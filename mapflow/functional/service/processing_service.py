@@ -66,6 +66,16 @@ class ProcessingService(QObject):
     # Emitted (in template view) once the template's full processings list is loaded, so listeners
     # can set up the "No AOI" map group for processings not bound to any AOI.
     templateProcessingsLoaded = pyqtSignal(object)
+    #: "Re-fetch whatever list the processings table is showing." The table serves two views —
+    #: the project's processings and an open template's AOIs+processings — and which one is
+    #: showing is navigation state, so the choice is `ProjectProcessingController`'s, not this
+    #: service's. Everything that used to call `get_processings()` to mean "refresh" emits this.
+    refreshRequested = pyqtSignal()
+    #: Same, but after starting a processing inside a template: the template must be re-hydrated,
+    #: not merely re-fetched, or the new processing lands under "No AOI" (feedback 8.2).
+    templateRehydrateRequested = pyqtSignal()
+    #: "Re-render the rows already held", for a sort that needs no request.
+    rerenderRequested = pyqtSignal()
 
     # Class-level defaults so the mode check is safe even when callers (and tests)
     # construct the service without running __init__.
@@ -471,13 +481,12 @@ class ProcessingService(QObject):
             # In a template the new processing is shown grouped UNDER its AOI. That binding
             # lives in the template's aoiDetails, which the run response does not carry, so a
             # flat optimistic add would place the processing under the "No AOI" separator until
-            # the user re-entered the template (feedback 8.2). Re-hydrate the template instead
-            # (fresh aoiDetails binds the processing to its AOI) and refetch the template
-            # processings for the full row data. Template run responses also may not be a full
-            # ProcessingDTO, so we do not parse one here.
+            # the user re-entered the template (feedback 8.2). Re-hydrating is what binds it, so
+            # ask for that rather than a plain refresh. Template run responses also may not be a
+            # full ProcessingDTO, so we do not parse one here.
             if isinstance(response_data, dict) and response_data.get("name"):
                 self.view.clear_processing_name(response_data["name"])
-            self._refresh_active_template()
+            self.templateRehydrateRequested.emit()
             self.dlg.startProcessing.setEnabled(True)
             return
         new_processing = None
@@ -494,10 +503,10 @@ class ProcessingService(QObject):
             self.view.add_new_processing(new_processing)
         # Always refresh full list because template-started processings can affect
         # both processings and template status/counts in table.
-        self.get_processings()
+        self.refreshRequested.emit()
         self.dlg.startProcessing.setEnabled(True)
 
-    def _refresh_active_template(self):
+    def refresh_active_template(self):
         """Re-hydrate the active template's ``aoiDetails`` and its processings, then rebuild
         the grouped rows. Used after starting a template processing so the new processing is
         bound to its AOI instead of appearing under 'No AOI' (feedback 8.2)."""
@@ -556,19 +565,18 @@ class ProcessingService(QObject):
     def _on_combo_sort_changed(self):
         """Combo sort resets any header-click override and re-fetches."""
         self.view._header_sort_by = None
-        self.get_processings()
+        self.refreshRequested.emit()
 
     def _on_header_sort_changed(self):
-        """Re-render the table with current data using the header sort."""
-        self.view.update_processing_table(self.combined_processing_rows())
+        """Re-render the table with current data using the header sort. Both views sort, so this
+        asks for a re-render rather than rendering the project rows itself."""
+        self.rerenderRequested.emit()
 
     def get_processings(self):
+        """Fetch the *project's* processings. Not the entry point for "refresh the table" — that
+        is `refreshRequested`, because inside a template the same table shows something else and
+        choosing between the two is the controller's call."""
         if not self.app_context.current_project:
-            return
-        # While inside a template, the table shows that template's AOIs + processings.
-        # The poll timer calls this method, so redirect it to the template refresh.
-        if self.in_template_mode:
-            self.refresh_template_view()
             return
         # Clamp offset if it exceeds total
         try:
@@ -716,8 +724,8 @@ class ProcessingService(QObject):
         return (aoi.display_name or "").lower()
 
     def combined_processing_rows(self):
-        if self.in_template_mode:
-            return self.combined_template_rows()
+        """The *project* rows: its templates above its processings. The in-template rows are
+        `combined_template_rows`; which of the two the table wants is the controller's call."""
         sort_by, sort_order = self.view.sort_processings()
         reverse = sort_order == "DESC"
         templates = sorted(self.templates.values(), key=lambda t: self._sort_key(t, sort_by), reverse=reverse)
@@ -899,20 +907,24 @@ class ProcessingService(QObject):
     def is_no_aoi_processing(self, processing_id) -> bool:
         return str(processing_id) in self.no_aoi_processing_ids()
 
+    # Paging and filtering are project-list controls. They emit rather than fetch directly for the
+    # same reason everything else does: inside a template the table is showing something these do
+    # not page, and the controller is what knows that.
+
     def show_processings_next_page(self):
         self.processings_page_offset += self.processings_page_limit
-        self.get_processings()
+        self.refreshRequested.emit()
 
     def show_processings_previous_page(self):
         self.processings_page_offset -= self.processings_page_limit
         if self.processings_page_offset < 0:
             self.processings_page_offset = 0
-        self.get_processings()
+        self.refreshRequested.emit()
 
     def get_filtered_processings(self):
         """Reset to first page when filter text changes."""
         self.processings_page_offset = 0
-        self.get_processings()
+        self.refreshRequested.emit()
 
     def update_local_processings(self, processings: List[ProcessingDTO]):
         """

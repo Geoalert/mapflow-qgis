@@ -66,7 +66,15 @@ MR-2 was split in two. MR-2a has landed: the run-state actions (rename/pause/res
 `_template_error_text` stayed behind — `hydrate_template` and the AOI error handler still use them —
 and `TemplateService._error_text` is the single seam to repoint when they come across.
 
-[ ] MR-2b: the navigation core → `TemplateService`
+[ready-for-review] MR-2b-1: give the processings table's refresh one owner
+Moving the navigation state would have made `ProcessingService` and `TemplateService` mutually
+dependent, because `get_processings`, `combined_processing_rows` and `start_processing_callback` all
+forked on `in_template_mode` and called template code. Those forks now live in
+`ProjectProcessingController`: services emit `refreshRequested` / `rerenderRequested` /
+`templateRehydrateRequested`, and the controller picks which of the table's two views to act on. No
+state moved, so nothing changed behaviourally — but MR-2b-2 becomes a move instead of a redesign.
+
+[ ] MR-2b-2: the navigation core → `TemplateService`
 The rest, and the part the earlier steps were sequenced to make safe: `enter/exit/refresh_template_view`,
 `hydrate_template`, `combined_template_rows`, `selected_aois` and the other selection queries, the
 navigation state (`in_template_mode`, `active_template`), the two helpers MR-2a left behind, and the

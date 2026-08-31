@@ -3,6 +3,8 @@ from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import MagicMock, call, patch
 
+from PyQt5.QtCore import QObject
+
 from mapflow.functional.controller.template_controller import TemplateController
 from mapflow.functional.service import processing_service as processing_service_module
 from mapflow.functional.service import template_service as template_service_module
@@ -420,7 +422,9 @@ def test_start_processing_callback_refreshes_processings_for_regular_response():
     service.processing_fetch_timer = MagicMock()
     service.processings = {}
     service.processings_history = MagicMock()
-    service.get_processings = MagicMock()
+    QObject.__init__(service)  # the refresh request is a signal now
+    asked = []
+    service.refreshRequested.connect(lambda: asked.append(True))
 
     response = MagicMock()
     response.readAll.return_value.data.return_value = b'{"id": "proc-1", "name": "Run 1"}'
@@ -430,7 +434,7 @@ def test_start_processing_callback_refreshes_processings_for_regular_response():
             patch.object(processing_service_module.ProcessingDTO, "from_dict", return_value=mock_processing):
         service.start_processing_callback(response)
 
-    service.get_processings.assert_called_once()
+    assert asked == [True]
     service.view.add_new_processing.assert_called_once()
     service.dlg.startProcessing.setEnabled.assert_called_with(True)
 
@@ -443,7 +447,9 @@ def test_start_processing_callback_refreshes_processings_for_template_response_s
     service.processing_fetch_timer = MagicMock()
     service.processings = {}
     service.processings_history = MagicMock()
-    service.get_processings = MagicMock()
+    QObject.__init__(service)  # the refresh request is a signal now
+    asked = []
+    service.refreshRequested.connect(lambda: asked.append(True))
 
     response = MagicMock()
     response.readAll.return_value.data.return_value = b'{"template": {"id": "tpl-1"}, "searchResults": []}'
@@ -451,7 +457,7 @@ def test_start_processing_callback_refreshes_processings_for_template_response_s
     with patch.object(processing_service_module, "alert"):
         service.start_processing_callback(response)
 
-    service.get_processings.assert_called_once()
+    assert asked == [True]
     service.view.add_new_processing.assert_not_called()
     service.dlg.startProcessing.setEnabled.assert_called_with(True)
 
@@ -486,9 +492,15 @@ def _rename_service(name="Old template"):
         activeUntil=datetime(2026, 1, 1, 12, 0, tzinfo=timezone.utc),
     )
     processing_service = SimpleNamespace(
-        selected_template=lambda: template, api=MagicMock(),
-        get_processings=MagicMock(), templates={})
+        selected_template=lambda: template, api=MagicMock(), templates={})
     return TemplateService(app_context=MagicMock(), processing_service=processing_service)
+
+
+def _refresh_requests(service):
+    """The table refresh is a request now — the controller picks which view to refresh."""
+    asked = []
+    service.refreshRequested.connect(lambda: asked.append(True))
+    return asked
 
 
 def test_rename_template_uses_update_template_api_with_renamed_name(monkeypatch):
@@ -565,6 +577,7 @@ def _renamed_template_payload(name="New template"):
 def test_rename_callback_shows_the_new_name_before_the_list_refreshes():
     """The renamed row is updated straight away; the controller drives the view from this."""
     service = _rename_service()
+    refreshed = _refresh_requests(service)
     renamed = []
     service.templateRenamed.connect(lambda tid, name: renamed.append((tid, name)))
     response = MagicMock()
@@ -575,12 +588,13 @@ def test_rename_callback_shows_the_new_name_before_the_list_refreshes():
 
     assert renamed == [("tpl-1", "New template")]
     assert service.processing_service.templates["tpl-1"].name == "New template"
-    service.processing_service.get_processings.assert_called_once()
+    assert refreshed == [True]
 
 
 def test_rename_callback_accepts_the_wrapped_template_shape():
     """The endpoint may answer either bare or wrapped in a `template` key."""
     service = _rename_service()
+    refreshed = _refresh_requests(service)
     renamed = []
     service.templateRenamed.connect(lambda tid, name: renamed.append((tid, name)))
     response = MagicMock()
@@ -590,10 +604,12 @@ def test_rename_callback_accepts_the_wrapped_template_shape():
     service.rename_template_callback(response)
 
     assert renamed == [("tpl-1", "Wrapped")]
+    assert refreshed == [True]
 
 
 def test_rename_callback_survives_a_body_that_is_not_json():
     service = _rename_service()
+    refreshed = _refresh_requests(service)
     renamed = []
     service.templateRenamed.connect(lambda tid, name: renamed.append((tid, name)))
     response = MagicMock()
@@ -602,7 +618,7 @@ def test_rename_callback_survives_a_body_that_is_not_json():
     service.rename_template_callback(response)
 
     assert renamed == []
-    service.processing_service.get_processings.assert_called_once()  # still refreshes
+    assert refreshed == [True]  # still refreshes
 
 
 # ---------- pause / resume / restart ----------
@@ -610,8 +626,7 @@ def test_rename_callback_survives_a_body_that_is_not_json():
 def _run_state_service(is_active=True, is_failed=False):
     template = SimpleNamespace(id="tpl-1", name="T", isActive=is_active, is_failed=is_failed)
     processing_service = SimpleNamespace(
-        selected_template=lambda: template, api=MagicMock(),
-        get_processings=MagicMock(), templates={},
+        selected_template=lambda: template, api=MagicMock(), templates={},
         _template_error_text=lambda response: "boom")
     return TemplateService(app_context=MagicMock(), processing_service=processing_service)
 

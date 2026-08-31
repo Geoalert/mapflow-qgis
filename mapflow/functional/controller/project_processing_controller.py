@@ -22,11 +22,16 @@ class ProjectProcessingController(QObject):
     def __init__(self, dlg: MainDialog,
                  processing_service: ProcessingService,
                  project_service: ProjectService,
+                 template_service,
                  app_context: AppContext):
         super().__init__()
         self.dlg = dlg
         self.processing_service = processing_service
         self.project_service = project_service
+        #: Subscribed to for "the table needs refreshing" after a template action. The in-template
+        #: view itself is still `ProcessingService`'s; when it moves, the branches in
+        #: `refresh_table` / `rerender_rows` point here instead.
+        self.template_service = template_service
         self.app_context = app_context
         
         self._setup_processing_bindings()
@@ -39,9 +44,40 @@ class ProjectProcessingController(QObject):
         """Processing-specific UI connections."""
         self.dlg.startProcessing.clicked.connect(self.processing_service.start_processing)
         self.dlg.processing_update_action.triggered.connect(self.update_processing)
-        self.processing_service.processing_fetch_timer.timeout.connect(
-            self.processing_service.get_processings
-        )
+        # The poll tick, and every action that wants the table refreshed, come here rather than
+        # going straight to a service: the table serves two views and picking between them is
+        # navigation, which is this controller's region.
+        self.processing_service.processing_fetch_timer.timeout.connect(self.refresh_table)
+        self.processing_service.refreshRequested.connect(self.refresh_table)
+        self.processing_service.rerenderRequested.connect(self.rerender_rows)
+        self.processing_service.templateRehydrateRequested.connect(self.rehydrate_template)
+        self.template_service.refreshRequested.connect(self.refresh_table)
+
+    # ==== WHICH VIEW THE PROCESSINGS TABLE IS SHOWING ==== #
+    #
+    # One table, two views: the project's processings+templates, or an open template's
+    # AOIs+processings. Both services would otherwise have to ask each other which is showing —
+    # `ProcessingService` needing `TemplateService` and vice versa — so the choice lives here
+    # instead, the way `SearchService` already leaves regular-vs-template search to a controller.
+
+    def refresh_table(self):
+        """Re-fetch whatever the table is showing."""
+        if self.processing_service.in_template_mode:
+            self.processing_service.refresh_template_view()
+        else:
+            self.processing_service.get_processings()
+
+    def rerender_rows(self):
+        """Re-render the rows already held, for a sort that needs no request."""
+        if self.processing_service.in_template_mode:
+            rows = self.processing_service.combined_template_rows()
+        else:
+            rows = self.processing_service.combined_processing_rows()
+        self.processing_service.view.update_processing_table(rows)
+
+    def rehydrate_template(self):
+        """A processing was started inside a template: re-hydrate so it binds to its AOI."""
+        self.processing_service.refresh_active_template()
     
     def _setup_project_bindings(self):
         """Project-specific UI connections."""
