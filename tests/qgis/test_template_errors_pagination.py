@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 from mapflow.functional.service import processing_service as ps_mod
+from mapflow.functional.service import template_service as ts_mod
 from mapflow.functional.service.processing_service import ProcessingService
 from mapflow.config import Config, ConfigColumns
 from mapflow.functional.controller.template_controller import TemplateController
@@ -55,11 +56,14 @@ def test_template_error_text_parses_response_body():
 
 
 def test_resume_error_handler_shows_meaningful_message(monkeypatch):
-    service = ProcessingService.__new__(ProcessingService)
-    service.tr = lambda text: text
+    """The run-state actions are TemplateService's; the body parse is still ProcessingService's
+    (its AOI handler needs the same one), so this drives the real pair."""
+    processing_service = ProcessingService.__new__(ProcessingService)
+    processing_service.tr = lambda text: text
+    service = TemplateService(app_context=MagicMock(), processing_service=processing_service)
     service._resume_template_state = {"template_id": "t-1"}
     alerts = []
-    monkeypatch.setattr(ps_mod, "alert", lambda *a, **k: alerts.append(a[0]))
+    monkeypatch.setattr(ts_mod, "alert", lambda *a, **k: alerts.append(a[0]))
 
     service.resume_template_error_handler(
         _error_response("You have reached the maximum number of active templates")

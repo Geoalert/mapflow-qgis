@@ -351,7 +351,12 @@ class Mapflow(QObject):
             processings_table=self.dlg.processingsTable,
             see_processings_action=self.dlg.see_processings_action,
             see_search_results_action=self.dlg.see_search_results_action,
-            selection_sync=self.sync_layer_selection_with_table)
+            selection_sync=self.sync_layer_selection_with_table,
+            processing_view=self.processing_service.view,
+            rename_action=self.dlg.template_rename_action,
+            pause_action=self.dlg.template_pause_action,
+            resume_action=self.dlg.template_resume_action,
+            restart_action=self.dlg.template_restart_action)
 
         self.setup_add_layer_menu()
         # Add options menu functionality
@@ -560,11 +565,7 @@ class Mapflow(QObject):
         self.dlg.processing_update_action.triggered.connect(self.processing_service.update_processing)
         self.dlg.processing_restart_action.triggered.connect(self.processing_service.restart_processing)
         self.dlg.processing_duplicate_action.triggered.connect(self.check_dir_and_duplicate_processing)
-        # Template-specific actions
-        self.dlg.template_rename_action.triggered.connect(self.processing_service.update_template)
-        self.dlg.template_pause_action.triggered.connect(self.processing_service.pause_template)
-        self.dlg.template_resume_action.triggered.connect(self.processing_service.resume_template)
-        self.dlg.template_restart_action.triggered.connect(self.processing_service.restart_template)
+        # The template run-state actions are wired by TemplateController, which owns their handlers.
         # AOI actions (in-template view)
         self.dlg.aoi_rename_action.triggered.connect(self.processing_service.rename_aoi)
         self.dlg.aoi_delete_action.triggered.connect(self.processing_service.delete_aoi)
