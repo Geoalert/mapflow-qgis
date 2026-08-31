@@ -61,16 +61,10 @@ The forks in shared search paths are the ones to watch: they are coordination be
 so they belong in a controller, not inside either service (`SearchService` says as much in its own
 docstring).
 
-MR-2 is split in two, because moving all ~35 template methods out of `processing_service` at once
-puts the mechanical half and the high-blast-radius half in front of one reviewer together.
-
-[ready-for-review] MR-2a: the template run-state actions → `TemplateService`
-`rename` (was `update_template`), `pause`, `resume` (with its two-step `activeUntil` extension) and
-`restart`, each with its callbacks; their action wiring moves to `TemplateController`. They separate
-cleanly because each is only "take the selected template → call the endpoint → say what happened →
-refresh", needing no navigation state. `_parse_template_response` and `_template_error_text` stay in
-`ProcessingService` for now — `hydrate_template` and the AOI error handler still use them — and come
-across with MR-2b.
+MR-2 was split in two. MR-2a has landed: the run-state actions (rename/pause/resume/restart) are on
+`TemplateService`, wired by `TemplateController`. `_parse_template_response` and
+`_template_error_text` stayed behind — `hydrate_template` and the AOI error handler still use them —
+and `TemplateService._error_text` is the single seam to repoint when they come across.
 
 [ ] MR-2b: the navigation core → `TemplateService`
 The rest, and the part the earlier steps were sequenced to make safe: `enter/exit/refresh_template_view`,
