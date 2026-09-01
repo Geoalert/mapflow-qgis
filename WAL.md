@@ -67,13 +67,6 @@ default, `TemplateService` at wiring time) covering the three places the start p
 template is open — `template_to_run`, the start callback, and resolving the table selection to
 objects. It is duck-typed and never imported, so no cycle is possible; delete it when that step
 lands.
-[ready-for-review] Give template-group layer placement one owner
-The two footprint-layer builders become one: `SearchService.build_metadata_layer` builds and
-registers the layer for both searches, and *where it goes* arrives as a `place` callable — beside
-the AOI layer for a regular search, inside the template group for a template's. `PreviewService`
-hands its preview layer to `TemplateService.place_preview_layer` instead of doing the tree surgery
-itself, so nothing but `TemplateService` reaches for a template group now.
-
 [ ] Extract processing lifecycle: options, start, review, rating → existing processing service/controller
 [ ] Split auth from account status → `SessionService` + `AccountService`
 [ ] Reduce what remains of `mapflow.py` to initGui/unload, wiring and construction
