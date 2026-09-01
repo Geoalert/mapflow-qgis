@@ -305,6 +305,34 @@ class ProcessingView:
         for row in rows:
             self.dlg.processingsTable.removeRow(row)
 
+    # ---------- the review / rating panel ----------
+
+    def set_rating_labels(self, processing_name: str, rating: int = 0, feedback: str = "") -> None:
+        """Show a processing's stored rating. ``rating`` 0 means none was submitted."""
+        self.dlg.set_processing_rating_labels(processing_name=processing_name,
+                                              current_rating=rating or None,
+                                              current_feedback=feedback or None)
+
+    def selected_rating(self) -> int:
+        """The star count the combo is on. The list is descending (None-5-4-3-2-1), so the index
+        is inverted; anything outside 1..5 means nothing was picked."""
+        return 6 - self.dlg.ratingComboBox.currentIndex()
+
+    def rating_is_selected(self) -> bool:
+        return 5 >= self.dlg.ratingComboBox.currentIndex() > 0
+
+    def rating_feedback(self) -> str:
+        return self.dlg.processingRatingFeedbackText.toPlainText()
+
+    def enable_rating(self, can_interact: bool, can_send: bool, reason: str) -> None:
+        self.dlg.enable_rating(can_interact=can_interact, can_send=can_send, reason=reason)
+
+    def enable_review(self, enabled: bool, reason: str = "") -> None:
+        self.dlg.enable_review(enabled, reason)
+
+    def enable_restart_action(self, enabled: bool) -> None:
+        self.dlg.enable_restart_action(enabled)
+
     def set_processing_cost(self, cost: int):
         self.dlg.processingProblemsLabel.setPalette(self.dlg.default_palette)
         self.dlg.processingProblemsLabel.setText(self.tr("Processing cost: {cost} credits").format(cost=cost))

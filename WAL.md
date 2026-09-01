@@ -67,7 +67,34 @@ default, `TemplateService` at wiring time) covering the three places the start p
 template is open — `template_to_run`, the start callback, and resolving the table selection to
 objects. It is duck-typed and never imported, so no cycle is possible; delete it when that step
 lands.
-[ ] Extract processing lifecycle: options, start, review, rating → existing processing service/controller
+
+Extract processing lifecycle: options, start, review, rating → existing processing service/controller.
+Split in three; ~35 methods in `mapflow.py`, which is 3× what lands cleanly in one MR.
+
+[ready-for-review] 2a: review and rating → `ProcessingService` / `ProcessingController`
+The whole review/rating panel leaves `mapflow.py`: the decisions and requests to the service, the
+widget reads to `ProcessingView`, the wiring and the `ReviewDialog` lifecycle to the controller.
+`ProcessingApi` gains `rate_processing`, `accept_processing` and `reject_processing` — these were
+the only processing endpoints called with a hand-built URL straight off `Http`, which is what had
+kept the code in `mapflow.py`.
+
+[ ] 2b: model options and processing-params assembly → `ProcessingController`
+`on_options_change`, `on_model_change`, `show_wd_options`, `save_options_settings`,
+`check_processing_ui`, `get_processing_params`, `show_processing_source`,
+`get_local_image_indices`, `get_search_providers`. The start panel's inputs; independent of 2a.
+
+[ ] 2c: start-button state, the context menu, and the `templates`-keyed queries
+`update_processing_options_menu` (the last large `self.dlg` block), `show_selected_details`,
+`on_processings_selection_changed`, `update_delete_button_state`,
+`update_start_processing_button_text/state`, `select_processing_in_table`, plus the
+`selected_template(s)` / `is_only_templates_selected` / `all_selected_templates_editable` /
+`template_to_run` cluster and the start fork in `handle_processing_submission`.
+**This is the step that deletes `ProcessingService.template_state`** (see the templates item above).
+Last of the three, and the highest blast radius.
+
+Not part of this item: `load_results`, `download_results_file`, `download_aoi_file` and
+`show_details` are `ResultService`'s, which Phase D names separately.
+
 [ ] Split auth from account status → `SessionService` + `AccountService`
 [ ] Reduce what remains of `mapflow.py` to initGui/unload, wiring and construction
 Acceptance for the phase: no `self.dlg.<widget>` access in `mapflow.py`, and the layering test's

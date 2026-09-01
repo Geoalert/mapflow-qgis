@@ -40,7 +40,7 @@ from ...schema.template import (
     ProcessingTemplateDTO,
     ProcessingTemplateDetails,
 )
-from ..service.alert_service import alert
+from ..service.alert_service import alert, alert_info
 from ..app_context import AppContext
 from ...model.provider import ImagerySearchProvider
 from ...config import Config
@@ -73,6 +73,12 @@ class ProcessingService(QObject):
     templateRehydrateRequested = pyqtSignal()
     #: "Re-render the rows already held", for a sort that needs no request.
     rerenderRequested = pyqtSignal()
+    #: A processing's stored rating arrived: (processing name, rating or 0, feedback). The
+    #: controller puts it in the rating panel; 0 means "rated but the server sent no score".
+    ratingLoaded = pyqtSignal(str, int, str)
+    #: A review was accepted or rejected, so the comment box should be cleared and the list
+    #: refreshed. The refresh itself goes through `refreshRequested` like every other.
+    reviewSubmitted = pyqtSignal()
 
     # Whether the last processings poll saw only final-state processings; combined with
     # template statuses to decide if the project poll can stop (see _apply_poll_timer_state).
@@ -809,6 +815,99 @@ class ProcessingService(QObject):
         self.save_processing(processing)
         self.view.update_processing_name(processing_id=processing.id, new_name=processing.name)
         self.processings[processing.id] = processing
+
+    # ============ REVIEW AND RATING ============ #
+    #
+    # `spec/007_architecture.md` gives both to this service. The widget reads (which star was
+    # picked, what the feedback box says) arrive as arguments and what the panel must show leaves
+    # as a signal, so nothing here touches a widget.
+
+    def load_current_rating(self) -> None:
+        """Fetch the selected processing's stored rating so the panel shows what was submitted
+        before. No-op without a selection."""
+        processing = self.selected_processing()
+        if not processing:
+            return
+        self.ratingLoaded.emit(str(processing.name or ""), 0, "")
+        self.api.get_processing(processing_id=processing.id,
+                                callback=self.load_current_rating_callback)
+
+    def load_current_rating_callback(self, response: QNetworkReply) -> None:
+        try:
+            response_data = json.loads(response.readAll().data())
+        except ValueError:
+            # Not JSON, or not decodable as UTF-8 (UnicodeDecodeError is a ValueError).
+            return
+        rating_json = response_data.get('rating')
+        if not rating_json:
+            return
+        self.ratingLoaded.emit(str(response_data.get('name') or ""),
+                               int(rating_json.get('rating') or 0),
+                               str(rating_json.get('feedback') or ""))
+
+    def _rateable_processing(self):
+        """The selected processing, if it can be rated at all. Alerts and returns None otherwise —
+        the reason is the same for rating and for review, so it is written once."""
+        processing = self.selected_processing()
+        if not processing:
+            return None
+        if not processing.status.is_ok:
+            alert(self.tr('Only finished processings can be rated'))
+            return None
+        return processing
+
+    def _reviewable_processing(self):
+        """The selected processing, if a review decision applies to it."""
+        processing = self._rateable_processing()
+        if processing is None:
+            return None
+        if not processing.reviewStatus.is_in_review:
+            alert(self.tr("Processing must be in `Review required` status"))
+            return None
+        return processing
+
+    def submit_rating(self, rating: int, feedback: str) -> None:
+        """Rate the selected processing. ``rating`` is already resolved from the combo by the
+        view; out-of-range means nothing was picked, so nothing is sent."""
+        processing = self._rateable_processing()
+        if processing is None:
+            return
+        if not 0 < rating <= 5:
+            return
+        self.api.rate_processing(processing_id=processing.id,
+                                 rating=rating,
+                                 feedback=feedback,
+                                 callback=self.submit_rating_callback,
+                                 callback_kwargs={'feedback': feedback})
+
+    def submit_rating_callback(self, response: QNetworkReply, feedback: str) -> None:
+        if feedback:
+            alert_info(self.tr("Thank you! Your rating and feedback are submitted!"))
+        else:
+            alert_info(self.tr("Thank you! Your rating is submitted!\n"
+                               "We would appreciate if you add feedback as well."))
+        self.load_current_rating()
+
+    def accept_processing(self) -> None:
+        """Approve the selected processing's review."""
+        processing = self._reviewable_processing()
+        if processing is None:
+            return
+        self.api.accept_processing(processing_id=processing.id,
+                                   callback=self.review_processing_callback)
+
+    def reject_processing(self, processing_id, comment: str, features) -> None:
+        """Send a review back. The comment and the reviewer's corrections are read off the review
+        dialog by the controller, since a dialog is not this service's to touch."""
+        self.api.reject_processing(processing_id=processing_id,
+                                   comment=comment,
+                                   features=features,
+                                   callback=self.review_processing_callback)
+
+    def review_processing_callback(self, response: QNetworkReply) -> None:
+        self.reviewSubmitted.emit()
+        self.processing_fetch_timer.start()
+        self.refreshRequested.emit()
 
     # Processing cost
     def update_processing_cost(self):

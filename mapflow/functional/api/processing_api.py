@@ -1,3 +1,4 @@
+import json
 from typing import Callable, List, Optional, Union
 from uuid import UUID
 
@@ -98,6 +99,36 @@ class ProcessingApi(QObject):
                       error_handler_kwargs=error_handler_kwargs or {},
                       use_default_error_handler=False,
                       timeout=30)
+
+    # ---- review and rating ----
+    #
+    # These three were the only processing endpoints called with a hand-built URL straight off
+    # `Http`, which is why the code around them could not leave `mapflow.py`.
+
+    def rate_processing(self,
+                        processing_id: Union[UUID, str],
+                        rating: int,
+                        feedback: str,
+                        callback: Callable,
+                        callback_kwargs: Optional[dict] = None) -> None:
+        self.http.put(path=f"processings/{processing_id}/rate",
+                      body=json.dumps({"rating": rating, "feedback": feedback}).encode(),
+                      callback=callback,
+                      callback_kwargs=callback_kwargs or {})
+
+    def accept_processing(self, processing_id: Union[UUID, str], callback: Callable) -> None:
+        """Approve a processing awaiting review."""
+        self.http.put(path=f"processings/{processing_id}/acceptation", callback=callback)
+
+    def reject_processing(self,
+                          processing_id: Union[UUID, str],
+                          comment: str,
+                          features,
+                          callback: Callable) -> None:
+        """Send a review back with a comment and the reviewer's corrections."""
+        self.http.put(path=f"processings/{processing_id}/rejection",
+                      body=json.dumps({"comment": comment, "features": features}).encode(),
+                      callback=callback)
 
     def get_processings(self, project_id: Union[UUID, str], request_body: ProcessingsRequest, callback: Callable):
         self.http.post(path=f"projects/{project_id}/processings/v2/page",
