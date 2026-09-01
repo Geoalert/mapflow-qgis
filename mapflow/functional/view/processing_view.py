@@ -1,4 +1,4 @@
-from typing import List, Union
+from typing import List, Tuple, Union
 from PyQt5.QtCore import Qt, QCoreApplication
 from PyQt5.QtWidgets import QAbstractItemView, QTableWidgetItem, QMessageBox, QCheckBox
 from ...dialogs.main_dialog import MainDialog
@@ -304,6 +304,35 @@ class ProcessingView:
         rows.sort(reverse=True)
         for row in rows:
             self.dlg.processingsTable.removeRow(row)
+
+    # ---------- the model and its options ----------
+
+    def selected_model_name(self) -> str:
+        return self.dlg.modelCombo.currentText()
+
+    def enabled_blocks(self) -> List[bool]:
+        """Which optional blocks are ticked, in layout order. Translating the order into block
+        names is the workflow definition's job, not this view's."""
+        return self.dlg.enabled_blocks()
+
+    def show_wd_price(self, wd_price: float, wd_description: str, display_price: bool) -> None:
+        self.dlg.show_wd_price(wd_price=wd_price,
+                               wd_description=wd_description,
+                               display_price=display_price)
+
+    def show_model_options(self, options: List[Tuple[str, bool]], enabled: bool) -> None:
+        """Replace the option checkboxes with this model's, then set their enabled state.
+
+        The two halves are one call because ordering matters: the checkboxes do not exist until
+        the loop above has run, so an `enable_model_options` issued with the rest of the panel
+        would reach nothing."""
+        self.dlg.clear_model_options()
+        for name, checked in options:
+            self.dlg.add_model_option(name, checked=checked)
+        self.dlg.enable_model_options(enabled)
+
+    def show_user_provider_info(self, source_params) -> str:
+        return self.dlg.show_user_provider_info(source_params)
 
     # ---------- the review / rating panel ----------
 

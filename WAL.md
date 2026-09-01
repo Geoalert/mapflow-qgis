@@ -68,20 +68,17 @@ template is open — `template_to_run`, the start callback, and resolving the ta
 objects. It is duck-typed and never imported, so no cycle is possible; delete it when that step
 lands.
 
-Extract processing lifecycle: options, start, review, rating → existing processing service/controller.
-Split in three; ~35 methods in `mapflow.py`, which is 3× what lands cleanly in one MR.
+Extract processing lifecycle: options, start, review, rating → existing processing
+service/controller. Split in three because it was 3× what lands cleanly in one MR; 2a (review and
+rating) is on `dev`, and what is left below is the start path.
 
-[ready-for-review] 2a: review and rating → `ProcessingService` / `ProcessingController`
-The whole review/rating panel leaves `mapflow.py`: the decisions and requests to the service, the
-widget reads to `ProcessingView`, the wiring and the `ReviewDialog` lifecycle to the controller.
-`ProcessingApi` gains `rate_processing`, `accept_processing` and `reject_processing` — these were
-the only processing endpoints called with a hand-built URL straight off `Http`, which is what had
-kept the code in `mapflow.py`.
-
-[ ] 2b: model options and processing-params assembly → `ProcessingController`
-`on_options_change`, `on_model_change`, `show_wd_options`, `save_options_settings`,
-`check_processing_ui`, `get_processing_params`, `show_processing_source`,
-`get_local_image_indices`, `get_search_providers`. The start panel's inputs; independent of 2a.
+[ready-for-review] 2b: model options and a processing's imagery source → `ProcessingController`
+The model combo and its option checkboxes leave `mapflow.py`: the widgets to `ProcessingView`,
+the `wd/{id}/{block}` settings round trip to `ProcessingService`, the decisions and the two signal
+connections to the controller. `show_processing_source` goes with them.
+Four of the nine methods this entry listed turned out to be dead — `check_processing_ui`,
+`get_processing_params`, and copies of `get_local_image_indices`/`get_search_providers` that
+`ProviderService` already owns — so they are deleted rather than moved.
 
 [ ] 2c: start-button state, the context menu, and the `templates`-keyed queries
 `update_processing_options_menu` (the last large `self.dlg` block), `show_selected_details`,

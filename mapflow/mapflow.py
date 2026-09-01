@@ -23,10 +23,7 @@ from qgis.core import (
 )
 
 from .config import Config, ConfigColumns
-from .errors import (BadProcessingInput,
-                     PluginError,
-                     ProcessingInputDataMissing,
-                     ProxyIsAlreadySet)
+from .errors import ProxyIsAlreadySet
 # Functional
 from .functional import helpers, layer_utils
 from .functional.app_context import AppContext
@@ -55,14 +52,9 @@ from .http import (Http,
                    api_message_parser,
                    get_error_report_body)
 # Schema
-from .schema import (BillingType,
-                     ImagerySearchParams,
-                     MyImageryParams,
-                     ProviderReturnSchema,
-                     UserDefinedParams)
+from .schema import BillingType, ProviderReturnSchema
 from .schema.catalog import ProductType
 from .schema.project import MapflowProject, UserRole
-from .schema.workflow_def import WorkflowDef
 # Dialogs
 from .dialogs import (ErrorMessageWidget,
                       MainDialog,
@@ -330,7 +322,12 @@ class Mapflow(QObject):
             rating_combo=self.dlg.ratingComboBox,
             accept_button=self.dlg.acceptButton,
             review_button=self.dlg.reviewButton,
-            processings_table=self.dlg.processingsTable)
+            processings_table=self.dlg.processingsTable,
+            provider_service=self.provider_service,
+            data_catalog_service=self.data_catalog_service,
+            result_loader=self.result_loader,
+            model_combo=self.dlg.modelCombo,
+            model_options_changed=self.dlg.modelOptionsChanged)
 
         # Templates (MR-1): create / update-search-params / exclude-from-search.
         self.template_service = TemplateService(app_context=self.app_context,
@@ -412,8 +409,7 @@ class Mapflow(QObject):
         self.dlg.metadataTo.setDate(self.app_context.settings.value('metadataTo', today))
 
         # ========== 12. SET UP SIGNALS & SLOTS ==========
-        self.dlg.modelCombo.currentIndexChanged.connect(self.on_model_change)
-        self.dlg.modelOptionsChanged.connect(self.on_options_change)
+        # The model combo and its option checkboxes are wired by ProcessingController.
         # Memorize dialog element sizes & positioning
         self.dlg.finished.connect(self.save_dialog_state)
         # Connect buttons
@@ -749,52 +745,6 @@ class Mapflow(QObject):
             self.dlg.processingsTable.scrollToItem(item)
             self.show_details()
             return
-
-    def on_options_change(self):
-        wd_name = self.dlg.modelCombo.currentText()
-        wd = self.app_context.get_workflow_def(wd_name)
-        if not wd:
-            return
-        enabled_blocks = self.dlg.enabled_blocks()
-        self.dlg.show_wd_price(wd_price=wd.get_price(enable_blocks=enabled_blocks),
-                               wd_description=wd.description,
-                               display_price=self.app_context.billing_type == BillingType.credits)
-        self.save_options_settings(wd, enabled_blocks)
-        if self.app_context.billing_type == BillingType.credits:
-            self.processing_service.update_processing_cost()
-
-    def on_model_change(self, 
-                        index: Optional[int] = None) -> None:
-        wd_name = self.dlg.modelCombo.currentText()
-        wd = self.app_context.get_workflow_def(wd_name)
-        self.provider_service.set_available_imagery_sources(wd_name)
-        if not wd:
-            return
-        self.show_wd_options(wd)
-        self.dlg.show_wd_price(wd_price=wd.get_price(enable_blocks=self.dlg.enabled_blocks()),
-                               wd_description=wd.description,
-                               display_price=self.app_context.billing_type == BillingType.credits)
-        if len(wd.blocks) == 0: # and for wd with options it will update cost later
-            if self.app_context.billing_type == BillingType.credits:
-                # todo: here was a toggle to not call if from setup_workflow_defs, but maybe not so important?
-                self.processing_service.update_processing_cost()
-
-    def show_wd_options(self, wd: WorkflowDef):
-        self.dlg.clear_model_options()
-        for block in wd.optional_blocks:
-            self.dlg.add_model_option(block.displayName, checked=bool(self.app_context.settings.value(f"wd/{wd.id}/{block.name}", False)))
-        # Other wigets are disabled before the appearence of these checkboxes, so we do it here separately after adding them
-        can_start_processing = True
-        if self.app_context.user_role:
-            can_start_processing = self.app_context.user_role.can_start_processing
-        self.dlg.enable_model_options(can_start_processing)
-
-    def save_options_settings(self, wd: WorkflowDef, enabled_blocks: List[bool]):
-        enabled_blocks_dict = wd.get_enabled_blocks(enabled_blocks)
-        for block in enabled_blocks_dict:
-            name = block["name"]
-            enabled = block["enabled"]
-            self.app_context.settings.setValue(f"wd/{wd.id}/{name}", enabled)
 
     def apply_local_filter(self, *_) -> None:
         """Instantly filter the current search/template results by the filter widgets
@@ -1542,39 +1492,6 @@ class Mapflow(QObject):
             #self.dlg.metadataTable.selectRow(items[0].row())
         # Redundant since imageId is temorary removed
 
-    def check_processing_ui(self, allow_empty_name=False):
-        processing_name = self.dlg.processingName.text()
-
-        if not processing_name and not allow_empty_name:
-            raise ProcessingInputDataMissing(self.tr('Please, specify a name for your processing'))
-        if not self.app_context.aoi:
-            if self.dlg.polygonCombo.currentLayer():
-                raise BadProcessingInput(self.tr('Processing area layer is corrupted or has invalid projection'))
-            else:
-                raise BadProcessingInput(self.tr('Please, select a valid area of interest'))
-        if self.app_context.aoi_area_limit < self.app_context.aoi_size:
-            raise BadProcessingInput(self.tr(
-                'Up to {} sq km can be processed at a time. '
-                'Try splitting your area(s) into several processings.').format(self.app_context.aoi_area_limit))
-
-        return True
-
-    def get_processing_params(self,
-                              provider_index: Optional[int],
-                              s3_uri: str = "",
-                              zoom: Optional[str] = None,
-                              provider_name: Optional[str] = None):
-        provider = self.provider_service.providers[provider_index]
-        meta = {'source-app': 'qgis',
-                'version': self.app_context.plugin_version,
-                'source': provider.name.lower()}
-        if not provider:
-            raise PluginError(self.tr('Providers are not initialized'))
-        provider_params, provider_meta = provider.to_processing_params(provider_name=provider_name,
-                                                                       zoom=zoom)
-        meta.update(**provider_meta)
-        return provider_params, meta
-
     def update_processing_limit(self) -> None:
         """Set the user's processing limit as reported by Mapflow."""
         self.http.get(
@@ -2076,48 +1993,12 @@ class Mapflow(QObject):
         if processing.messages:
             error = processing.error_message(raw=self.config.SHOW_RAW_ERROR)
         dialog = ProcessingDetailsDialog(self.dlg)
-        dialog.toSourceButton.clicked.connect(lambda: self.show_processing_source(
-                                                           processing=processing,
-                                                           window=dialog))
+        dialog.toSourceButton.clicked.connect(
+            lambda: self.processing_controller.show_processing_source(processing=processing,
+                                                                      window=dialog))
         dialog.setup(processing, error or None)
         dialog.deleteLater()
-    
-    def show_processing_source(self,
-                               processing,
-                               window):
-        source_params = processing.params.sourceParams
-        if isinstance(source_params, ImagerySearchParams):
-            # Download AOI and only then fill search table
-            self.result_loader.download_aoi_file(pid=processing.id, callback=self.processing_service.duplicate_aoi_callback)
-        elif isinstance(source_params, MyImageryParams):
-            self.data_catalog_service.show_my_imagery_source(source_params)
-        elif isinstance(source_params, UserDefinedParams):
-            text = self.dlg.show_user_provider_info(source_params)
-            self.alert(message=text, icon=QMessageBox.Information)
-        window.close()
 
-    def get_local_image_indices(self, selected_images):
-        try:
-            rows = list(set(image.row() for image in selected_images))
-            local_image_indices = [int(self.dlg.metadataTable.item(row, self.config.LOCAL_INDEX_COLUMN).text()) 
-                                   for row in rows]
-        except (AttributeError, KeyError):
-            local_image_indices = []
-        return local_image_indices
-
-    def get_search_providers(self, local_image_indices):
-        try:
-            provider_names = [self.app_context.search_footprints[local_image_index].attribute("providerName")
-                              for local_image_index in local_image_indices]
-        except KeyError:
-            provider_names = []
-        try:
-            product_types = [self.app_context.search_footprints[local_image_index].attribute("productType")
-                             for local_image_index in local_image_indices]
-        except KeyError:
-            product_types = []
-        return provider_names, product_types
-    
     def show_search_next_page(self):
         self._show_search_page(self.search_service.next_page_offset())
 
