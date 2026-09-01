@@ -96,72 +96,58 @@ def test_planned_processing_selection_error_requires_selected_metadata_rows():
     assert service.planned_processing_selection_error() is None
 
 
-def test_on_processings_selection_changed_sets_planned_start_button_text():
-    plugin = Mapflow.__new__(Mapflow)
-    plugin.tr = lambda text: text
-    plugin.dlg = MagicMock()
-    plugin.processing_service = MagicMock()
-    plugin.template_service = MagicMock()
-    plugin.template_service.in_template_mode = False
-    plugin.processing_service.selected_template.return_value = SimpleNamespace(id="template-1")
-    plugin.processing_service.selected_processing.return_value = None
-    plugin.processing_service.planned_processing_selection_error.return_value = (
-        "Select one or more images in search results to start planned processing"
-    )
-
-    plugin.app_context = SimpleNamespace(user_role=None)  # non-contributor: delete-button update is a no-op
-    plugin.on_processings_selection_changed()
-
-    plugin.dlg.startProcessing.setText.assert_called_with("Start planned processing")
-    plugin.dlg.disable_processing_start.assert_called_once()
+PLANNED_REASON = "Select one or more images in search results to start planned processing"
 
 
-def test_on_processings_selection_changed_restores_default_start_button_text_without_template():
-    plugin = Mapflow.__new__(Mapflow)
-    plugin.tr = lambda text: text
-    plugin.dlg = MagicMock()
-    plugin.dlg.processingProblemsLabel.text.return_value = (
-        "Select one or more images in search results to start planned processing"
-    )
-    plugin.processing_service = MagicMock()
-    plugin.template_service = MagicMock()
-    plugin.template_service.in_template_mode = False
-    plugin.processing_service.selected_template.return_value = None
-    plugin.processing_service.template_to_run.return_value = None
-    plugin.processing_service.planned_processing_selection_error.return_value = None
-
-    plugin.app_context = SimpleNamespace(user_role=None)  # non-contributor: delete-button update is a no-op
-    plugin.on_processings_selection_changed()
-
-    plugin.dlg.startProcessing.setText.assert_called_with("Start processing")
-    plugin.dlg.startProcessing.setEnabled.assert_called_with(True)
-    plugin.dlg.processingProblemsLabel.clear.assert_called_once()
-    plugin.dlg.disable_processing_start.assert_not_called()
+def _start_button_controller(template_to_run=None, gate_error=None):
+    """The Start button through a real `ProcessingView`, so the assertions stay on the widgets —
+    the surface that survives a move (`spec/007_architecture.md`)."""
+    from PyQt5.QtCore import QObject
+    from mapflow.functional.controller.processing_controller import ProcessingController
+    from mapflow.functional.view.processing_view import ProcessingView
+    controller = ProcessingController.__new__(ProcessingController)
+    QObject.__init__(controller)
+    controller.tr = lambda text: text
+    controller.processing_service = MagicMock()
+    controller.processing_service.template_to_run.return_value = template_to_run
+    controller.processing_service.planned_processing_selection_error.return_value = gate_error
+    controller.processing_view = ProcessingView(dlg=MagicMock())
+    controller.processing_view.dlg.processingProblemsLabel.text.return_value = PLANNED_REASON
+    return controller
 
 
-def test_on_processings_selection_changed_restores_default_when_processing_selected():
-    plugin = Mapflow.__new__(Mapflow)
-    plugin.tr = lambda text: text
-    plugin.dlg = MagicMock()
-    plugin.dlg.processingProblemsLabel.text.return_value = (
-        "Select one or more images in search results to start planned processing"
-    )
-    plugin.processing_service = MagicMock()
-    plugin.template_service = MagicMock()
-    plugin.template_service.in_template_mode = False
-    plugin.processing_service.selected_template.return_value = SimpleNamespace(id="template-1")
-    plugin.processing_service.selected_processing.return_value = SimpleNamespace(id="processing-1")
-    # A processing is also selected -> not a planned start.
-    plugin.processing_service.template_to_run.return_value = None
-    plugin.processing_service.planned_processing_selection_error.return_value = None
+def test_selecting_a_template_row_offers_a_planned_start():
+    controller = _start_button_controller(template_to_run=SimpleNamespace(id="template-1"),
+                                          gate_error=PLANNED_REASON)
 
-    plugin.app_context = SimpleNamespace(user_role=None)  # non-contributor: delete-button update is a no-op
-    plugin.on_processings_selection_changed()
+    controller.update_start_processing_button_state()
 
-    plugin.dlg.startProcessing.setText.assert_called_with("Start processing")
-    plugin.dlg.startProcessing.setEnabled.assert_called_with(True)
-    plugin.dlg.processingProblemsLabel.clear.assert_called_once()
-    plugin.dlg.disable_processing_start.assert_not_called()
+    dlg = controller.processing_view.dlg
+    dlg.startProcessing.setText.assert_called_with("Start planned processing")
+    dlg.disable_processing_start.assert_called_once()
+
+
+def test_without_a_template_the_button_returns_to_a_plain_start():
+    controller = _start_button_controller(template_to_run=None, gate_error=None)
+
+    controller.update_start_processing_button_state()
+
+    dlg = controller.processing_view.dlg
+    dlg.startProcessing.setText.assert_called_with("Start processing")
+    dlg.startProcessing.setEnabled.assert_called_with(True)
+    dlg.processingProblemsLabel.clear.assert_called_once()
+    dlg.disable_processing_start.assert_not_called()
+
+
+def test_a_reason_from_another_check_is_not_cleared():
+    """Only the planned-start reason is this gate's to clear. Blanking anything else would hide
+    a live reason the processing cannot start — the AOI being too large, say."""
+    controller = _start_button_controller(template_to_run=None, gate_error=None)
+    controller.processing_view.dlg.processingProblemsLabel.text.return_value = "AOI is too large"
+
+    controller.update_start_processing_button_state()
+
+    controller.processing_view.dlg.processingProblemsLabel.clear.assert_not_called()
 
 
 def test_load_results_double_click_template_enters_template_view():

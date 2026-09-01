@@ -1,27 +1,21 @@
 from PyQt5.QtCore import QObject
-from PyQt5.QtWidgets import QMessageBox
 from qgis.core import QgsMapLayer
 
 from .. import layer_utils
-from ..service.alert_service import alert
 from ..service.aoi_service import AoiService
 from ..view.aoi_view import AoiView
-from ...schema import (BillingType,
-                       ImagerySearchParams,
-                       MyImageryParams,
-                       UserDefinedParams)
+from ...schema import BillingType
 
 
 class ProcessingController(QObject):
     """The start-processing panel: the model and its options, which AOI a processing will cover,
-    and the review/rating panel beside it.
+    the Start button's text and state, and the review/rating panel beside it.
 
     Owns the wiring only. It is the one place allowed to see both a service and a view, which is
     why the round trips below exist — the service cannot read a checkbox and the view cannot call
     a service (`spec/007_architecture.md` § Layer rules).
 
-    Provider selection, cost and the start-button state join it as the later Phase C steps
-    extract them.
+    Provider selection and cost join it as the later Phase C steps extract them.
     """
 
     def __init__(self,
@@ -40,10 +34,9 @@ class ProcessingController(QObject):
                  review_button=None,
                  processings_table=None,
                  provider_service=None,
-                 data_catalog_service=None,
-                 result_loader=None,
                  model_combo=None,
-                 model_options_changed=None):
+                 model_options_changed=None,
+                 metadata_table=None):
         super().__init__()
         self.iface = iface
         self.aoi_service = aoi_service
@@ -56,8 +49,6 @@ class ProcessingController(QObject):
         self.app_context = app_context
         self.review_dialog = review_dialog
         self.provider_service = provider_service
-        self.data_catalog_service = data_catalog_service
-        self.result_loader = result_loader
 
         self.aoi_service.aoiLayerRegistered.connect(self._on_aoi_layer_registered)
         self.aoi_service.aoiLayersChanged.connect(self.refresh_excepted_layers)
@@ -83,6 +74,15 @@ class ProcessingController(QObject):
         if processings_table is not None:
             processings_table.itemSelectionChanged.connect(self.refresh_feedback_controls)
             processings_table.cellClicked.connect(self.load_current_rating)
+            # Which template a Start would run depends on the processings-table selection, so
+            # the button follows it. `ProjectProcessingController` subscribes to the same signal
+            # for the Delete button — two regions reading one widget signal is how they stay
+            # independent (`spec/007_architecture.md`: controllers must not call each other).
+            processings_table.itemSelectionChanged.connect(
+                self.update_start_processing_button_state)
+        if metadata_table is not None:
+            # The planned-processing gate counts selected search images.
+            metadata_table.itemSelectionChanged.connect(self.update_start_processing_button_state)
 
     # ---------- the model and its options ----------
 
@@ -133,23 +133,26 @@ class ProcessingController(QObject):
         if self.app_context.billing_type == BillingType.credits:
             self.processing_service.update_processing_cost()
 
-    # ---------- a processing's imagery source ----------
+    # ---------- the start button ----------
 
-    def show_processing_source(self, processing, window) -> None:
-        """'Go to source' on the details dialog: reopen whatever imagery the processing ran on.
-        Where that lives depends on the source, which is why the fork is here rather than in any
-        one of the three regions it dispatches to."""
-        source_params = processing.params.sourceParams
-        if isinstance(source_params, ImagerySearchParams):
-            # The search table is filled from the AOI, so the download has to finish first.
-            self.result_loader.download_aoi_file(
-                pid=processing.id, callback=self.processing_service.duplicate_aoi_callback)
-        elif isinstance(source_params, MyImageryParams):
-            self.data_catalog_service.show_my_imagery_source(source_params)
-        elif isinstance(source_params, UserDefinedParams):
-            alert(self.processing_view.show_user_provider_info(source_params),
-                  icon=QMessageBox.Information)
-        window.close()
+    def update_start_processing_button_state(self, *args) -> None:
+        """Render start button text and enforce planned-processing image selection gate."""
+        self.update_start_processing_button_text()
+        error = self.processing_service.planned_processing_selection_error()
+        if error:
+            self.processing_view.disable_processing_start(reason=error, clear_area=False)
+            return
+        # No gate error: re-enable the button and clear any planned-processing reason label.
+        self.processing_view.enable_processing_start(
+            clear_reason=self.tr("Select one or more images in search results "
+                                 "to start planned processing"))
+
+    def update_start_processing_button_text(self, *args) -> None:
+        # Mirror what the start action actually does: "Start planned processing" only when a
+        # template run would happen (template selected + imagery-search source + its results open).
+        self.processing_view.set_start_button_text(
+            self.tr("Start planned processing") if self.processing_service.template_to_run()
+            else self.tr("Start processing"))
 
     # ---------- review and rating ----------
 

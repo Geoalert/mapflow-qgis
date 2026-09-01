@@ -2,13 +2,16 @@
 
 The Delete button is recomputed on processings-table selection change and enabled only when
 every selected row is a template the contributor owns (``all_selected_templates_editable`` +
-``Mapflow.update_delete_button_state``). Other roles keep their fixed role-based state.
+``ProjectProcessingController.update_delete_button_state``). Other roles keep their fixed
+role-based state.
 """
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from mapflow.mapflow import Mapflow
+from PyQt5.QtCore import QObject
+
 from mapflow.functional.app_context import AppContext
+from mapflow.functional.controller.project_processing_controller import ProjectProcessingController
 from mapflow.functional.service.processing_service import ProcessingService
 from mapflow.schema.project import UserRole
 
@@ -62,39 +65,40 @@ def test_editable_true_for_maintainer_even_on_others_template():
     assert svc.all_selected_templates_editable() is True
 
 
-# ---- Mapflow.update_delete_button_state ----------------------------------------------------
+# ---- ProjectProcessingController.update_delete_button_state --------------------------------
 
-def _plugin(user_role, editable):
-    plugin = Mapflow.__new__(Mapflow)
-    plugin.tr = lambda text: text
-    plugin.dlg = MagicMock()
-    plugin.processing_service = MagicMock()
-    plugin.template_service = MagicMock()
-    plugin.template_service.in_template_mode = False
-    plugin.processing_service.all_selected_templates_editable.return_value = editable
-    plugin.app_context = SimpleNamespace(user_role=user_role)
-    return plugin
+def _controller(user_role, editable):
+    controller = ProjectProcessingController.__new__(ProjectProcessingController)
+    QObject.__init__(controller)
+    controller.tr = lambda text: text
+    controller.dlg = MagicMock()
+    controller.processing_service = MagicMock()
+    controller.template_service = MagicMock()
+    controller.template_service.in_template_mode = False
+    controller.processing_service.all_selected_templates_editable.return_value = editable
+    controller.app_context = SimpleNamespace(user_role=user_role)
+    return controller
 
 
 def test_delete_enabled_for_contributor_on_own_templates():
-    plugin = _plugin(UserRole.contributor, editable=True)
-    plugin.update_delete_button_state()
-    plugin.dlg.deleteProcessings.setEnabled.assert_called_once_with(True)
-    plugin.dlg.deleteProcessings.setToolTip.assert_called_once_with("")
+    controller = _controller(UserRole.contributor, editable=True)
+    controller.update_delete_button_state()
+    controller.dlg.deleteProcessings.setEnabled.assert_called_once_with(True)
+    controller.dlg.deleteProcessings.setToolTip.assert_called_once_with("")
 
 
 def test_delete_disabled_for_contributor_on_processing_or_others_template():
-    plugin = _plugin(UserRole.contributor, editable=False)
-    plugin.update_delete_button_state()
-    plugin.dlg.deleteProcessings.setEnabled.assert_called_once_with(False)
+    controller = _controller(UserRole.contributor, editable=False)
+    controller.update_delete_button_state()
+    controller.dlg.deleteProcessings.setEnabled.assert_called_once_with(False)
     # A non-empty explanatory tooltip is set.
-    (tip,), _ = plugin.dlg.deleteProcessings.setToolTip.call_args
+    (tip,), _ = controller.dlg.deleteProcessings.setToolTip.call_args
     assert tip
 
 
 def test_delete_button_untouched_for_non_contributor():
     for role in (UserRole.maintainer, UserRole.owner, UserRole.readonly):
-        plugin = _plugin(role, editable=True)
-        plugin.update_delete_button_state()
-        plugin.dlg.deleteProcessings.setEnabled.assert_not_called()
-        plugin.dlg.deleteProcessings.setToolTip.assert_not_called()
+        controller = _controller(role, editable=True)
+        controller.update_delete_button_state()
+        controller.dlg.deleteProcessings.setEnabled.assert_not_called()
+        controller.dlg.deleteProcessings.setToolTip.assert_not_called()

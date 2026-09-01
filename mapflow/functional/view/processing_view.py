@@ -111,6 +111,17 @@ class ProcessingView:
     def disable_processing_start(self, reason: str, clear_area: bool):
         self.dlg.disable_processing_start(reason=reason, clear_area=clear_area)
 
+    def enable_processing_start(self, clear_reason: str = "") -> None:
+        """Re-enable Start, and clear the problems label only if it is still showing
+        `clear_reason`. Anything else in there was put by another check that has not been
+        re-run, and blanking it would hide a live reason the processing cannot start."""
+        self.dlg.startProcessing.setEnabled(True)
+        if clear_reason and self.dlg.processingProblemsLabel.text() == clear_reason:
+            self.dlg.processingProblemsLabel.clear()
+
+    def set_start_button_text(self, text: str) -> None:
+        self.dlg.startProcessing.setText(text)
+
     def create_table_items(self, processing: Union[ProcessingDTO, ProcessingTemplateDTO]):
         table_items = []
         set_color = False

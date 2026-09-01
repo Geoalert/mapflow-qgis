@@ -44,53 +44,32 @@ navigation state — and it took several MRs: create/update-search-params/exclud
 gating; the seen-markers cluster; the map layers and their navigation slots; the search request,
 results, footprints and AOI scoping; the run-state actions; one owner for the processings table's
 refresh; and finally the in-template view with its navigation state.
-**`ProcessingService` now references nothing on `TemplateService`** apart from the seam below.
-
-[ ] Finish the split: the `templates`-keyed queries, the context menu, and the seam
-The templates extraction stopped here on purpose, not by omission. `selected_template(s)`,
-`is_only_templates_selected`, `all_selected_templates_editable` and `template_to_run` read
-`ProcessingService.templates` — the project's template dict, which its own project fetch fills —
-and `template_to_run` is what `handle_processing_submission` forks the start path on. Moving them
-means moving that fork, so they belong with **"Extract processing lifecycle: options, start, review,
-rating"** below rather than with templates.
-
-What that leaves in `mapflow.py`, all of it reading those queries:
-* the processings-table **context menu** (`update_processing_options_menu`, ~`mapflow.py:588-660`) —
-  its template branch reads `selected_template` and the run-state gating;
-* `show_selected_details`, `update_delete_button_state`, `load_results`/`_open_template`, and the
-  plan-mode branch of the Search button.
-The in-template forks in `apply_local_filter`, the header sort and the pager now read
-`template_service` directly and are fine where they are.
-
-Until that step, `ProcessingService.template_state` is a documented read-only seam (a null object by
-default, `TemplateService` at wiring time) covering the three places the start path asks whether a
-template is open — `template_to_run`, the start callback, and resolving the table selection to
-objects. It is duck-typed and never imported, so no cycle is possible; delete it when that step
-lands.
+**`ProcessingService` now references nothing on `TemplateService`** — the last seam is gone (2c).
 
 Extract processing lifecycle: options, start, review, rating → existing processing
 service/controller. Split in three because it was 3× what lands cleanly in one MR; 2a (review and
-rating) is on `dev`, and what is left below is the start path.
+rating) and 2b (model options) are on `dev`.
 
-[ready-for-review] 2b: model options and a processing's imagery source → `ProcessingController`
-The model combo and its option checkboxes leave `mapflow.py`: the widgets to `ProcessingView`,
-the `wd/{id}/{block}` settings round trip to `ProcessingService`, the decisions and the two signal
-connections to the controller. `show_processing_source` goes with them.
-Four of the nine methods this entry listed turned out to be dead — `check_processing_ui`,
-`get_processing_params`, and copies of `get_local_image_indices`/`get_search_providers` that
-`ProviderService` already owns — so they are deleted rather than moved.
+[ready-for-review] 2c: the table's actions, the start button, and the `template_state` seam
+The processings table's context menu, its Delete button and the details dialog go to
+`ProjectProcessingController`; the Start button's text and state to `ProcessingController`.
+`on_processings_selection_changed` dissolves — each controller subscribes to
+`itemSelectionChanged` itself, rather than one poking the other.
+`ProcessingService.template_state` is **deleted**: what it reached for is now pushed, as
+`TemplateService.templateOpened`/`templateClosed` and a new `visibleProcessingsChanged`.
+`select_processing_in_table` was dead and is deleted.
 
-[ ] 2c: start-button state, the context menu, and the `templates`-keyed queries
-`update_processing_options_menu` (the last large `self.dlg` block), `show_selected_details`,
-`on_processings_selection_changed`, `update_delete_button_state`,
-`update_start_processing_button_text/state`, `select_processing_in_table`, plus the
-`selected_template(s)` / `is_only_templates_selected` / `all_selected_templates_editable` /
-`template_to_run` cluster and the start fork in `handle_processing_submission`.
-**This is the step that deletes `ProcessingService.template_state`** (see the templates item above).
-Last of the three, and the highest blast radius.
+[ ] Move the start fork out of `ProcessingService`
+`handle_processing_submission` still forks on `template_to_run()`, and `template_to_run` still
+lives in the service because `planned_processing_selection_error` calls it and is itself called
+from `update_processing_cost` — service-internal, on no path a controller drives. Moving the fork
+means moving the cost estimate with it, which is its own step. Nothing is blocked on it: the seam
+that made this urgent is already gone.
 
-Not part of this item: `load_results`, `download_results_file`, `download_aoi_file` and
-`show_details` are `ResultService`'s, which Phase D names separately.
+Still in `mapflow.py` from this area: `load_results`, `download_results_file` and
+`download_aoi_file`, which are `ResultService`'s — Phase D names them separately. (`show_details`
+was listed with them, but it is a processings-table action rather than result loading, so it went
+to `ProjectProcessingController` with the rest of the table's actions in 2c.)
 
 [ ] Split auth from account status → `SessionService` + `AccountService`
 [ ] Reduce what remains of `mapflow.py` to initGui/unload, wiring and construction

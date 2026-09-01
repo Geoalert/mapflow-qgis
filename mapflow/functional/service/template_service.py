@@ -13,9 +13,11 @@ building.
 
 `ProcessingService` is still reached for the shared `api` client, the poll timer it owns, and its
 `templates` dict — the project's template list, which its own project fetch fills. The dependency
-runs one way only: `ProcessingService` never reaches back here, because the processings table's two
-views are chosen by `ProjectProcessingController` rather than by either service. The one exception
-is documented on `ProcessingService.template_state`, a read-only seam for the start path.
+runs one way only, with no exception: `ProcessingService` never reaches back here. What it needs to
+know about an open template — which one, and which processings the table is showing — is *pushed*
+to it, as `templateOpened`/`templateClosed` and `visibleProcessingsChanged`, wired by
+`ProjectProcessingController`. The processings table's two views are that controller's to choose,
+not either service's.
 """
 import json
 import logging
@@ -95,11 +97,17 @@ class TemplateService(QObject):
     templateRowsChanged = pyqtSignal(object)
     #: The in-template view polls on its own (slower) cadence; the controller applies it.
     pollIntervalChanged = pyqtSignal(int)
+    #: The processings the table is now resolving its row ids against — this template's while it
+    #: is open, `None` for the project's own. `ProcessingService` turns a table selection into
+    #: objects and so needs the pool, but must not reach in here for it (that reach was the
+    #: `template_state` seam); it is told instead, and holds a plain dict it does not interpret.
+    visibleProcessingsChanged = pyqtSignal(object)
 
     # Class-level defaults so the mode check is safe even when callers (and tests) construct the
     # service without running __init__.
     in_template_mode = False
     active_template = None
+    _template_processings = {}
 
     def __init__(self,
                  app_context: AppContext,
@@ -141,6 +149,21 @@ class TemplateService(QObject):
         #: The open template's rows — its AOIs keyed by table id, and its processings keyed by id.
         self.template_aois = {}
         self.template_processings = {}
+
+    @property
+    def template_processings(self):
+        return self._template_processings
+
+    @template_processings.setter
+    def template_processings(self, processings):
+        """Announce the pool on every assignment.
+
+        A property rather than an emit beside each assignment: there are four of them (construct,
+        enter, exit, and the fetch callback), and whoever adds a fifth would have to know to emit.
+        Silence there would leave `ProcessingService` resolving row ids against a stale dict —
+        selecting a row in the table and getting the wrong processing, or none."""
+        self._template_processings = processings
+        self.visibleProcessingsChanged.emit(processings if self.in_template_mode else None)
 
     # ---------- plan-search gating ----------
 
