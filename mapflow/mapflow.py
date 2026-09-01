@@ -54,7 +54,7 @@ from .http import (Http,
 # Schema
 from .schema import BillingType, ProviderReturnSchema
 from .schema.catalog import ProductType
-from .schema.project import MapflowProject, UserRole
+from .schema.project import MapflowProject
 # Dialogs
 from .dialogs import (ErrorMessageWidget,
                       MainDialog,
@@ -62,7 +62,6 @@ from .dialogs import (ErrorMessageWidget,
                       ProviderDialog,
                       ReviewDialog)
 from .dialogs.icons import plugin_icon
-from .dialogs.processing_details_dialog import ProcessingDetailsDialog
 # Providers
 from .model.provider import (create_provider,
                               DefaultProvider,
@@ -324,10 +323,9 @@ class Mapflow(QObject):
             review_button=self.dlg.reviewButton,
             processings_table=self.dlg.processingsTable,
             provider_service=self.provider_service,
-            data_catalog_service=self.data_catalog_service,
-            result_loader=self.result_loader,
             model_combo=self.dlg.modelCombo,
-            model_options_changed=self.dlg.modelOptionsChanged)
+            model_options_changed=self.dlg.modelOptionsChanged,
+            metadata_table=self.dlg.metadataTable)
 
         # Templates (MR-1): create / update-search-params / exclude-from-search.
         self.template_service = TemplateService(app_context=self.app_context,
@@ -338,10 +336,8 @@ class Mapflow(QObject):
                                                 search_service=self.search_service)
         # TemplateService owns the in-template view, but AoiService and PreviewService are built
         # before it (it takes AoiService as a collaborator), so their back-links are set here.
-        # ProcessingService reads it only for "is a template open" — see its `template_state`.
         self.aoi_service.template_service = self.template_service
         self.preview_service.template_service = self.template_service
-        self.processing_service.template_state = self.template_service
 
         self.template_view = TemplateView(dlg=self.dlg, iface=self.iface, config=self.config)
         self.template_controller = TemplateController(
@@ -372,7 +368,11 @@ class Mapflow(QObject):
             processing_service=self.processing_service,
             project_service=self.project_service,
             template_service=self.template_service,
-            app_context=self.app_context)
+            app_context=self.app_context,
+            aoi_service=self.aoi_service,
+            data_catalog_service=self.data_catalog_service,
+            result_loader=self.result_loader,
+            processing_view=self.processing_service.view)
 
         self.setup_add_layer_menu()
         # Add options menu functionality
@@ -430,8 +430,9 @@ class Mapflow(QObject):
         self.dlg.deleteProcessings.clicked.connect(self.processing_service.confirm_delete_processings)
         self.processing_service.connect_processings_pagination()
         # Entering and leaving a template is TemplateController's entirely — it owns the layers,
-        # the search results and the view state they drive.
-        self.dlg.processingsTable.itemSelectionChanged.connect(self.on_processings_selection_changed)
+        # the search results and the view state they drive. What the processings-table selection
+        # enables is split between the two controllers that own those widgets: the Start button is
+        # ProcessingController's, the Delete button and the context menu ProjectProcessingController's.
         # Review and rating are ProcessingController's — it owns those handlers now.
         self.dlg.enable_rating(False, False)  # by default disabled
         self.dlg.enable_review(False)
@@ -445,7 +446,6 @@ class Mapflow(QObject):
 
         self.meta_table_layer_connection = self.dlg.metadataTable.itemSelectionChanged.connect(
             self.sync_table_selection_with_image_id_and_layer)
-        self.dlg.metadataTable.itemSelectionChanged.connect(self.update_start_processing_button_state)
         self.app_context.meta_layer_table_connection = None
         self.dlg.getMetadata.clicked.connect(self.handle_metadata_button_click)
         self.dlg.metadataTable.cellClicked.connect(self.on_metadata_table_cell_clicked)
@@ -567,7 +567,8 @@ class Mapflow(QObject):
     def setup_options_menu_connections(self):
         self.dlg.save_result_action.triggered.connect(self.download_results_file)
         self.dlg.download_aoi_action.triggered.connect(self.download_aoi_file)
-        self.dlg.see_details_action.triggered.connect(self.show_selected_details)
+        # 'See details' and the menu's own aboutToShow are wired by ProjectProcessingController,
+        # which owns what the processings table offers for the current selection.
         self.dlg.processing_update_action.triggered.connect(self.processing_service.update_processing)
         self.dlg.processing_restart_action.triggered.connect(self.processing_service.restart_processing)
         self.dlg.processing_duplicate_action.triggered.connect(self.check_dir_and_duplicate_processing)
@@ -579,142 +580,7 @@ class Mapflow(QObject):
         self.dlg.aoi_update_geometry_action.triggered.connect(
             self.aoi_service.start_update_session)
         self.dlg.aoi_draw_action.triggered.connect(self.aoi_service.start_draw_session)
-        self.dlg.options_menu.aboutToShow.connect(self.update_processing_options_menu)
         self.dlg.saveOptionsButton.setMenu(self.dlg.options_menu)
-
-    def update_processing_options_menu(self):
-        """Render processing options menu depending on selected row type."""
-        menu = self.dlg.options_menu
-        menu.clear()
-
-        selected_template = self.processing_service.selected_template()
-        selected_processing = self.processing_service.selected_processing()
-
-        # In-template view: AOI add/rename/delete (only for AOI rows / empty selection;
-        # a selected processing row falls through to the normal processing actions below).
-        if self.template_service.in_template_mode and not selected_processing:
-            can_edit = self.app_context.can_edit_template(self.template_service.active_template)
-            selected_aoi = self.template_service.selected_aoi()
-            # No AOI action can start while another edit/draw session is running.
-            no_session = not self.aoi_service.session_active
-            if selected_aoi:
-                self.dlg.aoi_rename_action.setEnabled(can_edit and selected_aoi.can_rename)
-                menu.addAction(self.dlg.aoi_rename_action)
-                self.dlg.aoi_delete_action.setEnabled(can_edit and selected_aoi.can_rename)
-                menu.addAction(self.dlg.aoi_delete_action)
-                # Edit the selected AOI's geometry on the map (vertex editing, in place).
-                self.dlg.aoi_update_geometry_action.setEnabled(
-                    can_edit and selected_aoi.can_rename and no_session)
-                menu.addAction(self.dlg.aoi_update_geometry_action)
-            self.dlg.aoi_add_action.setEnabled(can_edit and no_session)
-            menu.addAction(self.dlg.aoi_add_action)
-            self.dlg.aoi_draw_action.setEnabled(can_edit and no_session)
-            menu.addAction(self.dlg.aoi_draw_action)
-            return
-
-        # In-template view, a processing row is backed by the v1 TemplateProcessingSchema
-        # (flat params, no ProcessingParams) — offer only the read-only result actions, not
-        # restart/duplicate which need v2 source params.
-        if self.template_service.in_template_mode and selected_processing:
-            menu.addAction(self.dlg.save_result_action)
-            menu.addAction(self.dlg.see_details_action)
-            # Subtract this processing's already-processed area from the template's AOIs (feature 3).
-            # This edits the open template's geometry, so it follows template-edit rights.
-            if self.app_context.can_edit_template(self.template_service.active_template):
-                menu.addAction(self.dlg.exclude_from_search_action)
-            return
-
-        # Template selection: only template details action.
-        if selected_template and not selected_processing:
-            menu.addAction(self.dlg.see_details_action)
-            menu.addAction(self.dlg.see_search_results_action)
-            menu.addAction(self.dlg.see_processings_action)
-            # A contributor may edit/control their OWN templates; maintainer+ may edit any.
-            can_edit_template = self.app_context.can_edit_template(selected_template)
-            if can_edit_template:
-                menu.addAction(self.dlg.template_rename_action)
-                # NB: "Update search parameters" is offered only from *inside* the template
-                # (below), where the filter widgets reflect the template (populated on open).
-                # In this project-list selection they hold unrelated values, so it is not shown.
-            # Add pause/resume/restart based on template status. Run-state control follows the
-            # same template-edit rights (maintainer+, or a contributor on their own template).
-            can_control = can_edit_template
-            # A FAILED template can still be isActive, so check FAILED first (mirrors
-            # ProcessingTemplateDTO.table_status precedence): it offers Restart, not Pause.
-            if selected_template.is_failed:
-                self.dlg.template_restart_action.setEnabled(can_control)
-                menu.addAction(self.dlg.template_restart_action)
-            elif selected_template.isActive:
-                self.dlg.template_pause_action.setEnabled(can_control)
-                menu.addAction(self.dlg.template_pause_action)
-            else:
-                self.dlg.template_resume_action.setEnabled(can_control)
-                menu.addAction(self.dlg.template_resume_action)
-            return
-
-        # Processing selection: show processing-related actions.
-        if not selected_processing:
-            return
-
-        menu.addAction(self.dlg.save_result_action)
-        menu.addAction(self.dlg.download_aoi_action)
-        menu.addAction(self.dlg.see_details_action)
-
-        if self.app_context.user_role.can_delete_rename_review_processing:
-            menu.addAction(self.dlg.processing_update_action)
-
-        if self.app_context.user_role.can_start_processing:
-            menu.addAction(self.dlg.processing_restart_action)
-            menu.addAction(self.dlg.processing_duplicate_action)
-
-    def show_selected_details(self):
-        """Open details based on selected entity type."""
-        template = self.processing_service.selected_template()
-        if template and not self.processing_service.selected_processing():
-            self.template_service.show_template_details(template)
-            return
-        self.show_details()
-
-    def on_processings_selection_changed(self):
-        """Refresh the Start button for the new processings-table selection (it resolves the
-        selected template/processing itself)."""
-        self.update_start_processing_button_state()
-        self.update_delete_button_state()
-
-    def update_delete_button_state(self):
-        """Contributor-only: the Delete button follows the selection — enabled only when every
-        selected row is a template the contributor owns (they may delete their own templates but
-        never a processing). Other roles keep the fixed, role-based state from
-        ``enable_shared_project``, so this leaves them untouched."""
-        if self.app_context.user_role != UserRole.contributor:
-            return
-        can_delete = self.processing_service.all_selected_templates_editable()
-        self.dlg.deleteProcessings.setEnabled(can_delete)
-        self.dlg.deleteProcessings.setToolTip(
-            "" if can_delete
-            else self.tr("Contributors can only delete their own planned processings"))
-
-    def update_start_processing_button_text(self):
-        # Mirror what the start action actually does: "Start planned processing" only when a
-        # template run would happen (template selected + imagery-search source + its results open).
-        if self.processing_service.template_to_run():
-            self.dlg.startProcessing.setText(self.tr("Start planned processing"))
-        else:
-            self.dlg.startProcessing.setText(self.tr("Start processing"))
-
-    def update_start_processing_button_state(self):
-        """Render start button text and enforce planned-processing image selection gate."""
-        self.update_start_processing_button_text()
-        error = self.processing_service.planned_processing_selection_error()
-        if error:
-            self.dlg.disable_processing_start(reason=error, clear_area=False)
-            return
-
-        # No gate error: re-enable the button and clear any planned-processing reason label.
-        self.dlg.startProcessing.setEnabled(True)
-        planned_reason = self.tr("Select one or more images in search results to start planned processing")
-        if self.dlg.processingProblemsLabel.text() == planned_reason:
-            self.dlg.processingProblemsLabel.clear()
 
     # ==================== AOI edit/draw/add sessions ==================== #
     def add_aoi_from_layer_dialog(self):
@@ -730,21 +596,6 @@ class Mapflow(QObject):
         if not selected_ids:
             return
         self.aoi_service.add_aois_from_layers(selected_ids)
-
-    def select_processing_in_table(self, processing_id: str):
-        """Select processing row by ID and open processing details."""
-        id_column_index = self.config.PROCESSING_TABLE_ID_COLUMN_INDEX
-        id_items = self.dlg.processingsTable.findItems(str(processing_id), Qt.MatchExactly)
-
-        for item in id_items:
-            if item.column() != id_column_index:
-                continue
-            row = item.row()
-            self.dlg.processingsTable.clearSelection()
-            self.dlg.processingsTable.selectRow(row)
-            self.dlg.processingsTable.scrollToItem(item)
-            self.show_details()
-            return
 
     def apply_local_filter(self, *_) -> None:
         """Instantly filter the current search/template results by the filter widgets
@@ -1028,8 +879,8 @@ class Mapflow(QObject):
         # button label depends on the data source: refresh it here (e.g. switching an open template
         # to My imagery must drop the "planned" wording). Text only — the enabled state is managed
         # by the validation above.
-        self.update_start_processing_button_text()
-    
+        self.processing_controller.update_start_processing_button_text()
+
     def on_zoom_change(self):
         """ Set chosen zoom and update cost (if it depends on zoom for provider).
         """
@@ -1984,20 +1835,6 @@ class Mapflow(QObject):
             # it is if the upgrade is not needed, we want to save it
             self.app_context.settings.setValue('latest_reported_version', server_version)
             self.version_ok = True
-
-    def show_details(self):
-        processing = self.processing_service.selected_processing()
-        if not processing:
-            return
-        error = None
-        if processing.messages:
-            error = processing.error_message(raw=self.config.SHOW_RAW_ERROR)
-        dialog = ProcessingDetailsDialog(self.dlg)
-        dialog.toSourceButton.clicked.connect(
-            lambda: self.processing_controller.show_processing_source(processing=processing,
-                                                                      window=dialog))
-        dialog.setup(processing, error or None)
-        dialog.deleteLater()
 
     def show_search_next_page(self):
         self._show_search_page(self.search_service.next_page_offset())

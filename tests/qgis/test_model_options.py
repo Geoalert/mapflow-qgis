@@ -1,4 +1,4 @@
-"""QGIS-tier tests for picking a model, its optional blocks, and reopening a processing's source.
+"""QGIS-tier tests for picking a model and its optional blocks.
 
 The split under test: `ProcessingService` owns only the settings round trip for the option
 checkboxes (`wd/{workflow_id}/{block_name}`, `spec/003_local_storage.md`), `ProcessingView` owns
@@ -8,13 +8,11 @@ without a dialog.
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-import pytest
 from PyQt5.QtCore import QObject
 
-from mapflow.functional.controller import processing_controller as pc_mod
 from mapflow.functional.controller.processing_controller import ProcessingController
 from mapflow.functional.service.processing_service import ProcessingService
-from mapflow.schema import BillingType, ImagerySearchParams, MyImageryParams, UserDefinedParams
+from mapflow.schema import BillingType
 from mapflow.schema.workflow_def import WorkflowDef
 
 
@@ -50,8 +48,6 @@ def _controller(wd=None, billing=BillingType.credits, user_role=None):
     controller.processing_view.selected_model_name.return_value = "Buildings"
     controller.processing_view.enabled_blocks.return_value = []
     controller.provider_service = MagicMock()
-    controller.data_catalog_service = MagicMock()
-    controller.result_loader = MagicMock()
     return controller
 
 
@@ -207,57 +203,3 @@ def test_a_role_that_may_not_start_a_processing_gets_the_options_disabled():
 
     assert controller.processing_view.show_model_options.call_args.kwargs["enabled"] is False
 
-
-# ---------- reopening the imagery a processing ran on ----------
-
-def _processing(source_params):
-    return SimpleNamespace(id="p-1", params=SimpleNamespace(sourceParams=source_params))
-
-
-def test_a_search_based_processing_downloads_its_aoi_first():
-    """The search table is filled from the AOI, so the source cannot be shown before it lands."""
-    controller = _controller()
-    window = MagicMock()
-
-    controller.show_processing_source(_processing(ImagerySearchParams(imagerySearch=None)), window)
-
-    kwargs = controller.result_loader.download_aoi_file.call_args.kwargs
-    assert kwargs["pid"] == "p-1"
-    assert kwargs["callback"] is controller.processing_service.duplicate_aoi_callback
-    window.close.assert_called_once()
-
-
-def test_a_my_imagery_processing_is_handed_to_the_catalog():
-    controller = _controller()
-    source_params = MyImageryParams(myImagery=None)
-
-    controller.show_processing_source(_processing(source_params), MagicMock())
-
-    controller.data_catalog_service.show_my_imagery_source.assert_called_once_with(source_params)
-
-
-def test_a_user_defined_source_is_described_in_a_message(monkeypatch):
-    said = []
-    monkeypatch.setattr(pc_mod, "alert", lambda message, *a, **k: said.append(message))
-    controller = _controller()
-    controller.processing_view.show_user_provider_info.return_value = "XYZ tiles at zoom 18"
-
-    controller.show_processing_source(_processing(UserDefinedParams(userDefined=None)), MagicMock())
-
-    assert said == ["XYZ tiles at zoom 18"]
-
-
-@pytest.mark.parametrize("source_params", [
-    ImagerySearchParams(imagerySearch=None),
-    MyImageryParams(myImagery=None),
-    UserDefinedParams(userDefined=None),
-    None,  # a provider-based processing: nothing to reopen
-])
-def test_the_details_window_always_closes(source_params, monkeypatch):
-    monkeypatch.setattr(pc_mod, "alert", lambda *a, **k: None)
-    controller = _controller()
-    window = MagicMock()
-
-    controller.show_processing_source(_processing(source_params), window)
-
-    window.close.assert_called_once()

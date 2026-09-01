@@ -53,21 +53,27 @@ def test_template_to_run_none_when_results_not_open():
     assert _service(template, data_provider=isp, open_id="other-template").template_to_run() is None
 
 
+def _start_button_controller():
+    from PyQt5.QtCore import QObject
+    from mapflow.functional.controller.processing_controller import ProcessingController
+    controller = ProcessingController.__new__(ProcessingController)
+    QObject.__init__(controller)
+    controller.tr = lambda text: text
+    controller.processing_service = MagicMock()
+    controller.processing_view = MagicMock()
+    return controller
+
+
 def test_start_button_text_follows_template_to_run():
-    plugin = Mapflow.__new__(Mapflow)
-    plugin.tr = lambda text: text
-    plugin.dlg = MagicMock()
-    plugin.processing_service = MagicMock()
-    plugin.template_service = MagicMock()
-    plugin.template_service.in_template_mode = False
+    controller = _start_button_controller()
 
-    plugin.processing_service.template_to_run.return_value = SimpleNamespace(id="t1")
-    plugin.update_start_processing_button_text()
-    plugin.dlg.startProcessing.setText.assert_called_with("Start planned processing")
+    controller.processing_service.template_to_run.return_value = SimpleNamespace(id="t1")
+    controller.update_start_processing_button_text()
+    controller.processing_view.set_start_button_text.assert_called_with("Start planned processing")
 
-    plugin.processing_service.template_to_run.return_value = None
-    plugin.update_start_processing_button_text()
-    plugin.dlg.startProcessing.setText.assert_called_with("Start processing")
+    controller.processing_service.template_to_run.return_value = None
+    controller.update_start_processing_button_text()
+    controller.processing_view.set_start_button_text.assert_called_with("Start processing")
 
 
 def _create_template_service():
@@ -153,9 +159,9 @@ def test_provider_change_refreshes_start_button_text():
     plugin.app_context = SimpleNamespace(data_provider=None)
     plugin.toggle_imagery_search = MagicMock()
     plugin.area_calculator_service = MagicMock()
-    plugin.update_start_processing_button_text = MagicMock()
+    plugin.processing_controller = MagicMock()
 
     plugin.on_provider_change()
 
     assert plugin.app_context.data_provider is provider
-    plugin.update_start_processing_button_text.assert_called_once()
+    plugin.processing_controller.update_start_processing_button_text.assert_called_once()

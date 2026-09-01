@@ -51,13 +51,6 @@ from ...dialogs.error_message_widget import ErrorMessageWidget
 logger = logging.getLogger(__name__)
 
 
-class _NoOpenTemplate:
-    """No template is open: the processings table is showing the project list."""
-    in_template_mode = False
-    active_template = None
-    template_processings = {}
-
-
 class ProcessingService(QObject):
     """
     A service to store & query the mapflow processings.
@@ -85,16 +78,15 @@ class ProcessingService(QObject):
     _processings_all_final = True
     _default_poll_interval = Config.PROCESSING_TABLE_REFRESH_INTERVAL * 1000
 
-    #: What is open in the processings table, when it is not the project list. Set to
-    #: `TemplateService` at wiring time; a null object until then, so this service still works
-    #: (and constructs in tests) on its own.
+    #: The template the processings table is showing, or None for the project's own list, and the
+    #: processings that table resolves its row ids against. Both are *pushed* by
+    #: `ProjectProcessingController` off `TemplateService`'s signals — this service never asks for
+    #: them, and holds no reference to the service that sends them.
     #:
-    #: This is a read-only seam, not a collaborator: three places genuinely need to know whether a
-    #: template is open — `template_to_run`, the start callback, and resolving the table selection
-    #: to objects — and all three are part of the start path, which moves to a controller in the
-    #: "Extract processing lifecycle" step. It is deliberately duck-typed and never imported, so
-    #: nothing here depends on `TemplateService` as a type and no import cycle is possible.
-    template_state = _NoOpenTemplate()
+    #: Class-level so an instance built without `__init__` (as the tests do) still answers "no
+    #: template open" rather than raising.
+    _open_template = None
+    _visible_processings = None
 
     def __init__(self,
                  http: Http,
@@ -127,6 +119,17 @@ class ProcessingService(QObject):
         self._default_poll_interval = timer_interval
         self.processing_cost = 0
         self._delete_state = {}  # Store state for template deletion callback
+
+    # ---------- what the processings table is showing (pushed, never asked for) ----------
+
+    def set_open_template(self, template) -> None:
+        """The in-template view opened (a template) or closed (None)."""
+        self._open_template = template
+
+    def set_visible_processings(self, processings) -> None:
+        """The pool a table row id resolves against: an open template's, or None for this
+        service's own `processings`."""
+        self._visible_processings = processings
 
     def load_processing_history(self):
         """
@@ -297,8 +300,8 @@ class ProcessingService(QObject):
         the single source of truth shared by the start button text and the start action,
         so they never disagree.
         """
-        if self.template_state.in_template_mode:
-            template = self.template_state.active_template
+        if self._open_template is not None:
+            template = self._open_template
         else:
             template = self.selected_template()
             if not template or self.selected_processing():
@@ -496,7 +499,7 @@ class ProcessingService(QObject):
         )
         response_data = json.loads(response.readAll().data())
         self.processing_fetch_timer.start()  # start monitoring
-        if self.template_state.in_template_mode:
+        if self._open_template is not None:
             # In a template the new processing is shown grouped UNDER its AOI. That binding
             # lives in the template's aoiDetails, which the run response does not carry, so a
             # flat optimistic add would place the processing under the "No AOI" separator until
@@ -1080,8 +1083,7 @@ class ProcessingService(QObject):
     def selected_processings(self, limit=None) -> List[ProcessingDTO]:
         pids = self.view.selected_processing_ids(limit=limit)
         # In template view the table holds the template's processings, not the project's.
-        pool = (self.template_state.template_processings
-                if self.template_state.in_template_mode else self.processings)
+        pool = self.processings if self._visible_processings is None else self._visible_processings
         # limit None will give full selection
         selected_processings = [pool[pid] for pid in filter(lambda pid: pid in pids, pool)]
         return selected_processings

@@ -33,9 +33,7 @@ def _service(in_template_mode):
     service.api = MagicMock()
     service.view = MagicMock()
     service.processing_fetch_timer = MagicMock()
-    service.template_state = SimpleNamespace(
-        in_template_mode=in_template_mode,
-        active_template=SimpleNamespace(id="tpl-1") if in_template_mode else None)
+    service.set_open_template(SimpleNamespace(id="tpl-1") if in_template_mode else None)
     service.processings = {}
     service.processings_history = MagicMock()
     return service

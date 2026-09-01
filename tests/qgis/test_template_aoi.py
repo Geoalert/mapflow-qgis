@@ -330,7 +330,7 @@ def test_template_to_run_uses_active_template_in_template_mode():
     from mapflow.model.provider import ImagerySearchProvider
     service = ProcessingService.__new__(ProcessingService)
     template = SimpleNamespace(id="t-1")
-    service.template_state = SimpleNamespace(in_template_mode=True, active_template=template)
+    service.set_open_template(template)
     service.app_context = SimpleNamespace(
         data_provider=ImagerySearchProvider(proxy="https://example"),
         open_template_results_id="t-1",
@@ -342,8 +342,7 @@ def test_template_to_run_uses_active_template_in_template_mode():
 def test_template_to_run_none_when_open_results_belong_to_other_template():
     from mapflow.model.provider import ImagerySearchProvider
     service = ProcessingService.__new__(ProcessingService)
-    service.template_state = SimpleNamespace(in_template_mode=True,
-                                             active_template=SimpleNamespace(id="t-1"))
+    service.set_open_template(SimpleNamespace(id="t-1"))
     service.app_context = SimpleNamespace(
         data_provider=ImagerySearchProvider(proxy="https://example"),
         open_template_results_id="other",
