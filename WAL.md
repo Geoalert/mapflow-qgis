@@ -38,55 +38,31 @@ leaf-first so each extraction depends only on what already moved.
 
 Service and controller boundaries are tabulated in `spec/007_architecture.md`.
 
-The templates domain is the phase's largest and spans two files — ~50 methods in `mapflow.py`
-plus the template half of `processing_service.py` — and ~50 references reach template navigation
-state (`in_template_mode` 13×, `active_template` 16×) through `processing_service` from the other
-services. Split into two MRs so the high-blast-radius part is reviewable on its own.
+**The templates domain is extracted.** It was the phase's largest — ~50 methods in `mapflow.py`
+plus the template half of `processing_service.py`, with ~50 cross-service references to its
+navigation state — and it took several MRs: create/update-search-params/exclude and plan-search
+gating; the seen-markers cluster; the map layers and their navigation slots; the search request,
+results, footprints and AOI scoping; the run-state actions; one owner for the processings table's
+refresh; and finally the in-template view with its navigation state.
+**`ProcessingService` now references nothing on `TemplateService`** apart from the seam below.
 
-MR-1 (de-god `mapflow.py`) has landed as several small MRs: create/update-search-params/exclude +
-plan-search gating; the seen-markers cluster; the template map layers and their layer-related
-navigation slots; the search request, results, footprints, AOI scoping and params-to-widgets
-mirroring. `TemplateService` still reads navigation state from `processing_service`
-(service→service); ownership moves in MR-2, below.
+[ ] Finish the split: the `templates`-keyed queries, the context menu, and the seam
+The templates extraction stopped here on purpose, not by omission. `selected_template(s)`,
+`is_only_templates_selected`, `all_selected_templates_editable` and `template_to_run` read
+`ProcessingService.templates` — the project's template dict, which its own project fetch fills —
+and `template_to_run` is what `handle_processing_submission` forks the start path on. Moving them
+means moving that fork, so they belong with **"Extract processing lifecycle: options, start, review,
+rating"** below rather than with templates.
 
-What is still template-shaped in `mapflow.py` is there *because* it depends on the half MR-2 moves,
-so it comes out with it rather than needing its own step:
-* the processings-table **context menu** (~`mapflow.py:563-645`) — the rename/pause/resume/restart
-  actions and their `can_edit_template` / `is_failed` / `isActive` gating, all reading
-  `processing_service`;
-* the branches in shared paths — `load_results`/`_open_template`, `show_selected_details`,
-  `update_delete_button_state`, `add_aoi_from_layer_dialog`, the plan-mode branch of the Search
-  button, and the `in_template_mode` forks in `apply_local_filter`, the header sort and the pager.
-The forks in shared search paths are the ones to watch: they are coordination between two regions,
-so they belong in a controller, not inside either service (`SearchService` says as much in its own
-docstring).
+What that leaves in `mapflow.py`, all of it reading those queries:
+* the processings-table **context menu** (`update_processing_options_menu`, ~`mapflow.py:588-660`) —
+  its template branch reads `selected_template` and the run-state gating;
+* `show_selected_details`, `update_delete_button_state`, `load_results`/`_open_template`, and the
+  plan-mode branch of the Search button.
+The in-template forks in `apply_local_filter`, the header sort and the pager now read
+`template_service` directly and are fine where they are.
 
-MR-2 was split in two. MR-2a has landed: the run-state actions (rename/pause/resume/restart) are on
-`TemplateService`, wired by `TemplateController`. `_parse_template_response` and
-`_template_error_text` stayed behind — `hydrate_template` and the AOI error handler still use them —
-and `TemplateService._error_text` is the single seam to repoint when they come across.
-
-MR-2b-1 has landed: the processings table's refresh has one owner. Services emit
-`refreshRequested` / `rerenderRequested` / `templateRehydrateRequested` and
-`ProjectProcessingController` picks which of the table's two views to act on, so neither service
-needs the other to answer "which view is showing". The three template branches in `refresh_table`,
-`rerender_rows` and `rehydrate_template` are the places MR-2b-2 repoints at `TemplateService`.
-
-[ready-for-review] MR-2b-2: the navigation core → `TemplateService`
-The in-template view and its state move: `in_template_mode`, `active_template`, `template_aois`,
-`template_processings`, `enter/exit/refresh_template_view`, `refresh_active_template`, the
-processings fetch and its callback, the row building, `combined_template_rows`, the no-AOI queries,
-`selected_aois`, `hydrate_template`, the template-AOI CRUD and the two helpers MR-2a left behind.
-`ProcessingService` now references nothing on `TemplateService`.
-
-[ ] Finish the split: the `templates`-keyed queries and the context menu
-What MR-2b-2 could NOT take, and why. `selected_template(s)`, `is_only_templates_selected`,
-`all_selected_templates_editable` and `template_to_run` read `ProcessingService.templates` — the
-project's template dict, which its own project fetch fills — and `template_to_run` is what
-`handle_processing_submission` forks the start path on. Moving them means moving that fork, so they
-belong with **"Extract processing lifecycle: options, start, review, rating"** below rather than with
-templates. The `mapflow.py` context menu goes with them: its branches read exactly these queries.
-Until then `ProcessingService.template_state` is a documented read-only seam (a null object by
+Until that step, `ProcessingService.template_state` is a documented read-only seam (a null object by
 default, `TemplateService` at wiring time) covering the three places the start path asks whether a
 template is open — `template_to_run`, the start callback, and resolving the table selection to
 objects. It is duck-typed and never imported, so no cycle is possible; delete it when that step
