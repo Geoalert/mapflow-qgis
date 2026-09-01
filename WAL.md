@@ -67,13 +67,14 @@ default, `TemplateService` at wiring time) covering the three places the start p
 template is open — `template_to_run`, the start callback, and resolving the table selection to
 objects. It is duck-typed and never imported, so no cycle is possible; delete it when that step
 lands.
-Also here (decided): **template-group layer placement moves to `TemplateService`.** The creating
-half already landed with the layers step — `ensure_template_group` is on `TemplateService`, since
-only `mapflow.py` called it. What remains is the shared read-only lookup: `AoiService` and
-`PreviewService` still call `layer_utils.find_template_group` themselves. They should instead emit
-the built layer and let `TemplateService` place it in the tree (where a layer sits is a template
-concern). The find/ensure split (preview step) already removed the side-effect hazard; this removes
-the question.
+[ ] Give template-group layer placement one owner
+Independent of the item above — this is about layers, not the start path, so it can be done at any
+point. Decided: **placement belongs to `TemplateService`.** The creating half already landed —
+`ensure_template_group` is there, since only `mapflow.py` called it. What remains is the shared
+read-only lookup: `AoiService` and `PreviewService` still call `layer_utils.find_template_group`
+themselves. They should instead emit the built layer and let `TemplateService` place it in the tree
+(where a layer sits is a template concern). The find/ensure split already removed the side-effect
+hazard; this removes the question.
 Same item, same reason (user's call when the search render moved): **there are two footprint-layer
 builders** — `TemplateService.store_search_footprints` and
 `SearchService.display_metadata_geojson_layer`. They differ only in where the layer is placed
@@ -81,7 +82,7 @@ builders** — `TemplateService.store_search_footprints` and
 wired. `spec/007_architecture.md` gives "the footprints layer" to `SearchService`, so the merge is
 one shared builder that hands the layer back for placement. Kept out of the search-render MR
 deliberately: unifying them touches the working regular-search path, which is a behaviour risk that
-deserves its own review rather than riding along with the extraction.
+deserves its own review rather than riding along with an extraction.
 
 [ ] Extract processing lifecycle: options, start, review, rating → existing processing service/controller
 [ ] Split auth from account status → `SessionService` + `AccountService`
