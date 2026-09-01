@@ -29,6 +29,7 @@ from PyQt5.QtNetwork import QNetworkReply
 from qgis.core import (QgsFeature,
                        QgsGeometry,
                        QgsLayerTreeGroup,
+                       QgsLayerTreeLayer,
                        QgsVectorLayer)
 
 from .. import layer_utils
@@ -73,9 +74,6 @@ class TemplateService(QObject):
     searchResultsReady = pyqtSignal(object)
     #: The template's search returned no images; the controller empties the table.
     searchResultsEmpty = pyqtSignal()
-    #: The search-results footprints layer was (re)built; the controller wires its selection to
-    #: the table.
-    metadataLayerReady = pyqtSignal(object)
     #: A template was renamed: (template id, new name). The controller updates its row's name
     #: cell straight away, so the rename shows before the refreshed list arrives.
     templateRenamed = pyqtSignal(str, str)
@@ -1327,30 +1325,51 @@ class TemplateService(QObject):
         filename = provider.save_search_layer(self.app_context.temp_dir, geoms)
         if not filename:
             return
-        # Drop the previous footprint layer so repeated searches don't stack duplicates.
-        if getattr(self.app_context, 'metadata_layer', None) is not None:
-            try:
-                self.app_context.project.removeMapLayer(self.app_context.metadata_layer)
-            except (AttributeError, RuntimeError):
-                pass
-        layer = QgsVectorLayer(filename, f"{provider.name} metadata", "ogr")
-        if not layer.isValid():
-            self.app_context.metadata_layer = None
+        # `SearchService` owns the footprints layer itself (spec/007 § Services); what is a
+        # template concern is only where the layer ends up in the tree, which is what `place` says.
+        # Wiring the layer's selection to the table is `SearchService.metadataLayerReady`'s job for
+        # both searches now; emitting a second signal here connected it twice, so one footprint
+        # click previewed twice.
+        self.search_service.build_metadata_layer(
+            filename, f"{provider.name} metadata",
+            place=lambda built: self.place_in_template_group(built, template_group_name))
+
+    def place_preview_layer(self, layer) -> None:
+        """Move a freshly added preview layer into the open template's group, above the
+        search-results footprints and below the AOI subgroups, so the precedence is
+        AOIs (top) > previews > search results (bottom). No-op outside a template."""
+        if not layer or not self.in_template_mode or not self.active_template:
             return
-        layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'metadata.qml'))
-        # Register as the current search-metadata layer BEFORE adding it to the project, so
-        # the AOI-area monitor (which reacts to layersAdded) recognizes and skips it.
-        self.app_context.metadata_layer = layer
-        if template_group_name:
-            target_group = self.ensure_template_group(template_group_name)
-            self.app_context.project.addMapLayer(layer, addToLegend=False)
-            # Append (bottom) so the search-results footprints sit below the AOI/processing
-            # subgroups rather than on top of them.
-            target_group.addLayer(layer)
-        else:
+        try:
+            template_group = self.find_template_group(str(self.active_template.name))
+            root = self.app_context.project.layerTreeRoot()
+            node = root.findLayer(layer.id())
+            if node is None or template_group is None:
+                return
+            footprints_layer = getattr(self.app_context, 'metadata_layer', None)
+            footprints_id = footprints_layer.id() if footprints_layer else None
+            children = template_group.children()
+            # Default to the bottom; otherwise insert directly above the footprints layer
+            # (which itself sits below the AOI/processing subgroups).
+            insert_index = len(children)
+            for i, child in enumerate(children):
+                if isinstance(child, QgsLayerTreeLayer) and child.layerId() == footprints_id:
+                    insert_index = i
+                    break
+            template_group.insertChildNode(insert_index, node.clone())
+            (node.parent() or root).removeChildNode(node)
+        except (AttributeError, RuntimeError):
+            return
+
+    def place_in_template_group(self, layer, template_group_name: Optional[str] = None) -> None:
+        """Put a built layer inside the open template's group. Where a layer sits among a
+        template's layers is a template concern, so the services that build one hand it here
+        rather than reaching for the group themselves."""
+        if not template_group_name:
             self.result_loader.add_layer(layer=layer)
-        # Selecting a footprint on the map selects the matching table row (and triggers preview).
-        self.metadataLayerReady.emit(layer)
-        self.app_context.search_footprints = {
-            feature["local_index"]: feature for feature in layer.getFeatures()
-        }
+            return
+        target_group = self.ensure_template_group(template_group_name)
+        self.app_context.project.addMapLayer(layer, addToLegend=False)
+        # Append (bottom) so the search-results footprints sit below the AOI/processing
+        # subgroups rather than on top of them.
+        target_group.addLayer(layer)

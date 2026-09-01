@@ -353,7 +353,6 @@ class Mapflow(QObject):
             processings_table=self.dlg.processingsTable,
             see_processings_action=self.dlg.see_processings_action,
             see_search_results_action=self.dlg.see_search_results_action,
-            selection_sync=self.sync_layer_selection_with_table,
             processing_view=self.processing_service.view,
             rename_action=self.dlg.template_rename_action,
             pause_action=self.dlg.template_pause_action,
@@ -1211,7 +1210,7 @@ class Mapflow(QObject):
         # We store the results in a temp folder, separate file for each provider
         geoms = self.app_context.search_provider.load_search_layer(self.app_context.temp_dir)
         if geoms:
-            self.search_service.display_metadata_geojson_layer(
+            self.search_service.build_metadata_layer(
                 os.path.join(self.app_context.temp_dir, self.app_context.search_provider.metadata_layer_name),
                 f"{self.app_context.search_provider.name} metadata")
             # Keep the restored results available to the instant local filter (fill below emits

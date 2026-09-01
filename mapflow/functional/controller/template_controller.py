@@ -35,7 +35,6 @@ class TemplateController(QObject):
                  processings_table,
                  see_processings_action,
                  see_search_results_action,
-                 selection_sync,
                  processing_view,
                  rename_action,
                  pause_action,
@@ -56,10 +55,6 @@ class TemplateController(QObject):
         self.processing_service = processing_service
         self.app_context = app_context
         self.iface = iface
-        #: Wires a rebuilt footprints layer's selection to the results table. Still owned by
-        #: `mapflow.py` (it serves the regular search too), so it arrives as a callable — the
-        #: same indirection `provider_service.selection_sync_callback` already uses.
-        self.selection_sync = selection_sync
 
         update_search_button.clicked.connect(self.update_template_search_params)
         exclude_action.triggered.connect(self.template_service.exclude_processing_from_search)
@@ -96,7 +91,6 @@ class TemplateController(QObject):
             lambda message: self.iface.messageBar().pushWarning(self.app_context.plugin_name, message))
         self.template_service.searchResultsReady.connect(self.show_search_results)
         self.template_service.searchResultsEmpty.connect(self.search_view.clear_table)
-        self.template_service.metadataLayerReady.connect(self.bind_metadata_layer_selection)
         self.template_service.templateRenamed.connect(self.show_renamed_template)
 
     def create_search_template(self, name_override: str = None) -> None:
@@ -281,11 +275,6 @@ class TemplateController(QObject):
         self.search_view.fill_table(geoms, sort=False)
         # New images are flagged with an icon in the leftmost column (not by editing text).
         self.apply_new_image_markers()
-
-    def bind_metadata_layer_selection(self, layer) -> None:
-        """Selecting a footprint on the map selects the matching table row (and triggers preview)."""
-        self.app_context.meta_layer_table_connection = layer.selectionChanged.connect(
-            self.selection_sync)
 
     def show_renamed_template(self, template_id: str, new_name: str) -> None:
         """Put the new name in the template's row without waiting for the refreshed list."""

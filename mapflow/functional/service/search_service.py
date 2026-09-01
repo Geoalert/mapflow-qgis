@@ -181,7 +181,9 @@ class SearchService(QObject):
             logger.exception("Unexpected error saving the search layer")
             alert(save_failed_message)
             return
-        self.display_metadata_geojson_layer(filename, f"{provider.name} metadata", aoi_layer)
+        self.build_metadata_layer(
+            filename, f"{provider.name} metadata",
+            place=lambda layer: self.place_beside_aoi_layer(layer, aoi_layer))
         # Retain the raw results so the instant local filter can reorder/re-render them without
         # a new request.
         self.app_context.search_result_geojson = geoms
@@ -190,27 +192,46 @@ class SearchService(QObject):
 
     # ---------- the footprints layer ----------
 
-    def display_metadata_geojson_layer(self, filename, layer_name, aoi_layer=None):
+    def build_metadata_layer(self, filename, layer_name, place=None):
+        """Build the search-results footprints layer from a saved file, and register it.
+
+        One builder for both searches. Where the layer *goes* is the only thing that differs — a
+        regular search puts it beside the AOI layer, a template's inside that template's group —
+        so placement arrives as ``place(layer)`` from the caller. `spec/007_architecture.md` gives
+        the footprints layer to this service; it does not give it an opinion about the template
+        layer tree.
+
+        Returns the layer, or None when the file will not open as one.
+        """
         self.remove_metadata_layer()
-        # Assigned (before add_layer) so the AOI-area monitor recognizes and skips it.
-        self.app_context.metadata_layer = QgsVectorLayer(filename, layer_name, 'ogr')
-        self.app_context.metadata_layer.loadNamedStyle(
-            os.path.join(self.plugin_dir, 'static', 'styles', 'metadata.qml'))
-        # Place search results just under the AOI layer, if that layer has a legend node.
-        # (A layer added with addToLegend=False has no tree node -> findLayer returns None;
-        # fall back to a plain add instead of dereferencing a missing parent.)
+        layer = QgsVectorLayer(filename, layer_name, 'ogr')
+        if not layer.isValid():
+            self.app_context.metadata_layer = None
+            return None
+        layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'metadata.qml'))
+        # Assigned before the layer is added to the project, so the AOI-area monitor (which reacts
+        # to layersAdded) recognises and skips it.
+        self.app_context.metadata_layer = layer
+        (place or self.place_beside_aoi_layer)(layer)
+        self.app_context.search_footprints = {
+            feature['local_index']: feature for feature in layer.getFeatures()
+        }
+        self.metadataLayerReady.emit(layer)
+        return layer
+
+    def place_beside_aoi_layer(self, layer, aoi_layer=None) -> None:
+        """Put the footprints just under the AOI layer, if that layer has a legend node.
+
+        (A layer added with addToLegend=False has no tree node -> findLayer returns None; fall
+        back to a plain add instead of dereferencing a missing parent.)
+        """
         aoi_layer_tree = (self.app_context.project.layerTreeRoot().findLayer(aoi_layer.id())
                           if aoi_layer else None)
         if aoi_layer_tree is not None and aoi_layer_tree.parent() is not None:
             index = aoi_layer_tree.parent().children().index(aoi_layer_tree)
-            self.result_loader.add_layer(layer=self.app_context.metadata_layer, order=index + 1)
+            self.result_loader.add_layer(layer=layer, order=index + 1)
         else:
-            self.result_loader.add_layer(layer=self.app_context.metadata_layer)
-        self.app_context.search_footprints = {
-            feature['local_index']: feature
-            for feature in self.app_context.metadata_layer.getFeatures()
-        }
-        self.metadataLayerReady.emit(self.app_context.metadata_layer)
+            self.result_loader.add_layer(layer=layer)
 
     def remove_metadata_layer(self) -> None:
         try:

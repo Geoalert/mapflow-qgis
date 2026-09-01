@@ -67,22 +67,12 @@ default, `TemplateService` at wiring time) covering the three places the start p
 template is open — `template_to_run`, the start callback, and resolving the table selection to
 objects. It is duck-typed and never imported, so no cycle is possible; delete it when that step
 lands.
-[ ] Give template-group layer placement one owner
-Independent of the item above — this is about layers, not the start path, so it can be done at any
-point. Decided: **placement belongs to `TemplateService`.** The creating half already landed —
-`ensure_template_group` is there, since only `mapflow.py` called it. What remains is the shared
-read-only lookup: `AoiService` and `PreviewService` still call `layer_utils.find_template_group`
-themselves. They should instead emit the built layer and let `TemplateService` place it in the tree
-(where a layer sits is a template concern). The find/ensure split already removed the side-effect
-hazard; this removes the question.
-Same item, same reason (user's call when the search render moved): **there are two footprint-layer
-builders** — `TemplateService.store_search_footprints` and
-`SearchService.display_metadata_geojson_layer`. They differ only in where the layer is placed
-(template group vs. beside the AOI layer), how a failed save is reported, and how selection-sync is
-wired. `spec/007_architecture.md` gives "the footprints layer" to `SearchService`, so the merge is
-one shared builder that hands the layer back for placement. Kept out of the search-render MR
-deliberately: unifying them touches the working regular-search path, which is a behaviour risk that
-deserves its own review rather than riding along with an extraction.
+[ready-for-review] Give template-group layer placement one owner
+The two footprint-layer builders become one: `SearchService.build_metadata_layer` builds and
+registers the layer for both searches, and *where it goes* arrives as a `place` callable — beside
+the AOI layer for a regular search, inside the template group for a template's. `PreviewService`
+hands its preview layer to `TemplateService.place_preview_layer` instead of doing the tree surgery
+itself, so nothing but `TemplateService` reaches for a template group now.
 
 [ ] Extract processing lifecycle: options, start, review, rating → existing processing service/controller
 [ ] Split auth from account status → `SessionService` + `AccountService`

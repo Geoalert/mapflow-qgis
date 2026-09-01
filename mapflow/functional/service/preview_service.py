@@ -4,7 +4,7 @@ from typing import List, Optional, Tuple
 from PyQt5.QtCore import QObject
 from PyQt5.QtNetwork import QNetworkReply
 from osgeo import gdal, ogr
-from qgis.core import (QgsCoordinateReferenceSystem, QgsFeature, QgsGeometry, QgsLayerTreeLayer,
+from qgis.core import (QgsCoordinateReferenceSystem, QgsFeature, QgsGeometry,
                        QgsRasterLayer, QgsRectangle, QgsVectorLayer)
 
 from .. import helpers
@@ -104,35 +104,10 @@ class PreviewService(QObject):
         self.result_loader.add_aoi_to_preview()
 
     def _relocate_to_template_group(self, layer) -> None:
-        """In the in-template view, move a freshly added preview layer into the template's
-        map group, above the search-results footprints and below the AOI subgroups, so the
-        precedence is AOIs (top) > previews > search results (bottom)."""
-        service = self.template_service
-        if not layer or not service.in_template_mode or not service.active_template:
-            return
-        settings = self.app_context.settings
-        mapflow_group_name = settings.value('layerGroup') or self.app_context.plugin_name
-        try:
-            template_group = layer_utils.find_template_group(
-                self.app_context.project, mapflow_group_name, str(service.active_template.name))
-            root = self.app_context.project.layerTreeRoot()
-            node = root.findLayer(layer.id())
-            if node is None or template_group is None:
-                return
-            footprints_layer = getattr(self.app_context, 'metadata_layer', None)
-            footprints_id = footprints_layer.id() if footprints_layer else None
-            children = template_group.children()
-            # Default to the bottom; otherwise insert directly above the footprints layer
-            # (which itself sits below the AOI/processing subgroups).
-            insert_index = len(children)
-            for i, child in enumerate(children):
-                if isinstance(child, QgsLayerTreeLayer) and child.layerId() == footprints_id:
-                    insert_index = i
-                    break
-            template_group.insertChildNode(insert_index, node.clone())
-            (node.parent() or root).removeChildNode(node)
-        except (AttributeError, RuntimeError):
-            return
+        """Inside a template, a preview belongs in that template's map group. Where among its
+        layers is `TemplateService`'s call, so the built layer is handed over rather than placed
+        from here (`spec/007_architecture.md`: where a layer sits is a template concern)."""
+        self.template_service.place_preview_layer(layer)
 
     def _move_layer_to_top(self, layer_id: str) -> bool:
         """Move an existing layer's tree node to the top of its parent group."""
