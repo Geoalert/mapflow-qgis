@@ -29,8 +29,7 @@ def service():
                              config=MagicMock(),
                              result_loader=MagicMock(),
                              processing_service=MagicMock(),
-        template_service=SimpleNamespace(in_template_mode=False,
-                                                                active_template=None))
+        template_service=MagicMock(in_template_mode=False, active_template=None))
     service.metadata_feature = MagicMock(return_value=MagicMock())  # feature exists
     service.preview_png = MagicMock()
     return service

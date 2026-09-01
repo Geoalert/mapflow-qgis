@@ -10,6 +10,7 @@ from unittest.mock import MagicMock
 from qgis.core import QgsProject, QgsVectorLayer
 
 from mapflow.functional.service.preview_service import PreviewService
+from mapflow.functional.service.template_service import TemplateService
 
 
 def _mem_layer(name):
@@ -48,6 +49,15 @@ def test_move_layer_to_top_brings_node_first():
     assert root.children()[0].layerId() == second.id()
 
 
+def _template_service(app_context, in_template_mode=True, template_name="T1"):
+    """Placing a layer among a template's layers is TemplateService's call since the
+    layer-placement step; PreviewService just hands the built layer over."""
+    service = TemplateService(app_context=app_context, processing_service=MagicMock())
+    service.in_template_mode = in_template_mode
+    service.active_template = SimpleNamespace(name=template_name) if in_template_mode else None
+    return service
+
+
 def test_relocate_preview_places_it_above_footprints_inside_template_group():
     project = QgsProject()
     root = project.layerTreeRoot()
@@ -61,13 +71,11 @@ def test_relocate_preview_places_it_above_footprints_inside_template_group():
 
     settings = MagicMock()
     settings.value.return_value = "Mapflow"
-    service = _service(
+    service = _template_service(
         SimpleNamespace(project=project, settings=settings, plugin_name="Mapflow",
-                        metadata_layer=footprints),
-        template_service=SimpleNamespace(in_template_mode=True,
-                                         active_template=SimpleNamespace(name="T1")))
+                        metadata_layer=footprints))
 
-    service._relocate_to_template_group(preview)
+    service.place_preview_layer(preview)
 
     names = [c.name() for c in template_group.children()]
     # Order within the template group: AOI subgroup, preview, footprints.
@@ -81,8 +89,19 @@ def test_relocate_preview_noop_outside_template_mode():
     root = project.layerTreeRoot()
     preview = _add(project, root, _mem_layer("img-1 preview"))
 
-    service = _service(SimpleNamespace(project=project))
+    service = _template_service(SimpleNamespace(project=project), in_template_mode=False)
 
-    service._relocate_to_template_group(preview)
+    service.place_preview_layer(preview)
 
     assert root.children()[-1].layerId() == preview.id()
+
+
+def test_preview_service_hands_the_layer_to_the_template_service():
+    """The placement decision is not PreviewService's; it only passes the layer along."""
+    service = _service(SimpleNamespace(project=QgsProject()),
+                       template_service=MagicMock())
+    layer = object()
+
+    service._relocate_to_template_group(layer)
+
+    service.template_service.place_preview_layer.assert_called_once_with(layer)
