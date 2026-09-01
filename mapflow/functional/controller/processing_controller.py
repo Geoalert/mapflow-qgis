@@ -1,21 +1,27 @@
 from PyQt5.QtCore import QObject
+from PyQt5.QtWidgets import QMessageBox
 from qgis.core import QgsMapLayer
 
 from .. import layer_utils
+from ..service.alert_service import alert
 from ..service.aoi_service import AoiService
 from ..view.aoi_view import AoiView
+from ...schema import (BillingType,
+                       ImagerySearchParams,
+                       MyImageryParams,
+                       UserDefinedParams)
 
 
 class ProcessingController(QObject):
-    """The start-processing panel: which AOI a processing will cover, and the review/rating
-    panel beside it.
+    """The start-processing panel: the model and its options, which AOI a processing will cover,
+    and the review/rating panel beside it.
 
-    Owns the wiring only. It is the one place allowed to see both `AoiService` and `AoiView`,
-    which is why the round trips below exist — the service cannot read a checkbox and the view
-    cannot call a service (`spec/007_architecture.md` § Layer rules).
+    Owns the wiring only. It is the one place allowed to see both a service and a view, which is
+    why the round trips below exist — the service cannot read a checkbox and the view cannot call
+    a service (`spec/007_architecture.md` § Layer rules).
 
-    Model and options, provider selection, cost and the start-button state join it as the later
-    Phase C steps extract them.
+    Provider selection, cost and the start-button state join it as the later Phase C steps
+    extract them.
     """
 
     def __init__(self,
@@ -32,7 +38,12 @@ class ProcessingController(QObject):
                  rating_combo=None,
                  accept_button=None,
                  review_button=None,
-                 processings_table=None):
+                 processings_table=None,
+                 provider_service=None,
+                 data_catalog_service=None,
+                 result_loader=None,
+                 model_combo=None,
+                 model_options_changed=None):
         super().__init__()
         self.iface = iface
         self.aoi_service = aoi_service
@@ -44,11 +55,18 @@ class ProcessingController(QObject):
         self.processing_view = processing_view
         self.app_context = app_context
         self.review_dialog = review_dialog
+        self.provider_service = provider_service
+        self.data_catalog_service = data_catalog_service
+        self.result_loader = result_loader
 
         self.aoi_service.aoiLayerRegistered.connect(self._on_aoi_layer_registered)
         self.aoi_service.aoiLayersChanged.connect(self.refresh_excepted_layers)
         self.aoi_service.currentAoiLayerChanged.connect(self.aoi_view.set_current_layer)
 
+        if model_combo is not None:
+            model_combo.currentIndexChanged.connect(self.on_model_change)
+        if model_options_changed is not None:
+            model_options_changed.connect(self.on_options_change)
         if processing_service is not None:
             processing_service.ratingLoaded.connect(self.processing_view.set_rating_labels)
             processing_service.reviewSubmitted.connect(self._on_review_submitted)
@@ -65,6 +83,73 @@ class ProcessingController(QObject):
         if processings_table is not None:
             processings_table.itemSelectionChanged.connect(self.refresh_feedback_controls)
             processings_table.cellClicked.connect(self.load_current_rating)
+
+    # ---------- the model and its options ----------
+
+    def on_model_change(self, *args) -> None:
+        """A different model was picked: its options, its price, and which imagery sources it
+        accepts all change together."""
+        wd_name = self.processing_view.selected_model_name()
+        wd = self.app_context.get_workflow_def(wd_name)
+        # Unconditional, and before the early return: a model with no definition still narrows
+        # the provider list, and leaving the previous model's sources offered is worse than
+        # offering none.
+        self.provider_service.set_available_imagery_sources(wd_name)
+        if not wd:
+            return
+        self.show_wd_options(wd)
+        self._show_price(wd)
+        # The test is `blocks`, not `optional_blocks`: a model that declares any block waits,
+        # because adding its option checkboxes fires `modelOptionsChanged` and `on_options_change`
+        # quotes the cost then. Which leaves obligatory-only models quoted by neither path —
+        # pinned in `test_a_model_whose_blocks_are_all_obligatory_is_not_quoted_on_selection`.
+        if not wd.blocks:
+            self._update_cost()
+
+    def on_options_change(self, *args) -> None:
+        wd = self.app_context.get_workflow_def(self.processing_view.selected_model_name())
+        if not wd:
+            return
+        self._show_price(wd)
+        self.processing_service.save_option_settings(wd, self.processing_view.enabled_blocks())
+        self._update_cost()
+
+    def show_wd_options(self, wd) -> None:
+        """Rebuild the option checkboxes for `wd`, ticked as this user last left them."""
+        can_start_processing = True
+        if self.app_context.user_role:
+            can_start_processing = self.app_context.user_role.can_start_processing
+        self.processing_view.show_model_options(self.processing_service.saved_model_options(wd),
+                                                enabled=can_start_processing)
+
+    def _show_price(self, wd) -> None:
+        self.processing_view.show_wd_price(
+            wd_price=wd.get_price(enable_blocks=self.processing_view.enabled_blocks()),
+            wd_description=wd.description,
+            display_price=self.app_context.billing_type == BillingType.credits)
+
+    def _update_cost(self) -> None:
+        """A cost is quoted in credits, so only a credits account has one to ask for."""
+        if self.app_context.billing_type == BillingType.credits:
+            self.processing_service.update_processing_cost()
+
+    # ---------- a processing's imagery source ----------
+
+    def show_processing_source(self, processing, window) -> None:
+        """'Go to source' on the details dialog: reopen whatever imagery the processing ran on.
+        Where that lives depends on the source, which is why the fork is here rather than in any
+        one of the three regions it dispatches to."""
+        source_params = processing.params.sourceParams
+        if isinstance(source_params, ImagerySearchParams):
+            # The search table is filled from the AOI, so the download has to finish first.
+            self.result_loader.download_aoi_file(
+                pid=processing.id, callback=self.processing_service.duplicate_aoi_callback)
+        elif isinstance(source_params, MyImageryParams):
+            self.data_catalog_service.show_my_imagery_source(source_params)
+        elif isinstance(source_params, UserDefinedParams):
+            alert(self.processing_view.show_user_provider_info(source_params),
+                  icon=QMessageBox.Information)
+        window.close()
 
     # ---------- review and rating ----------
 

@@ -2,7 +2,7 @@ import json
 import logging
 from datetime import datetime, timezone
 from uuid import UUID
-from typing import Dict, Optional, List
+from typing import Dict, Optional, List, Tuple
 from PyQt5.QtCore import QObject, QTimer, pyqtSignal
 from PyQt5.QtNetwork import QNetworkReply
 from PyQt5.QtWidgets import QMessageBox, QApplication, QInputDialog
@@ -144,6 +144,22 @@ class ProcessingService(QObject):
 
         # Optionally refresh processings for the new project
         # self.get_processings()  # Uncomment when this method is implemented
+
+    # ================  MODEL OPTIONS  ====================== #
+    # Which optional blocks a model runs with is remembered per model, under
+    # `wd/{workflow_id}/{block_name}` (`spec/003_local_storage.md`). Only the settings round trip
+    # lives here — the checkboxes themselves are `ProcessingView`'s.
+
+    def saved_model_options(self, wd) -> List[Tuple[str, bool]]:
+        """This model's optional blocks as (label, remembered state) pairs, in the order the
+        workflow definition declares them — the order is what maps a checkbox back to a block."""
+        return [(block.displayName,
+                 bool(self.app_context.settings.value(f"wd/{wd.id}/{block.name}", False)))
+                for block in wd.optional_blocks]
+
+    def save_option_settings(self, wd, enabled_blocks: List[bool]) -> None:
+        for block in wd.get_enabled_blocks(enabled_blocks):
+            self.app_context.settings.setValue(f"wd/{wd.id}/{block['name']}", block["enabled"])
 
     # ================  CREATE  ====================== #
     def validate_processing_params(self, processing_params, allow_empty_name: bool = False):

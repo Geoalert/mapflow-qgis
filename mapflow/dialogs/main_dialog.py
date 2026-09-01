@@ -531,7 +531,8 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
     def enable_model_options(self, can_start_processing: bool = True):
         """
         Set the whole group of checkboxes for model options disabled depending on user role property.
-        Is called from 'show_wd_options' in 'mapflow.py'.
+        Called by `ProcessingView.show_model_options`, right after the checkboxes are created —
+        they do not exist any earlier, so this cannot be folded into the rest of the panel setup.
         """
         if not can_start_processing:
             can_start_processing = True
