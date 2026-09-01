@@ -321,7 +321,16 @@ class Mapflow(QObject):
             aoi_service=self.aoi_service,
             aoi_view=self.aoi_view,
             add_layer_action=self.add_layer_action,
-            remove_layer_action=self.remove_layer_action)
+            remove_layer_action=self.remove_layer_action,
+            processing_service=self.processing_service,
+            processing_view=self.processing_service.view,
+            app_context=self.app_context,
+            review_dialog=self.review_dialog,
+            rating_submit_button=self.dlg.ratingSubmitButton,
+            rating_combo=self.dlg.ratingComboBox,
+            accept_button=self.dlg.acceptButton,
+            review_button=self.dlg.reviewButton,
+            processings_table=self.dlg.processingsTable)
 
         # Templates (MR-1): create / update-search-params / exclude-from-search.
         self.template_service = TemplateService(app_context=self.app_context,
@@ -426,19 +435,10 @@ class Mapflow(QObject):
         self.processing_service.connect_processings_pagination()
         # Entering and leaving a template is TemplateController's entirely — it owns the layers,
         # the search results and the view state they drive.
-        # Processings ratings
-        self.dlg.processingsTable.itemSelectionChanged.connect(self.enable_feedback)
         self.dlg.processingsTable.itemSelectionChanged.connect(self.on_processings_selection_changed)
-        self.dlg.ratingSubmitButton.clicked.connect(self.submit_processing_rating)
+        # Review and rating are ProcessingController's — it owns those handlers now.
         self.dlg.enable_rating(False, False)  # by default disabled
         self.dlg.enable_review(False)
-        # Processing feedback
-        self.dlg.ratingComboBox.activated.connect(self.enable_feedback)
-        self.dlg.processingsTable.cellClicked.connect(self.update_processing_current_rating)
-        # Processing review
-        self.dlg.acceptButton.clicked.connect(self.accept_processing)
-        self.dlg.reviewButton.clicked.connect(self.show_review_dialog)
-        self.review_dialog.accepted.connect(self.submit_review)
 
         # ========== 13. PROVIDERS ==========
         # searchImageryButton and the metadata table's double/cell-click previews are wired by
@@ -1677,162 +1677,6 @@ class Mapflow(QObject):
     def on_metadata_table_cell_clicked(self, row: int, column: int):
         """Keep click behavior passive; marking seen is handled by Seen actions only."""
         return
-
-    def update_processing_current_rating(self) -> None:
-        # reset labels:
-        processing = self.processing_service.selected_processing()
-        if not processing:
-            return
-        pid = processing.id
-        p_name = processing.name
-
-        self.dlg.set_processing_rating_labels(processing_name=p_name)
-        self.http.get(
-            url=f'{self.server}/processings/{pid}/v2',
-            callback=self.update_processing_current_rating_callback
-        )
-
-    def update_processing_current_rating_callback(self, response: QNetworkReply) -> None:
-        response_data = json.loads(response.readAll().data())
-        p_name = response_data.get('name')
-        rating_json = response_data.get('rating')
-        if not rating_json:
-            return
-        rating = int(rating_json.get('rating'))
-        feedback = rating_json.get('feedback')
-        self.dlg.set_processing_rating_labels(processing_name=p_name,
-                                              current_rating=rating,
-                                              current_feedback=feedback)
-
-    def submit_processing_rating(self) -> None:
-        processing = self.processing_service.selected_processing()
-        if not processing:
-            return
-        pid = processing.id
-        if not processing.status.is_ok:
-            self.alert(self.tr('Only finished processings can be rated'))
-            return
-        # Rating is descending: None-5-4-3-2-1
-        rating = 6 - self.dlg.ratingComboBox.currentIndex()
-        if not 0 < rating <= 5:
-            return
-        feedback_text = self.dlg.processingRatingFeedbackText.toPlainText()
-        body = {
-            'rating': rating,
-            'feedback': feedback_text
-        }
-        self.http.put(
-            url=f'{self.server}/processings/{pid}/rate',
-            body=json.dumps(body).encode(),
-            callback=self.submit_processing_rating_callback,
-            callback_kwargs={'feedback': feedback_text}
-        )
-
-    def accept_processing(self):
-        processing = self.processing_service.selected_processing()
-        if not processing:
-            return
-        pid = processing.id
-        if not processing.status.is_ok:
-            self.alert(self.tr('Only finished processings can be rated'))
-            return
-        elif not processing.reviewStatus.is_in_review:
-            self.alert(self.tr("Processing must be in `Review required` status"))
-            return
-        self.http.put(
-            url=f'{self.server}/processings/{pid}/acceptation',
-            callback=self.review_processing_callback
-        )
-
-    def review_processing_callback(self, response: QNetworkReply):
-        # Clear successfully uploaded review
-        self.review_dialog.reviewComment.setText("")
-        self.processing_service.processing_fetch_timer.start()
-        self.project_processing_controller.refresh_table()
-
-    def show_review_dialog(self):
-        processing = self.processing_service.selected_processing()
-        if not processing:
-            return
-        if not processing.status.is_ok:
-            self.alert(self.tr('Only finished processings can be rated'))
-            return
-        elif not processing.reviewStatus.is_in_review:
-            self.alert(self.tr("Processing must be in `Review required` status"))
-            return
-        self.review_dialog.setup(processing)
-        self.review_dialog.show()
-
-    def submit_review(self):
-        body = {"comment": self.review_dialog.reviewComment.toPlainText(),
-                "features": layer_utils.export_as_geojson(self.review_dialog.reviewLayerCombo.currentLayer())}
-        self.http.put(
-            url=f'{self.server}/processings/{self.review_dialog.processing.id}/rejection',
-            body=json.dumps(body).encode(),
-            callback=self.review_processing_callback
-        )
-
-    def submit_processing_rating_callback(self, response: QNetworkReply, feedback: str) -> None:
-        if not feedback:
-            self.alert(
-                self.tr(
-                    "Thank you! Your rating is submitted!\nWe would appreciate if you add feedback as well."
-                ),
-                QMessageBox.Information
-            )
-        else:
-            self.alert(
-                self.tr(
-                    "Thank you! Your rating and feedback are submitted!"
-                ),
-                QMessageBox.Information
-            )
-        self.update_processing_current_rating()
-
-    def enable_review_submit(self, status_ok: bool) -> None:
-        self.dlg.enable_review(status_ok,
-                               self.tr("Only correctly finished processings with 'Review required' status can be reviewed"))
-
-    def enable_rating_submit(self, status_ok: bool) -> None:
-        rating_selected = 5 >= self.dlg.ratingComboBox.currentIndex() > 0
-        if not self.app_context.user_role.can_delete_rename_review_processing:
-            reason = self.tr('Not enough rights to rate processing in a shared project ({})').format(self.app_context.user_role.value)
-        elif not status_ok:
-            if not self.processing_service.selected_processing():
-                reason = self.tr('Please select processing')
-            else:
-                reason = self.tr("Only correctly finished processings (status OK) can be rated")
-        elif not rating_selected and self.app_context.user_role.can_delete_rename_review_processing:
-            reason = self.tr("Please select rating to submit")
-        else:
-            reason = ""
-        self.dlg.enable_rating(can_interact=(status_ok and self.app_context.user_role.can_delete_rename_review_processing),
-                               can_send=rating_selected,
-                               reason=reason)
-
-    def enable_feedback(self) -> None:
-        """
-        By feedback we mean either rating (1-5 stars + message) for regular users
-        or review for users which have review workflow enabled
-        """
-        processing = self.processing_service.selected_processing()
-        if not processing:
-            if self.app_context.review_workflow_enabled:
-                self.enable_review_submit(False)
-            else:
-                self.enable_rating_submit(False)
-            return
-        if self.app_context.review_workflow_enabled:
-            self.enable_review_submit(processing.status.is_ok and processing.reviewStatus.is_in_review)
-        else:
-            self.enable_rating_submit(processing.status.is_ok)
-        self.enable_restart_action(self.app_context.user_role.can_start_processing 
-                                   and (processing.status.is_failed 
-                                        or processing.status.is_cancelled))
-    
-    def enable_restart_action(self, enabled: bool):
-        self.dlg.enable_restart_action(enabled)
-            
 
     # =================== Results management ==================== #
     def _open_template(self, template):
