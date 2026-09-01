@@ -32,8 +32,8 @@ def controller():
     # Needed for the connect tests below: a slot on an uninitialised QObject never fires.
     QObject.__init__(controller)
     controller.processing_service = MagicMock()
-    controller.processing_service.in_template_mode = False
     controller.template_service = MagicMock()
+    controller.template_service.in_template_mode = False
     return controller
 
 
@@ -41,35 +41,35 @@ def test_outside_a_template_the_project_list_is_fetched(controller):
     controller.refresh_table()
 
     controller.processing_service.get_processings.assert_called_once()
-    controller.processing_service.refresh_template_view.assert_not_called()
+    controller.template_service.refresh_template_view.assert_not_called()
 
 
 def test_inside_a_template_the_template_view_is_refreshed(controller):
-    controller.processing_service.in_template_mode = True
+    controller.template_service.in_template_mode = True
 
     controller.refresh_table()
 
-    controller.processing_service.refresh_template_view.assert_called_once()
+    controller.template_service.refresh_template_view.assert_called_once()
     controller.processing_service.get_processings.assert_not_called()
 
 
 def test_a_sort_re_renders_the_rows_of_whichever_view_is_up(controller):
     controller.rerender_rows()
     assert controller.processing_service.combined_processing_rows.called
-    assert not controller.processing_service.combined_template_rows.called
+    assert not controller.template_service.combined_template_rows.called
 
     controller.processing_service.reset_mock()
-    controller.processing_service.in_template_mode = True
+    controller.template_service.in_template_mode = True
 
     controller.rerender_rows()
-    assert controller.processing_service.combined_template_rows.called
+    assert controller.template_service.combined_template_rows.called
     assert not controller.processing_service.combined_processing_rows.called
 
 
 def test_a_rehydrate_request_rebinds_the_template(controller):
     controller.rehydrate_template()
 
-    controller.processing_service.refresh_active_template.assert_called_once()
+    controller.template_service.refresh_active_template.assert_called_once()
 
 
 def test_one_request_produces_exactly_one_fetch(controller):

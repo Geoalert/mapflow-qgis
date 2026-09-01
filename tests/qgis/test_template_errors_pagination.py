@@ -45,10 +45,9 @@ def test_max_active_templates_message_is_translated():
 
 
 def test_template_error_text_parses_response_body():
-    service = ProcessingService.__new__(ProcessingService)
-    service.tr = lambda text: text
+    service = TemplateService(app_context=MagicMock(), processing_service=MagicMock())
 
-    text = service._template_error_text(
+    text = service._error_text(
         _error_response("You have reached the maximum number of active templates")
     )
 
@@ -74,12 +73,11 @@ def test_resume_error_handler_shows_meaningful_message(monkeypatch):
 
 
 def test_template_error_text_falls_back_to_unknown_on_bad_body():
-    service = ProcessingService.__new__(ProcessingService)
-    service.tr = lambda text: text
+    service = TemplateService(app_context=MagicMock(), processing_service=MagicMock())
     response = MagicMock()
     response.readAll.return_value.data.return_value = b"not json"
 
-    assert service._template_error_text(response) == "Unknown server error"
+    assert service._error_text(response) == "Unknown server error"
 
 
 def _template_service(page_offset=0, page_limit=30):

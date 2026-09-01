@@ -52,6 +52,11 @@ class ProjectProcessingController(QObject):
         self.processing_service.rerenderRequested.connect(self.rerender_rows)
         self.processing_service.templateRehydrateRequested.connect(self.rehydrate_template)
         self.template_service.refreshRequested.connect(self.refresh_table)
+        # The in-template view holds no widget and owns no timer, so its rebuilt rows and its
+        # slower poll cadence arrive here to be applied.
+        self.template_service.templateRowsChanged.connect(
+            self.processing_service.view.update_processing_table)
+        self.template_service.pollIntervalChanged.connect(self._set_poll_interval)
 
     # ==== WHICH VIEW THE PROCESSINGS TABLE IS SHOWING ==== #
     #
@@ -62,22 +67,28 @@ class ProjectProcessingController(QObject):
 
     def refresh_table(self):
         """Re-fetch whatever the table is showing."""
-        if self.processing_service.in_template_mode:
-            self.processing_service.refresh_template_view()
+        if self.template_service.in_template_mode:
+            self.template_service.refresh_template_view()
         else:
             self.processing_service.get_processings()
 
     def rerender_rows(self):
         """Re-render the rows already held, for a sort that needs no request."""
-        if self.processing_service.in_template_mode:
-            rows = self.processing_service.combined_template_rows()
+        if self.template_service.in_template_mode:
+            rows = self.template_service.combined_template_rows()
         else:
             rows = self.processing_service.combined_processing_rows()
         self.processing_service.view.update_processing_table(rows)
 
     def rehydrate_template(self):
         """A processing was started inside a template: re-hydrate so it binds to its AOI."""
-        self.processing_service.refresh_active_template()
+        self.template_service.refresh_active_template()
+
+    def _set_poll_interval(self, interval_ms: int):
+        """Apply a view's poll cadence: the in-template view polls slower than the project list.
+        The timer belongs to `ProcessingService`, so the service that wants the change asks."""
+        self.processing_service.processing_fetch_timer.setInterval(interval_ms)
+        self.processing_service.processing_fetch_timer.start()
     
     def _setup_project_bindings(self):
         """Project-specific UI connections."""
@@ -103,8 +114,8 @@ class ProjectProcessingController(QObject):
         # omits them), so `in_template_mode` flips only in the hydrate callback. Refresh the nav
         # buttons on the actual open/close signals — otherwise the "enter template" arrow stays
         # enabled until the next selection change.
-        self.processing_service.templateOpened.connect(self._update_nav_buttons)
-        self.processing_service.templateClosed.connect(self._update_nav_buttons)
+        self.template_service.templateOpened.connect(self._update_nav_buttons)
+        self.template_service.templateClosed.connect(self._update_nav_buttons)
         self._update_nav_buttons()
 
     def _on_project_double_clicked(self, index):
@@ -116,14 +127,14 @@ class ProjectProcessingController(QObject):
     # ==== IN-TEMPLATE NAVIGATION ==== #
     def navigate_back(self):
         """Left arrow: leave a template (back to processings) or go back to projects."""
-        if self.processing_service.in_template_mode:
+        if self.template_service.in_template_mode:
             self.exit_template()
         else:
             self.show_projects(open_saved_page=True)
 
     def navigate_into_template(self):
         """Right arrow: enter the currently selected template."""
-        if self.processing_service.in_template_mode:
+        if self.template_service.in_template_mode:
             return
         template = self.processing_service.selected_template()
         if not template or not self.processing_service.is_only_templates_selected():
@@ -132,13 +143,13 @@ class ProjectProcessingController(QObject):
 
     def enter_template(self, template):
         """Enter the in-template view for the given template."""
-        self.processing_service.enter_template_view(template)
+        self.template_service.enter_template_view(template)
         self._set_processings_tab_text(str(template.name))
         self._update_nav_buttons()
 
     def exit_template(self):
         """Return from the in-template view to the project's processings list."""
-        self.processing_service.exit_template_view()
+        self.template_service.exit_template_view()
         self.processing_service.setup_processings_table()
         self._set_processings_tab_text(self.tr("Processing"))
         self._update_nav_buttons()
@@ -165,7 +176,7 @@ class ProjectProcessingController(QObject):
 
         Accepts optional signal arguments (``templateOpened``/``templateClosed`` emit the
         template object) so it can be wired directly to those signals."""
-        in_template = self.processing_service.in_template_mode
+        in_template = self.template_service.in_template_mode
         can_enter = (
             not in_template
             and self.processing_service.is_only_templates_selected()

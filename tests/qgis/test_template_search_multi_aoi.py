@@ -14,12 +14,10 @@ from mapflow.functional.service.template_service import TemplateService
 
 def _service(selected_aois):
     template = SimpleNamespace(id="tpl-1", name="T1")
-    processing_service = SimpleNamespace(
-        in_template_mode=True,
-        active_template=template,
-        selected_aois=lambda: selected_aois,
-    )
-    service = TemplateService(app_context=MagicMock(), processing_service=processing_service)
+    service = TemplateService(app_context=MagicMock(), processing_service=MagicMock())
+    service.in_template_mode = True
+    service.active_template = template
+    service.selected_aois = lambda: selected_aois
     service.load_search = MagicMock()
     return service, template
 
@@ -70,7 +68,7 @@ def test_reselection_order_independent():
 
 def test_no_active_template_is_noop():
     service, _ = _service([_aoi("a1")])
-    service.processing_service.active_template = None
+    service.active_template = None
 
     service.filter_search_by_selected_aois()
 
@@ -81,7 +79,7 @@ def test_not_in_template_mode_is_noop():
     """The in-template check stays with the caller: the service has no view of navigation."""
     controller = TemplateController.__new__(TemplateController)
     controller.template_service = MagicMock()
-    controller.processing_service = SimpleNamespace(in_template_mode=False)
+    controller.template_service.in_template_mode = False
 
     controller.filter_search_by_selected_aoi()
 
@@ -91,7 +89,7 @@ def test_not_in_template_mode_is_noop():
 def test_in_template_mode_delegates_to_the_service():
     controller = TemplateController.__new__(TemplateController)
     controller.template_service = MagicMock()
-    controller.processing_service = SimpleNamespace(in_template_mode=True)
+    controller.template_service.in_template_mode = True
 
     controller.filter_search_by_selected_aoi()
 

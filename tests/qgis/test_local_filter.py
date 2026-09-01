@@ -59,7 +59,7 @@ def _plugin_regular(min_intersection=50, max_cloud=50, date_from=None, date_to=N
     plugin.local_filter_service = LocalFilterService()
     plugin._allowed_provider_set = MagicMock(return_value=None)
     plugin._product_category_filter = MagicMock(return_value=None)
-    plugin.processing_service = SimpleNamespace(in_template_mode=False)
+    plugin.template_service = SimpleNamespace(in_template_mode=False)
     plugin.app_context = SimpleNamespace(
         metadata_aoi=_square(0, 0, 10, 10),
         project=QgsProject.instance(),
@@ -135,7 +135,7 @@ def _plugin_orchestration(unfit):
     plugin = Mapflow.__new__(Mapflow)
     plugin.tr = lambda t: t
     plugin.dlg = MagicMock()
-    plugin.processing_service = SimpleNamespace(in_template_mode=False)
+    plugin.template_service = SimpleNamespace(in_template_mode=False)
     layer = MagicMock()
     layer.crs.return_value = "crs"
     plugin.app_context = SimpleNamespace(
@@ -194,7 +194,7 @@ def test_apply_local_filter_preserves_server_order_for_template():
     # Template results are now also sorted server-side (the template-images endpoint takes the
     # same sortBy/sortOrder), so the local filter must preserve their incoming order too.
     plugin = _plugin_orchestration(unfit=set())
-    plugin.processing_service.in_template_mode = True
+    plugin.template_service = SimpleNamespace(in_template_mode=True)
     plugin.app_context.search_result_geojson = _dated_geoms()
 
     plugin.apply_local_filter()

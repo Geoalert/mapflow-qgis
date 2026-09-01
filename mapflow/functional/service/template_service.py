@@ -1,17 +1,21 @@
 """Planned processings (templates): creation, search-param update, exclude-from-search, the
 seen-image markers, the template's map layers, and its imagery-search results.
 
-This is MR-1 of the templates extraction — the half that was tangled into `mapflow.py`. The
-lifecycle half (enter/exit/pause/resume, navigation state) is still in `ProcessingService` and is
-read from there for now; MR-2 moves it here.
+Everything scoped to a template id lives here, including the in-template view: whether a template
+is open, which one, its AOIs and its launched processings.
 
 Holds no widget (`spec/007_architecture.md` § Layer rules). Inputs that come from widgets — the
 template name, the assembled `SearchParams`, the AOI FeatureCollection — arrive as arguments from
-`TemplateController`; UI effects the service must cause (the busy button, the "select a project"
-label) leave as signals. The map layers a template draws are QGIS layer-tree work, not widgets, so
-they live here alongside `AoiService`/`PreviewService`'s own layer building. `ProcessingService` is
-read for navigation state and reached for its `api`; that dependency becomes `TemplateService`'s
-own in MR-2.
+`TemplateController`; UI effects the service must cause (the busy button, the rebuilt table rows,
+the slower in-template poll cadence) leave as signals. The map layers a template draws are QGIS
+layer-tree work, not widgets, so they live here alongside `AoiService`/`PreviewService`'s own layer
+building.
+
+`ProcessingService` is still reached for the shared `api` client, the poll timer it owns, and its
+`templates` dict — the project's template list, which its own project fetch fills. The dependency
+runs one way only: `ProcessingService` never reaches back here, because the processings table's two
+views are chosen by `ProjectProcessingController` rather than by either service. The one exception
+is documented on `ProcessingService.template_state`, a read-only seam for the start path.
 """
 import json
 import logging
@@ -29,6 +33,7 @@ from qgis.core import (QgsFeature,
 
 from .. import layer_utils
 from ..app_context import AppContext
+from ...config import Config
 from ..geometry import geometry_from_geojson
 from ..helpers import utc_date_from_iso
 from .alert_service import (alert, alert_confirm, alert_info, alert_warning,
@@ -36,10 +41,14 @@ from .alert_service import (alert, alert_confirm, alert_info, alert_warning,
 from ...errors import ErrorMessage
 from ...http import api_message_parser
 from ...schema import ImageCatalogResponseSchema
-from ...schema.template import (CreateProcessingTemplateSchema,
+from ...schema.template import (AOI_NAME_MAX_LENGTH,
+                                CreateProcessingTemplateSchema,
                                 DeleteAoisSchema,
+                                NoAoiProcessingsRow,
                                 ProcessingTemplateDTO,
+                                ProcessingTemplateDetails,
                                 SearchParams,
+                                TemplateProcessingSchema,
                                 UpdateAoiSchema,
                                 UpdateProcessingTemplateSchema)
 
@@ -74,6 +83,25 @@ class TemplateService(QObject):
     #: Which view that is depends on navigation state, so the controller decides — see
     #: `ProcessingService.refreshRequested`, which carries the same meaning from the other side.
     refreshRequested = pyqtSignal()
+    #: Entering / leaving the in-template view, so map side-effects (search results, AOI layers)
+    #: are handled outside the service.
+    templateOpened = pyqtSignal(object)
+    templateClosed = pyqtSignal(object)
+    #: The template's AOIs changed (add/rename/delete/geometry) and it was re-hydrated, so
+    #: listeners can redraw its map layers.
+    templateAoisChanged = pyqtSignal(object)
+    #: The template's full processings list arrived, so the "No AOI" map group can be set up.
+    templateProcessingsLoaded = pyqtSignal(object)
+    #: The in-template rows were rebuilt. The service holds no widget, so it hands the rows out
+    #: and the controller writes them into the table.
+    templateRowsChanged = pyqtSignal(object)
+    #: The in-template view polls on its own (slower) cadence; the controller applies it.
+    pollIntervalChanged = pyqtSignal(int)
+
+    # Class-level defaults so the mode check is safe even when callers (and tests) construct the
+    # service without running __init__.
+    in_template_mode = False
+    active_template = None
 
     def __init__(self,
                  app_context: AppContext,
@@ -81,11 +109,15 @@ class TemplateService(QObject):
                  plugin_dir: Optional[str] = None,
                  aoi_service=None,
                  result_loader=None,
-                 search_service=None):
+                 search_service=None,
+                 config=None):
         super().__init__()
         self.app_context = app_context
-        #: Read for navigation state (`active_template`, `selected_template`,
-        #: `selected_processing`) and reached for `api`. MR-2 gives TemplateService its own.
+        #: For the two poll cadences (the in-template view polls slower than the project list).
+        self.config = config or Config
+        #: Reached for the shared `api` client, the poll timer, the project's `templates` dict and
+        #: the table-selection queries that read it (`selected_template`, `selected_processing`).
+        #: One-way: nothing there reaches back here.
         self.processing_service = processing_service
         #: For the .qml style paths of the template AOI/footprint layers (mirrors `AoiService`).
         self.plugin_dir = plugin_dir
@@ -105,6 +137,12 @@ class TemplateService(QObject):
         #: The AOI ids the in-template results are currently scoped to (None = all the
         #: template's AOIs). Only used to re-request the same scope on a page change.
         self.search_aoi_filter = None
+        #: Navigation state: whether the processings table is showing a template, and which one.
+        self.in_template_mode = False
+        self.active_template = None
+        #: The open template's rows — its AOIs keyed by table id, and its processings keyed by id.
+        self.template_aois = {}
+        self.template_processings = {}
 
     # ---------- plan-search gating ----------
 
@@ -176,7 +214,7 @@ class TemplateService(QObject):
         self.creationBusy.emit(False)
         # A created template is normally active; isActive comes back False when the
         # active-templates limit is reached (created but inactivated).
-        template = self.processing_service._parse_template_response(response)
+        template = self.parse_template_response(response)
         if template is not None and not template.isActive:
             alert_warning(self.tr(
                 "The template has been created, but is inactive.\n\n"
@@ -197,7 +235,7 @@ class TemplateService(QObject):
         """Save the current imagery-search filter widgets to the open template's stored
         ``searchParams`` (non-geometry params only — the backend merges them and preserves the
         geometry). ``search_params`` is built with ``aoi_details=None`` by the controller."""
-        template = (self.processing_service.active_template
+        template = (self.active_template
                     or self.processing_service.selected_template())
         if not template:
             return
@@ -215,7 +253,7 @@ class TemplateService(QObject):
     def _template_updated_callback(self, response: QNetworkReply):
         alert_info(self.tr("Template updated."))
         # Re-hydrate so the open template / list reflects the new params.
-        self.processing_service.aoi_changed_callback(response)
+        self.aoi_changed_callback(response)
         self.refreshRequested.emit()
 
     def _template_update_error_handler(self, response: QNetworkReply):
@@ -230,7 +268,7 @@ class TemplateService(QObject):
         """'Exclude from search' — subtract a processing's footprint from the AOIs it was run
         over, so the template stops searching an already-processed area. A processing links to
         every AOI it intersects, so subtract from each; an AOI fully consumed is deleted."""
-        template = self.processing_service.active_template
+        template = self.active_template
         processing = self.processing_service.selected_processing()
         if not template or not processing:
             return
@@ -258,15 +296,15 @@ class TemplateService(QObject):
                 template_id=template.id,
                 aoi_id=aoi_id,
                 data=UpdateAoiSchema(geometry=geom),
-                callback=self.processing_service.aoi_changed_callback,
-                error_handler=self.processing_service.aoi_change_error_handler,
+                callback=self.aoi_changed_callback,
+                error_handler=self.aoi_change_error_handler,
             )
         if deletions:
             self.processing_service.api.delete_aois(
                 template_id=template.id,
                 data=DeleteAoisSchema(aoiIds=deletions),
-                callback=self.processing_service.aoi_changed_callback,
-                error_handler=self.processing_service.aoi_change_error_handler,
+                callback=self.aoi_changed_callback,
+                error_handler=self.aoi_change_error_handler,
             )
 
     def _processing_footprints_by_aoi(self, template, processing_id: str):
@@ -302,7 +340,7 @@ class TemplateService(QObject):
         open_id = getattr(self.app_context, "open_template_results_id", None)
         if open_id:
             return str(open_id)
-        template = self.processing_service.active_template
+        template = self.active_template
         return str(template.id) if template else None
 
     def image_is_new(self, image_id: Optional[str]) -> bool:
@@ -568,7 +606,7 @@ class TemplateService(QObject):
         if not processing:
             return
         pid = str(processing.id)
-        if not self.processing_service.is_no_aoi_processing(pid):
+        if not self.is_no_aoi_processing(pid):
             return
         if pid in self._pending_no_aoi_ids or self.no_aoi_aoi_on_map(pid):
             return
@@ -583,8 +621,8 @@ class TemplateService(QObject):
 
     def _add_no_aoi_processing_aoi_callback(self, response: QNetworkReply, pid: str, name: str) -> None:
         self._pending_no_aoi_ids.discard(pid)
-        template = self.processing_service.active_template
-        if not template or not self.processing_service.in_template_mode or self.no_aoi_aoi_on_map(pid):
+        template = self.active_template
+        if not template or not self.in_template_mode or self.no_aoi_aoi_on_map(pid):
             return
         # GET /processings/{id}/aois returns a JSON list of AOI objects (each with a `geometry`),
         # not a FeatureCollection — wrap each geometry into a feature the layer builder understands.
@@ -652,6 +690,291 @@ class TemplateService(QObject):
         )
 
         alert_info(details)
+
+    # ---------- the in-template view: entering, leaving, and its rows ----------
+    #
+    # The processings table serves two views and this owns one of them. It writes no widget: the
+    # rebuilt rows leave as `templateRowsChanged` and `ProjectProcessingController` puts them in
+    # the table, the same way it already decides which of the two views to refresh.
+
+    @staticmethod
+    def _template_has_aoi(template) -> bool:
+        try:
+            return bool(template.aoi_dtos())
+        except (AttributeError, TypeError):
+            # `searchParams`/`aoiDetails` arriving as something other than a mapping: the
+            # accessors raise AttributeError, and a non-list `features` raises TypeError when
+            # iterated. Either way the template has no AOIs we can show.
+            return False
+
+    @staticmethod
+    def parse_template_response(response: QNetworkReply):
+        """Parse a ``GET /processings/template/{id}`` response into a ProcessingTemplateDTO."""
+        try:
+            data = json.loads(response.readAll().data())
+            if isinstance(data, dict) and "template" in data:
+                return ProcessingTemplateDetails.from_dict(data).template
+            if isinstance(data, dict):
+                return ProcessingTemplateDTO.from_dict(data)
+        except ValueError:
+            # Not JSON, or not decodable as UTF-8 (UnicodeDecodeError is a ValueError).
+            return None
+        return None
+
+    def hydrate_template(self, template, callback) -> None:
+        """Ensure the template carries its ``aoiDetails`` (the project poll omits them),
+        then invoke ``callback(hydrated_template)``."""
+        if self._template_has_aoi(template):
+            callback(template)
+            return
+        self.processing_service.api.get_template(
+            template_id=template.id,
+            callback=lambda response: callback(self.parse_template_response(response) or template),
+        )
+
+    def enter_template_view(self, template) -> None:
+        """Open a template ('one step right'): show its AOIs + launched processings.
+
+        The project-scoped poll omits ``searchParams``; hydrate the template by id first
+        when its AOIs are missing, then enter.
+        """
+        self.hydrate_template(template, self._hydrate_and_enter)
+
+    def _hydrate_and_enter(self, template) -> None:
+        if template is not None:
+            self.processing_service.templates[template.id] = template
+        self._do_enter_template(template)
+
+    def _do_enter_template(self, template) -> None:
+        self.in_template_mode = True
+        self.active_template = template
+        self.template_aois = {aoi.table_id: aoi for aoi in template.aoi_dtos()}
+        self.template_processings = {}
+        self._rebuild_template_rows()
+        # Fetch the full processings (with result layers) for double-click loading.
+        self._fetch_template_processings()
+        # Poll the in-template view less aggressively than the project list.
+        self.pollIntervalChanged.emit(self.config.TEMPLATE_TABLE_REFRESH_INTERVAL * 1000)
+        # Map side-effects (search results + AOI layers) are handled by listeners.
+        self.templateOpened.emit(template)
+
+    def exit_template_view(self) -> None:
+        """Leave the template ('one step left'): return to the project's processings."""
+        closed = self.active_template
+        self.in_template_mode = False
+        self.active_template = None
+        self.template_processings = {}
+        self.template_aois = {}
+        # Restore the regular (faster) project-list poll cadence.
+        self.pollIntervalChanged.emit(self.config.PROCESSING_TABLE_REFRESH_INTERVAL * 1000)
+        # Let listeners clean up the template's map layers / search table.
+        self.templateClosed.emit(closed)
+
+    def refresh_template_view(self) -> None:
+        """Poll tick: refresh only the processings (status/progress + the unbound section).
+
+        The AOI grouping (``aoiDetails`` from the full template) changes slowly and is
+        re-hydrated on enter and after AOI edits — NOT every tick — so a poll is a single
+        ``/processings`` request rather than three. AOI statuses are kept current by syncing
+        them from the polled processings (see ``_sync_aoi_statuses_from_processings``).
+        """
+        if self.active_template:
+            self._fetch_template_processings()
+
+    def refresh_active_template(self) -> None:
+        """Re-hydrate the active template's ``aoiDetails`` and its processings, then rebuild
+        the grouped rows. Used after starting a template processing so the new processing is
+        bound to its AOI instead of appearing under 'No AOI' (feedback 8.2)."""
+        if not self.active_template:
+            return
+        self.processing_service.api.get_template(
+            template_id=self.active_template.id,
+            callback=self._reopen_template_callback,
+        )
+        self._fetch_template_processings()
+
+    def _rebuild_template_rows(self) -> None:
+        if not self.active_template:
+            return
+        self.template_aois = {aoi.table_id: aoi for aoi in self.active_template.aoi_dtos()}
+        self._sync_aoi_statuses_from_processings()
+        self.templateRowsChanged.emit(self.combined_template_rows())
+
+    def _sync_aoi_statuses_from_processings(self) -> None:
+        """Refresh each AOI's processing-link statuses from the latest polled processings, so
+        the AOI aggregate status is current without re-fetching the full template each tick."""
+        for aoi in self.template_aois.values():
+            for link in aoi.processings:
+                full = self.template_processings.get(str(link.processingId))
+                if full is not None:
+                    try:
+                        link.processingStatus = full.status.value
+                    except AttributeError:
+                        pass
+
+    def _fetch_template_processings(self) -> None:
+        """Fetch the template's processings (v1 ``ProcessingJson``) for the full row data
+        (model, progress, status, result layers) and the unbound ('No AOI') section."""
+        if not self.active_template:
+            return
+        self.processing_service.api.get_template_processings(
+            template_id=self.active_template.id,
+            callback=self.get_template_processings_callback,
+        )
+
+    def get_template_processings_callback(self, response: QNetworkReply) -> None:
+        """Store the template's full processings (keyed by id) and re-render the rows."""
+        try:
+            data = json.loads(response.readAll().data())
+        except ValueError:
+            data = []
+        items = data.get("results") if isinstance(data, dict) else data
+        processings = {}
+        for item in items or []:
+            if not isinstance(item, dict):
+                continue
+            try:
+                processing = TemplateProcessingSchema.from_dict(item)
+            except (TypeError, ValueError, KeyError):
+                continue
+            processings[str(processing.id)] = processing
+        self.template_processings = processings
+        if self.in_template_mode:
+            self._rebuild_template_rows()
+            self.templateProcessingsLoaded.emit(self.active_template)
+
+    def template_processing(self, processing_id: str):
+        """Full processing (with layers) for a grouped AOI-processing row, by id."""
+        return self.template_processings.get(str(processing_id))
+
+    def combined_template_rows(self):
+        """Grouped layout: each AOI row (color-coded) followed by its processings, then the
+        next AOI; finally a 'No AOI' separator and any processings attached to the template
+        but not intersecting an AOI (absent from aoiDetails).
+
+        Processing rows use the full ``TemplateProcessingSchema`` (model/progress/status)
+        when loaded, falling back to the lighter aoiDetails link until then.
+        """
+        rows = []
+        bound_ids = set()
+        for aoi in self.template_aois.values():
+            rows.append(aoi)
+            for link in aoi.processings:
+                pid = str(link.processingId) if link.processingId else ""
+                if pid:
+                    bound_ids.add(pid)
+                full = self.template_processings.get(pid)
+                rows.append(full if full is not None else link)
+        unbound = [p for pid, p in self.template_processings.items() if pid not in bound_ids]
+        if unbound:
+            rows.append(NoAoiProcessingsRow())
+            rows.extend(unbound)
+        return rows
+
+    def no_aoi_processing_ids(self) -> set:
+        """IDs of the template's processings not bound to any AOI (omitted from aoiDetails)."""
+        bound = {str(link.processingId)
+                 for aoi in self.template_aois.values()
+                 for link in aoi.processings if link.processingId}
+        return {pid for pid in self.template_processings if pid not in bound}
+
+    def is_no_aoi_processing(self, processing_id) -> bool:
+        return str(processing_id) in self.no_aoi_processing_ids()
+
+    # ---------- what the table selection means for templates ----------
+
+    def _selected_ids(self, limit=None):
+        return self.processing_service.view.selected_processing_ids(limit=limit)
+
+    def selected_aois(self, limit=None) -> list:
+        """Selected AOI rows (only meaningful inside the in-template view)."""
+        pids = self._selected_ids(limit=limit)
+        return [self.template_aois[pid] for pid in self.template_aois if pid in pids]
+
+    def selected_aoi(self):
+        first = self.selected_aois(limit=1)
+        return first[0] if first else None
+
+    # `selected_template(s)`, `is_only_templates_selected` and `template_to_run` stay on
+    # `ProcessingService`: they read its `templates` dict, which its own project fetch fills, and
+    # `template_to_run` is what the start path forks on. Moving them means moving that fork too —
+    # see the "Extract processing lifecycle" step, which is where it belongs.
+
+    # ---------- the template's AOIs: rename, delete, and re-hydrate after a change ----------
+
+    def rename_aoi(self) -> None:
+        """Rename the selected AOI via the per-AOI update endpoint."""
+        aoi = self.selected_aoi()
+        template = self.active_template
+        if not aoi or not template:
+            return
+        if not aoi.can_rename:
+            alert_info(self.tr("This AOI has no id yet and cannot be renamed. "
+                               "Reopen the template and try again."))
+            return
+        new_name, ok = ask_text(self.tr("Rename AOI"), self.tr("AOI name:"),
+                                default=str(aoi.name or ""))
+        if not ok:
+            return
+        new_name = (new_name or "").strip()
+        if not new_name:
+            alert_warning(self.tr("Please, specify AOI name"))
+            return
+        if len(new_name) > AOI_NAME_MAX_LENGTH:
+            alert_warning(self.tr("AOI name must not exceed {limit} characters").format(
+                limit=AOI_NAME_MAX_LENGTH))
+            return
+        if new_name == (aoi.name or ""):
+            return
+        self.processing_service.api.update_aoi(
+            template_id=template.id,
+            aoi_id=aoi.id,
+            data=UpdateAoiSchema(name=new_name),
+            callback=self.aoi_changed_callback,
+            error_handler=self.aoi_change_error_handler,
+        )
+
+    def delete_aoi(self) -> None:
+        """Delete the selected AOI(s) from the active template."""
+        template = self.active_template
+        if not template:
+            return
+        deletable = [a for a in self.selected_aois() if a.can_rename]
+        if not deletable:
+            return
+        if not alert_confirm(self.tr("Delete selected AOI(s)?")):
+            return
+        self.processing_service.api.delete_aois(
+            template_id=template.id,
+            data=DeleteAoisSchema(aoiIds=[a.id for a in deletable]),
+            callback=self.aoi_changed_callback,
+            error_handler=self.aoi_change_error_handler,
+        )
+
+    def aoi_changed_callback(self, response: QNetworkReply) -> None:
+        """After an AOI add/rename/delete, re-hydrate the template (so names/ids are fresh)."""
+        if self.active_template:
+            self.processing_service.api.get_template(
+                template_id=self.active_template.id,
+                callback=self._reopen_template_callback,
+            )
+
+    def _reopen_template_callback(self, response: QNetworkReply) -> None:
+        try:
+            hydrated = self.parse_template_response(response)
+            if hydrated is not None:
+                self.active_template = hydrated
+                self.processing_service.templates[hydrated.id] = hydrated
+        except Exception:
+            logger.exception("Could not hydrate template details from response")
+        if self.in_template_mode and self.active_template:
+            self.template_aois = {aoi.table_id: aoi for aoi in self.active_template.aoi_dtos()}
+            self.templateRowsChanged.emit(self.combined_template_rows())
+            # Redraw the template's AOI/processing map layers to reflect the AOI change.
+            self.templateAoisChanged.emit(self.active_template)
+
+    def aoi_change_error_handler(self, response) -> None:
+        alert(self.tr("AOI update failed: {}").format(self._error_text(response)))
 
     # ---------- run-state actions on the selected template ----------
     #
@@ -801,10 +1124,19 @@ class TemplateService(QObject):
         alert(self.tr("Error restarting template: {}").format(self._error_text(response)))
 
     def _error_text(self, response) -> str:
-        """The user-facing message for a failed template action. Still `ProcessingService`'s,
-        because its AOI error handler needs the same parse; it comes here with the AOI actions
-        in MR-2."""
-        return self.processing_service._template_error_text(response)
+        """Resolve a template/AOI action error response to a meaningful, translatable message.
+
+        The error handlers receive a ``QNetworkReply``; parse its body through the central error
+        registry (e.g. a generic ``BAD_REQUEST`` with "You have reached the maximum number of
+        active templates" maps to a translated description) rather than formatting the raw reply
+        object (which produced an empty/garbled message box)."""
+        try:
+            body = response.readAll().data().decode()
+        except (AttributeError, RuntimeError, UnicodeDecodeError):
+            # No reply object, its C++ side is gone, or the body is not UTF-8.
+            return self.tr("Unknown server error")
+        # api_message_parser handles its own parse failures and returns None.
+        return api_message_parser(body) or self.tr("Unknown server error")
 
     # ---------- the template's imagery-search results ----------
 
@@ -841,7 +1173,7 @@ class TemplateService(QObject):
     def load_search_page(self, offset: int) -> None:
         """Re-fetch the active template's search results at ``offset``, preserving the current
         AOI filter — the search pager's next/prev and a header re-sort inside a template (T6)."""
-        template = self.processing_service.active_template
+        template = self.active_template
         if not template:
             return
         aoi_ids = list(self.search_aoi_filter) if self.search_aoi_filter else None
@@ -854,11 +1186,11 @@ class TemplateService(QObject):
         The caller checks that a template is open — this reloads only when the effective filter
         actually changed, because a selection signal fires on every click.
         """
-        template = self.processing_service.active_template
+        template = self.active_template
         if not template:
             return
         selected_ids = frozenset(
-            str(aoi.id) for aoi in self.processing_service.selected_aois() if aoi and aoi.id
+            str(aoi.id) for aoi in self.selected_aois() if aoi and aoi.id
         )
         if selected_ids == (self.search_aoi_filter or frozenset()):
             return

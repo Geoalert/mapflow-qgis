@@ -69,6 +69,8 @@ def _plugin(user_role, editable):
     plugin.tr = lambda text: text
     plugin.dlg = MagicMock()
     plugin.processing_service = MagicMock()
+    plugin.template_service = MagicMock()
+    plugin.template_service.in_template_mode = False
     plugin.processing_service.all_selected_templates_editable.return_value = editable
     plugin.app_context = SimpleNamespace(user_role=user_role)
     return plugin

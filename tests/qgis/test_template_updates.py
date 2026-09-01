@@ -78,7 +78,7 @@ def test_update_search_params_noop_without_template():
 def test_update_search_params_prefers_active_template():
     controller, processing_service = _controller_f1()
     processing_service.selected_template = lambda: None
-    processing_service.active_template = SimpleNamespace(
+    controller.template_service.active_template = SimpleNamespace(
         id="tpl-open", name="Open", processingParams=None, activeUntil=datetime(2026, 3, 1))
 
     controller.update_template_search_params()
@@ -98,11 +98,11 @@ def _service_f3(template, processing, monkeypatch):
     monkeypatch.setattr("mapflow.functional.service.template_service.alert_info",
                         lambda *a, **k: None)  # the "not linked" notice
     processing_service = SimpleNamespace(
-        active_template=template,
-        selected_processing=lambda: processing,
-        api=MagicMock(), aoi_changed_callback=MagicMock(), aoi_change_error_handler=MagicMock())
-    return TemplateService(app_context=SimpleNamespace(plugin_version="1.0"),
-                           processing_service=processing_service)
+        selected_processing=lambda: processing, api=MagicMock())
+    service = TemplateService(app_context=SimpleNamespace(plugin_version="1.0"),
+                              processing_service=processing_service)
+    service.active_template = template
+    return service
 
 
 def _aoi(aoi_id, geom, links):
@@ -164,6 +164,7 @@ def test_exclude_noop_when_processing_not_linked(monkeypatch):
 def test_on_template_aois_changed_redraws_layers():
     controller = TemplateController.__new__(TemplateController)
     controller.template_service = MagicMock()
+    controller.template_service.in_template_mode = False
     template = SimpleNamespace(name="T1")
 
     controller.on_template_aois_changed(template)
@@ -175,6 +176,7 @@ def test_on_template_aois_changed_redraws_layers():
 def test_on_template_aois_changed_noop_without_template():
     controller = TemplateController.__new__(TemplateController)
     controller.template_service = MagicMock()
+    controller.template_service.in_template_mode = False
 
     controller.on_template_aois_changed(None)
 
@@ -182,14 +184,9 @@ def test_on_template_aois_changed_noop_without_template():
 
 
 def test_reopen_template_callback_emits_aois_changed():
-    from PyQt5.QtCore import QObject
-    from mapflow.functional.service.processing_service import ProcessingService
-    service = ProcessingService.__new__(ProcessingService)
-    QObject.__init__(service)
+    service = TemplateService(app_context=MagicMock(), processing_service=MagicMock())
     service.in_template_mode = True
     service.active_template = SimpleNamespace(id="t1", aoi_dtos=lambda: [])
-    service.templates = {}
-    service.view = MagicMock()
     service.combined_template_rows = lambda: []
     received = []
     service.templateAoisChanged.connect(lambda t: received.append(t))

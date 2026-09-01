@@ -147,6 +147,7 @@ def test_not_in_template_mode_is_noop():
     controller = TemplateController.__new__(TemplateController)
     controller.aoi_service = MagicMock()
     controller.template_service = MagicMock()
+    controller.template_service.in_template_mode = False
     controller.processing_service = SimpleNamespace(in_template_mode=False)
 
     controller.sync_processing_area_to_selected_aois()

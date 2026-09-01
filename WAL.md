@@ -72,13 +72,25 @@ MR-2b-1 has landed: the processings table's refresh has one owner. Services emit
 needs the other to answer "which view is showing". The three template branches in `refresh_table`,
 `rerender_rows` and `rehydrate_template` are the places MR-2b-2 repoints at `TemplateService`.
 
-[ ] MR-2b-2: the navigation core → `TemplateService`
-The rest, and the part the earlier steps were sequenced to make safe: `enter/exit/refresh_template_view`,
-`hydrate_template`, `combined_template_rows`, `selected_aois` and the other selection queries, the
-navigation state (`in_template_mode`, `active_template`), the two helpers MR-2a left behind, and the
-`mapflow.py` context menu (its branches read that state). Repoint the ~50 cross-service references.
-Note the shared-path forks called out above (`apply_local_filter`, the header sort, the pager,
-`load_results`) — those belong in a controller, not in either service.
+[ready-for-review] MR-2b-2: the navigation core → `TemplateService`
+The in-template view and its state move: `in_template_mode`, `active_template`, `template_aois`,
+`template_processings`, `enter/exit/refresh_template_view`, `refresh_active_template`, the
+processings fetch and its callback, the row building, `combined_template_rows`, the no-AOI queries,
+`selected_aois`, `hydrate_template`, the template-AOI CRUD and the two helpers MR-2a left behind.
+`ProcessingService` now references nothing on `TemplateService`.
+
+[ ] Finish the split: the `templates`-keyed queries and the context menu
+What MR-2b-2 could NOT take, and why. `selected_template(s)`, `is_only_templates_selected`,
+`all_selected_templates_editable` and `template_to_run` read `ProcessingService.templates` — the
+project's template dict, which its own project fetch fills — and `template_to_run` is what
+`handle_processing_submission` forks the start path on. Moving them means moving that fork, so they
+belong with **"Extract processing lifecycle: options, start, review, rating"** below rather than with
+templates. The `mapflow.py` context menu goes with them: its branches read exactly these queries.
+Until then `ProcessingService.template_state` is a documented read-only seam (a null object by
+default, `TemplateService` at wiring time) covering the three places the start path asks whether a
+template is open — `template_to_run`, the start callback, and resolving the table selection to
+objects. It is duck-typed and never imported, so no cycle is possible; delete it when that step
+lands.
 Also here (decided): **template-group layer placement moves to `TemplateService`.** The creating
 half already landed with the layers step — `ensure_template_group` is on `TemplateService`, since
 only `mapflow.py` called it. What remains is the shared read-only lookup: `AoiService` and

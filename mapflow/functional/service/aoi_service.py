@@ -55,17 +55,20 @@ class AoiService(QObject):
                  plugin_dir: str,
                  result_loader,
                  data_catalog_service,
-                 processing_service):
+                 processing_service,
+                 template_service=None):
         super().__init__()
         self.iface = iface
         self.app_context = app_context
         self.plugin_dir = plugin_dir
         self.result_loader = result_loader
         self.data_catalog_service = data_catalog_service
-        #: Owns the active template, the AOI table selection, the AOI endpoints and the poll
-        #: timer, all of which a session needs. Service→service is allowed; this dependency
-        #: becomes `TemplateService` when the templates step splits it out.
+        #: Reached for the AOI endpoints and the poll timer, which a session pauses and resumes.
         self.processing_service = processing_service
+        #: Owns the active template and the AOI table selection. Assigned after construction:
+        #: `TemplateService` takes this service as a collaborator, so one of the two has to be
+        #: wired second.
+        self.template_service = template_service
         #: The in-flight edit session, or None. Keys: mode, layer, aoi, is_temp,
         #: prev_active_layer.
         self._session = None
@@ -325,7 +328,7 @@ class AoiService(QObject):
         root = project.layerTreeRoot()
         mapflow_group = root.findGroup(self.app_context.settings.value('layerGroup')
                                        or self.app_context.plugin_name)
-        template = self.processing_service.active_template
+        template = self.template_service.active_template
         if template is not None and mapflow_group is not None:
             template_group = mapflow_group.findGroup(str(template.name))
             if template_group is not None:
@@ -363,7 +366,7 @@ class AoiService(QObject):
 
     def add_aois_from_layers(self, layer_ids: List[str]) -> None:
         """Add every polygon in the chosen layers as an AOI of the active template."""
-        template = self.processing_service.active_template
+        template = self.template_service.active_template
         if not template:
             return
         try:
@@ -384,8 +387,8 @@ class AoiService(QObject):
         """'Update selected AOI': edit the selected AOI's polygon on the map (in place)."""
         if self.session_active:
             return
-        aoi = self.processing_service.selected_aoi()
-        template = self.processing_service.active_template
+        aoi = self.template_service.selected_aoi()
+        template = self.template_service.active_template
         if not aoi or not template:
             return
         if not aoi.can_rename:  # a persisted AOI id is required to update it
@@ -406,7 +409,7 @@ class AoiService(QObject):
         """'Draw AOI on the map': draw a new polygon, name it on Save, then add it as an AOI."""
         if self.session_active:
             return
-        if not self.processing_service.active_template:
+        if not self.template_service.active_template:
             return
         layer = QgsVectorLayer('Polygon?crs=epsg:4326', self.tr('New AOI'), 'memory')
         layer.loadNamedStyle(os.path.join(self.plugin_dir, 'static', 'styles', 'aoi.qml'))
@@ -485,7 +488,7 @@ class AoiService(QObject):
         """POST the edited AOI geometry (as-is, single or multi-part — the per-AOI update
         endpoint accepts a generic geometry). Returns False (keeping the session open) if the
         edit left no usable geometry."""
-        template = self.processing_service.active_template
+        template = self.template_service.active_template
         if not template or not aoi or not aoi.id:
             return False
         feats = [f for f in layer.getFeatures() if f.geometry() and not f.geometry().isEmpty()]
@@ -504,8 +507,8 @@ class AoiService(QObject):
             template_id=template.id,
             aoi_id=aoi.id,
             data=UpdateAoiSchema(geometry=json.loads(wgs.asJson())),
-            callback=self.processing_service.aoi_changed_callback,
-            error_handler=self.processing_service.aoi_change_error_handler,
+            callback=self.template_service.aoi_changed_callback,
+            error_handler=self.template_service.aoi_change_error_handler,
         )
         return True
 
@@ -513,7 +516,7 @@ class AoiService(QObject):
         """Name the drawn polygon(s) and add them as AOI(s). Returns False if nothing was drawn,
         the prompt was cancelled, or the name is too long — in every case the session stays open
         and the drawing is not lost."""
-        template = self.processing_service.active_template
+        template = self.template_service.active_template
         if not template:
             return False
         if layer.isEditable():
@@ -545,6 +548,6 @@ class AoiService(QObject):
         self.processing_service.api.add_aois(
             template_id=template.id,
             data=AddAoisSchema(aois=aois),
-            callback=self.processing_service.aoi_changed_callback,
-            error_handler=self.processing_service.aoi_change_error_handler,
+            callback=self.template_service.aoi_changed_callback,
+            error_handler=self.template_service.aoi_change_error_handler,
         )

@@ -80,10 +80,10 @@ class TemplateController(QObject):
         processings_table.itemSelectionChanged.connect(self.sync_processing_area_to_selected_aois)
         processings_table.itemSelectionChanged.connect(self.filter_search_by_selected_aoi)
         processings_table.cellClicked.connect(self.on_no_aoi_processing_clicked)
-        processing_service.templateAoisChanged.connect(self.on_template_aois_changed)
-        processing_service.templateProcessingsLoaded.connect(self.on_template_processings_loaded)
-        processing_service.templateOpened.connect(self.on_template_opened)
-        processing_service.templateClosed.connect(self.on_template_closed)
+        template_service.templateAoisChanged.connect(self.on_template_aois_changed)
+        template_service.templateProcessingsLoaded.connect(self.on_template_processings_loaded)
+        template_service.templateOpened.connect(self.on_template_opened)
+        template_service.templateClosed.connect(self.on_template_closed)
 
         self.template_service.creationBusy.connect(
             lambda busy: self.template_view.set_search_enabled(not busy))
@@ -176,13 +176,13 @@ class TemplateController(QObject):
         if not template or self.processing_service.selected_processing():
             return
         # Hydrate first (the list view's template omits aoiDetails), then draw layers.
-        self.processing_service.hydrate_template(template, self.template_service.load_template_layers)
+        self.template_service.hydrate_template(template, self.template_service.load_template_layers)
 
     def on_template_processings_loaded(self, template) -> None:
         """Once a template's processings load, create the (initially empty) 'No AOI' group if any
         processing is not bound to an AOI. Each such AOI is fetched and added lazily when the user
         single-clicks its row (see on_no_aoi_processing_clicked) — no bulk requests on open."""
-        if not template or not self.processing_service.no_aoi_processing_ids():
+        if not template or not self.template_service.no_aoi_processing_ids():
             return
         self.template_service.ensure_template_group(str(template.name),
                                                     self.template_service.no_aoi_subgroup_name())
@@ -191,7 +191,7 @@ class TemplateController(QObject):
         """Single-click on a 'No AOI' processing row: fetch that processing's AOI and add it to the
         'No AOI' group. No-op outside a template; the service ignores AOI/bound-processing rows, an
         AOI already on the map, or a request already in flight (double-click still loads results)."""
-        if not self.processing_service.in_template_mode:
+        if not self.template_service.in_template_mode:
             return
         self.template_service.load_no_aoi_processing_aoi(self.processing_service.selected_processing())
 
@@ -211,11 +211,11 @@ class TemplateController(QObject):
         A single selection points at that AOI's own (already visible) layer; a multi-selection
         points at a visible "Selected AOIs" layer holding one feature per AOI. No-op when no AOI
         is selected, keeping the current Area (e.g. while a processing row is selected)."""
-        if not self.processing_service.in_template_mode:
+        if not self.template_service.in_template_mode:
             return
-        template = self.processing_service.active_template
+        template = self.template_service.active_template
         self.aoi_service.select_aois_as_processing_area(
-            self.processing_service.selected_aois(),
+            self.template_service.selected_aois(),
             self.template_service.find_template_group(str(template.name)) if template else None)
 
     def on_template_opened(self, template) -> None:
@@ -267,7 +267,7 @@ class TemplateController(QObject):
     def filter_search_by_selected_aoi(self, *args) -> None:
         """S7: selecting AOI rows scopes the search results to them. No-op outside a template;
         the service ignores a selection that does not change the effective filter."""
-        if not self.processing_service.in_template_mode:
+        if not self.template_service.in_template_mode:
             return
         self.template_service.filter_search_by_selected_aois()
 

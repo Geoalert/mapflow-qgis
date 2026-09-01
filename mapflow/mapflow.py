@@ -330,6 +330,13 @@ class Mapflow(QObject):
                                                 aoi_service=self.aoi_service,
                                                 result_loader=self.result_loader,
                                                 search_service=self.search_service)
+        # TemplateService owns the in-template view, but AoiService and PreviewService are built
+        # before it (it takes AoiService as a collaborator), so their back-links are set here.
+        # ProcessingService reads it only for "is a template open" — see its `template_state`.
+        self.aoi_service.template_service = self.template_service
+        self.preview_service.template_service = self.template_service
+        self.processing_service.template_state = self.template_service
+
         self.template_view = TemplateView(dlg=self.dlg, iface=self.iface, config=self.config)
         self.template_controller = TemplateController(
             template_service=self.template_service,
@@ -571,8 +578,8 @@ class Mapflow(QObject):
         self.dlg.processing_duplicate_action.triggered.connect(self.check_dir_and_duplicate_processing)
         # The template run-state actions are wired by TemplateController, which owns their handlers.
         # AOI actions (in-template view)
-        self.dlg.aoi_rename_action.triggered.connect(self.processing_service.rename_aoi)
-        self.dlg.aoi_delete_action.triggered.connect(self.processing_service.delete_aoi)
+        self.dlg.aoi_rename_action.triggered.connect(self.template_service.rename_aoi)
+        self.dlg.aoi_delete_action.triggered.connect(self.template_service.delete_aoi)
         self.dlg.aoi_add_action.triggered.connect(self.add_aoi_from_layer_dialog)
         self.dlg.aoi_update_geometry_action.triggered.connect(
             self.aoi_service.start_update_session)
@@ -590,9 +597,9 @@ class Mapflow(QObject):
 
         # In-template view: AOI add/rename/delete (only for AOI rows / empty selection;
         # a selected processing row falls through to the normal processing actions below).
-        if self.processing_service.in_template_mode and not selected_processing:
-            can_edit = self.app_context.can_edit_template(self.processing_service.active_template)
-            selected_aoi = self.processing_service.selected_aoi()
+        if self.template_service.in_template_mode and not selected_processing:
+            can_edit = self.app_context.can_edit_template(self.template_service.active_template)
+            selected_aoi = self.template_service.selected_aoi()
             # No AOI action can start while another edit/draw session is running.
             no_session = not self.aoi_service.session_active
             if selected_aoi:
@@ -613,12 +620,12 @@ class Mapflow(QObject):
         # In-template view, a processing row is backed by the v1 TemplateProcessingSchema
         # (flat params, no ProcessingParams) — offer only the read-only result actions, not
         # restart/duplicate which need v2 source params.
-        if self.processing_service.in_template_mode and selected_processing:
+        if self.template_service.in_template_mode and selected_processing:
             menu.addAction(self.dlg.save_result_action)
             menu.addAction(self.dlg.see_details_action)
             # Subtract this processing's already-processed area from the template's AOIs (feature 3).
             # This edits the open template's geometry, so it follows template-edit rights.
-            if self.app_context.can_edit_template(self.processing_service.active_template):
+            if self.app_context.can_edit_template(self.template_service.active_template):
                 menu.addAction(self.dlg.exclude_from_search_action)
             return
 
@@ -717,7 +724,7 @@ class Mapflow(QObject):
     # ==================== AOI edit/draw/add sessions ==================== #
     def add_aoi_from_layer_dialog(self):
         """Add AOI(s) from existing polygon layer(s) chosen in a multi-select dialog."""
-        if not self.processing_service.active_template or self.aoi_service.session_active:
+        if not self.template_service.active_template or self.aoi_service.session_active:
             return
         layers = self.aoi_service.selectable_layers()
         if not layers:
@@ -839,7 +846,7 @@ class Mapflow(QObject):
         finally:
             self._suppress_local_filter = False
         # Re-filling drops the per-row 'new image' icons; restore them for template results.
-        if getattr(self.processing_service, "in_template_mode", False):
+        if getattr(self.template_service, "in_template_mode", False):
             self.template_controller.apply_new_image_markers()
         self._mark_unfit_rows(unfit)
         self._hide_unfit_footprints(getattr(self.app_context, "metadata_layer", None), unfit)
@@ -1368,7 +1375,7 @@ class Mapflow(QObject):
         self._update_search_sort_indicator(column)
         # Re-request the first page with the new sort — the template-images endpoint and
         # /catalog/meta take the same sort params, so both re-sort server-side.
-        if self.processing_service.in_template_mode:
+        if self.template_service.in_template_mode:
             self.template_controller.load_search_page(0)
         else:
             self.get_metadata()
@@ -2278,7 +2285,7 @@ class Mapflow(QObject):
         """Which endpoint serves the page depends on where the results came from, so the branch
         stays out of `SearchService` — it is coordination between two regions, and moves to
         `SearchController` / `TemplateController` rather than into either service."""
-        if self.processing_service.in_template_mode:
+        if self.template_service.in_template_mode:
             self.template_controller.load_search_page(offset)
         else:
             self.get_metadata(offset=offset)

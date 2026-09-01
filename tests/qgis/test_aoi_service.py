@@ -31,7 +31,8 @@ def service(tmp_path):
                       plugin_dir=str(tmp_path),
                       result_loader=MagicMock(),
                       data_catalog_service=MagicMock(),
-                      processing_service=MagicMock())
+                      processing_service=MagicMock(),
+                      template_service=MagicMock())
 
 
 # ---------- the registry ----------
@@ -201,12 +202,14 @@ def _polygon_layer(wkt="POLYGON((0 0,2 0,2 2,0 2,0 0))", name="aoi"):
 
 @pytest.fixture
 def session_service(service):
-    """`service` with a processing_service that behaves like an open template."""
+    """`service` with an open template. The AOI endpoints and the poll timer are still
+    `ProcessingService`'s; the template itself and the AOI selection are `TemplateService`'s."""
     service.processing_service = SimpleNamespace(
+        api=MagicMock(),
+        processing_fetch_timer=MagicMock())
+    service.template_service = SimpleNamespace(
         selected_aoi=lambda: None,
         active_template=SimpleNamespace(id="tpl-1", name="T1"),
-        api=MagicMock(),
-        processing_fetch_timer=MagicMock(),
         aoi_changed_callback=MagicMock(),
         aoi_change_error_handler=MagicMock())
     return service
@@ -253,7 +256,7 @@ def test_commit_update_rejects_empty_geometry(session_service, messages):
 
 
 def test_start_update_session_rejects_aoi_without_id(session_service, messages):
-    session_service.processing_service.selected_aoi = (
+    session_service.template_service.selected_aoi = (
         lambda: SimpleNamespace(id=None, can_rename=False))
 
     session_service.start_update_session()
@@ -263,7 +266,7 @@ def test_start_update_session_rejects_aoi_without_id(session_service, messages):
 
 
 def test_start_update_session_needs_the_aoi_layer_on_map(session_service, messages):
-    session_service.processing_service.selected_aoi = lambda: SimpleNamespace(
+    session_service.template_service.selected_aoi = lambda: SimpleNamespace(
         id="aoi-1", can_rename=True, display_name="A1")
     session_service.find_layer_for_aoi = MagicMock(return_value=None)
 
@@ -275,7 +278,7 @@ def test_start_update_session_needs_the_aoi_layer_on_map(session_service, messag
 
 def test_start_update_session_begins_when_layer_found(session_service):
     aoi = SimpleNamespace(id="aoi-1", can_rename=True, display_name="A1")
-    session_service.processing_service.selected_aoi = lambda: aoi
+    session_service.template_service.selected_aoi = lambda: aoi
     layer = _polygon_layer()
     session_service.find_layer_for_aoi = MagicMock(return_value=layer)
     started = []

@@ -16,6 +16,7 @@ from PyQt5.QtCore import QObject
 
 from mapflow.functional.service import processing_service as processing_service_module
 from mapflow.functional.service.processing_service import ProcessingService
+from mapflow.functional.service.template_service import TemplateService
 
 
 def _response(payload):
@@ -32,12 +33,19 @@ def _service(in_template_mode):
     service.api = MagicMock()
     service.view = MagicMock()
     service.processing_fetch_timer = MagicMock()
-    service.in_template_mode = in_template_mode
-    service.active_template = SimpleNamespace(id="tpl-1") if in_template_mode else None
+    service.template_state = SimpleNamespace(
+        in_template_mode=in_template_mode,
+        active_template=SimpleNamespace(id="tpl-1") if in_template_mode else None)
     service.processings = {}
     service.processings_history = MagicMock()
+    return service
+
+
+def _template_service(active_template=SimpleNamespace(id="tpl-1")):
+    """The rehydrate itself is TemplateService's: it owns the open template."""
+    service = TemplateService(app_context=MagicMock(), processing_service=MagicMock())
+    service.active_template = active_template
     service._fetch_template_processings = MagicMock()
-    service._reopen_template_callback = MagicMock()
     return service
 
 
@@ -82,20 +90,20 @@ def test_regular_start_does_flat_add_and_asks_for_a_plain_refresh():
 
 def test_rehydrate_re_fetches_the_template_and_its_processings():
     """What the controller runs when the rehydrate request arrives."""
-    service = _service(in_template_mode=True)
+    service = _template_service()
 
     service.refresh_active_template()
 
-    service.api.get_template.assert_called_once()
-    assert service.api.get_template.call_args.kwargs["template_id"] == "tpl-1"
+    api = service.processing_service.api
+    api.get_template.assert_called_once()
+    assert api.get_template.call_args.kwargs["template_id"] == "tpl-1"
     service._fetch_template_processings.assert_called_once()
 
 
 def test_refresh_active_template_noop_without_active_template():
-    service = _service(in_template_mode=True)
-    service.active_template = None
+    service = _template_service(active_template=None)
 
     service.refresh_active_template()
 
-    service.api.get_template.assert_not_called()
+    service.processing_service.api.get_template.assert_not_called()
     service._fetch_template_processings.assert_not_called()

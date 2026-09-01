@@ -58,6 +58,8 @@ def test_start_button_text_follows_template_to_run():
     plugin.tr = lambda text: text
     plugin.dlg = MagicMock()
     plugin.processing_service = MagicMock()
+    plugin.template_service = MagicMock()
+    plugin.template_service.in_template_mode = False
 
     plugin.processing_service.template_to_run.return_value = SimpleNamespace(id="t1")
     plugin.update_start_processing_button_text()
@@ -73,8 +75,6 @@ def _create_template_service():
     service = TemplateService.__new__(TemplateService)
     TemplateService.__init__(service, app_context=SimpleNamespace(plugin_version="1.0"),
                              processing_service=MagicMock())
-    # Use the real template-response parser (the schema path), not a mock.
-    service.processing_service._parse_template_response = ProcessingService._parse_template_response
     return service
 
 

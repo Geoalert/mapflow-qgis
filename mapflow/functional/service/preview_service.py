@@ -36,7 +36,8 @@ class PreviewService(QObject):
                  config,
                  result_loader,
                  processing_service,
-                 data_catalog_service=None):
+                 data_catalog_service=None,
+                 template_service=None):
         super().__init__()
         self.iface = iface
         self.app_context = app_context
@@ -48,9 +49,10 @@ class PreviewService(QObject):
         #: selected is the catalog's business; putting the resulting raster on the map is this
         #: service's.
         self.data_catalog_service = data_catalog_service
-        #: Consulted for the in-template placement rules only. Becomes `TemplateService` when the
-        #: templates step splits it out.
         self.processing_service = processing_service
+        #: Consulted for the in-template placement rules only. Assigned after construction —
+        #: `TemplateService` is built later, and only needs to exist by the time a preview runs.
+        self.template_service = template_service
         #: Image ids whose preview is being downloaded. The layer is only added in the HTTP
         #: callback, so the on-map duplicate check cannot see an in-flight one — a rapid second
         #: click would start a second download without this.
@@ -97,7 +99,7 @@ class PreviewService(QObject):
     def _add_aoi_to_preview_if_needed(self) -> None:
         """Overlay the search AOI on a preview — but not inside a template, where the AOI is
         already drawn as its own layer, so the clone would just duplicate it (feedback 1)."""
-        if self.processing_service.in_template_mode:
+        if self.template_service.in_template_mode:
             return
         self.result_loader.add_aoi_to_preview()
 
@@ -105,7 +107,7 @@ class PreviewService(QObject):
         """In the in-template view, move a freshly added preview layer into the template's
         map group, above the search-results footprints and below the AOI subgroups, so the
         precedence is AOIs (top) > previews > search results (bottom)."""
-        service = self.processing_service
+        service = self.template_service
         if not layer or not service.in_template_mode or not service.active_template:
             return
         settings = self.app_context.settings
@@ -313,7 +315,7 @@ class PreviewService(QObject):
             image_name=image_id,
             # Don't clone the AOI over the preview inside a template: the AOI is already drawn
             # as its own layer there, so the "Search area" clone just duplicates it (feedback 1).
-            add_aoi=not self.processing_service.in_template_mode,
+            add_aoi=not self.template_service.in_template_mode,
         )
         self._pending_preview_ids.discard(image_id)  # download finished
         self._relocate_to_template_group(layer)

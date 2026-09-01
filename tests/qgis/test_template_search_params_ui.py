@@ -117,6 +117,7 @@ def test_apply_search_params_without_providers_clears_combo():
 def _controller():
     controller = TemplateController.__new__(TemplateController)
     controller.template_service = MagicMock()
+    controller.template_service.in_template_mode = False
     controller.template_view = MagicMock()
     controller.search_view = MagicMock()
     controller.aoi_service = MagicMock()
