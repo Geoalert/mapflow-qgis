@@ -7,12 +7,20 @@ from PyQt5.QtCore import QObject
 
 from mapflow.functional.controller.project_processing_controller import ProjectProcessingController
 from mapflow.functional.service.processing_service import ProcessingService
+from mapflow.functional.service.template_service import TemplateService
 
 
 def _bare_service():
     """A ProcessingService with only its QObject base initialised (so signals work)."""
     service = ProcessingService.__new__(ProcessingService)
     QObject.__init__(service)
+    return service
+
+
+def _bare_template_service():
+    """A TemplateService with the in-template view's collaborators mocked. It owns the
+    navigation state and its signals since the templates step."""
+    service = TemplateService(app_context=MagicMock(), processing_service=MagicMock())
     return service
 
 
@@ -24,6 +32,8 @@ def _controller():
     controller.tr = lambda text: text
     controller.dlg = MagicMock()
     controller.processing_service = MagicMock()
+    controller.template_service = MagicMock()
+    controller.template_service.in_template_mode = False
     controller.project_service = MagicMock()
     controller.app_context = SimpleNamespace()
     return controller
@@ -31,7 +41,7 @@ def _controller():
 
 def test_navigate_back_exits_template_when_inside():
     controller = _controller()
-    controller.processing_service.in_template_mode = True
+    controller.template_service.in_template_mode = True
     controller.exit_template = MagicMock()
     controller.show_projects = MagicMock()
 
@@ -43,7 +53,7 @@ def test_navigate_back_exits_template_when_inside():
 
 def test_navigate_back_goes_to_projects_when_in_processings():
     controller = _controller()
-    controller.processing_service.in_template_mode = False
+    controller.template_service.in_template_mode = False
     controller.exit_template = MagicMock()
     controller.show_projects = MagicMock()
 
@@ -55,7 +65,7 @@ def test_navigate_back_goes_to_projects_when_in_processings():
 
 def test_navigate_into_template_requires_single_template():
     controller = _controller()
-    controller.processing_service.in_template_mode = False
+    controller.template_service.in_template_mode = False
     template = SimpleNamespace(id="t-1", name="T1")
     controller.processing_service.selected_template.return_value = template
     controller.processing_service.is_only_templates_selected.return_value = True
@@ -68,7 +78,7 @@ def test_navigate_into_template_requires_single_template():
 
 def test_navigate_into_template_noop_when_processing_selected():
     controller = _controller()
-    controller.processing_service.in_template_mode = False
+    controller.template_service.in_template_mode = False
     controller.processing_service.selected_template.return_value = SimpleNamespace(id="t-1")
     controller.processing_service.is_only_templates_selected.return_value = False
     controller.enter_template = MagicMock()
@@ -79,15 +89,10 @@ def test_navigate_into_template_noop_when_processing_selected():
 
 
 def test_enter_template_view_emits_opened_signal():
-    service = _bare_service()
-    service.view = MagicMock()
-    service.view.sort_processings.return_value = ("CREATED", "DESC")
-    service.api = MagicMock()
-    service.processing_fetch_timer = MagicMock()
+    service = _bare_template_service()
     received = []
     service.templateOpened.connect(lambda t: received.append(t))
     template = SimpleNamespace(id="t-1", name="T1", aoi_dtos=lambda: [])
-    service._sort_key = lambda item, sort_by: ""
 
     service._do_enter_template(template)
 
@@ -102,11 +107,12 @@ def test_enter_arrow_disables_on_template_opened_signal():
     therefore be refreshed on the `templateOpened` signal — not only on the next selection
     change (the reported bug: the '>' stayed enabled until an AOI/processing was selected)."""
     controller = _controller()
-    service = _bare_service()  # real signals
+    service = _bare_template_service()  # real signals
     service.in_template_mode = False
-    service.is_only_templates_selected = MagicMock(return_value=True)
-    service.selected_template = MagicMock(return_value=SimpleNamespace(id="t-1"))
-    controller.processing_service = service
+    controller.template_service = service
+    controller.processing_service.is_only_templates_selected = MagicMock(return_value=True)
+    controller.processing_service.selected_template = MagicMock(
+        return_value=SimpleNamespace(id="t-1"))
 
     controller._setup_navigation()  # wires templateOpened/Closed -> _update_nav_buttons
     # A single template is selected in the processings view -> arrow enabled.
@@ -121,13 +127,12 @@ def test_enter_arrow_disables_on_template_opened_signal():
 
 
 def test_exit_template_view_emits_closed_signal_and_clears_state():
-    service = _bare_service()
+    service = _bare_template_service()
     service.in_template_mode = True
     template = SimpleNamespace(id="t-1", name="T1")
     service.active_template = template
     service.template_processings = {"p": object()}
     service.template_aois = {"a": object()}
-    service.processing_fetch_timer = MagicMock()
     received = []
     service.templateClosed.connect(lambda t: received.append(t))
 

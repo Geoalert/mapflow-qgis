@@ -42,7 +42,7 @@ def _plugin(sort_by="ACQUISITION_DATE", sort_order="DESC", in_template=False, ro
     plugin.config = Config
     plugin.config_search_columns = ConfigColumns()
     plugin.search_service = _search_service(sort_by, sort_order)
-    plugin.processing_service = SimpleNamespace(in_template_mode=in_template)
+    plugin.template_service = SimpleNamespace(in_template_mode=in_template)
     plugin.dlg = MagicMock()
     plugin.dlg.metadataTable.rowCount.return_value = rows
     plugin._update_search_sort_indicator = MagicMock()

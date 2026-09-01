@@ -130,7 +130,8 @@ def _preview_service(in_template_mode):
         plugin_dir="",
         config=MagicMock(),
         result_loader=MagicMock(),
-        processing_service=SimpleNamespace(in_template_mode=in_template_mode,
+        processing_service=MagicMock(),
+        template_service=SimpleNamespace(in_template_mode=in_template_mode,
                                            active_template=None))
 
 

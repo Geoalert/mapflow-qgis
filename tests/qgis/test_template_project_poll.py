@@ -74,12 +74,11 @@ def test_poll_not_restarted_when_already_active():
     service.processing_fetch_timer.stop.assert_not_called()
 
 
-def test_in_template_mode_is_noop():
-    service = _service(
-        processings_all_final=True, templates={"t": _template(False)}, in_template_mode=True
-    )
+def test_the_poll_state_is_only_decided_for_the_project_list():
+    """The in-template guard this used to need is gone: the callback that calls this only runs
+    for a project response now, and the in-template view sets its own cadence on enter."""
+    service = _service(processings_all_final=True, templates={"t": _template(False)})
 
     service._apply_poll_timer_state()
 
-    service.processing_fetch_timer.stop.assert_not_called()
-    service.processing_fetch_timer.start.assert_not_called()
+    service.processing_fetch_timer.stop.assert_called_once()

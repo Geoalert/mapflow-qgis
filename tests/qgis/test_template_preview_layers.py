@@ -22,7 +22,7 @@ def _add(project, group, layer):
     return layer
 
 
-def _service(app_context, processing_service=None):
+def _service(app_context, template_service=None):
     return PreviewService(
         iface=MagicMock(),
         app_context=app_context,
@@ -30,7 +30,8 @@ def _service(app_context, processing_service=None):
         plugin_dir="",
         config=MagicMock(),
         result_loader=MagicMock(),
-        processing_service=processing_service or SimpleNamespace(in_template_mode=False,
+        processing_service=MagicMock(),
+        template_service=template_service or SimpleNamespace(in_template_mode=False,
                                                                  active_template=None))
 
 
@@ -63,8 +64,8 @@ def test_relocate_preview_places_it_above_footprints_inside_template_group():
     service = _service(
         SimpleNamespace(project=project, settings=settings, plugin_name="Mapflow",
                         metadata_layer=footprints),
-        processing_service=SimpleNamespace(in_template_mode=True,
-                                           active_template=SimpleNamespace(name="T1")))
+        template_service=SimpleNamespace(in_template_mode=True,
+                                         active_template=SimpleNamespace(name="T1")))
 
     service._relocate_to_template_group(preview)
 

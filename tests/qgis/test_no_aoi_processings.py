@@ -19,7 +19,7 @@ from mapflow.functional.service.template_service import TemplateService
 # ---------------- service: which processings are 'No AOI' ----------------
 
 def _service(processing_ids, bound_ids):
-    service = ProcessingService.__new__(ProcessingService)
+    service = TemplateService(app_context=MagicMock(), processing_service=MagicMock())
     service.template_processings = {pid: SimpleNamespace(id=pid) for pid in processing_ids}
     service.template_aois = {
         "aoi1": SimpleNamespace(processings=[SimpleNamespace(processingId=pid) for pid in bound_ids])
@@ -39,8 +39,8 @@ def test_no_aoi_processing_ids_are_the_unbound_ones():
 def _controller(in_template=True, processing=None):
     controller = TemplateController.__new__(TemplateController)
     controller.template_service = MagicMock()
+    controller.template_service.in_template_mode = in_template
     controller.processing_service = MagicMock()
-    controller.processing_service.in_template_mode = in_template
     controller.processing_service.selected_processing.return_value = processing
     return controller
 
@@ -64,8 +64,8 @@ def test_click_ignored_outside_template():
 
 def _service_load(is_no_aoi=True, on_map=False, pending=None):
     processing_service = MagicMock()
-    processing_service.is_no_aoi_processing.return_value = is_no_aoi
     service = TemplateService(app_context=MagicMock(), processing_service=processing_service)
+    service.is_no_aoi_processing = lambda pid: is_no_aoi
     service.no_aoi_aoi_on_map = MagicMock(return_value=on_map)
     if pending:
         service._pending_no_aoi_ids.update(pending)
@@ -107,14 +107,14 @@ def test_load_ignored_for_no_processing():
 
 
 def test_callback_draws_layer_tags_it_and_clears_in_flight():
-    processing_service = MagicMock()
-    processing_service.in_template_mode = True
-    processing_service.active_template = SimpleNamespace(name="T")
-    service = TemplateService(app_context=MagicMock(), processing_service=processing_service)
+    service = TemplateService(app_context=MagicMock(), processing_service=MagicMock())
+    service.in_template_mode = True
+    service.active_template = SimpleNamespace(name="T")
     service._pending_no_aoi_ids = {"p2"}
     service.no_aoi_aoi_on_map = MagicMock(return_value=False)
     layer = MagicMock()
     service.add_geojson_aoi_layer = MagicMock(return_value=layer)
+    service.no_aoi_subgroup_name = lambda: "No AOI"
     response = MagicMock()
     # /processings/{id}/aois returns a JSON list of AOI objects, each with a geometry.
     response.readAll.return_value.data.return_value = (
@@ -133,14 +133,14 @@ def test_callback_draws_layer_tags_it_and_clears_in_flight():
 def test_processings_loaded_creates_no_aoi_group_only_when_unbound_exist():
     controller = TemplateController.__new__(TemplateController)
     controller.template_service = MagicMock()
+    controller.template_service.in_template_mode = False
     controller.template_service.no_aoi_subgroup_name.return_value = "No AOI"
-    controller.processing_service = MagicMock()
 
-    controller.processing_service.no_aoi_processing_ids.return_value = {"p2"}
+    controller.template_service.no_aoi_processing_ids.return_value = {"p2"}
     controller.on_template_processings_loaded(SimpleNamespace(name="T"))
     controller.template_service.ensure_template_group.assert_called_once_with("T", "No AOI")
 
     controller.template_service.ensure_template_group.reset_mock()
-    controller.processing_service.no_aoi_processing_ids.return_value = set()
+    controller.template_service.no_aoi_processing_ids.return_value = set()
     controller.on_template_processings_loaded(SimpleNamespace(name="T"))
     controller.template_service.ensure_template_group.assert_not_called()

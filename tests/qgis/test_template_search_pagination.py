@@ -31,7 +31,8 @@ def _plugin(in_template_mode=True):
     plugin.dlg = MagicMock()
     plugin.search_view = SearchView(dlg=plugin.dlg, config=MagicMock())
     plugin.search_service = _service()
-    plugin.processing_service = SimpleNamespace(in_template_mode=in_template_mode, active_template=None)
+    plugin.template_service = SimpleNamespace(in_template_mode=in_template_mode,
+                                              active_template=None)
     return plugin
 
 
@@ -128,9 +129,8 @@ def test_next_page_outside_template_mode_uses_regular_search():
 
 
 def _template_service(active_template=None, aoi_filter=None):
-    service = TemplateService(
-        app_context=MagicMock(),
-        processing_service=SimpleNamespace(active_template=active_template))
+    service = TemplateService(app_context=MagicMock(), processing_service=MagicMock())
+    service.active_template = active_template
     service.search_aoi_filter = aoi_filter
     service.load_search = MagicMock()
     return service

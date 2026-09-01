@@ -101,6 +101,8 @@ def test_on_processings_selection_changed_sets_planned_start_button_text():
     plugin.tr = lambda text: text
     plugin.dlg = MagicMock()
     plugin.processing_service = MagicMock()
+    plugin.template_service = MagicMock()
+    plugin.template_service.in_template_mode = False
     plugin.processing_service.selected_template.return_value = SimpleNamespace(id="template-1")
     plugin.processing_service.selected_processing.return_value = None
     plugin.processing_service.planned_processing_selection_error.return_value = (
@@ -122,6 +124,8 @@ def test_on_processings_selection_changed_restores_default_start_button_text_wit
         "Select one or more images in search results to start planned processing"
     )
     plugin.processing_service = MagicMock()
+    plugin.template_service = MagicMock()
+    plugin.template_service.in_template_mode = False
     plugin.processing_service.selected_template.return_value = None
     plugin.processing_service.template_to_run.return_value = None
     plugin.processing_service.planned_processing_selection_error.return_value = None
@@ -143,6 +147,8 @@ def test_on_processings_selection_changed_restores_default_when_processing_selec
         "Select one or more images in search results to start planned processing"
     )
     plugin.processing_service = MagicMock()
+    plugin.template_service = MagicMock()
+    plugin.template_service.in_template_mode = False
     plugin.processing_service.selected_template.return_value = SimpleNamespace(id="template-1")
     plugin.processing_service.selected_processing.return_value = SimpleNamespace(id="processing-1")
     # A processing is also selected -> not a planned start.
@@ -162,6 +168,8 @@ def test_load_results_double_click_template_enters_template_view():
     """Double-clicking a template navigates 'one step right' via the controller."""
     plugin = Mapflow.__new__(Mapflow)
     plugin.processing_service = MagicMock()
+    plugin.template_service = MagicMock()
+    plugin.template_service.in_template_mode = False
     template = SimpleNamespace(id="template-1")
     plugin.processing_service.selected_template.return_value = template
     plugin.project_processing_controller = MagicMock()
@@ -173,30 +181,29 @@ def test_load_results_double_click_template_enters_template_view():
 
 def test_enter_template_view_hydrated_skips_refetch():
     """A template that already carries its AOIs is entered without a refetch."""
-    service = ProcessingService.__new__(ProcessingService)
-    service.api = MagicMock()
-    service.templates = {}
+    service = TemplateService(app_context=MagicMock(), processing_service=MagicMock())
+    service.processing_service.templates = {}
     service._do_enter_template = MagicMock()
     template = SimpleNamespace(id="template-1", aoi_dtos=lambda: [object()])
 
     service.enter_template_view(template)
 
     service._do_enter_template.assert_called_once_with(template)
-    service.api.get_template.assert_not_called()
+    service.processing_service.api.get_template.assert_not_called()
 
 
 def test_enter_template_view_unhydrated_fetches_then_enters():
     """A template missing its AOIs (project poll omits searchParams) is hydrated first."""
-    service = ProcessingService.__new__(ProcessingService)
-    service.api = MagicMock()
-    service.templates = {}
+    service = TemplateService(app_context=MagicMock(), processing_service=MagicMock())
+    service.processing_service.templates = {}
     service._do_enter_template = MagicMock()
     template = SimpleNamespace(id="template-1", aoi_dtos=lambda: [])
 
     service.enter_template_view(template)
 
-    service.api.get_template.assert_called_once()
-    assert service.api.get_template.call_args.kwargs["template_id"] == "template-1"
+    api = service.processing_service.api
+    api.get_template.assert_called_once()
+    assert api.get_template.call_args.kwargs["template_id"] == "template-1"
     service._do_enter_template.assert_not_called()
 
     hydrated_payload = {
@@ -213,11 +220,11 @@ def test_enter_template_view_unhydrated_fetches_then_enters():
     }
     response = MagicMock()
     response.readAll.return_value.data.return_value = json.dumps(hydrated_payload).encode()
-    callback = service.api.get_template.call_args.kwargs["callback"]
+    callback = service.processing_service.api.get_template.call_args.kwargs["callback"]
 
     callback(response)
 
-    assert "template-1" in service.templates
+    assert "template-1" in service.processing_service.templates
     service._do_enter_template.assert_called_once()
 
 
@@ -271,9 +278,10 @@ def _seen_setup(selected_rows=None, open_id="tpl-1", active_template=None):
     # The in-memory template DTO whose newImagesCount the seen flow decrements.
     template_dto = SimpleNamespace(id=open_id or (active_template.id if active_template else None),
                                    newImagesCount=2)
-    processing_service = SimpleNamespace(api=MagicMock(), active_template=active_template,
+    processing_service = SimpleNamespace(api=MagicMock(),
                                          templates={template_dto.id: template_dto})
     service = TemplateService(app_context=app_context, processing_service=processing_service)
+    service.active_template = active_template
     service.template_search_images = {
         "img-1": SimpleNamespace(id="img-1", isNew=True, productType="Image"),
         "img-2": SimpleNamespace(id="img-2", isNew=False, productType="Image"),
@@ -626,9 +634,10 @@ def test_rename_callback_survives_a_body_that_is_not_json():
 def _run_state_service(is_active=True, is_failed=False):
     template = SimpleNamespace(id="tpl-1", name="T", isActive=is_active, is_failed=is_failed)
     processing_service = SimpleNamespace(
-        selected_template=lambda: template, api=MagicMock(), templates={},
-        _template_error_text=lambda response: "boom")
-    return TemplateService(app_context=MagicMock(), processing_service=processing_service)
+        selected_template=lambda: template, api=MagicMock(), templates={})
+    service = TemplateService(app_context=MagicMock(), processing_service=processing_service)
+    service._error_text = lambda response: "boom"
+    return service
 
 
 def test_pause_stops_an_active_template():

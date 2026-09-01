@@ -20,13 +20,15 @@ def _plugin_with_template(user_role, is_active=True, status="READY",
     plugin.tr = lambda text: text
     plugin.dlg = MagicMock()
     plugin.processing_service = MagicMock()
+    plugin.template_service = MagicMock()
+    plugin.template_service.in_template_mode = False
     plugin.processing_service.selected_template.return_value = SimpleNamespace(
         isActive=is_active, status=status, userId=template_user_id,
         is_failed=(status or "").upper() == "FAILED",
     )
     plugin.processing_service.selected_processing.return_value = None
     # Selecting a template row happens in the processings list, not inside a template.
-    plugin.processing_service.in_template_mode = False
+    plugin.template_service.in_template_mode = False
     app_context = AppContext()
     app_context.user_role = user_role
     app_context.user_id = user_id

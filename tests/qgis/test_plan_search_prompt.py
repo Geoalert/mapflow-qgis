@@ -87,6 +87,7 @@ def _dispatch_plugin(exceeds, mode="search"):
     plugin.metadata_search_mode = mode
     plugin.get_metadata = MagicMock()
     plugin.template_service = MagicMock()
+    plugin.template_service.in_template_mode = False
     plugin.template_service.search_area_exceeds_limit.return_value = exceeds
     plugin.template_controller = MagicMock()
     return plugin
@@ -131,6 +132,7 @@ def _controller(plan_confirmed):
     from mapflow.functional.controller.template_controller import TemplateController
     controller = TemplateController.__new__(TemplateController)
     controller.template_service = MagicMock()
+    controller.template_service.in_template_mode = False
     controller.template_service.planned_search_default_name.return_value = "Searching 2026-07-14 10:00"
     controller.template_view = MagicMock()
     controller.template_view.prompt_plan_search.return_value = plan_confirmed

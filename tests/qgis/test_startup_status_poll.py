@@ -127,6 +127,8 @@ def test_logout_stops_a_startup_poll_that_never_finished(plugin):
     """Otherwise a failed startup keeps polling the account endpoint after logging out."""
     plugin.app_context = SimpleNamespace(settings=MagicMock(), logged_in=True)
     plugin.processing_service = MagicMock()
+    plugin.template_service = MagicMock()
+    plugin.template_service.in_template_mode = False
     plugin.user_status_update_timer = MagicMock()
     plugin.dlg = MagicMock()
     plugin.dlg_login = MagicMock()
