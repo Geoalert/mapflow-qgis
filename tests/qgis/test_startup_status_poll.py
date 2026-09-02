@@ -146,16 +146,16 @@ def test_the_storage_quota_is_requested_once_on_success_not_per_retry():
 
 
 def test_logout_stops_a_startup_poll_that_never_finished(service):
-    """Otherwise a failed startup keeps polling the account endpoint after logging out."""
+    """Otherwise a failed startup keeps polling the account endpoint after logging out.
+
+    `SessionService` ends the session and announces it; the polls belong to other services, so
+    `mapflow.py` is what stops them. This drives that slot, which is the half that can regress."""
     plugin = Mapflow.__new__(Mapflow)
     plugin.account_service = service
-    plugin.app_context = SimpleNamespace(settings=MagicMock(), logged_in=True)
     plugin.processing_service = MagicMock()
-    plugin.http = MagicMock()
     plugin.dlg = MagicMock()
-    plugin.dlg_login = MagicMock()
 
-    plugin.logout()
+    plugin.on_logged_out()
 
     assert not service.startup_timer.isActive()
     assert not service.refresh_timer.isActive()

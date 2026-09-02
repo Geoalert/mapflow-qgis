@@ -2,7 +2,6 @@ import json
 import logging
 import os.path
 import shutil
-from base64 import b64decode
 from configparser import ConfigParser  # parse metadata.txt -> QGIS version check (compatibility)
 from pathlib import Path
 from typing import List, Optional, Callable
@@ -21,11 +20,9 @@ from qgis.core import (
 )
 
 from .config import Config, ConfigColumns
-from .errors import ProxyIsAlreadySet
 # Functional
 from .functional import helpers, layer_utils
 from .functional.app_context import AppContext
-from .functional.auth import get_auth_id
 from .functional.controller.data_catalog_controller import DataCatalogController
 from .functional.controller.project_processing_controller import ProjectProcessingController
 from .functional.controller.processing_controller import ProcessingController
@@ -44,6 +41,7 @@ from .functional.service import (DataCatalogService,
                                  ProjectService,
                                  ProviderService)
 from .functional.service.account_service import AccountService
+from .functional.service.session_service import SessionService
 from .functional.service.alert_service import AlertService, alert
 from .functional.service.area_calculator_service import AreaCalculatorService
 # HTTP
@@ -127,10 +125,8 @@ class Mapflow(QObject):
 
         # ========== 3. INIT DIALOGS ==========
         # Init dialogs before creating timers that need them as parent
-        self.use_oauth = (self.app_context.settings.value('use_oauth', 'false').lower() == 'true')
         self.plugin_icon = plugin_icon
         self.dlg = MainDialog(self.main_window, self.app_context.settings)
-        self.dlg_login = self.set_up_login_dialog()
         self.review_dialog = ReviewDialog(self.dlg)
         self.dlg_provider = ProviderDialog(self.dlg)
         self.dlg_provider.accepted.connect(self.edit_provider_callback)
@@ -148,6 +144,19 @@ class Mapflow(QObject):
         self.calculator = QgsDistanceArea()
         # Restore directory from settings
         self.dlg.outputDirectory.setText(self.app_context.settings.value('outputDir'))
+
+        # ========== 3b. SESSION ==========
+        # Owns the credentials and the auth method. Built after `Http` (it drives it) and before
+        # the login dialog (which asks it which input to show).
+        self.session_service = SessionService(http=self.http,
+                                              app_context=self.app_context,
+                                              config=self.config,
+                                              on_authenticated=self.log_in_callback)
+        self.dlg_login = self.set_up_login_dialog()
+        self.session_service.tokenRejected.connect(self.dlg_login.invalidToken.setVisible)
+        self.session_service.loginRequired.connect(self.dlg_login.show)
+        self.session_service.authTypeChanged.connect(self.on_auth_type_changed)
+        self.session_service.loggedOut.connect(self.on_logged_out)
 
         # ========== 4. ACCOUNT STATUS ==========
         # Owns both /user/status polls and their timers: the steady-state refresh for the limits
@@ -405,7 +414,7 @@ class Mapflow(QObject):
         # Memorize dialog element sizes & positioning
         self.dlg.finished.connect(self.save_dialog_state)
         # Connect buttons
-        self.dlg.logoutButton.clicked.connect(self.logout)
+        self.dlg.logoutButton.clicked.connect(self.session_service.logout)
         self.dlg.selectOutputDirectory.clicked.connect(self.select_output_directory)
         self.dlg.downloadResultsButton.clicked.connect(self.load_results)
         # Calculate AOI size
@@ -561,18 +570,31 @@ class Mapflow(QObject):
 
     def set_up_login_dialog(self) -> MapflowLoginDialog:
         """Create a login dialog, set its title and signal-slot connections."""
-        dlg_login = MapflowLoginDialog(self.main_window, self.use_oauth, self.app_context.settings.value("token", ""))
+        dlg_login = MapflowLoginDialog(self.main_window,
+                                       self.session_service.use_oauth,
+                                       self.session_service.saved_token)
         dlg_login.setWindowTitle(helpers.generate_plugin_header(self.tr("Log in ") + self.plugin_name,
                                                                      self.config.MAPFLOW_ENV,
                                                                      None, None, None))
-        dlg_login.logIn.clicked.connect(self.read_mapflow_token)
-        dlg_login.useOauth.toggled.connect(self.set_auth_type)
+        dlg_login.logIn.clicked.connect(self.log_in)
+        dlg_login.useOauth.toggled.connect(self.session_service.set_auth_type)
         return dlg_login
 
-    def set_auth_type(self, use_oauth: bool = False):
-        self.use_oauth = use_oauth
-        self.app_context.settings.setValue("use_oauth", str(use_oauth).lower())
-        self.dlg_login.set_auth_type(use_oauth=use_oauth, token = self.app_context.settings.value('token', ""))
+    def log_in(self) -> None:
+        """The Log in button. What the user typed is a widget read, so it is taken here and handed
+        over; which auth method applies is the service's own state."""
+        self.session_service.authenticate(self.dlg_login.token_value())
+
+    def on_auth_type_changed(self, use_oauth: bool, token: str) -> None:
+        self.dlg_login.set_auth_type(use_oauth=use_oauth, token=token)
+
+    def on_logged_out(self) -> None:
+        """Everything that must stop when the session ends. The polls belong to other services,
+        so they are stopped here rather than by `SessionService` reaching into them."""
+        self.processing_service.processing_fetch_timer.stop()
+        self.account_service.stop_refreshing()
+        self.account_service.stop_startup_polling()
+        self.dlg.close()
 
     def on_provider_change(self) -> None:
         """Adjust max and current zoom, and update the metadata table when user selects another
@@ -1213,87 +1235,6 @@ class Mapflow(QObject):
         self.app_context.settings.setValue('metadataFrom', self.dlg.metadataFrom.date())
         self.app_context.settings.setValue('metadataTo', self.dlg.metadataTo.date())
 
-    def read_mapflow_token(self) -> None:
-        """Compose and memorize the user's credentils as Basic Auth."""
-        if self.use_oauth:
-            auth_id, new_auth = get_auth_id(self.config.AUTH_CONFIG_NAME,
-                                             self.config.AUTH_CONFIG_MAP)
-            if new_auth:
-                self.alert(self.tr("We have just set the authentication config for you. \n"
-                                       " You may need to restart QGIS to apply it so you could log in"),
-                           icon=QMessageBox.Information)
-            if not auth_id:
-                self.dlg_login.invalidToken.setVisible(True)
-            else:
-                self.dlg_login.invalidToken.setVisible(False)
-                self.login_oauth(auth_id)
-        else:
-            auth_data = self.dlg_login.token_value()
-            if not auth_data:
-                return
-            # to add paddind for the token len to be multiple of 4
-            token = auth_data + "=" * ((4 - len(auth_data) % 4) % 4)
-            self.login_basic(token)
-
-    def login_oauth(self, oauth_id):
-        try:
-            self.http.setup_auth(oauth_id=oauth_id)
-            self.http.get(
-                url=f'{self.config.SERVER}/projects/default',
-                callback=self.log_in_callback,
-                use_default_error_handler=True
-            )
-        except ProxyIsAlreadySet:
-            self.alert(self.tr("Please restart QGIS before using OAuth2 login."),
-                       icon=QMessageBox.Warning)
-        except Exception as e:
-            self.alert(f"Error while trying to send authorization request: {e}."
-                       f"It is possible that your auth config is corrupted. "
-                       f"Remove auth config named {self.config.AUTH_CONFIG_NAME} and restart QGis"
-                       f"for the plugin to recreate it. "
-                       f"If it does not help, contact us",
-                       icon=QMessageBox.Warning)
-
-    def login_basic(self, token) -> None:
-        """Log into Mapflow."""
-        # save new token to settings immediately to overwrite old one, if any
-        self.app_context.settings.setValue('token', token)
-        # keep login/password from token
-        try:
-            self.app_context.username, self.app_context.password = b64decode(token).decode().split(':')
-        except (ValueError, TypeError):
-            # A malformed token, which is the whole point of this handler. ValueError covers
-            # all three ways it can be malformed: binascii.Error (not base64) and
-            # UnicodeDecodeError (not utf-8) both subclass it, and so does the unpack when
-            # the decoded text has no ':'. TypeError covers a non-str/bytes token.
-            self.app_context.username = self.app_context.password = ''  # nosec B105  # clearing creds, not a secret
-            self.dlg_login.show()
-            self.alert(self.tr('Wrong token. '
-                               'Visit "<a href=\"https://app.mapflow.ai/account/api\">mapflow.ai</a>" '
-                               'to get a new one'),
-                       icon=QMessageBox.Warning)
-            self.dlg_login.invalidToken.setVisible(True)
-            return
-        self.http.setup_auth(basic_auth_token=f'Basic {token}')
-        self.http.get(
-            url=f'{self.config.SERVER}/projects/default',
-            callback=self.log_in_callback,
-            use_default_error_handler=True
-        )
-
-    def logout(self) -> None:
-        """Close the plugin and clear credentials from cache."""
-        # set token to empty to delete it from settings
-        self.app_context.settings.setValue('token', '')
-        self.processing_service.processing_fetch_timer.stop()
-        self.account_service.stop_refreshing()
-        self.account_service.stop_startup_polling()
-        self.app_context.logged_in = False
-        self.http.logout()
-        self.dlg.close()
-        # self.dlg_login = self.set_up_login_dialog()  # recreate the login dialog
-        self.dlg_login.show()  # assume user wants to log into another account
-
     def default_error_handler(self,
                               response: QNetworkReply,
                               ) -> bool:
@@ -1309,13 +1250,9 @@ class Mapflow(QObject):
         if error == QNetworkReply.AuthenticationRequiredError:  # invalid/empty credentials
             # Prevent deadlocks
             if self.app_context.logged_in:  # token re-issued during a plugin session
-                self.logout()
-            elif self.app_context.settings.value('token'):  # env changed w/out logging out (admin)
-                self.alert(self.tr('Wrong token. '
-                                   'Visit "<a href=\"https://app.mapflow.ai/account/api\">mapflow.ai</a>" '
-                                   'to get a new one'),
-                           icon=QMessageBox.Warning)
-                self.dlg_login.show()
+                self.session_service.logout()
+            elif self.session_service.saved_token:  # env changed w/out logging out (admin)
+                self.session_service.reject_saved_token()
 
             self.dlg_login.invalidToken.setVisible(True)
             return True
@@ -1575,10 +1512,10 @@ class Mapflow(QObject):
             self.account_service.start_refreshing()
             return
 
-        token = self.app_context.settings.value('token')
-        if not self.use_oauth and token:
+        token = self.session_service.saved_token
+        if not self.session_service.use_oauth and token:
             # Saved token for basic auth
-            self.login_basic(token)
+            self.session_service.login_basic(token)
         else:
             self.dlg_login.show()
 
