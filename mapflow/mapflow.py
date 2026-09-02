@@ -12,7 +12,7 @@ from PyQt5.QtCore import (
 )
 from PyQt5.QtNetwork import QNetworkReply
 from PyQt5.QtWidgets import (
-    QAbstractItemView, QAction, QApplication, QFileDialog,
+    QAction, QApplication, QFileDialog,
     QMenu, QMessageBox, QWidget, QToolButton
 )
 from qgis.core import (
@@ -216,7 +216,6 @@ class Mapflow(QObject):
                                                             app_context=self.app_context,
                                                             config=self.config,
                                                             data_catalog_service=self.data_catalog_service)
-        self.provider_service.selection_sync_callback = self.sync_layer_selection_with_table
 
         self.processing_service = ProcessingService(http=self.http,
                                                     dlg=self.dlg,
@@ -284,11 +283,11 @@ class Mapflow(QObject):
         # Search wiring. Results/pager signals stay here for now — the run and pagination
         # handlers they end at are still mapflow.py slots (see SearchController's docstring).
         self.search_service.resultsReceived.connect(self._on_search_results)
-        self.search_service.metadataLayerReady.connect(self._on_metadata_layer_ready)
         self.search_service.pagerChanged.connect(self.search_view.show_pages)
         self.search_service.pagerHidden.connect(self.search_view.hide_pages)
+        self.aoi_view = AoiView(dlg=self.dlg, iface=self.iface)
         # Owns the preview-dispatch handlers (search button, cell/double click), the local filter
-        # over the fetched results, and their wiring.
+        # over the fetched results, the two-way table<->footprint selection sync, and their wiring.
         self.search_controller = SearchController(search_service=self.search_service,
                                                   search_view=self.search_view,
                                                   preview_service=self.preview_service,
@@ -299,8 +298,9 @@ class Mapflow(QObject):
                                                   app_context=self.app_context,
                                                   widen_warning_button=self.dlg.searchWidenWarning,
                                                   reset_filters_button=self.dlg.resetSearchFilters,
-                                                  clear_search_button=self.dlg.clearSearch)
-        self.aoi_view = AoiView(dlg=self.dlg, iface=self.iface)
+                                                  clear_search_button=self.dlg.clearSearch,
+                                                  aoi_view=self.aoi_view)
+        self.search_service.metadataLayerReady.connect(self.search_controller.on_metadata_layer_ready)
         # Template-AOI session wiring. It belongs to TemplateController, which the templates
         # step creates; until then mapflow.py holds the connects (the spec allows wiring here,
         # not domain logic).
@@ -397,7 +397,13 @@ class Mapflow(QObject):
                                                              provider_service=self.provider_service,
                                                              use_imagery_extent=self.use_imagery_extent)
         self.project_service.area_calculator_service = self.area_calculator_service
-        
+        # SearchController is built well before this service (it is needed by the search wiring
+        # above), so its cost-recompute collaborator is set here, as the other back-links are.
+        self.search_controller.area_calculator_service = self.area_calculator_service
+        # Restoring a provider's saved selection re-selects footprints, which must drive the table.
+        self.provider_service.selection_sync_callback = \
+            self.search_controller.sync_layer_selection_with_table
+
         # ========== 11. SETUP METADATA FILTERS ==========
         self.dlg.minIntersection.setValue(int(self.app_context.settings.value('metadataMinIntersection', 0)))
         self.dlg.maxCloudCover.setValue(int(self.app_context.settings.value('metadataMaxCloudCover', 100)))
@@ -445,8 +451,7 @@ class Mapflow(QObject):
         self.dlg.editProvider.clicked.connect(self.edit_provider)
         self.dlg.removeProvider.clicked.connect(self.remove_provider)
 
-        self.meta_table_layer_connection = self.dlg.metadataTable.itemSelectionChanged.connect(
-            self.sync_table_selection_with_image_id_and_layer)
+        self.search_controller.connect_table_selection()
         self.app_context.meta_layer_table_connection = None
         self.dlg.getMetadata.clicked.connect(self.handle_metadata_button_click)
         self.dlg.metadataTable.cellClicked.connect(self.on_metadata_table_cell_clicked)
@@ -968,111 +973,6 @@ class Mapflow(QObject):
         """Built-in Qt sorting stays OFF: results already arrive in the server's sort order, and
         a header click re-requests rather than sorting locally."""
         self.search_view.fill_table(geoms, sort=False)
-
-    def _on_metadata_layer_ready(self, layer) -> None:
-        """Selecting a footprint on the map selects the matching table row (and triggers preview)."""
-        self.app_context.meta_layer_table_connection = layer.selectionChanged.connect(
-            self.sync_layer_selection_with_table)
-
-    def sync_table_selection_with_image_id_and_layer(self) -> None:
-        """
-        Every time user selects a row in the metadata table, select the
-        corresponding feature in the metadata layer and put the selected image's
-        id into the "Image ID" field.
-        """
-        local_index_column = self.config.LOCAL_INDEX_COLUMN
-        key = 'local_index'
-
-        selected_cells = self.dlg.metadataTable.selectedItems()
-        if not selected_cells:
-            selected_rows = local_indices = []
-        else:
-            selected_rows = [cell.row() for cell in selected_cells]
-            local_indices = [self.dlg.metadataTable.item(row, local_index_column).text() for row in selected_rows]
-        try:
-            self.app_context.metadata_layer.selectionChanged.disconnect(self.app_context.meta_layer_table_connection)
-            # disconnect to prevent loop of signals
-        except (RuntimeError, AttributeError, TypeError):
-            # metadata layer was removed or not initialized
-            return
-        self.replace_search_provider_index()
-
-        try:
-            self.app_context.metadata_layer.selectByExpression(f"{key} in {tuple(local_indices)}")
-        except RuntimeError:  # layer has been deleted
-            pass
-        except Exception as e:
-            self.app_context.meta_layer_table_connection = self.app_context.metadata_layer.selectionChanged.connect(
-                self.sync_layer_selection_with_table)
-            raise e
-        # Set the zoom from the selected image BEFORE recomputing cost, with the combo's
-        # signals blocked. Otherwise zoomCombo.currentIndexChanged -> on_zoom_change fires a
-        # SECOND, duplicate cost request (and the first one below would use the stale zoom).
-        if selected_rows:
-            zooms = [self.dlg.metadataTable.item(row, self.config.ZOOM_COLUMN_INDEX).text() for row in selected_rows]
-            zoom_index = self.dlg.zoomCombo.findText(zooms[0])  # different zooms are not allowed
-        else:
-            zoom_index = -1
-        self.dlg.zoomCombo.blockSignals(True)
-        self.dlg.zoomCombo.setCurrentIndex(0 if zoom_index == -1 else zoom_index)
-        self.dlg.zoomCombo.blockSignals(False)
-        self.area_calculator_service.calculate_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
-        self.app_context.meta_layer_table_connection = self.app_context.metadata_layer.selectionChanged.connect(
-            self.sync_layer_selection_with_table)
-
-    def sync_layer_selection_with_table(self, selected_ids: List[int]) -> None:
-        """
-        Every time user selects an image in the metadata layer, select the corresponding
-        row in the table and fill out the image id in the providers tab.
-
-        :param selected_ids: The selected feature IDs. These aren't the image IDs, but rather
-            the primary keys of the features.
-        """
-        self.dlg.metadataTable.setSelectionMode(QAbstractItemView.MultiSelection)
-        # Disconnect to avoid backwards signal and possible infinite loop;
-        # connection is restored before return
-        key = 'local_index'
-        id_column_index = self.config.LOCAL_INDEX_COLUMN
-
-        self.dlg.metadataTable.itemSelectionChanged.disconnect(self.meta_table_layer_connection)
-
-        try:
-            if not selected_ids:
-                self.dlg.metadataTable.clearSelection()
-                return
-            found_items = []
-            for selected_id in selected_ids:
-                selected_local_index = self.app_context.metadata_layer.getFeature(selected_id)[key]
-                for item in self.dlg.metadataTable.findItems(str(selected_local_index), Qt.MatchExactly):
-                    if item.column() == id_column_index:
-                        found_items.append(item)
-            self.dlg.metadataTable.clearSelection()
-            if not found_items:
-                return
-            for item in found_items:
-                self.dlg.metadataTable.selectRow(item.row())
-        finally:
-            self.dlg.metadataTable.setSelectionMode(QAbstractItemView.ExtendedSelection)
-            self.meta_table_layer_connection = self.dlg.metadataTable.itemSelectionChanged.connect(
-                self.sync_table_selection_with_image_id_and_layer)
-
-    def sync_image_id_with_table_and_layer(self, image_id: str) -> None:
-        """
-        Select a footprint in the current metadata layer when user selects it in the table.
-
-        :param image_id: The new image ID.
-        """
-
-        if not image_id:
-            self.dlg.metadataTable.clearSelection()
-            return
-        items = self.dlg.metadataTable.findItems(image_id, Qt.MatchExactly)
-        if not items:
-            self.dlg.metadataTable.clearSelection()
-            return
-        #if items[0] not in self.dlg.metadataTable.selectedItems():
-            #self.dlg.metadataTable.selectRow(items[0].row())
-        # Redundant since imageId is temorary removed
 
     def _register_provider_min_areas(self, providers_data):
         """Map provider name -> minimum AOI area (sq km) from /user/status provider data.
