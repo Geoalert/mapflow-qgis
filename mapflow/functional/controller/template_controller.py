@@ -79,6 +79,10 @@ class TemplateController(QObject):
         template_service.templateProcessingsLoaded.connect(self.on_template_processings_loaded)
         template_service.templateOpened.connect(self.on_template_opened)
         template_service.templateClosed.connect(self.on_template_closed)
+        # Every refill rebuilds the cells and so drops the 'new image' icons. The local filter
+        # refills on each filter change, and it is `SearchController`'s — subscribing to the
+        # view's own signal is how the markers survive without either controller calling the other.
+        self.search_view.tableRefilled.connect(self.apply_new_image_markers)
 
         self.template_service.creationBusy.connect(
             lambda busy: self.template_view.set_search_enabled(not busy))
@@ -143,9 +147,16 @@ class TemplateController(QObject):
             template_id,
             on_success=lambda: [self.template_view.set_new_image_marker(r, False) for r in new_rows])
 
-    def apply_new_image_markers(self) -> None:
-        """Show the 'new image' icon on every row whose image DTO is still new. Called after a
-        template's results (re)fill."""
+    def apply_new_image_markers(self, *args) -> None:
+        """Show the 'new image' icon on every row whose image DTO is still new. Runs after every
+        results (re)fill; only a template's results carry the flag, so a regular search's refill
+        stops here rather than walking its rows.
+
+        The test is `open_template_results_id`, not `in_template_mode`: a template's results are
+        also shown from the project list ('See search results') without entering its view, and the
+        markers belong there too."""
+        if not getattr(self.app_context, "open_template_results_id", None):
+            return
         for row in range(self.template_view.metadata_row_count()):
             image_id = self.template_view.image_id_at(row)
             self.template_view.set_new_image_marker(row, self.template_service.image_is_new(image_id))
@@ -232,7 +243,7 @@ class TemplateController(QObject):
         if template is not None:
             self.template_service.remove_template_group(str(template.name))
         self.template_service.clear_search_state()
-        self.search_view.set_widen_warning_visible(False)
+        self.search_view.hide_widen_warning()
         self.template_view.set_update_template_visible(False)
         # Drop the AOI-selection processing Area so it doesn't leak to the project view.
         self.aoi_service.clear_processing_area_selection()
@@ -266,15 +277,13 @@ class TemplateController(QObject):
         self.template_service.filter_search_by_selected_aois()
 
     def show_search_results(self, geoms) -> None:
-        """Render a page of template results: fill the table, then re-draw the new-image markers
-        the fill dropped."""
+        """Render a page of template results."""
         # Built-in Qt column sorting stays OFF: search order is server-driven (regular search) or
         # local-filter-driven (templates); only SEARCH_SORT_FIELDS headers re-sort, server-side.
         # Filling the table emits `metadataTableFilled`, which is what runs the local filter —
-        # do not call it here as well, or every page would be filtered twice.
+        # do not call it here as well, or every page would be filtered twice. The fill also emits
+        # `tableRefilled`, which is what re-draws the new-image markers it dropped.
         self.search_view.fill_table(geoms, sort=False)
-        # New images are flagged with an icon in the leftmost column (not by editing text).
-        self.apply_new_image_markers()
 
     def show_renamed_template(self, template_id: str, new_name: str) -> None:
         """Put the new name in the template's row without waiting for the refreshed list."""

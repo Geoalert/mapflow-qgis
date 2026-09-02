@@ -1,26 +1,22 @@
-"""QGIS-tier tests for the local-filter machinery that stays in `mapflow.py`: assembling a
-`FilterCriteria` from the widgets + context, and applying the result to the table and layer.
+"""QGIS-tier tests for the local filter, now that it belongs to `SearchController`.
 
-The pure computation (which results fail the filter, and the widen `(!)` comparison) moved to
-`LocalFilterService` and is tested in `tests/functional/test_local_filter.py`. What remains here
-needs the QGIS runtime and/or real widgets: the provider/product resolution that reads
+The pure computation (which results fail the filter, and the widen `(!)` comparison) is
+`LocalFilterService`'s and is tested in `tests/functional/test_local_filter.py`. What is here needs
+the QGIS runtime and/or real widgets: the criteria assembly that reads the widgets and
 `app_context`, the `apply_local_filter` orchestration (reorder, re-entrancy guard, skip-unchanged),
-the row greying and footprint hiding, and the widen-indicator button toggle.
+the row greying, the footprint hiding, and the widen-indicator toggle.
 """
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from PyQt5.QtCore import QDate, Qt
+from PyQt5.QtCore import QDate, QObject, Qt
 from PyQt5.QtWidgets import QTableWidget, QTableWidgetItem
-from qgis.core import QgsDistanceArea, QgsGeometry, QgsProject
+from qgis.core import QgsGeometry, QgsProject
 
+from mapflow.functional.controller.search_controller import SearchController
 from mapflow.functional.service.local_filter_service import LocalFilterService
-from mapflow.mapflow import Mapflow
-
-
-def _square(x0, y0, x1, y1):
-    return QgsGeometry.fromWkt(
-        f"POLYGON(({x0} {y0},{x1} {y0},{x1} {y1},{x0} {y1},{x0} {y0}))")
+from mapflow.functional.service.search_service import SearchService
+from mapflow.functional.view.search_view import SearchView
 
 
 def _square_geojson(x0, y0, x1, y1):
@@ -42,87 +38,102 @@ def _feature_p(local_index, provider, product_type="OPTICAL"):
     return f
 
 
-def _plugin_regular(min_intersection=50, max_cloud=50, date_from=None, date_to=None):
-    date_from = date_from or QDate(2025, 1, 1)
-    date_to = date_to or QDate(2025, 12, 31)
-    plugin = Mapflow.__new__(Mapflow)
-    plugin.tr = lambda t: t
-    plugin.dlg = MagicMock()
-    plugin.dlg.metadataFrom.date.return_value = date_from
-    plugin.dlg.metadataTo.date.return_value = date_to
-    plugin.dlg.maxCloudCover.value.return_value = max_cloud
-    plugin.dlg.minIntersection.value.return_value = min_intersection
-    plugin.dlg.off_nadir_range.return_value = (0, 30)
-    plugin.dlg.off_nadir_is_full_range.return_value = True
-    # The pure computation lives in the service; these mapflow tests exercise the criteria
-    # assembly that feeds it, so a real service is wired in.
-    plugin.local_filter_service = LocalFilterService()
-    plugin._allowed_provider_set = MagicMock(return_value=None)
-    plugin._product_category_filter = MagicMock(return_value=None)
-    plugin.template_service = SimpleNamespace(in_template_mode=False)
-    plugin.app_context = SimpleNamespace(
-        metadata_aoi=_square(0, 0, 10, 10),
-        project=QgsProject.instance(),
-        search_baseline_filters=None,
-        search_result_geojson=None,
-        metadata_layer=None)
-    return plugin
+def _view(dlg=None):
+    """A real `SearchView` over a mock dialog, so the widget reads under test are the real ones."""
+    return SearchView(dlg=dlg or MagicMock(), config=SimpleNamespace(LOCAL_INDEX_COLUMN=0))
 
 
-# ---------- _allowed_provider_set / _product_category_filter (criteria assembly) ----------
+def _controller(search_view=None, app_context=None):
+    controller = SearchController.__new__(SearchController)
+    QObject.__init__(controller)
+    controller.tr = lambda t: t
+    controller.search_view = search_view or MagicMock()
+    controller.search_service = MagicMock()
+    controller.local_filter_service = LocalFilterService()
+    controller.app_context = app_context or SimpleNamespace(
+        search_baseline_filters=None, search_result_geojson=None, search_data_providers=None)
+    controller._suppress_local_filter = False
+    controller._last_unfit_set = None
+    controller._last_filtered_geoms = None
+    controller._widen_details = []
+    return controller
+
+
+def _filter_dlg(min_intersection=50, max_cloud=50, date_from=None, date_to=None):
+    dlg = MagicMock()
+    dlg.metadataFrom.date.return_value = date_from or QDate(2025, 1, 1)
+    dlg.metadataTo.date.return_value = date_to or QDate(2025, 12, 31)
+    dlg.maxCloudCover.value.return_value = max_cloud
+    dlg.minIntersection.value.return_value = min_intersection
+    dlg.off_nadir_range.return_value = (0, 30)
+    dlg.off_nadir_is_full_range.return_value = True
+    return dlg
+
+
+# ---------- criteria assembly: which providers a result may come from ----------
 
 def test_allowed_provider_set_off_when_unavailable_toggle_off():
-    plugin = _plugin_regular()
-    del plugin._allowed_provider_set  # use the real method
-    plugin.dlg.hideUnavailableResults.isChecked.return_value = False
+    dlg = _filter_dlg()
+    dlg.hideUnavailableResults.isChecked.return_value = False
+    controller = _controller(search_view=_view(dlg))
 
-    assert plugin._allowed_provider_set() is None
+    assert controller._allowed_provider_set() is None
 
 
 def test_allowed_provider_set_uses_checked_when_any():
-    plugin = _plugin_regular()
-    del plugin._allowed_provider_set  # use the real method
-    plugin.dlg.hideUnavailableResults.isChecked.return_value = True
-    plugin.dlg.searchProvidersCombo.checkedItemsData.return_value = ["Orbview_SVN1"]
+    dlg = _filter_dlg()
+    dlg.hideUnavailableResults.isChecked.return_value = True
+    dlg.searchProvidersCombo.checkedItemsData.return_value = ["Orbview_SVN1"]
+    controller = _controller(search_view=_view(dlg))
 
-    assert plugin._allowed_provider_set() == {"orbview_svn1"}
+    assert controller._allowed_provider_set() == {"orbview_svn1"}
 
 
 def test_allowed_provider_set_falls_back_to_available_when_none_checked():
     # "Search only through available providers" ON, nothing checked -> limit to available list.
-    plugin = _plugin_regular()
-    del plugin._allowed_provider_set  # use the real method
-    plugin.dlg.hideUnavailableResults.isChecked.return_value = True
-    plugin.dlg.searchProvidersCombo.checkedItemsData.return_value = []
-    plugin.app_context.search_data_providers = ["orbview_svn1", "orbview_svn3"]
+    dlg = _filter_dlg()
+    dlg.hideUnavailableResults.isChecked.return_value = True
+    dlg.searchProvidersCombo.checkedItemsData.return_value = []
+    controller = _controller(
+        search_view=_view(dlg),
+        app_context=SimpleNamespace(search_data_providers=["orbview_svn1", "orbview_svn3"],
+                                    search_baseline_filters=None, search_result_geojson=None))
 
-    assert plugin._allowed_provider_set() == {"orbview_svn1", "orbview_svn3"}
+    assert controller._allowed_provider_set() == {"orbview_svn1", "orbview_svn3"}
 
 
 def test_search_only_available_greys_unavailable_provider():
-    # End to end through the wrapper: real assembly + real service. A provider not available to
-    # the user is dropped from an otherwise-fit result.
-    plugin = _plugin_regular(min_intersection=0, max_cloud=100)
-    plugin._product_category_filter = MagicMock(return_value=None)
-    plugin.dlg.hideUnavailableResults.isChecked.return_value = True
-    plugin.dlg.searchProvidersCombo.checkedItemsData.return_value = []
-    plugin.app_context.search_data_providers = ["orbview_svn1"]
-    del plugin._allowed_provider_set  # use the real method
+    # End to end through the assembly + the real service: a provider not available to the user is
+    # dropped from an otherwise-fit result.
+    dlg = _filter_dlg(min_intersection=0, max_cloud=100)
+    dlg.hideUnavailableResults.isChecked.return_value = True
+    dlg.searchProvidersCombo.checkedItemsData.return_value = []
+    dlg.searchMosaicCheckBox.isChecked.return_value = True
+    dlg.searchImageCheckBox.isChecked.return_value = True  # both -> no product filter
+    controller = _controller(
+        search_view=_view(dlg),
+        app_context=SimpleNamespace(search_data_providers=["orbview_svn1"],
+                                    metadata_aoi=QgsGeometry.fromWkt(
+                                        "POLYGON((0 0,10 0,10 10,0 10,0 0))"),
+                                    project=QgsProject.instance(),
+                                    search_baseline_filters=None, search_result_geojson=None))
     features = [_feature_p(0, "orbview_svn1"), _feature_p(1, "legacy_provider")]
 
-    assert plugin._unfit_local_indices(features) == {1}
+    unfit = controller.local_filter_service.unfit_indices(features, controller._filter_criteria())
+
+    assert unfit == {1}
 
 
 def test_product_category_filter_none_when_both_or_neither():
-    plugin = _plugin_regular()
-    del plugin._product_category_filter  # use the real method
+    dlg = _filter_dlg()
+    view = _view(dlg)
     for mosaic, image in [(True, True), (False, False)]:
-        plugin.dlg.searchMosaicCheckBox.isChecked.return_value = mosaic
-        plugin.dlg.searchImageCheckBox.isChecked.return_value = image
-        assert plugin._product_category_filter() is None
-    plugin.dlg.searchMosaicCheckBox.isChecked.return_value = True
-    plugin.dlg.searchImageCheckBox.isChecked.return_value = False
-    assert plugin._product_category_filter() == {"MOSAIC"}
+        dlg.searchMosaicCheckBox.isChecked.return_value = mosaic
+        dlg.searchImageCheckBox.isChecked.return_value = image
+        assert view.product_category_filter() is None
+    dlg.searchMosaicCheckBox.isChecked.return_value = True
+    dlg.searchImageCheckBox.isChecked.return_value = False
+    assert view.product_category_filter() == {"MOSAIC"}
 
 
 # ---------- apply_local_filter orchestration ----------
@@ -131,41 +142,35 @@ def _geoms(*local_indices):
     return {"features": [{"properties": {"local_index": i}} for i in local_indices]}
 
 
-def _plugin_orchestration(unfit):
-    plugin = Mapflow.__new__(Mapflow)
-    plugin.tr = lambda t: t
-    plugin.dlg = MagicMock()
-    plugin.template_service = SimpleNamespace(in_template_mode=False)
-    layer = MagicMock()
-    layer.crs.return_value = "crs"
-    plugin.app_context = SimpleNamespace(
-        metadata_layer=layer,
-        search_result_geojson=_geoms(0, 1, 2, 3),
-        search_baseline_filters=None)
-    plugin._unfit_local_indices = MagicMock(return_value=set(unfit))
-    plugin._mark_unfit_rows = MagicMock()
-    plugin._hide_unfit_footprints = MagicMock()
-    plugin.search_controller = MagicMock()  # apply_local_filter drives reconnect_cell_preview
-    plugin.template_controller = MagicMock()  # ...and apply_new_image_markers in template mode
-    plugin._update_widen_indicator = MagicMock()
-    plugin._restore_search_sort_indicator = MagicMock()
-    return plugin
+def _orchestration_controller(unfit, geoms=None):
+    controller = _controller(app_context=SimpleNamespace(
+        search_result_geojson=geoms or _geoms(0, 1, 2, 3),
+        search_baseline_filters=None,
+        search_data_providers=None))
+    controller.local_filter_service = MagicMock()
+    controller.local_filter_service.unfit_indices.return_value = set(unfit)
+    controller.local_filter_service.widen_messages.return_value = []
+    # The criteria assembly has its own tests above; here the orchestration is what matters.
+    controller._filter_criteria = MagicMock()
+    controller.reconnect_cell_preview = MagicMock()
+    controller.restore_sort_indicator = MagicMock()
+    return controller
 
 
 def test_apply_local_filter_sorts_unfit_rows_to_bottom():
-    plugin = _plugin_orchestration(unfit={1, 3})
+    controller = _orchestration_controller(unfit={1, 3})
 
-    plugin.apply_local_filter()
+    controller.apply_local_filter()
 
-    filled = plugin.dlg.fill_metadata_table.call_args.args[0]
+    filled = controller.search_view.fill_table.call_args.args[0]
     order = [f["properties"]["local_index"] for f in filled["features"]]
     assert order == [0, 2, 1, 3]  # fit first (original order), then unfit (original order)
     # Built-in column sorting must be OFF for this fill, or the table re-sorts by date and the
     # unfit rows jump back up.
-    assert plugin.dlg.fill_metadata_table.call_args.kwargs.get("sort") is False
-    plugin._mark_unfit_rows.assert_called_once_with({1, 3})
-    plugin._hide_unfit_footprints.assert_called_once()
-    plugin._update_widen_indicator.assert_called_once()
+    assert controller.search_view.fill_table.call_args.kwargs.get("sort") is False
+    controller.search_view.mark_unfit_rows.assert_called_once_with({1, 3})
+    controller.search_service.hide_unfit_footprints.assert_called_once_with({1, 3})
+    controller.restore_sort_indicator.assert_called_once()
 
 
 def _dated_geoms():
@@ -177,76 +182,79 @@ def _dated_geoms():
     ]}
 
 
-def test_apply_local_filter_preserves_server_order_for_regular_search():
-    # Regression: the local filter used to force date-desc, discarding the server's sort order
-    # (so a pixel-resolution sort never showed in the table). Regular search must keep server order.
-    plugin = _plugin_orchestration(unfit=set())
-    plugin.app_context.search_result_geojson = _dated_geoms()
+def test_apply_local_filter_preserves_server_order():
+    # Regression: the local filter used to force date-desc, discarding the server's sort order (so
+    # a pixel-resolution sort never showed in the table). Both regular and template results are
+    # sorted server-side, so the incoming order must survive.
+    controller = _orchestration_controller(unfit=set(), geoms=_dated_geoms())
 
-    plugin.apply_local_filter()
+    controller.apply_local_filter()
 
     order = [f["properties"]["local_index"]
-             for f in plugin.dlg.fill_metadata_table.call_args.args[0]["features"]]
+             for f in controller.search_view.fill_table.call_args.args[0]["features"]]
     assert order == [0, 1, 2]  # server order preserved (date-desc would have given [1, 2, 0])
 
 
-def test_apply_local_filter_preserves_server_order_for_template():
-    # Template results are now also sorted server-side (the template-images endpoint takes the
-    # same sortBy/sortOrder), so the local filter must preserve their incoming order too.
-    plugin = _plugin_orchestration(unfit=set())
-    plugin.template_service = SimpleNamespace(in_template_mode=True)
-    plugin.app_context.search_result_geojson = _dated_geoms()
-
-    plugin.apply_local_filter()
-
-    order = [f["properties"]["local_index"]
-             for f in plugin.dlg.fill_metadata_table.call_args.args[0]["features"]]
-    assert order == [0, 1, 2]  # server order preserved (no client date re-sort)
-
-
 def test_apply_local_filter_is_reentrancy_guarded():
-    plugin = _plugin_orchestration(unfit=set())
-    # Simulate the nested metadataTableFilled emission during fill_metadata_table.
-    plugin.dlg.fill_metadata_table.side_effect = lambda *a, **k: plugin.apply_local_filter()
+    controller = _orchestration_controller(unfit=set())
+    # Simulate the nested metadataTableFilled emission during the fill.
+    controller.search_view.fill_table.side_effect = lambda *a, **k: controller.apply_local_filter()
 
-    plugin.apply_local_filter()
+    controller.apply_local_filter()
 
     # The nested call is swallowed: exactly one real fill.
-    assert plugin.dlg.fill_metadata_table.call_count == 1
-    assert plugin._suppress_local_filter is False
+    assert controller.search_view.fill_table.call_count == 1
+    assert controller._suppress_local_filter is False
 
 
 def test_apply_local_filter_skips_refill_when_unchanged():
-    plugin = _plugin_orchestration(unfit={2})
+    controller = _orchestration_controller(unfit={2})
 
-    plugin.apply_local_filter()
-    plugin.apply_local_filter()  # same unfit set + same geoms object
+    controller.apply_local_filter()
+    controller.apply_local_filter()  # same unfit set + same geoms object
 
-    assert plugin.dlg.fill_metadata_table.call_count == 1
+    assert controller.search_view.fill_table.call_count == 1
 
+
+def test_apply_local_filter_with_no_results_still_refreshes_the_indicator():
+    controller = _orchestration_controller(unfit=set(), geoms={"features": []})
+
+    controller.apply_local_filter()
+
+    controller.search_view.fill_table.assert_not_called()
+    controller.reconnect_cell_preview.assert_called_once()
+
+
+# ---------- what the filter does to the table and the map ----------
 
 def test_hide_unfit_footprints_builds_subset_string():
-    plugin = Mapflow.__new__(Mapflow)
+    service = SearchService.__new__(SearchService)
     layer = MagicMock()
+    service.app_context = SimpleNamespace(metadata_layer=layer)
 
-    plugin._hide_unfit_footprints(layer, {3, 1})
+    service.hide_unfit_footprints({3, 1})
     layer.setSubsetString.assert_called_once_with("local_index NOT IN (1, 3)")
 
     layer.reset_mock()
-    plugin._hide_unfit_footprints(layer, set())
+    service.hide_unfit_footprints(set())
     layer.setSubsetString.assert_called_once_with("")
 
 
+def test_hide_unfit_footprints_survives_a_missing_layer():
+    service = SearchService.__new__(SearchService)
+    service.app_context = SimpleNamespace(metadata_layer=None)
+
+    service.hide_unfit_footprints({1})  # must not raise
+
+
 def test_mark_unfit_rows_greys_and_disables_only_unfit():
-    plugin = Mapflow.__new__(Mapflow)
-    plugin.config = SimpleNamespace(LOCAL_INDEX_COLUMN=0)
     table = QTableWidget(2, 2)
     for row, local_index in enumerate([5, 6]):
         table.setItem(row, 0, QTableWidgetItem(str(local_index)))
         table.setItem(row, 1, QTableWidgetItem("x"))
-    plugin.dlg = SimpleNamespace(metadataTable=table)
+    view = _view(SimpleNamespace(metadataTable=table))
 
-    plugin._mark_unfit_rows({6})
+    view.mark_unfit_rows({6})
 
     fit_item = table.item(0, 1)
     unfit_item = table.item(1, 1)
@@ -257,27 +265,59 @@ def test_mark_unfit_rows_greys_and_disables_only_unfit():
 
 # ---------- widen (!) indicator button ----------
 
-def _plugin_widen(baseline):
-    plugin = Mapflow.__new__(Mapflow)
-    plugin.tr = lambda t: t
-    plugin.dlg = MagicMock()
-    plugin.dlg.metadataFrom.date.return_value = QDate(2025, 1, 1)
-    plugin.dlg.metadataTo.date.return_value = QDate(2025, 6, 1)
-    plugin.dlg.maxCloudCover.value.return_value = 30
-    plugin.dlg.minIntersection.value.return_value = 40
-    plugin.dlg.off_nadir_range.return_value = (0, 30)
-    plugin.local_filter_service = LocalFilterService()
-    plugin.selected_search_product_types = MagicMock(return_value=["IMAGE"])
-    plugin.selected_search_providers = MagicMock(return_value=["providerA"])
-    plugin.app_context = SimpleNamespace(search_baseline_filters=baseline)
-    return plugin
+def _widen_controller(baseline):
+    dlg = _filter_dlg(min_intersection=40, max_cloud=30,
+                      date_from=QDate(2025, 1, 1), date_to=QDate(2025, 6, 1))
+    dlg.searchMosaicCheckBox.isChecked.return_value = False
+    dlg.searchImageCheckBox.isChecked.return_value = True
+    dlg.hideUnavailableResults.isChecked.return_value = True
+    dlg.searchProvidersCombo.checkedItemsData.return_value = ["providerA"]
+    controller = _controller(
+        search_view=_view(dlg),
+        app_context=SimpleNamespace(search_baseline_filters=baseline,
+                                    search_result_geojson=None, search_data_providers=None))
+    return controller, dlg
 
 
 def test_update_widen_indicator_toggles_button_visibility():
-    plugin = _plugin_widen(None)  # no baseline -> nothing to warn about
-    plugin._update_widen_indicator()
-    plugin.dlg.searchWidenWarning.setVisible.assert_called_with(False)
+    controller, dlg = _widen_controller(None)  # no baseline -> nothing to warn about
+    controller.update_widen_indicator()
+    dlg.searchWidenWarning.setVisible.assert_called_with(False)
 
-    plugin.app_context.search_baseline_filters = {"max_cloud_cover": 5}
-    plugin._update_widen_indicator()
-    plugin.dlg.searchWidenWarning.setVisible.assert_called_with(True)
+    controller.app_context.search_baseline_filters = {"max_cloud_cover": 5}
+    controller.update_widen_indicator()
+    dlg.searchWidenWarning.setVisible.assert_called_with(True)
+
+
+def test_the_widen_tooltip_names_what_will_not_apply():
+    controller, dlg = _widen_controller({"max_cloud_cover": 5})
+
+    controller.update_widen_indicator()
+
+    tooltip = dlg.searchWidenWarning.setToolTip.call_args.args[0]
+    assert "Run a new Search" in tooltip
+    assert "cloud" in tooltip.lower()
+
+
+# ---------- resetting the filters ----------
+
+def test_reset_filters_puts_the_widgets_back_and_refilters():
+    controller = _controller()
+    controller.app_context.search_baseline_filters = {"max_cloud_cover": 20}
+    controller.apply_local_filter = MagicMock()
+
+    controller.reset_filters()
+
+    controller.search_view.apply_baseline.assert_called_once_with({"max_cloud_cover": 20})
+    # Some setters may not change a value, so their change-signal would not fire the filter.
+    controller.apply_local_filter.assert_called_once()
+
+
+def test_reset_filters_without_a_baseline_does_nothing():
+    controller = _controller()
+    controller.apply_local_filter = MagicMock()
+
+    controller.reset_filters()
+
+    controller.search_view.apply_baseline.assert_not_called()
+    controller.apply_local_filter.assert_not_called()
