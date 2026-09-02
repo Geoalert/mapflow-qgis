@@ -5,15 +5,17 @@
 
 # BRANCH MODEL — READ BEFORE ANY GIT OR MAKE COMMAND
 
-This repo uses **git flow with `dev` as the integration branch**. Feature branches are cut from `dev` and their MRs target `dev`. `master` is the release branch.
+This repo uses **git flow with `dev` as the integration branch**. Feature branches are cut from `dev` and their PRs target `dev`. `master` is the release branch.
 
-**`master` is also the branch `agent-make` verifies watched files against.** These two facts collide, and the collision is load-bearing:
+**`dev` is also the branch `agent-make` verifies watched files against** (`agent-make.branch`). One branch for both roles, deliberately: a change to a watched file (`Makefile`, `Dockerfile.tests`) unblocks `agent-make` the moment it merges to `dev` — the same merge every other change goes through. Nothing has to reach `master` first.
 
-- Editing a watched file (`Makefile`, `Dockerfile.tests`) and merging it to `dev` does **not** unblock `agent-make`. Every invocation keeps failing with *"local files differ from origin/master"* until that change also reaches `master`.
-- So a step that touches a watched file needs its own MR merged to `master` **before** any subsequent step can run tests. Plan such steps first in a release, or land them as a standalone MR.
-- Never "fix" this by reverting the watched file to match `master`. That silently discards the change. STOP and surface to the user — merging to `master` is a human action.
+- While a watched-file edit is still local, every `agent-make` invocation fails with *"local files differ from origin/dev"* — including test runs for unrelated work on the same branch. That is the check doing its job.
+- So a step that touches a watched file wants its own PR, merged before the next step needs tests.
+- Never "fix" a mismatch by reverting the watched file to match `origin/dev`. That silently discards the change. STOP and surface to the user.
 
-Everywhere below, `dev` is the branch you branch from, pull, and target. `master` appears only as the `agent-make` reference point.
+`master` is still protected from pushes — `agent-git` refuses `main`, `master`, `develop`, `release/*`, `hotfix/*` from a hardcoded list that `agent-make.branch` does not affect. So does `dev`, by the allowed-prefix rule below: it carries none of `feature/`, `fix/`, `chore/`, `refactor/`, `test/`, `agent/`.
+
+Everywhere below, `dev` is the branch you branch from, pull, target, and are verified against.
 
 # GIT COMMAND POLICY FOR AGENTS
 
@@ -29,35 +31,50 @@ Assume the agent-security-toolkit is installed and the repo is onboarded (`agent
 - Commits are signed with the bot identity from `/etc/agent-security-toolkit.conf`. **Do NOT add `Co-Authored-By:` trailers — the bot account IS the agent attribution.**
 
 ## What `agent-git push` does for you (do not duplicate)
-On every push, `agent-git` automatically adds:
-- `--set-upstream` (first push wires up tracking)
-- `-o merge_request.create`
-- `-o merge_request.draft`
-- `-o merge_request.target=<policy>` — the target comes from per-repo `agent-git.mr-target`; **agent-supplied `merge_request.target=` is rejected**.
+`origin` here is **GitHub**, so pushing and opening the PR are two commands, not one.
 
-So the entire MR-open flow is one command:
+`agent-git push` moves the branch and adds `--set-upstream` on the first push. It does **not** open a pull request: `merge_request.*` push options are a GitLab feature that GitHub ignores, so `agent-git` strips them on this remote and prints
+
+```
+agent-git: pushed '<branch>'. Open a Draft PR with: agent-pr create
+```
+
+This split is deliberate. Because `agent-git push` never touches PR state, a follow-up push can never flip a PR a human marked "Ready" back to Draft.
+
+# PULL REQUESTS: `agent-pr`
+
+`agent-pr` wraps the GitHub CLI (`gh`) with the same policy `agent-git` enforces.
+
+```
+agent-pr create                       # open a Draft PR for the current branch
+agent-pr create --title "…" --body "…"
+agent-pr update --title "…"           # edit the current branch's PR
+agent-pr update --body-file NOTES.md
+agent-pr view                         # show the current branch's PR
+agent-pr --self-check                 # verify gh, token and bot identity
+```
+
+What it enforces, and what that means for you:
+- **The base branch comes from `agent-git.mr-target` and cannot be overridden.** There is no `--base`. If a PR opens against the wrong branch, the fix is `agent-repo-init --mr-target <branch>`, which is the user's to run.
+- **`create` always opens a Draft**, and only for the current branch.
+- **`create` takes BOTH `--title` and `--body`, or NEITHER.** With neither, it derives them from the branch's commits — which is why the commit message carries the WHY (see WHERE THE WHY GOES). Prefer the no-argument form.
+- The same branch rules as `agent-git`: refuses a detached HEAD, a protected branch, and any branch not prefixed `feature/`, `fix/`, `chore/`, `refactor/`, `test/`, `agent/`.
+- Multi-line bodies are fine here — unlike push options, `--body` is a normal argument. Use `--body-file` for anything long.
+
+So the full flow is:
 ```
 agent-git push
-```
-By default GitLab uses the **last commit subject** as the MR title. Override at first open by passing the title explicitly:
-```
-agent-git push -o merge_request.title="add review loop and language packs"
+agent-pr create
 ```
 
-## Modifying the MR header on follow-up pushes
-GitLab updates the existing Draft MR on every subsequent push from the same branch. To change the title or body without touching the UI:
-```
-agent-git push \
-  -o merge_request.title="new title" \
-  -o merge_request.description="updated summary…"
-```
-The only push options `agent-git` accepts: `merge_request.create`, `merge_request.draft`, `merge_request.title=…`, `merge_request.description=…`. Anything else (including `merge_request.target=…`) is rejected by policy.
+**If `agent-pr` reports a missing token**, stop and surface it. It needs `AGENT_GH_TOKEN` (a GitHub fine-grained PAT for the bot account, Pull requests: write + Contents: read) in `/etc/agent-security-toolkit.conf` — a root-owned file. That is a human action; do not attempt to work around it, and do not fall back to `gh` directly. Report the branch as pushed and say the PR must be opened manually.
 
-## When `agent-git` blocks you
-Read the `agent-git BLOCKED:` line — it is the spec. **Do not work around it.** Stop and surface to the user with the exact message. Common cases:
+## When `agent-git` or `agent-pr` blocks you
+Read the `BLOCKED:` / error line — it is the spec. **Do not work around it.** Stop and surface to the user with the exact message. Common cases:
 - Branch name doesn't match the allowed prefix → rename the branch.
-- MR target equals current branch → user must run `agent-repo-init --mr-target <branch>`.
+- PR base equals the current branch → user must run `agent-repo-init --mr-target <branch>`.
 - Push to protected branch → switch to a feature branch first.
+- `AGENT_GH_TOKEN` not set → human action, see above.
 - Watched-file mismatch from `agent-make` → see make policy below.
 
 # MAKE COMMAND POLICY FOR AGENTS
@@ -67,14 +84,14 @@ Use `agent-make` for every build / test / lint invocation in this repo. Raw `mak
 ## Usage
 - `agent-make <target> [<target>…]` — root Makefile (`agent-make test`, `agent-make lint test`).
 - `agent-make --in <subdir> <target>` — monorepo sub-Makefile (the sub-Makefile must be on the watched-files list).
-- Targets must be plain identifiers (`[A-Za-z0-9._/-]+`). No flags, no `VAR=val` overrides, no shell metacharacters. If a flag-style invocation is needed, define a dedicated Makefile target instead — but note that adding a target edits a watched file, which blocks `agent-make` until it reaches `master` (see BRANCH MODEL).
+- Targets must be plain identifiers (`[A-Za-z0-9._/-]+`). No flags, no `VAR=val` overrides, no shell metacharacters. If a flag-style invocation is needed, define a dedicated Makefile target instead — but note that adding a target edits a watched file, which blocks `agent-make` until it reaches `dev` (see BRANCH MODEL).
 
 ## What `agent-make` enforces
-- Fetches `origin/master` and verifies every watched file (here: `Makefile`, `Dockerfile.tests`) byte-for-byte against the remote before running. **Any local modification to a watched file blocks every `agent-make` invocation** — including test runs for unrelated work on the same branch.
+- Fetches `origin/dev` and verifies every watched file (here: `Makefile`, `Dockerfile.tests`) byte-for-byte against the remote before running. **Any local modification to a watched file blocks every `agent-make` invocation** — including test runs for unrelated work on the same branch.
 - Optional per-repo target allowlist (`agent-make.allowed-targets`) — unlisted targets are blocked.
 
 ## When `agent-make` blocks you
-- *"local files differ from origin/master"* — a watched file was edited locally. **STOP and surface to user.** The fix is human-only: the change must be merged to `master`, not just `dev` (see BRANCH MODEL). Do not revert other agent work to satisfy this check.
+- *"local files differ from origin/dev"* — a watched file was edited locally. **STOP and surface to user.** The fix is to merge that change to `dev` through its own PR, which is a human action. Do not revert other agent work to satisfy this check.
 - *"Target 'X' is not in agent-make.allowed-targets"* — STOP and ask the user to extend the allowlist via `agent-repo-init --allowed-targets …`.
 - *"Sub-Makefile '<path>' is not in agent-make.files"* — STOP and ask the user to add it via `agent-repo-init --files …`.
 
@@ -142,46 +159,49 @@ Execute it every time a session is initiated.
     - Mark the WAL step `[ready-for-review]`. Keep the entry itself short — it is a tracker line, not a write-up.
     - Distil the important insights from `.plans/<branch>.md` into **the commit message body** (the WHY), and into `spec/` for anything that outlives this step. The `.plans/` file stays local — gitignored, no cleanup needed.
     - Add a `## Manual test` section to the commit message: new behaviour to try, and the regression surface with the symptom to watch for. Write `none` explicitly rather than omitting it. See `instructions/delivery.md` § Manual Test Notes — the release checklist is compiled from these, so a missing one is a gap nobody notices until a user finds it.
-    - If a durable decision changed, the spec edit is part of THIS MR. Do not leave it as a WAL note to apply later.
-13. Commit, publish branch, and open Draft MR (`AGENTS.md`):
-    - Commit work with a meaningful message — the subject doubles as the default MR title.
-    - Publish branch and open the Draft MR in one shot:
+    - If a durable decision changed, the spec edit is part of THIS PR. Do not leave it as a WAL note to apply later.
+13. Commit, publish branch, and open the Draft PR (`AGENTS.md`):
+    - Commit work with a meaningful message — `agent-pr create` derives the PR from it.
+    - Publish the branch, then open the Draft PR:
       ```
       agent-git push
+      agent-pr create
       ```
-    - `agent-git push` automatically adds `--set-upstream`, `merge_request.create`, `merge_request.draft`, and the policy-controlled `merge_request.target`. Do NOT supply them manually — explicit `merge_request.target=…` is rejected.
-    - To pin a different MR title at first open: `agent-git push -o merge_request.title="…"`.
+    - `agent-git push` adds `--set-upstream` itself; do not pass it. It does **not** open the PR — on this GitHub remote that is `agent-pr`'s job.
+    - Prefer bare `agent-pr create`: with neither `--title` nor `--body` it takes both from the branch's commits, which is where the WHY already lives. Passing one means passing both.
+    - The base branch is policy (`agent-git.mr-target`) and cannot be passed. If it is wrong, stop — the fix is `agent-repo-init --mr-target <branch>`, which the user runs.
     - For follow-up pushes (review-loop fixes, stabilization, header updates), see the FULL LOOP EXAMPLE section below.
-14. MR review and merge decision gate (in chat) (`AGENTS.md`):
+14. PR review and merge decision gate (in chat) (`AGENTS.md`):
     - Wait for user to confirm review outcome (`approved`, `changes requested`, or `merged`).
-    - If `changes requested`: address feedback, push to the same MR, keep WAL status `[ready-for-review]`.
+    - If `changes requested`: address feedback, push to the same branch, keep WAL status `[ready-for-review]`.
     - If `approved`: 
     -- **remove** the step's entry from `WAL.md` — its WHY is already in the commit message and, where durable, in `spec/`. Do not mark it done and leave it; the WAL only carries planned and in-flight work.
     -- create a follow-up commit for the WAL removal, and `agent-git push`. Then wait for user to merge.
     -- `.plans/<branch>.md` is gitignored — no removal step needed; it stays on the local machine and is naturally orphaned when the branch is deleted.
     - If `merged` (user merged directly without separate approval): remove the entry on `dev` (see step 15).
 15. Post-merge finalization (`AGENTS.md`):
-    - If the entry was already removed in the MR (approval path): nothing to do, `WAL.md` is correct on `dev` after merge.
-    - If user merged without prior approval signal: `agent-git checkout dev && agent-git pull --ff-only`, remove the step's entry, then land it through a short-lived `chore/wal-*` branch + MR. A direct push from `dev` is blocked — `dev` carries none of the allowed branch prefixes (`feature/`, `fix/`, `chore/`, `refactor/`, `test/`, `agent/`).
+    - If the entry was already removed in the PR (approval path): nothing to do, `WAL.md` is correct on `dev` after merge.
+    - **Verify the merge before acting on it.** `agent-git log --oneline origin/dev..origin/<branch>` must come back empty. A report of "merged" can arrive for a different branch than the one you are on, and re-pulling `dev` on a wrong assumption silently reverts the working tree to the pre-merge state.
+    - If user merged without prior approval signal: `agent-git checkout dev && agent-git pull --ff-only`, remove the step's entry, then land it through a short-lived `chore/wal-*` branch + PR. A direct push from `dev` is blocked — `dev` carries none of the allowed branch prefixes (`feature/`, `fix/`, `chore/`, `refactor/`, `test/`, `agent/`).
     - Before removing, confirm the WHY actually survives elsewhere. If the rationale exists only in the WAL entry, it is not yet distilled — move it to `spec/` first, or the removal destroys it.
 
 # IMPLEMENTATION DEFINITION OF DONE (PRE-MERGE)
 - tests added/updated according to the feature specification
 - `agent-make test` runs successfully
 - review loop converged (0 open CRITICAL) or was explicitly escalated to user with Final Review Summary
-- branch pushed and `[Draft]` MR created
+- branch pushed and Draft PR opened with `agent-pr create`
 - WAL step is marked `[ready-for-review]`; the WHY is in the commit message body, and any durable decision is in `spec/`
 - the commit message has a `## Manual test` section (new behaviour + regression surface, or an explicit `none`)
 
 # APPROVAL DEFINITION OF DONE (PRE-MERGE)
 - user confirms `approved` in chat
-- the step's entry is **removed** from `WAL.md` in the MR branch, pushed
-- user merges the MR
+- the step's entry is **removed** from `WAL.md` in the PR branch, pushed
+- user merges the PR
 
 # WORKFLOW DEFINITION OF DONE (POST-MERGE)
-- MR is merged (the WAL entry was already removed at the approval step)
+- PR is merged, confirmed by `agent-git log --oneline origin/dev..origin/<branch>` coming back empty
 - `dev` is up to date
-- if the step touched a watched file (`Makefile`, `Dockerfile.tests`), it has ALSO reached `master` — otherwise `agent-make` stays blocked for every later step (see BRANCH MODEL)
+- a step that touched a watched file (`Makefile`, `Dockerfile.tests`) is on `dev`, which is all `agent-make` needs (see BRANCH MODEL)
 
 # COMPANION INSTRUCTIONS (SCOPED)
 - `instructions/planning.md`: use for strategic planning and architecture decisions in `spec/**`.
@@ -272,7 +292,7 @@ Note: `agent-make` does not accept `VAR=val` overrides. Every test target alread
   - `test-qgis` — needs the QGIS runtime. Use when touching layers, providers, projections, or anything importing `qgis.core` / `qgis.gui`.
   - `test-ui` — Qt widgets under `xvfb-run`. Currently an **empty harness**: the Makefile treats pytest's exit code 5 ("no tests collected") as a pass. A green `test-ui` therefore proves nothing yet — remove that guard in the Makefile once the first UI test lands.
 - Run the narrow tier while iterating, but `agent-make test` must pass before review.
-- If `agent-make` blocks with *"local files differ from origin/master"*, a watched file (`Makefile`, `Dockerfile.tests`) was edited locally — escalate to the user. Do not undo other work to satisfy the check.
+- If `agent-make` blocks with *"local files differ from origin/dev"*, a watched file (`Makefile`, `Dockerfile.tests`) was edited locally — escalate to the user. Do not undo other work to satisfy the check.
 
 # STATIC ANALYSIS (LINTING)
 - `agent-make lint` runs **flake8**, then **bandit**, then **detect-secrets** — the three checks
@@ -301,6 +321,37 @@ Note: `agent-make` does not accept `VAR=val` overrides. Every test target alread
   (use-before-assignment across branches). flake8's `F821` covers undefined names only. Accepted
   deliberately for qgis.org parity; revisit after the refactor lands type annotations.
 
+# WHICH TERMINAL COMMANDS TO REACH FOR
+
+**Every command outside the allowlist costs a permission prompt**, which stalls an unattended run
+until a human answers. Autonomy therefore depends on staying inside the list, not on being clever
+with the shell. The allowlist is `.claude/settings.json` (Claude Code) — read it rather than
+guessing, and if something you need is genuinely missing, ask for it to be added instead of
+routing around it.
+
+Allowlisted: the toolkit wrappers (`agent-git`, `agent-make`, `agent-pr`, `agent-doctor`) and
+read-only inspection (`grep`, `rg`, `find`, `ls`, `wc`, `head`, `tail`, `sort`, `uniq`, `cut`,
+`diff`, `file`, `which`, `mkdir`).
+
+**Use the built-in tools instead of shell equivalents.** They are always permitted, they do not
+prompt, and they are what the deny list exists to push you toward:
+
+| Instead of | Use |
+|---|---|
+| `cat`, `head -n`, `sed -n '1,50p'` to read | the **Read** tool (it takes `offset`/`limit`) |
+| `sed -i`, `awk`, `python3` heredocs to rewrite a file | the **Edit** tool, with a unique anchor string |
+| `echo … > file`, `tee`, `cat <<EOF` | the **Write** tool |
+| `git`, `make`, `docker`, `gh` | `agent-git`, `agent-make`, `agent-pr` |
+
+Deleting a range of lines has no shell shortcut here: anchor an **Edit** on the first and last
+lines of the block and replace it with what should follow. Reaching for `python3` to do it by line
+number is denied outright, because a line number is exactly the thing that goes stale between
+reading a file and editing it.
+
+Shell-compound forms (`;`, `||`, `&&` with a denied command, a pipe into `awk`) are matched
+per-command, so one denied element blocks the whole invocation. Keep each call to a single
+allowlisted command, and let the built-in tools do the rest.
+
 # TERMINAL COMMAND BATCHING
 - Read-only commands (`agent-git status`, `agent-git diff`, `agent-git log`, `agent-git show`, etc.) are allowlisted — call them directly, don't batch.
 - Combine state-changing commands into a single `&&`-chained invocation when there is no need to inspect intermediate output. Example after a Confirmation-Gate-approved task with a clear path list:
@@ -313,7 +364,7 @@ Note: `agent-make` does not accept `VAR=val` overrides. Every test target alread
 - Preferred fixup flow: new commit + `agent-git push`. Amend / force-push are blocked by `agent-git` by design.
 - Raw `git push --force-with-lease` is blocked and should not be attempted — surface to user if you genuinely need it.
 
-# FULL LOOP EXAMPLE — START TO MR
+# FULL LOOP EXAMPLE — START TO PR
 Concrete copy-paste of every step. The exact flow the SESSION PROTOCOL above expects.
 
 ```bash
@@ -324,7 +375,7 @@ agent-git pull --ff-only
 # 1. Investigate recent history before planning
 agent-git log --oneline -20                        # recent commits
 agent-git log --oneline dev..origin/dev            # what landed since last sync
-agent-git log --oneline master..dev                # unreleased — and what agent-make can't see yet
+agent-git log --oneline master..dev                # merged to dev, not yet released
 agent-git show <sha>                               # inspect a specific commit
 agent-git diff <sha>~..<sha> -- path/              # narrow diff for a file/dir
 agent-git blame path/to/file.py                    # who/why on a specific line
@@ -338,54 +389,49 @@ agent-git diff                                     # unstaged changes
 agent-git diff --staged                            # staged changes
 agent-git log --oneline -5                         # commits on this branch
 
-# 4. Stage explicit paths, then commit
+# 4. Stage explicit paths, then commit.
+# The commit message is the PR: `agent-pr create` takes the title from the subject
+# and the body from the message body, so write it for a reader of the PR.
 agent-git add mapflow/functional/service/foo.py tests/functional/test_foo.py
-agent-git commit -m "feat: foo handles empty input"
-# The commit subject becomes the default MR title.
+agent-git commit -m "$(cat <<'EOF'
+feat: foo handles empty input
 
-# 5. Open the Draft MR in one command
+Empty input reached the provider lookup as None and raised there, three frames from
+the cause. Rejecting it at the boundary is what makes the error name the input.
+
+## Manual test
+Submit the form with the field blank: it is refused with "specify a name" instead of
+failing mid-request. Regression surface: a filled field must still submit.
+EOF
+)"
+
+# 5. Publish the branch, then open the Draft PR
 agent-git push
-# Optional: pin the MR title at open instead of inheriting commit subject
-agent-git push -o merge_request.title="feat: foo handles empty input"
+agent-pr create                                    # title + body from the commit(s)
 
 # 6. Follow-up commit (review-loop fix, stabilization, etc.) — same flow
 agent-git add mapflow/functional/service/foo.py
 agent-git commit -m "fix: address review comment from the review loop"
-agent-git push                                     # GitLab updates the existing MR
+agent-git push                                     # updates the branch; PR state untouched
 
-# 7. Update MR header on a follow-up push (no UI needed)
-# IMPORTANT: git rejects newlines in push-option values with
-#   fatal: push options must not have new line characters
-# So MR title and description passed via -o must each fit on a single line.
-agent-git push \
-  -o merge_request.title="feat: foo handles empty input + N+1 fix" \
-  -o merge_request.description="Summary: foo accepts empty input; provider lookup no longer raises on a missing key. Test plan: agent-make test."
+# 7. Update the PR header without touching the UI
+agent-pr update --title "feat: foo handles empty input + N+1 fix"
+agent-pr update --body-file .plans/pr-body.md      # multi-line is fine here
+agent-pr view                                      # what the PR currently says
 
-# For a rich, multi-line MR description, do NOT try to cram it into a
-# push option. Instead, put the body into the commit message itself —
-# GitLab uses the commit body as the MR description by default whenever
-# you do not override it with -o merge_request.description=.
-agent-git commit -m "$(cat <<'EOF'
-feat: foo handles empty input + N+1 fix
-
-## Summary
-- foo accepts empty input without raising
-- provider lookup no longer raises on a missing key
-
-## Test plan
-- agent-make test-functional
-- agent-make test
-EOF
-)"
-agent-git push   # title = commit subject; description = commit body
+# 8. If agent-pr reports a missing token, STOP.
+agent-pr --self-check                              # gh present? token set? bot identity?
+# AGENT_GH_TOKEN lives in /etc/agent-security-toolkit.conf and is a human's to add.
+# Report the branch as pushed and let the user open the PR.
 ```
 
 Hard rules surfaced again here:
-- `agent-git push` always opens or updates a Draft MR — never call `gh`, `glab`, or `git push -o merge_request.target=…` yourself.
+- `agent-git push` moves the branch; `agent-pr create` opens the Draft PR. Never call `gh` or `glab` yourself — both are denied.
 - `--set-upstream` is added automatically; do not pass `-u`.
+- The PR base is policy and has no flag. A wrong base is `agent-repo-init --mr-target`, which the user runs.
+- `agent-pr create` takes both `--title` and `--body` or neither — prefer neither.
+- Never run `agent-repo-init` yourself: it sets the boundary you operate inside, and that authorization is the user's.
 - No `Co-Authored-By:` trailers — the bot account identity is the agent attribution.
-- Only `merge_request.{create,draft,title,description}` push options are accepted by `agent-git`; anything else is rejected.
-- Push-option values are **single-line only** — git rejects newlines. For multi-line MR descriptions, write them into the commit body and push without `-o merge_request.description=`.
 
 # IMPLEMENTATION GUIDELINES
 - Methodology: `instructions/delivery.md`.

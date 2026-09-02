@@ -131,13 +131,15 @@ The result is regenerable, so there is no cleanup commit to forget.
 Language-specific style, idioms, and patterns live in per-language packs under `instructions/lang/`. Consult the pack that matches the file you are editing (e.g. `lang/python.md` for `.py` files). If no pack exists for the language you need, ask the user before inventing conventions.
 
 ## Tooling Policy For File Operations
-Use the agent's native file-edit/write tools for **all writes**. Never shell out for destructive or stateful operations — they bypass the agent's edit tracking and trigger an approval prompt per invocation. This includes: `sed -i`, `awk -i inplace`, `echo > file`, `tee`, `mv`, `rm`, `mkdir`, `touch`, `cp`.
+Use the agent's native file-edit/write tools for **all writes**. Never shell out for them: they bypass the agent's edit tracking, and every one is denied outright by `.claude/settings.json` — `sed`, `awk`, `echo`, `tee`, `cat`, `python3`, `mv`, `rm`, `cp`.
 
-Read-only shell commands are encouraged when they save tokens — they are typically pre-approved and let you load only the lines you need rather than full files:
-- `grep -n` / `rg` to locate symbols without reading entire files
-- `find` / `ls` to enumerate paths
-- `head` / `tail` / `wc` for bounded reads
-- `cat` only when a full read is cheaper than a targeted one
+This matters beyond tidiness. A denied or unlisted command stops an unattended run until a human answers a prompt, so **the allowlist is the autonomy budget**. Spending it on a shell rewrite that `Edit` does natively is the most common way a long run stalls. AGENTS.md § WHICH TERMINAL COMMANDS TO REACH FOR carries the full table; the short version:
+
+- Reading a slice of a file → the **Read** tool's `offset`/`limit`, not `sed -n` or `head`.
+- Rewriting part of a file → **Edit**, anchored on a unique string. There is no shell fallback for deleting a line range; anchor on the first and last lines of the block instead. Line numbers go stale between the read and the write, which is the reason the shortcut is denied rather than discouraged.
+- Creating a file → **Write**.
+
+Read-only shell commands are still encouraged when they save tokens — `grep -n` / `rg` to locate symbols, `find` / `ls` to enumerate paths, `wc` to size something. Keep each invocation to one allowlisted command: matching is per-command, so a single denied element in a `&&` / `||` / `;` chain or a pipe blocks the whole line.
 
 Rule of thumb: **writes → native tool; reads → whichever costs fewer tokens.**
 
