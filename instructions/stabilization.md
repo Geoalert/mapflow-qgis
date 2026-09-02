@@ -23,7 +23,7 @@ Drive failing work to implementation DoD through controlled iterative fix cycles
 - Stop earlier if the same failure signature repeats after a fix attempt.
 - Stop if resolving requires changing the spec or accepting a behavior tradeoff.
 - Stop if tool/runtime limits prevent reliable validation.
-- **Stop immediately if `agent-make` reports *"local files differ from origin/dev"*** — a watched file (`Makefile`, `Dockerfile.tests`) was edited. No fix cycle can proceed, and reverting the file to unblock yourself would discard someone's work. Surface to the user; merging that change to `dev` through its own PR is a human action (see AGENTS.md BRANCH MODEL).
+- **Stop immediately if `agent-make` reports *"local files differ from origin/master"*** — a watched file (`Makefile`, `Dockerfile.tests`) was edited. No fix cycle can proceed, and reverting the file to unblock yourself would discard someone's work. Surface to the user; merging to `master` is a human action (see AGENTS.md BRANCH MODEL).
 - **Do not spend the fix cycle on permission prompts.** Stabilization is where the temptation to reach for `sed`/`python3` is strongest, and both are denied. Use `Edit`; see `instructions/delivery.md` § Tooling Policy For File Operations.
 
 ## Feedback Handling
