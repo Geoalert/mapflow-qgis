@@ -7,15 +7,15 @@
 
 This repo uses **git flow with `dev` as the integration branch**. Feature branches are cut from `dev` and their PRs target `dev`. `master` is the release branch.
 
-**`dev` is also the branch `agent-make` verifies watched files against** (`agent-make.branch`). One branch for both roles, deliberately: a change to a watched file (`Makefile`, `Dockerfile.tests`) unblocks `agent-make` the moment it merges to `dev` — the same merge every other change goes through. Nothing has to reach `master` first.
+**`master` is also the branch `agent-make` verifies watched files against.** Not a choice — `agent-repo-init` refuses any `--branch` but `main` or `master`. These two facts collide, and the collision is load-bearing:
 
-- While a watched-file edit is still local, every `agent-make` invocation fails with *"local files differ from origin/dev"* — including test runs for unrelated work on the same branch. That is the check doing its job.
-- So a step that touches a watched file wants its own PR, merged before the next step needs tests.
-- Never "fix" a mismatch by reverting the watched file to match `origin/dev`. That silently discards the change. STOP and surface to the user.
+- Editing a watched file (`Makefile`, `Dockerfile.tests`) and merging it to `dev` does **not** unblock `agent-make`. Every invocation keeps failing with *"local files differ from origin/master"* until that change also reaches `master`.
+- So a step that touches a watched file needs its own PR merged to `master` **before** any subsequent step can run tests. Plan such steps first in a release, or land them as a standalone PR.
+- Never "fix" this by reverting the watched file to match `master`. That silently discards the change. STOP and surface to the user — merging to `master` is a human action.
 
-`master` is still protected from pushes — `agent-git` refuses `main`, `master`, `develop`, `release/*`, `hotfix/*` from a hardcoded list that `agent-make.branch` does not affect. So does `dev`, by the allowed-prefix rule below: it carries none of `feature/`, `fix/`, `chore/`, `refactor/`, `test/`, `agent/`.
+The collision applies to **watched files only**. `AGENTS.md`, `instructions/`, `spec/`, `.claude/` and all plugin code are not compared against anything, so they merge to `dev` like any other change and never need a trip through `master`.
 
-Everywhere below, `dev` is the branch you branch from, pull, target, and are verified against.
+Everywhere below, `dev` is the branch you branch from, pull, and target. `master` appears only as the `agent-make` reference point.
 
 # GIT COMMAND POLICY FOR AGENTS
 
@@ -84,14 +84,14 @@ Use `agent-make` for every build / test / lint invocation in this repo. Raw `mak
 ## Usage
 - `agent-make <target> [<target>…]` — root Makefile (`agent-make test`, `agent-make lint test`).
 - `agent-make --in <subdir> <target>` — monorepo sub-Makefile (the sub-Makefile must be on the watched-files list).
-- Targets must be plain identifiers (`[A-Za-z0-9._/-]+`). No flags, no `VAR=val` overrides, no shell metacharacters. If a flag-style invocation is needed, define a dedicated Makefile target instead — but note that adding a target edits a watched file, which blocks `agent-make` until it reaches `dev` (see BRANCH MODEL).
+- Targets must be plain identifiers (`[A-Za-z0-9._/-]+`). No flags, no `VAR=val` overrides, no shell metacharacters. If a flag-style invocation is needed, define a dedicated Makefile target instead — but note that adding a target edits a watched file, which blocks `agent-make` until it reaches `master` (see BRANCH MODEL).
 
 ## What `agent-make` enforces
-- Fetches `origin/dev` and verifies every watched file (here: `Makefile`, `Dockerfile.tests`) byte-for-byte against the remote before running. **Any local modification to a watched file blocks every `agent-make` invocation** — including test runs for unrelated work on the same branch.
+- Fetches `origin/master` and verifies every watched file (here: `Makefile`, `Dockerfile.tests`) byte-for-byte against the remote before running. **Any local modification to a watched file blocks every `agent-make` invocation** — including test runs for unrelated work on the same branch.
 - Optional per-repo target allowlist (`agent-make.allowed-targets`) — unlisted targets are blocked.
 
 ## When `agent-make` blocks you
-- *"local files differ from origin/dev"* — a watched file was edited locally. **STOP and surface to user.** The fix is to merge that change to `dev` through its own PR, which is a human action. Do not revert other agent work to satisfy this check.
+- *"local files differ from origin/master"* — a watched file was edited locally. **STOP and surface to user.** The fix is human-only: the change must be merged to `master`, not just `dev` (see BRANCH MODEL). Do not revert other agent work to satisfy this check.
 - *"Target 'X' is not in agent-make.allowed-targets"* — STOP and ask the user to extend the allowlist via `agent-repo-init --allowed-targets …`.
 - *"Sub-Makefile '<path>' is not in agent-make.files"* — STOP and ask the user to add it via `agent-repo-init --files …`.
 
@@ -201,7 +201,7 @@ Execute it every time a session is initiated.
 # WORKFLOW DEFINITION OF DONE (POST-MERGE)
 - PR is merged, confirmed by `agent-git log --oneline origin/dev..origin/<branch>` coming back empty
 - `dev` is up to date
-- a step that touched a watched file (`Makefile`, `Dockerfile.tests`) is on `dev`, which is all `agent-make` needs (see BRANCH MODEL)
+- if the step touched a watched file (`Makefile`, `Dockerfile.tests`), it has ALSO reached `master` — otherwise `agent-make` stays blocked for every later step (see BRANCH MODEL)
 
 # COMPANION INSTRUCTIONS (SCOPED)
 - `instructions/planning.md`: use for strategic planning and architecture decisions in `spec/**`.
@@ -292,7 +292,7 @@ Note: `agent-make` does not accept `VAR=val` overrides. Every test target alread
   - `test-qgis` — needs the QGIS runtime. Use when touching layers, providers, projections, or anything importing `qgis.core` / `qgis.gui`.
   - `test-ui` — Qt widgets under `xvfb-run`. Currently an **empty harness**: the Makefile treats pytest's exit code 5 ("no tests collected") as a pass. A green `test-ui` therefore proves nothing yet — remove that guard in the Makefile once the first UI test lands.
 - Run the narrow tier while iterating, but `agent-make test` must pass before review.
-- If `agent-make` blocks with *"local files differ from origin/dev"*, a watched file (`Makefile`, `Dockerfile.tests`) was edited locally — escalate to the user. Do not undo other work to satisfy the check.
+- If `agent-make` blocks with *"local files differ from origin/master"*, a watched file (`Makefile`, `Dockerfile.tests`) was edited locally — escalate to the user. Do not undo other work to satisfy the check.
 
 # STATIC ANALYSIS (LINTING)
 - `agent-make lint` runs **flake8**, then **bandit**, then **detect-secrets** — the three checks
@@ -375,7 +375,7 @@ agent-git pull --ff-only
 # 1. Investigate recent history before planning
 agent-git log --oneline -20                        # recent commits
 agent-git log --oneline dev..origin/dev            # what landed since last sync
-agent-git log --oneline master..dev                # merged to dev, not yet released
+agent-git log --oneline master..dev                # unreleased — and what agent-make can't see yet
 agent-git show <sha>                               # inspect a specific commit
 agent-git diff <sha>~..<sha> -- path/              # narrow diff for a file/dir
 agent-git blame path/to/file.py                    # who/why on a specific line
