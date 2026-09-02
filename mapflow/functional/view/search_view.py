@@ -2,7 +2,7 @@ from typing import List, Optional, Tuple
 
 from PyQt5.QtCore import QObject, Qt, pyqtSignal
 from PyQt5.QtGui import QBrush, QColor
-from PyQt5.QtWidgets import QPushButton, QWidget
+from PyQt5.QtWidgets import QAbstractItemView, QPushButton, QWidget
 
 from ..helpers import utc_date_from_iso
 from ...dialogs.main_dialog import MainDialog
@@ -234,6 +234,76 @@ class SearchView(QObject):
 
     def metadata_row_count(self) -> int:
         return self.dlg.metadataTable.rowCount()
+
+    # ---------- selection, for the table <-> footprint-layer sync ----------
+
+    def selected_local_indices(self) -> List[str]:
+        """The `local_index` of every selected row — the key the footprint layer is keyed by."""
+        selected = self.dlg.metadataTable.selectedItems()
+        if not selected:
+            return []
+        return [self.dlg.metadataTable.item(cell.row(), self.config.LOCAL_INDEX_COLUMN).text()
+                for cell in selected]
+
+    def selected_zoom(self) -> Optional[str]:
+        """The zoom of the first selected row. Different zooms across a multi-selection are not
+        allowed, so the first one speaks for all of them."""
+        selected = self.dlg.metadataTable.selectedItems()
+        if not selected:
+            return None
+        return self.dlg.metadataTable.item(selected[0].row(), self.config.ZOOM_COLUMN_INDEX).text()
+
+    def set_zoom_silently(self, zoom: Optional[str]) -> None:
+        """Set the zoom combo without emitting `currentIndexChanged`.
+
+        Unblocked, that signal reaches `on_zoom_change` and fires a SECOND cost request — using
+        the zoom from before this call, so the two race and the stale one can win.
+        """
+        index = -1 if zoom is None else self.dlg.zoomCombo.findText(zoom)
+        self.dlg.zoomCombo.blockSignals(True)
+        self.dlg.zoomCombo.setCurrentIndex(0 if index == -1 else index)
+        self.dlg.zoomCombo.blockSignals(False)
+
+    def select_rows_by_local_index(self, local_indices: List[str]) -> None:
+        """Select the rows carrying these `local_index` values, clearing any other selection.
+
+        Multi-select is turned on for the duration because `selectRow` otherwise replaces the
+        previous selection instead of adding to it, and restored in a `finally` so an exception
+        cannot leave the results table in a mode the user cannot get out of.
+        """
+        table = self.dlg.metadataTable
+        table.setSelectionMode(QAbstractItemView.MultiSelection)
+        try:
+            rows = []
+            for local_index in local_indices:
+                rows += [item.row() for item in table.findItems(str(local_index), Qt.MatchExactly)
+                         if item.column() == self.config.LOCAL_INDEX_COLUMN]
+            table.clearSelection()
+            for row in rows:
+                table.selectRow(row)
+        finally:
+            table.setSelectionMode(QAbstractItemView.ExtendedSelection)
+
+    def clear_metadata_selection(self) -> None:
+        self.dlg.metadataTable.clearSelection()
+
+    def has_row_with_text(self, text: str) -> bool:
+        return bool(self.dlg.metadataTable.findItems(text, Qt.MatchExactly))
+
+    def connect_table_selection(self, handler):
+        return self.dlg.metadataTable.itemSelectionChanged.connect(handler)
+
+    def disconnect_table_selection(self, connection) -> None:
+        """Drop the table->layer handler while the layer is driving the table.
+
+        Guarded, unlike the call this replaces: Qt raises `TypeError` when the handle was never
+        connected, and an unguarded raise here aborts the caller *after* it has switched the table
+        to multi-select, leaving the results table stuck in a mode the user cannot leave.
+        """
+        try:
+            self.dlg.metadataTable.itemSelectionChanged.disconnect(connection)
+        except (RuntimeError, TypeError):
+            pass
 
     # ---------- pagination ----------
 

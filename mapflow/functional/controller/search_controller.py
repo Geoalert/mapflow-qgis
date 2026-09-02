@@ -33,7 +33,9 @@ class SearchController(QObject):
                  app_context=None,
                  widen_warning_button=None,
                  reset_filters_button=None,
-                 clear_search_button=None):
+                 clear_search_button=None,
+                 area_calculator_service=None,
+                 aoi_view=None):
         super().__init__()
         self.search_service = search_service
         self.search_view = search_view
@@ -41,6 +43,13 @@ class SearchController(QObject):
         self.provider_service = provider_service
         self.local_filter_service = local_filter_service
         self.app_context = app_context
+        #: Selecting a search result changes the processing area, so the cost is recomputed from
+        #: the AOI layer the combo currently names.
+        self.area_calculator_service = area_calculator_service
+        self.aoi_view = aoi_view
+        #: The table->layer connection handle, so the layer->table direction can take it down
+        #: while it drives. Set by `connect_table_selection`.
+        self._table_selection_connection = None
 
         #: Guards the ``metadataTableFilled`` -> ``apply_local_filter`` -> ``fill_table`` ->
         #: ``metadataTableFilled`` loop: the re-fill below re-emits the signal that called us.
@@ -92,6 +101,73 @@ class SearchController(QObject):
     def reconnect_cell_preview(self) -> None:
         """Rewire the Preview-cell click after a table refill."""
         self.search_view.connect_cell_preview(self.preview_search_from_cell)
+
+    # ---------- table <-> footprint layer, both directions ----------
+    #
+    # Each direction writes the selection the other listens to, so each disconnects the opposite
+    # handler before touching a selection and reconnects afterwards. Without that, one click
+    # ping-pongs between them until the stack runs out.
+
+    def on_metadata_layer_ready(self, layer) -> None:
+        """A new footprint layer: selecting a footprint should select its table row."""
+        self.app_context.meta_layer_table_connection = layer.selectionChanged.connect(
+            self.sync_layer_selection_with_table)
+
+    def connect_table_selection(self) -> None:
+        """Wire the table->layer direction, remembering the handle so the other direction can
+        take it down while it drives."""
+        self._table_selection_connection = self.search_view.connect_table_selection(
+            self.sync_table_selection_with_layer)
+
+    def sync_table_selection_with_layer(self, *args) -> None:
+        """Rows were selected: highlight their footprints and adopt the image's zoom."""
+        local_indices = self.search_view.selected_local_indices()
+        layer = self.app_context.metadata_layer
+        try:
+            layer.selectionChanged.disconnect(self.app_context.meta_layer_table_connection)
+        except (RuntimeError, AttributeError, TypeError):
+            # No layer yet (nothing searched), or it has been removed. Nothing to sync to.
+            return
+        self.search_view.ensure_search_provider(self.provider_service)
+        try:
+            layer.selectByExpression("local_index in {}".format(tuple(local_indices)))
+        except RuntimeError:  # layer deleted between the check and here
+            pass
+        except Exception:
+            # Reconnect before propagating, or the map silently stops driving the table.
+            self.app_context.meta_layer_table_connection = layer.selectionChanged.connect(
+                self.sync_layer_selection_with_table)
+            raise
+        # The zoom is adopted BEFORE the cost is recomputed, and with the combo silent — see
+        # `set_zoom_silently` for why the order and the blocking both matter.
+        self.search_view.set_zoom_silently(self.search_view.selected_zoom())
+        self.area_calculator_service.calculate_aoi_area_polygon_layer(self.aoi_view.current_layer())
+        self.app_context.meta_layer_table_connection = layer.selectionChanged.connect(
+            self.sync_layer_selection_with_table)
+
+    def sync_layer_selection_with_table(self, selected_ids: List[int]) -> None:
+        """Footprints were selected on the map: select the matching rows.
+
+        ``selected_ids`` are feature ids, not image ids, so each is resolved to its `local_index`
+        before the table is searched for it.
+        """
+        self.search_view.disconnect_table_selection(self._table_selection_connection)
+        try:
+            if not selected_ids:
+                self.search_view.clear_metadata_selection()
+                return
+            local_indices = []
+            for selected_id in selected_ids:
+                local_indices.append(
+                    self.app_context.metadata_layer.getFeature(selected_id)["local_index"])
+            self.search_view.select_rows_by_local_index(local_indices)
+        finally:
+            self.connect_table_selection()
+
+    def sync_image_id_with_table(self, image_id: str) -> None:
+        """An image id typed or cleared elsewhere: clear the table selection when it names no row."""
+        if not image_id or not self.search_view.has_row_with_text(image_id):
+            self.search_view.clear_metadata_selection()
 
     # ---------- the local filter ----------
 
