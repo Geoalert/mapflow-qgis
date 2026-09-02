@@ -43,6 +43,7 @@ from .functional.service import (DataCatalogService,
                                  ProcessingService,
                                  ProjectService,
                                  ProviderService)
+from .functional.service.account_service import AccountService
 from .functional.service.alert_service import AlertService, alert
 from .functional.service.area_calculator_service import AreaCalculatorService
 # HTTP
@@ -50,7 +51,7 @@ from .http import (Http,
                    api_message_parser,
                    get_error_report_body)
 # Schema
-from .schema import BillingType, ProviderReturnSchema
+from .schema import ProviderReturnSchema
 from .schema.project import MapflowProject
 # Dialogs
 from .dialogs import (ErrorMessageWidget,
@@ -148,20 +149,18 @@ class Mapflow(QObject):
         # Restore directory from settings
         self.dlg.outputDirectory.setText(self.app_context.settings.value('outputDir'))
 
-        # ========== 4. CREATE TIMERS ==========
-        # Poll user status to get limits
-        self.user_status_update_timer = QTimer(self.dlg)
-        self.user_status_update_timer.setInterval(self.config.USER_STATUS_UPDATE_INTERVAL * 1000)
-        self.user_status_update_timer.timeout.connect(self.refresh_status)
-        # Retries /user/status until the response that configures the plugin arrives.
-        # A tick is skipped while a request is still in flight, so a slow or unreachable
-        # server produces one outstanding request rather than two per second.
-        self.app_startup_user_update_timer = QTimer(self.dlg)
-        self.app_startup_user_update_timer.setInterval(self.config.STARTUP_STATUS_RETRY_INTERVAL)
-        self.app_startup_user_update_timer.timeout.connect(self.first_status_request)
-        self._startup_status_attempts = 0
-        self._startup_status_pending = False
-        self._startup_status_given_up = False
+        # ========== 4. ACCOUNT STATUS ==========
+        # Owns both /user/status polls and their timers: the steady-state refresh for the limits
+        # and balance, and the post-login retry that the startup configuration below waits for.
+        self.account_service = AccountService(http=self.http,
+                                              app_context=self.app_context,
+                                              config=self.config,
+                                              server=self.server,
+                                              plugin_name=self.plugin_name)
+        self.account_service.balanceChanged.connect(self.dlg.balanceLabel.setText)
+        self.account_service.statusApplied.connect(self.on_account_status)
+        self.account_service.startupGaveUp.connect(
+            lambda message: self.alert(message, icon=QMessageBox.Warning))
 
         # ========== 5. SETUP TEMP DIRECTORY ==========
         # AlertService must exist before setup_tempdir: an unavailable working directory below (and
@@ -489,60 +488,32 @@ class Mapflow(QObject):
         self.processing_controller.refresh_excepted_layers()
         self.app_context.settings.setValue('useAllVectorLayers', str(self.dlg.useAllVectorLayers.isChecked()))
 
-    def refresh_status(self):
-        self.http.get(
-            url=f'{self.server}/user/status',
-            callback=self.set_processing_limit,
-            use_default_error_handler=False  # ignore errors to prevent repetitive alerts
-        )
+    def on_account_status(self, response_data: dict, app_startup_request: bool) -> None:
+        """Configure the plugin from an account-status response.
 
-    def first_status_request(self):
-        if self._startup_status_given_up or self._startup_status_pending:
-            return
-        if self._startup_status_attempts >= self.config.STARTUP_STATUS_MAX_ATTEMPTS:
-            # Latched rather than left to the stopped timer: giving up must be a terminal
-            # state, so a stray call cannot turn one warning into a modal per invocation.
-            self._startup_status_given_up = True
-            self.stop_startup_status_polling()
-            self.alert(self.tr('Could not load your account status from Mapflow.\n\n'
-                               'Some features stay unavailable until you reconnect and '
-                               'reopen the plugin.'),
-                       icon=QMessageBox.Warning)
-            return
-        self._startup_status_attempts += 1
-        self._startup_status_pending = True
-        self.http.get(
-            url=f'{self.server}/user/status',
-            callback=self.first_status_callback,
-            error_handler=self.first_status_error_handler,
-            use_default_error_handler=False
-        )
-
-    def stop_startup_status_polling(self):
-        self.app_startup_user_update_timer.stop()
-        self._startup_status_pending = False
-
-    def first_status_callback(self, response: QNetworkReply) -> None:
-        """Apply the startup configuration carried by the first /user/status response.
-
-        The timer is stopped *before* the configuration runs, not after it. `set_processing_limit`
-        is invoked through the error guard, which swallows an exception and skips the rest of the
-        callback — so a stop placed after the configuration would never run on a bad response, and
-        the plugin would re-attempt the whole setup twice a second for the rest of the session.
-        See spec/006_error_reporting.md § Consequences for new code.
+        Only the first response after login configures anything: everything below depends on the
+        billing mode, the review workflow and the provider lists, none of which are known before
+        it. Later refreshes only update the limits `AccountService` has already applied.
         """
-        self.stop_startup_status_polling()
-        self.set_processing_limit(response, app_startup_request=True)
+        if not app_startup_request:
+            return
         # Storage quota for My Imagery: needed once at startup, and refreshed later by
         # mosaicsUpdated. Issuing it per retry would mean a second endpoint polled at the
         # retry interval, with its own error dialog on every failed tick.
         self.data_catalog_service.get_user_limit()
-
-    def first_status_error_handler(self, response: QNetworkReply) -> None:
-        """Let the next tick retry, and surface the failure once the attempts run out."""
-        self._startup_status_pending = False
-        logger.warning("Startup /user/status attempt %s failed with Qt error %s",
-                       self._startup_status_attempts, response.error())
+        self.processing_service.update_processing_cost()
+        self.dlg.setup_for_billing(self.app_context.billing_type)
+        self.dlg.setup_for_review(self.app_context.review_workflow_enabled)
+        self.dlg.modelCombo.activated.emit(self.dlg.modelCombo.currentIndex())
+        self.setup_providers(response_data.get("dataProviders") or [])
+        self.setup_search_providers(response_data.get("searchDataProviders") or [])
+        self.on_provider_change()
+        # Open processings or projects table
+        if self.app_context.current_project:
+            self.project_processing_controller.show_processings()
+        else:
+            self.project_processing_controller.show_projects()
+            self.project_service.setup_project_change_rights()
 
     def setup_add_layer_menu(self):
         self.add_layer_menu.addAction(self.draw_aoi)
@@ -1081,57 +1052,6 @@ class Mapflow(QObject):
             #self.dlg.metadataTable.selectRow(items[0].row())
         # Redundant since imageId is temorary removed
 
-    def update_processing_limit(self) -> None:
-        """Set the user's processing limit as reported by Mapflow."""
-        self.http.get(
-            url=f'{self.server}/user/status',
-            callback=self.set_processing_limit,
-            use_default_error_handler=False  # it is done by timer, so we ignore errors to avoid stacking
-        )
-
-    def set_processing_limit(self, response: QNetworkReply,
-                             app_startup_request: Optional[bool] = False) -> None:
-        response_data = json.loads(response.readAll().data())
-        if self.plugin_name != 'Mapflow':
-            # In custom plugins, we don't show the remaining limit and do not check it for the processing
-            self.app_context.billing_type = BillingType.none
-        else:
-            # get billing type, by default it is area
-            self.app_context.billing_type = BillingType(response_data.get('billingType', 'AREA').upper())
-        # get limits
-        self.app_context.remaining_limit = int(response_data.get('remainingArea', 0)) / 1e6  # convert into sq.km
-        self.app_context.remaining_credits = int(response_data.get('remainingCredits', 0))
-        # Planned-processing (template) area cap; absent/zero means "unknown" and disables the client-side check
-        self.app_context.template_area_limit = int(response_data.get('templateAreaLimit', 0)) / 1e6  # convert into sq.km
-        # Immediate-search area cap; above it the user is offered a Planned Search (T8). Zero = unknown/disabled.
-        self.app_context.search_area_limit = int(response_data.get('searchAreaLimit', 0)) / 1e6  # convert into sq.km
-        self.app_context.max_aois_per_processing = int(response_data.get("maxAoisPerProcessing",
-                                                             self.config.MAX_AOIS_PER_PROCESSING))
-        if self.app_context.billing_type == BillingType.credits:
-            balance_str = self.tr("Your balance: {} credits").format(self.app_context.remaining_credits)
-        elif self.app_context.billing_type == BillingType.area:  # area
-            balance_str = self.tr('Remaining limit: {:.2f} sq.km').format(self.app_context.remaining_limit)
-        else:  # BillingType.none
-            balance_str = ''
-
-        self.app_context.review_workflow_enabled = response_data.get('reviewWorkflowEnabled', False)
-        self.dlg.balanceLabel.setText(balance_str)
-
-        if app_startup_request:
-            self.processing_service.update_processing_cost()
-            self.dlg.setup_for_billing(self.app_context.billing_type)
-            self.dlg.setup_for_review(self.app_context.review_workflow_enabled)
-            self.dlg.modelCombo.activated.emit(self.dlg.modelCombo.currentIndex())
-            self.setup_providers(response_data.get("dataProviders") or [])
-            self.setup_search_providers(response_data.get("searchDataProviders") or [])
-            self.on_provider_change()
-            # Open processings or projects table
-            if self.app_context.current_project:
-                self.project_processing_controller.show_processings()
-            else:
-                self.project_processing_controller.show_projects()
-                self.project_service.setup_project_change_rights()
-
     def _register_provider_min_areas(self, providers_data):
         """Map provider name -> minimum AOI area (sq km) from /user/status provider data.
 
@@ -1278,7 +1198,7 @@ class Mapflow(QObject):
     def unload(self) -> None:
         """Remove the plugin icon & toolbar from QGIS GUI."""
         self.processing_service.stop()
-        self.user_status_update_timer.stop()
+        self.account_service.stop_refreshing()
         self.iface.removeCustomActionForLayerType(self.add_layer_action)
         self.iface.removeCustomActionForLayerType(self.remove_layer_action)
         for dlg in self.dlg, self.dlg_login, self.dlg_provider:
@@ -1366,8 +1286,8 @@ class Mapflow(QObject):
         # set token to empty to delete it from settings
         self.app_context.settings.setValue('token', '')
         self.processing_service.processing_fetch_timer.stop()
-        self.user_status_update_timer.stop()
-        self.stop_startup_status_polling()
+        self.account_service.stop_refreshing()
+        self.account_service.stop_startup_polling()
         self.app_context.logged_in = False
         self.http.logout()
         self.dlg.close()
@@ -1499,7 +1419,7 @@ class Mapflow(QObject):
         if default_project.user is not None:
             self.app_context.user_id = default_project.user.id
 
-        self.update_processing_limit()
+        self.account_service.request_status()
         # We have different behavior for admin as he has access to all processings
         self.is_admin = userinfo.get("role") == "ADMIN"
 
@@ -1526,12 +1446,8 @@ class Mapflow(QObject):
             self.data_catalog_service.get_mosaics()
         self.dlg.setup_for_billing(self.app_context.billing_type)
         self.dlg.show()
-        self.user_status_update_timer.start()
-        # Logging in again after a failed startup must get a full budget of retries.
-        self._startup_status_attempts = 0
-        self._startup_status_pending = False
-        self._startup_status_given_up = False
-        self.app_startup_user_update_timer.start()
+        self.account_service.start_refreshing()
+        self.account_service.begin_startup_polling()
 
     def check_plugin_version_callback(self, response: QNetworkReply) -> None:
         """Inspect the plugin version backend expects and show a warning if it is incompatible w/ the plugin.
@@ -1655,8 +1571,8 @@ class Mapflow(QObject):
             # with any auth method
             self.dlg.show()
             self.dlg.raise_()
-            self.update_processing_limit()
-            self.user_status_update_timer.start()
+            self.account_service.request_status()
+            self.account_service.start_refreshing()
             return
 
         token = self.app_context.settings.value('token')
