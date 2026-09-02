@@ -33,6 +33,6 @@ Follow `instructions/stabilization.md` for methodology and the matching pack und
 - After 3 failed cycles → ask the user how to proceed
 - Same failure signature repeats after a fix → stop and surface
 - Fix requires changing `/spec` or accepting a behavior tradeoff → stop and surface
-- `agent-make` blocks with "local files differ from origin/master" → stop and surface (a watched file was edited; the fix is human-only — merging to `master`. Never revert the file to unblock yourself)
+- `agent-make` blocks with "local files differ from origin/dev" → stop and surface (a watched file was edited; the fix is human-only — merging that change to `dev`. Never revert the file to unblock yourself)
 - Tool/runtime limits prevent reliable validation → stop and surface
 - A green `agent-make test-ui` is not evidence: that tier is an empty harness and its target passes on "no tests collected" (see AGENTS.md TEST EXECUTION MODES)
