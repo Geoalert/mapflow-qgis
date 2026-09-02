@@ -57,7 +57,9 @@ agent-pr --self-check                 # verify gh, token and bot identity
 What it enforces, and what that means for you:
 - **The base branch comes from `agent-git.mr-target` and cannot be overridden.** There is no `--base`. If a PR opens against the wrong branch, the fix is `agent-repo-init --mr-target <branch>`, which is the user's to run.
 - **`create` always opens a Draft**, and only for the current branch.
-- **`create` takes BOTH `--title` and `--body`, or NEITHER.** With neither, it derives them from the branch's commits — which is why the commit message carries the WHY (see WHERE THE WHY GOES). Prefer the no-argument form.
+- **`create` takes BOTH `--title` and `--body`, or NEITHER.** Which form to use depends on how many commits the branch has:
+  - **One commit** — use the bare form. Title and body come from that commit message, which is where the WHY already lives (see WHERE THE WHY GOES).
+  - **More than one** — pass both explicitly. The derived title is the **branch name** with separators replaced, not any commit subject, and the derived body is a bullet list of subjects. Write the body to a file and pass `--body-file`; a heredoc needs `cat`, which is denied.
 - The same branch rules as `agent-git`: refuses a detached HEAD, a protected branch, and any branch not prefixed `feature/`, `fix/`, `chore/`, `refactor/`, `test/`, `agent/`.
 - Multi-line bodies are fine here — unlike push options, `--body` is a normal argument. Use `--body-file` for anything long.
 
@@ -68,6 +70,18 @@ agent-pr create
 ```
 
 **If `agent-pr` reports a missing token**, stop and surface it. It needs `AGENT_GH_TOKEN` (a GitHub fine-grained PAT for the bot account, Pull requests: write + Contents: read) in `/etc/agent-security-toolkit.conf` — a root-owned file. That is a human action; do not attempt to work around it, and do not fall back to `gh` directly. Report the branch as pushed and say the PR must be opened manually.
+
+## Stacking a PR on an unmerged one — prefer not to
+
+The repo merges with GitHub's **"Rebase and merge"**, which replays commits as *new objects*. A branch stacked on the one being merged still holds the originals, so after the parent merges the child PR shows the parent's changes all over again. The fix is a rebase and a **force push**, which `agent-git` blocks by design — so it becomes the user's manual step.
+
+Avoid the situation rather than handling it:
+
+- **Sequence instead of stacking.** Finish a step, let it merge, `agent-git checkout dev && agent-git pull --ff-only`, branch again.
+- **If you must work ahead, keep it local.** Commit on a branch cut from the current `dev`, but do not push. When the parent merges, `agent-git rebase origin/dev` (it drops the already-applied commits on its own) and push *once*. A first push never needs `--force`.
+- Only stack a pushed branch when the user explicitly asks for it, and say up front that they will have to force-push after the parent merges.
+
+If it happens anyway: `agent-git rebase origin/dev` cleans the history, then the user runs the force push. Do not attempt to work around the block.
 
 ## When `agent-git` or `agent-pr` blocks you
 Read the `BLOCKED:` / error line — it is the spec. **Do not work around it.** Stop and surface to the user with the exact message. Common cases:
@@ -407,7 +421,9 @@ EOF
 
 # 5. Publish the branch, then open the Draft PR
 agent-git push
-agent-pr create                                    # title + body from the commit(s)
+agent-pr create                                    # single-commit branch: derives from the commit
+# Multi-commit branch: derive gives you the BRANCH NAME as the title, so be explicit.
+agent-pr create --title "feat: foo handles empty input" --body-file /tmp/pr-body.md
 
 # 6. Follow-up commit (review-loop fix, stabilization, etc.) — same flow
 agent-git add mapflow/functional/service/foo.py
