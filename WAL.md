@@ -50,14 +50,10 @@ Extract processing lifecycle: options, start, review, rating → existing proces
 service/controller. Split in three because it was 3× what lands cleanly in one MR; 2a (review and
 rating) and 2b (model options) are on `dev`.
 
-[ready-for-review] 2c: the table's actions, the start button, and the `template_state` seam
-The processings table's context menu, its Delete button and the details dialog go to
-`ProjectProcessingController`; the Start button's text and state to `ProcessingController`.
-`on_processings_selection_changed` dissolves — each controller subscribes to
-`itemSelectionChanged` itself, rather than one poking the other.
-`ProcessingService.template_state` is **deleted**: what it reached for is now pushed, as
-`TemplateService.templateOpened`/`templateClosed` and a new `visibleProcessingsChanged`.
-`select_processing_in_table` was dead and is deleted.
+[ready-for-review] The local filter → `SearchController`, and `/user/status` → `AccountService`
+The last large widget block in `mapflow.py` (instant filtering over fetched results) and the
+account-status polling both leave it. `SearchView` emits `tableRefilled` so the template view's
+new-image markers survive a refill without one controller calling another.
 
 [ ] Move the start fork out of `ProcessingService`
 `handle_processing_submission` still forks on `template_to_run()`, and `template_to_run` still
@@ -71,10 +67,42 @@ Still in `mapflow.py` from this area: `load_results`, `download_results_file` an
 was listed with them, but it is a processings-table action rather than result loading, so it went
 to `ProjectProcessingController` with the rest of the table's actions in 2c.)
 
-[ ] Split auth from account status → `SessionService` + `AccountService`
+[ ] Session: login, logout and the token → `SessionService`
+The account half of this item is done (`AccountService`). What is left is `read_mapflow_token`,
+`login_oauth`, `login_basic`, `logout` and `log_in_callback`. The first four are a service; the
+fifth is startup orchestration and stays in `mapflow.py` beside `on_account_status`, for the same
+reason that one did.
+
 [ ] Reduce what remains of `mapflow.py` to initGui/unload, wiring and construction
+Four clusters left, in the order they are worth doing:
+1. **Imagery search / metadata** → `SearchController` + `SearchView`: `get_metadata`,
+   `handle_metadata_button_click`, `on_metadata_header_clicked`, the Search/Plan and Seen
+   dropdowns, the pager, and the three `sync_*` methods that keep the table and the footprint
+   layer in step. The sync pair is the delicate part — it disconnects and reconnects both
+   directions to avoid a signal loop, so it wants its own tests before it moves.
+2. **Providers** → a new `ProviderController` (`spec/007_architecture.md:165` names it):
+   `on_provider_change`, `on_zoom_change`, add/edit/remove provider, `setup_providers`,
+   `setup_search_providers`, `toggle_imagery_search`, `replace_search_provider`.
+   `on_provider_change` ends by refreshing the Start button's text, which would be a
+   controller-to-controller call — it needs a `ProviderService` signal that
+   `ProcessingController` subscribes to.
+3. **Results loading** → `ResultService`: `load_results`, `download_results_file`,
+   `download_aoi_file`, `_open_template`. Phase D also names this one.
+4. **Output directory and the error handlers**: `select_output_directory`,
+   `check_if_output_directory_is_selected`, `prompt_output_directory`, `ensure_output_directory`,
+   `default_error_handler`, `report_http_error`.
+
 Acceptance for the phase: no `self.dlg.<widget>` access in `mapflow.py`, and the layering test's
 allowlist is empty (`spec/007_architecture.md` invariants 1 and 5).
+Note on the first half: `mapflow.py` is the composition root, so it necessarily passes widgets to
+the controllers and views it builds. Read the criterion as *no widget access outside construction
+and wiring* — behaviour that reads or writes a widget must live in a view.
+The second half is a separate body of work from anything above: it means removing the `dlg`
+constructor argument from `ProcessingService`, `ProviderService`, `ProjectService`,
+`DataCatalogService`, `AreaCalculatorService`, `ProcessingApi` and `DataCatalogApi` — about 140
+`self.dlg` accesses across the five services, each of which changes that service's constructor and
+every test that builds it. Plan it as its own sequence of MRs, one service at a time, rather than
+as the tail of this item.
 
 ### Phase D — move the packages
 
