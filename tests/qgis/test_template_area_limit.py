@@ -9,11 +9,12 @@ import json
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+from PyQt5.QtCore import QObject
 from qgis.core import QgsGeometry
 
 from mapflow.functional.app_context import AppContext
+from mapflow.functional.service.account_service import AccountService
 from mapflow.functional.service.template_service import TemplateService
-from mapflow.mapflow import Mapflow
 
 
 def _user_status_response(**overrides):
@@ -30,35 +31,35 @@ def _user_status_response(**overrides):
     return response
 
 
-def test_set_processing_limit_stores_template_area_limit_in_sq_km():
-    plugin = Mapflow.__new__(Mapflow)
-    plugin.tr = lambda text: text
-    plugin.plugin_name = "Mapflow"
-    plugin.config = SimpleNamespace(MAX_AOIS_PER_PROCESSING=1)
-    plugin.app_context = AppContext()
-    plugin.dlg = MagicMock()
-
-    plugin.set_processing_limit(_user_status_response())
-
-    assert plugin.app_context.template_area_limit == 2.0
+def _account_service():
+    service = AccountService.__new__(AccountService)
+    QObject.__init__(service)
+    service.tr = lambda text: text
+    service.plugin_name = "Mapflow"
+    service.config = SimpleNamespace(MAX_AOIS_PER_PROCESSING=1)
+    service.app_context = AppContext()
+    return service
 
 
-def test_set_processing_limit_defaults_template_area_limit_to_zero_when_absent():
-    plugin = Mapflow.__new__(Mapflow)
-    plugin.tr = lambda text: text
-    plugin.plugin_name = "Mapflow"
-    plugin.config = SimpleNamespace(MAX_AOIS_PER_PROCESSING=1)
-    plugin.app_context = AppContext()
-    plugin.dlg = MagicMock()
+def test_template_area_limit_is_stored_in_sq_km():
+    service = _account_service()
+
+    service.apply_status(_user_status_response())
+
+    assert service.app_context.template_area_limit == 2.0
+
+
+def test_template_area_limit_defaults_to_zero_when_absent():
+    service = _account_service()
 
     response = _user_status_response()
     payload = json.loads(response.readAll.return_value.data.return_value)
     payload.pop("templateAreaLimit")
     response.readAll.return_value.data.return_value = json.dumps(payload).encode()
 
-    plugin.set_processing_limit(response)
+    service.apply_status(response)
 
-    assert plugin.app_context.template_area_limit == 0.0
+    assert service.app_context.template_area_limit == 0.0
 
 
 def _template_service(app_context):
