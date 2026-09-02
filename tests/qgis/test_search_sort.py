@@ -44,8 +44,9 @@ def _plugin(sort_by="ACQUISITION_DATE", sort_order="DESC", in_template=False, ro
     plugin.search_service = _search_service(sort_by, sort_order)
     plugin.template_service = SimpleNamespace(in_template_mode=in_template)
     plugin.dlg = MagicMock()
-    plugin.dlg.metadataTable.rowCount.return_value = rows
     plugin.search_view = MagicMock()
+    # The "have we searched yet" guard reads the row count through the view, not the dialog.
+    plugin.search_view.metadata_row_count.return_value = rows
     plugin.get_metadata = MagicMock()
     plugin.template_controller = MagicMock()
     return plugin

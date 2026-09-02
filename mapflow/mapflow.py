@@ -13,7 +13,7 @@ from PyQt5.QtCore import (
 from PyQt5.QtNetwork import QNetworkReply
 from PyQt5.QtWidgets import (
     QAction, QApplication, QFileDialog,
-    QMenu, QMessageBox, QWidget, QToolButton
+    QMenu, QMessageBox, QWidget
 )
 from qgis.core import (
     QgsDistanceArea, QgsMapLayer, QgsMapLayerType, QgsProject
@@ -476,8 +476,11 @@ class Mapflow(QObject):
             signal.connect(self.search_controller.apply_local_filter)
         self.dlg.searchRightButton.clicked.connect(self.show_search_next_page)
         self.dlg.searchLeftButton.clicked.connect(self.show_search_previous_page)
-        self.setup_metadata_search_dropdown()
-        self.setup_metadata_seen_dropdown()
+        self.search_view.searchModeChanged.connect(self.template_controller.on_search_mode_changed)
+        self.search_view.setup_search_mode_dropdown()
+        self.search_view.setup_seen_dropdown(
+            on_seen=self.template_controller.mark_selected_images_seen,
+            on_seen_all=self.template_controller.mark_all_images_seen)
 
         # ========== 14. ZOOM SELECTOR CONFIGURATION ==========
         self.dlg.zoomCombo.currentIndexChanged.connect(self.on_zoom_change)
@@ -867,47 +870,11 @@ class Mapflow(QObject):
         # to SearchController.
         self.search_view.ensure_search_provider(self.provider_service)
 
-    def setup_metadata_search_dropdown(self):
-        """Set Search button as dropdown with Search and Plan search modes."""
-        self.metadata_search_mode = "search"
-        self.metadata_search_menu = QMenu(self.dlg.getMetadata)
-        search_action = self.metadata_search_menu.addAction(self.tr("Search"))
-        plan_action = self.metadata_search_menu.addAction(self.tr("Plan search"))
-        search_action.triggered.connect(lambda: self.set_metadata_search_mode("search"))
-        plan_action.triggered.connect(lambda: self.set_metadata_search_mode("plan"))
-        self.dlg.getMetadata.setPopupMode(QToolButton.MenuButtonPopup)
-        self.dlg.getMetadata.setMenu(self.metadata_search_menu)
-        self.set_metadata_search_mode("search")
-
-    def setup_metadata_seen_dropdown(self):
-        """Set Seen button as dropdown with Seen and Seen all actions."""
-        self.metadata_seen_menu = QMenu(self.dlg.markSeenButton)
-        self.metadata_seen_action = self.metadata_seen_menu.addAction(self.tr("Seen"))
-        self.metadata_seen_all_action = self.metadata_seen_menu.addAction(self.tr("Seen all"))
-        self.metadata_seen_action.triggered.connect(
-            self.template_controller.mark_selected_images_seen)
-        self.metadata_seen_all_action.triggered.connect(
-            self.template_controller.mark_all_images_seen)
-        self.dlg.markSeenButton.setPopupMode(QToolButton.MenuButtonPopup)
-        self.dlg.markSeenButton.setMenu(self.metadata_seen_menu)
-        self.dlg.markSeenButton.setDefaultAction(self.metadata_seen_action)
-
-    def set_metadata_search_mode(self, mode: str):
-        self.metadata_search_mode = mode
-        self.dlg.getMetadata.setText(self.tr("Plan search") if mode == "plan" else self.tr("Search"))
-        self.update_plan_search_message()
-
-    def update_plan_search_message(self) -> None:
-        """A template must belong to a project. In plan mode without one, prompt the user in
-        the cost/message label (the immediate search is never blocked, so the button stays usable)."""
-        message = self.template_service.project_required_message
-        if getattr(self, "metadata_search_mode", "search") == "plan" and not self.app_context.current_project:
-            self.template_view.show_project_required(message)
-        else:
-            self.template_view.clear_project_required(message)
-
     def handle_metadata_button_click(self):
-        if getattr(self, "metadata_search_mode", "search") == "plan":
+        """Which of the three things the Search button does. The fork spans the search and
+        template regions, so it stays here: in `SearchController` the two `template_controller`
+        calls below would be controller-to-controller (`spec/007_architecture.md` § Controllers)."""
+        if self.search_view.search_mode == "plan":
             self.template_controller.create_search_template()
             return
         # An immediate search over a too-large AOI is offered as a Planned Search instead (T8).
@@ -922,7 +889,7 @@ class Mapflow(QObject):
         (config.SEARCH_SORT_FIELDS) react; the rest (preview, product type, band order, image id)
         do nothing. Applies to both regular search (/catalog/meta) and template results (the
         template-images endpoint accepts the same sortBy/sortOrder)."""
-        if self.dlg.metadataTable.rowCount() == 0:
+        if self.search_view.metadata_row_count() == 0:
             return  # nothing searched yet
         sort_field = self.search_service.sort_column_field(column)
         if not sort_field:
