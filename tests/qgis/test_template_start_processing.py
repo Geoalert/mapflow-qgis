@@ -274,8 +274,11 @@ def _seen_setup(selected_rows=None, open_id="tpl-1", active_template=None):
         "img-3": SimpleNamespace(id="img-3", isNew=True, productType="Mosaic")}
     view = TemplateView(dlg=dlg, iface=MagicMock(), config=config)
     controller = TemplateController.__new__(TemplateController)
+    QObject.__init__(controller)
     controller.template_service = service
     controller.template_view = view
+    # The markers are drawn only while the results on screen are a template's.
+    controller.app_context = app_context
     template_dto = processing_service.templates[template_dto.id]
     return controller, service, view, marker_cells, template_dto
 

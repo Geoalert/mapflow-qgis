@@ -239,6 +239,20 @@ class SearchService(QObject):
         except (AttributeError, RuntimeError):  # metadata layer has been deleted
             pass
 
+    def hide_unfit_footprints(self, unfit: set) -> None:
+        """Take the locally filtered-out images' footprints off the map, so what is drawn matches
+        what the results table offers. A subset string rather than deleting features: the layer is
+        rebuilt only by a new search, and widening the filter has to bring them straight back."""
+        layer = self.app_context.metadata_layer
+        try:
+            if unfit:
+                layer.setSubsetString(
+                    'local_index NOT IN ({})'.format(', '.join(str(i) for i in sorted(unfit))))
+            else:
+                layer.setSubsetString('')
+        except (RuntimeError, AttributeError):  # no layer yet, or its C++ object is gone
+            pass
+
     def clear(self) -> None:
         """Drop the results, the layer and the retained baseline. The widen (!) indicator is the
         controller's to hide — this only makes it meaningless."""

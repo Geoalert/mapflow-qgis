@@ -45,10 +45,22 @@ def _plugin(sort_by="ACQUISITION_DATE", sort_order="DESC", in_template=False, ro
     plugin.template_service = SimpleNamespace(in_template_mode=in_template)
     plugin.dlg = MagicMock()
     plugin.dlg.metadataTable.rowCount.return_value = rows
-    plugin._update_search_sort_indicator = MagicMock()
+    plugin.search_view = MagicMock()
     plugin.get_metadata = MagicMock()
     plugin.template_controller = MagicMock()
     return plugin
+
+
+def _sort_controller(sort_by="ACQUISITION_DATE", sort_order="DESC"):
+    """Restoring the arrow after a re-fill is `SearchController`'s; the column<->token mapping it
+    asks for is still the search service's."""
+    from PyQt5.QtCore import QObject
+    from mapflow.functional.controller.search_controller import SearchController
+    controller = SearchController.__new__(SearchController)
+    QObject.__init__(controller)
+    controller.search_service = _search_service(sort_by, sort_order)
+    controller.search_view = MagicMock()
+    return controller
 
 
 def test_backend_tokens_are_upper_snake_case():
@@ -120,19 +132,27 @@ def test_no_results_yet_does_not_search():
 
 def test_restore_sort_indicator_maps_token_to_its_column():
     # After a re-fill hides the arrow, the indicator is restored on the column matching the token.
-    plugin = _plugin(sort_by="CLOUD_COVER")
+    controller = _sort_controller(sort_by="CLOUD_COVER")
 
-    plugin._restore_search_sort_indicator()
+    controller.restore_sort_indicator()
 
-    plugin._update_search_sort_indicator.assert_called_once_with(_column("cloudCover"))
+    assert controller.search_view.show_sort_indicator.call_args.args == (_column("cloudCover"),)
+
+
+def test_restore_sort_indicator_carries_the_current_order():
+    controller = _sort_controller(sort_by="CLOUD_COVER", sort_order="ASC")
+
+    controller.restore_sort_indicator()
+
+    assert controller.search_view.show_sort_indicator.call_args.kwargs["descending"] is False
 
 
 def test_restore_sort_indicator_noop_without_active_sort():
-    plugin = _plugin(sort_by=None)
+    controller = _sort_controller(sort_by=None)
 
-    plugin._restore_search_sort_indicator()
+    controller.restore_sort_indicator()
 
-    plugin._update_search_sort_indicator.assert_not_called()
+    controller.search_view.show_sort_indicator.assert_not_called()
 
 
 def test_request_schema_serializes_sort_fields():
