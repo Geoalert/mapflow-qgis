@@ -1,5 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "_comment_attribution": "Claude Code appends a Co-Authored-By trailer to commits and a generated-with line to PR bodies by default. AGENTS.md forbids both: agent-git signs every commit as the bot account, which IS the agent attribution, so a trailer duplicates it. Turned off here rather than relying on each agent to remember not to add it.",
+  "includeCoAuthoredBy": false,
   "_comment": "Repo-shipped permissions for Claude Code agents. Goal: zero mid-flow permission prompts while an agent stays inside the boundary documented in AGENTS.md (GIT / PULL REQUESTS / MAKE COMMAND POLICY). Allow = the toolkit wrappers plus read-only inspection. Deny = the raw escape hatches the wrappers exist to replace, and the file-mutating shell commands the built-in Edit/Write tools replace. Note the model matches on the command prefix only, so an allowed command can still redirect output to a file — this list signals intent and removes prompts, it is not a sandbox. The sandbox is agent-git / agent-make / agent-pr.",
   "permissions": {
     "allow": [
