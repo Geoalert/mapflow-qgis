@@ -32,6 +32,29 @@ def pytest_configure(config):
         print(f"QGIS Processing unavailable, geometry operations will not run: {error}")
 
 
+@pytest.fixture(autouse=True)
+def _no_blocking_dialogs(monkeypatch):
+    """Never let a modal dialog open in the test container.
+
+    `alert()` defaults to `blocking=True`, which is `QMessageBox.exec()` — an event loop with
+    nobody to close it here. An unstubbed call does not fail the run, it **hangs** it: pytest
+    prints nothing further and the tier sits until it is killed, with no indication of which test
+    is stuck. Fourteen test modules stub `alert` themselves precisely to avoid this, which means
+    the protection holds only for as long as everyone remembers it.
+
+    Patching the dialog primitives instead makes forgetting harmless: `exec` returns `Ok`
+    immediately, so a missed stub produces a normal pass or a normal assertion failure. Modules
+    that stub `alert` are unaffected — their patch shadows this one.
+    """
+    from PyQt5.QtWidgets import QInputDialog, QMessageBox
+    monkeypatch.setattr(QMessageBox, "exec", lambda self: QMessageBox.Ok, raising=False)
+    monkeypatch.setattr(QMessageBox, "exec_", lambda self: QMessageBox.Ok, raising=False)
+    monkeypatch.setattr(QMessageBox, "open", lambda self: None, raising=False)
+    # ask_text() is the other blocking prompt reachable from service code.
+    monkeypatch.setattr(QInputDialog, "getText", staticmethod(lambda *a, **k: ("", False)),
+                        raising=False)
+
+
 @pytest.fixture()
 def iface():
     """Mock QgisInterface for tests that need a plugin iface reference."""
