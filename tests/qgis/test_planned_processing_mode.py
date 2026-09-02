@@ -153,7 +153,9 @@ def test_provider_change_refreshes_start_button_text():
     provider = MagicMock()  # not an ImagerySearchProvider/MyImageryProvider -> the generic branch
     provider.requires_image_id = False
     plugin.dlg = MagicMock()
-    plugin.dlg.providerIndex.return_value = 0
+    plugin.provider_view = MagicMock()
+    plugin.provider_view.provider_index.return_value = 0
+    plugin.aoi_view = MagicMock()
     plugin.provider_service = MagicMock()
     plugin.provider_service.providers = [provider]
     plugin.app_context = SimpleNamespace(data_provider=None)
@@ -165,3 +167,5 @@ def test_provider_change_refreshes_start_button_text():
 
     assert plugin.app_context.data_provider is provider
     plugin.processing_controller.update_start_processing_button_text.assert_called_once()
+    # A tiled source keeps its zoom selectable; only imagery-search and My Imagery lock it.
+    plugin.provider_view.enable_zoom.assert_called_once_with(True)

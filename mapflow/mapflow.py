@@ -13,7 +13,7 @@ from PyQt5.QtCore import (
 from PyQt5.QtNetwork import QNetworkReply
 from PyQt5.QtWidgets import (
     QAction, QApplication, QFileDialog,
-    QMenu, QMessageBox, QWidget
+    QMenu, QMessageBox
 )
 from qgis.core import (
     QgsDistanceArea, QgsMapLayer, QgsMapLayerType, QgsProject
@@ -26,6 +26,8 @@ from .functional.app_context import AppContext
 from .functional.controller.data_catalog_controller import DataCatalogController
 from .functional.controller.project_processing_controller import ProjectProcessingController
 from .functional.controller.processing_controller import ProcessingController
+from .functional.controller.provider_controller import ProviderController
+from .functional.view.provider_view import ProviderView
 from .functional.controller.search_controller import SearchController
 from .functional.controller.template_controller import TemplateController
 from .functional.service.template_service import TemplateService
@@ -59,8 +61,7 @@ from .dialogs import (ErrorMessageWidget,
                       ReviewDialog)
 from .dialogs.icons import plugin_icon
 # Providers
-from .model.provider import (create_provider,
-                              DefaultProvider,
+from .model.provider import (DefaultProvider,
                               ImagerySearchProvider,
                               MyImageryProvider,
                               ProviderInterface,
@@ -129,7 +130,6 @@ class Mapflow(QObject):
         self.dlg = MainDialog(self.main_window, self.app_context.settings)
         self.review_dialog = ReviewDialog(self.dlg)
         self.dlg_provider = ProviderDialog(self.dlg)
-        self.dlg_provider.accepted.connect(self.edit_provider_callback)
         # todo: Move to Maindialog
         metadata_parser = ConfigParser()
         metadata_parser.read(os.path.join(self.plugin_dir, 'metadata.txt'))
@@ -446,10 +446,19 @@ class Mapflow(QObject):
 
         # ========== 13. PROVIDERS ==========
         # searchImageryButton and the metadata table's double/cell-click previews are wired by
-        # SearchController (constructed above).
-        self.dlg.addProvider.clicked.connect(self.add_provider)
-        self.dlg.editProvider.clicked.connect(self.edit_provider)
-        self.dlg.removeProvider.clicked.connect(self.remove_provider)
+        # SearchController (constructed above); the add/edit/remove buttons and the zoom combo by
+        # ProviderController, which owns those handlers.
+        self.provider_view = ProviderView(dlg=self.dlg)
+        self.provider_controller = ProviderController(
+            provider_service=self.provider_service,
+            provider_view=self.provider_view,
+            provider_dialog=self.dlg_provider,
+            app_context=self.app_context,
+            processing_service=self.processing_service,
+            add_button=self.dlg.addProvider,
+            edit_button=self.dlg.editProvider,
+            remove_button=self.dlg.removeProvider,
+            zoom_combo=self.dlg.zoomCombo)
 
         self.search_controller.connect_table_selection()
         self.app_context.meta_layer_table_connection = None
@@ -483,7 +492,7 @@ class Mapflow(QObject):
             on_seen_all=self.template_controller.mark_all_images_seen)
 
         # ========== 14. ZOOM SELECTOR CONFIGURATION ==========
-        self.dlg.zoomCombo.currentIndexChanged.connect(self.on_zoom_change)
+        # currentIndexChanged is wired by ProviderController, which owns the handler.
         saved_zoom = self.app_context.settings.value('zoom')
         if saved_zoom is None:
             self.dlg.zoomCombo.setCurrentIndex(0)
@@ -605,124 +614,40 @@ class Mapflow(QObject):
         self.dlg.close()
 
     def on_provider_change(self) -> None:
-        """Adjust max and current zoom, and update the metadata table when user selects another
-        provider.
+        """A different imagery source was picked.
 
-        :param index: The currently selected provider index
+        Stays in the composition root rather than moving to `ProviderController`: the effects land
+        in the search, catalog and processing regions at once, and reaching into those controllers
+        from one of them would be controller-to-controller (`spec/007_architecture.md`
+        § Controllers). Everything it touches here is a view or a service.
         """
-        # This is done after area calculation, because there the provider list is updated?
-        provider_index = self.dlg.providerIndex()
-        provider = self.provider_service.providers[provider_index]
+        provider = self.provider_service.providers[self.provider_view.provider_index()]
         self.app_context.data_provider = provider
         # Changes in search tab
         self.toggle_imagery_search(provider)
-        # re-calculate AOI because it may change due to intersection of image/area
-        polygon_layer = self.dlg.polygonCombo.currentLayer()
         if isinstance(provider, MyImageryProvider):
-            my_imagery_tab = self.dlg.tabWidget.findChild(QWidget, "catalogTab") 
-            self.dlg.tabWidget.setCurrentWidget(my_imagery_tab)
+            self.provider_view.show_catalog_tab()
             self.area_calculator_service.calculate_aoi_area_catalog()
             self.processing_service.validate_all_processing_params(allow_empty_name=True)
-            self.dlg.zoomCombo.setEnabled(False)
-            self.dlg.zoomCombo.setCurrentIndex(0)
+            # Fixed-resolution source: no zoom to choose.
+            self.provider_view.enable_zoom(False)
+            self.provider_view.reset_zoom()
         else:
-            if isinstance(provider, ImagerySearchProvider):
-                self.dlg.zoomCombo.setEnabled(False)
-            else:
-                self.dlg.zoomCombo.setEnabled(True)
-            self.area_calculator_service.calculate_aoi_area_polygon_layer(polygon_layer)
+            self.provider_view.enable_zoom(not isinstance(provider, ImagerySearchProvider))
+            # Re-calculate the AOI: it can change where an image and the area intersect.
+            self.area_calculator_service.calculate_aoi_area_polygon_layer(
+                self.aoi_view.current_layer())
         if provider.requires_image_id:
-            imagery_search_tab = self.dlg.tabWidget.findChild(QWidget, "providersTab")
-            self.dlg.tabWidget.setCurrentWidget(imagery_search_tab)
+            self.provider_view.show_imagery_search_tab()
         # A planned (template) start only applies with the imagery-search source, so the Start
-        # button label depends on the data source: refresh it here (e.g. switching an open template
-        # to My imagery must drop the "planned" wording). Text only — the enabled state is managed
-        # by the validation above.
+        # button label depends on the data source: switching an open template to My imagery must
+        # drop the "planned" wording. Text only — the enabled state comes from the validation above.
         self.processing_controller.update_start_processing_button_text()
-
-    def on_zoom_change(self):
-        """ Set chosen zoom and update cost (if it depends on zoom for provider).
-        """
-        if self.dlg.zoomCombo.currentIndex() != 0:
-            self.app_context.settings.setValue('zoom', str(self.dlg.zoomCombo.currentText()))
-        else:
-            self.app_context.settings.setValue('zoom', None)
-        self.processing_service.update_processing_cost()
 
     def save_dialog_state(self):
         """Memorize dialog element sizes & positioning to allow user to customize the look."""
         # Save main dialog size & position
         self.app_context.settings.setValue('mainDialogState', self.dlg.saveGeometry())
-
-    # ========= Providers ============ #
-    def remove_provider(self) -> None:
-        """Delete a web tile provider from the list of registered providers.
-
-        Is called by clicking the red minus button near the provider dropdown list.
-        """
-        provider_index = self.dlg.providerCombo.currentIndex()
-        provider = self.provider_service.providers[provider_index]
-        if provider.is_default:
-            # We want to protect built in providers!
-            self.alert(self.tr("This provider is default and cannot be removed"),
-                       icon=QMessageBox.Warning)
-            return
-        # Ask for confirmation
-        elif self.alert(self.tr('Permanently remove {}?').format(provider.name),
-                        icon=QMessageBox.Question):
-            self.provider_service.user_providers.remove(provider)
-            self.provider_service.update_providers()
-
-    def edit_provider_callback(self) -> None:
-        """Add a web imagery provider or commit edits to an existing one."""
-        old_provider = self.dlg_provider.current_provider
-        if self.dlg_provider.result:
-            new_provider = create_provider(**self.dlg_provider.result)
-        else:
-            # returned empty provider - i.e. nothing was changed
-            return
-
-        if not old_provider:
-            # we have added new one - without current one
-            if new_provider.name in self.provider_service.providers:
-                self.alert(self.tr("Provider name must be unique. {name} already exists, "
-                                   "select another or delete/edit existing").format(name=new_provider.name),
-                           icon=QMessageBox.Warning)
-                self.dlg_provider.show()
-                return
-            else:
-                self.provider_service.user_providers.append(new_provider)
-                provider_index = len(self.provider_service.providers)
-        else:
-            # we replace old provider with a new one
-            # if self.dlg_provider.property('mode') == 'edit':  #
-            provider_index = self.provider_service.providers.index(old_provider)
-            user_provider_index = self.provider_service.user_providers.index(old_provider)
-            if new_provider.name != old_provider.name and new_provider.name in self.provider_service.providers:
-                # we do not want user to replace another provider when editing this one
-                self.alert(self.tr("Provider name must be unique. {name} already exists,"
-                                   " select another or delete/edit existing").format(name=new_provider.name),
-                           icon=QMessageBox.Warning)
-                self.dlg_provider.show()
-                return
-            else:
-                self.provider_service.user_providers[user_provider_index] = new_provider
-        self.provider_service.update_providers()
-        self.dlg.setProviderIndex(provider_index)
-
-    def add_provider(self) -> None:
-        self.dlg_provider.setup(None, self.tr("Add new provider"))
-
-    def edit_provider(self) -> None:
-        """Prepare and show the provider edit dialog.
-        Is called by the corresponding button.
-        """
-        provider = self.provider_service.providers[self.dlg.providerIndex()]
-        if provider.is_default:
-            self.alert(self.tr("This is a default provider, it cannot be edited"),
-                       icon=QMessageBox.Warning)
-        else:
-            self.dlg_provider.setup(provider)
 
     def monitor_polygon_layer_feature_selection(self, layers: List[QgsMapLayer]) -> None:
         """Set up connection between feature selection in polygon layers and AOI area calculation.
