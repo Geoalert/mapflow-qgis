@@ -87,7 +87,8 @@ def _dispatch_plugin(exceeds, mode="search"):
     """`handle_metadata_button_click` stays in mapflow.py — it dispatches to the template
     controller (plan / too-large) or to the search (get_metadata)."""
     plugin = Mapflow.__new__(Mapflow)
-    plugin.metadata_search_mode = mode
+    plugin.search_view = MagicMock()
+    plugin.search_view.search_mode = mode
     plugin.get_metadata = MagicMock()
     plugin.template_service = MagicMock()
     plugin.template_service.in_template_mode = False

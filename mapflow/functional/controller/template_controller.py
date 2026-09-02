@@ -110,6 +110,20 @@ class TemplateController(QObject):
         name = (name_override or self.template_view.template_name())
         self.template_service.create_search_template(name, aoi_details, search_params)
 
+    def on_search_mode_changed(self, mode: str) -> None:
+        """The Search button switched mode. A planned search creates a template, and a template
+        needs a project — so in plan mode without one, say so in the message label.
+
+        The immediate search is never blocked by this, so the button stays usable; the label is
+        the only effect. Lives here rather than in the search tab because "a template needs a
+        project" is this region's rule, and `SearchView` announces the mode instead of asking.
+        """
+        message = self.template_service.project_required_message
+        if mode == "plan" and not self.app_context.current_project:
+            self.template_view.show_project_required(message)
+        else:
+            self.template_view.clear_project_required(message)
+
     def prompt_plan_search(self) -> None:
         """Offer a Planned Search for a too-large AOI (T8); on accept, create it with an
         auto-generated name."""

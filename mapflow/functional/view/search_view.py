@@ -2,7 +2,7 @@ from typing import List, Optional, Tuple
 
 from PyQt5.QtCore import QObject, Qt, pyqtSignal
 from PyQt5.QtGui import QBrush, QColor
-from PyQt5.QtWidgets import QAbstractItemView, QPushButton, QWidget
+from PyQt5.QtWidgets import QAbstractItemView, QMenu, QPushButton, QToolButton, QWidget
 
 from ..helpers import utc_date_from_iso
 from ...dialogs.main_dialog import MainDialog
@@ -27,6 +27,10 @@ class SearchView(QObject):
     #: view's 'new image' icons. Emitting rather than calling keeps this view ignorant of who
     #: decorates its rows.
     tableRefilled = pyqtSignal()
+    #: The Search button switched between an immediate search and planning one ("search"/"plan").
+    #: A planned search creates a template, which needs a project — but that rule is the template
+    #: region's, so it is announced rather than checked here.
+    searchModeChanged = pyqtSignal(str)
 
     def __init__(self, dlg: MainDialog, config):
         super().__init__()
@@ -34,6 +38,41 @@ class SearchView(QObject):
         self.config = config
         #: The current cellClicked->preview connection, so it can be dropped before rewiring.
         self._cell_preview_connection = None
+        #: "search" (run it now) or "plan" (create a template that keeps searching).
+        self.search_mode = "search"
+
+    # ---------- the Search and Seen split-buttons ----------
+
+    def setup_search_mode_dropdown(self) -> None:
+        """Turn the Search button into a split button offering Search / Plan search."""
+        self._search_menu = QMenu(self.dlg.getMetadata)
+        search_action = self._search_menu.addAction(self.tr("Search"))
+        plan_action = self._search_menu.addAction(self.tr("Plan search"))
+        search_action.triggered.connect(lambda: self.set_search_mode("search"))
+        plan_action.triggered.connect(lambda: self.set_search_mode("plan"))
+        self.dlg.getMetadata.setPopupMode(QToolButton.MenuButtonPopup)
+        self.dlg.getMetadata.setMenu(self._search_menu)
+        self.set_search_mode("search")
+
+    def set_search_mode(self, mode: str) -> None:
+        self.search_mode = mode
+        self.dlg.getMetadata.setText(self.tr("Plan search") if mode == "plan" else self.tr("Search"))
+        self.searchModeChanged.emit(mode)
+
+    def setup_seen_dropdown(self, on_seen, on_seen_all) -> None:
+        """Turn the Seen button into a split button offering Seen / Seen all.
+
+        The handlers are passed in rather than looked up: marking images seen is the template
+        region's, and a view may not reach into a controller.
+        """
+        self._seen_menu = QMenu(self.dlg.markSeenButton)
+        seen_action = self._seen_menu.addAction(self.tr("Seen"))
+        seen_all_action = self._seen_menu.addAction(self.tr("Seen all"))
+        seen_action.triggered.connect(on_seen)
+        seen_all_action.triggered.connect(on_seen_all)
+        self.dlg.markSeenButton.setPopupMode(QToolButton.MenuButtonPopup)
+        self.dlg.markSeenButton.setMenu(self._seen_menu)
+        self.dlg.markSeenButton.setDefaultAction(seen_action)
 
     # ---------- what the user is asking for ----------
 
