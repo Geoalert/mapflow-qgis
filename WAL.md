@@ -33,83 +33,130 @@ leave a behaviour covered by neither.
 
 ### Phase C — dissolve the god object
 
-One domain per MR, each ending with `mapflow.py` smaller and no behaviour changed. Ordered
-leaf-first so each extraction depends only on what already moved.
+Landed. `mapflow.py` went from 2993 lines to 1183 across ~25 MRs, each moving one domain and
+changing no behaviour: AOI layers, previews, imagery search, the local filter, templates (the
+largest — ~50 methods and ~50 cross-service references to its navigation state), the processing
+lifecycle, account status, the session, providers, result actions, and the working directory.
+Service and controller boundaries are tabulated in `spec/007_architecture.md`; the WHY of each
+step is in its commit message.
 
-Service and controller boundaries are tabulated in `spec/007_architecture.md`.
+What `mapflow.py` still holds is composition-root work: `initGui`/`unload`, construction, signal
+wiring, startup sequencing (`log_in_callback`, `on_account_status`, `main`, the provider setup),
+and the cross-region forks that choose between two controllers — which is precisely what a
+controller may not do (`spec/007_architecture.md` § Controllers). Its remaining `self.dlg`
+references are construction and wiring, plus the startup block restoring saved filter values.
 
-**The templates domain is extracted.** It was the phase's largest — ~50 methods in `mapflow.py`
-plus the template half of `processing_service.py`, with ~50 cross-service references to its
-navigation state — and it took several MRs: create/update-search-params/exclude and plan-search
-gating; the seen-markers cluster; the map layers and their navigation slots; the search request,
-results, footprints and AOI scoping; the run-state actions; one owner for the processings table's
-refresh; and finally the in-template view with its navigation state.
-**`ProcessingService` now references nothing on `TemplateService`** — the last seam is gone (2c).
+**The phase's second acceptance criterion is NOT met.** It read "the layering test's allowlist is
+empty"; nothing in this phase touched it. Emptying it is a different body of work from moving code
+out of `mapflow.py`, and folding it into a phase that already ran ~25 MRs would have hidden it —
+so it is **Phase C2** below rather than a footnote here.
 
-Extract processing lifecycle: options, start, review, rating → existing processing
-service/controller. Split in three because it was 3× what lands cleanly in one MR; 2a (review and
-rating) and 2b (model options) are on `dev`.
+### Phase C2 — take the dialog out of the services
 
-[ready-for-review] The local filter → `SearchController`, and `/user/status` → `AccountService`
-The last large widget block in `mapflow.py` (instant filtering over fetched results) and the
-account-status polling both leave it. `SearchView` emits `tableRefilled` so the template view's
-new-image markers survive a refill without one controller calling another.
+Empties the layering allowlist, which is Phase C's unmet acceptance criterion.
 
-**The start fork stays in `ProcessingService`, and this item is closed rather than done.**
-`handle_processing_submission` forks on `template_to_run()`, and moving that fork out means moving
-`template_to_run` — which `planned_processing_selection_error` calls, which `update_processing_cost`
-calls in turn. One of `update_processing_cost`'s callers is `AreaCalculatorService`
-(`area_calculator_service.py:191`), a **service**, which cannot compute a template and has no
-business knowing templates exist. So the parameter would have to be threaded through it, or the
-rule duplicated. The alternative shape — a controller calling `service.run_template(params)` or
-`service.create(params)` — splits one operation across two layers and gives the controller nothing
-it needs.
-`template_to_run` reads only `_open_template` (pushed to it), its own `selected_template()` and
-`app_context`; it reaches into no other service, so it is not a layering violation. The seam that
-made this urgent was deleted in 2c. Re-open only with a concrete reason the current shape blocks
-something.
+`ProcessingService`, `ProviderService`, `ProjectService`, `DataCatalogService`,
+`AreaCalculatorService`, `ProcessingApi` and `DataCatalogApi` each take the main dialog as a
+constructor argument and reach through it — **138 `self.dlg` accesses**, measured. Each service
+needs its widget access moved to the matching view, its constructor changed, and every test that
+builds it updated. That is one MR per service; there is no shortcut that does several at once,
+because each constructor change ripples into a different set of tests.
 
-[ ] Session: login, logout and the token → `SessionService`
-The account half of this item is done (`AccountService`). What is left is `read_mapflow_token`,
-`login_oauth`, `login_basic`, `logout` and `log_in_callback`. The first four are a service; the
-fifth is startup orchestration and stays in `mapflow.py` beside `on_account_status`, for the same
-reason that one did.
+**Before Phase D**, deliberately: Phase D moves `functional/` wholesale, and five of the files it
+moves are the ones this rewrites. Doing D first means moving a file and then rewriting it.
 
-[ ] Reduce what remains of `mapflow.py` to initGui/unload, wiring and construction
-Search, providers and results loading are done. What is left:
+[ ] C2.1 `AreaCalculatorService` (17 accesses) — smallest, so the first MR is a complete worked
+    example: which reads become view methods, how the constructor changes, what happens to its tests.
+[ ] C2.2 `ProcessingService` (26)
+[ ] C2.3 `ProjectService` (28)
+[ ] C2.4 `DataCatalogService` (29)
+[ ] C2.5 `ProviderService` (38)
+[ ] C2.6 `ProcessingApi` and `DataCatalogApi` — last, and different in kind: they hold the dialog
+    only to hand it to the result loader, so the fix is a constructor change rather than a view.
 
-1. **Output directory and the error handlers**: `select_output_directory`,
-   `check_if_output_directory_is_selected`, `prompt_output_directory`, `ensure_output_directory`,
-   `default_error_handler`, `report_http_error`. Two controllers currently take the directory
-   check as an injected callable (`SearchController.ensure_output_dir`,
-   `ProjectProcessingController.ensure_output_directory`); extracting this cluster is what turns
-   those into real collaborators.
-2. **Startup configuration**: `setup_providers`, `setup_search_providers`,
-   `_register_provider_min_areas`, `toggle_imagery_search`, `on_provider_change`, `log_in_callback`,
-   `on_account_status`, `main`. These are composition-root work and mostly *stay* — they sequence
-   several regions. What they must not keep is widget access; that is the acceptance below.
+Each MR deletes its own entries from `tests/functional/test_layering.py`'s `ALLOWED`.
+`test_the_allowlist_has_no_stale_entries` fails if an exemption outlives its violation, so the list
+cannot silently drift — but note it only shrinks when someone removes the entry, so removing it is
+part of the MR, not a follow-up.
 
-**Cross-region forks that stay in `mapflow.py` by design**, not by omission:
-`handle_metadata_button_click`, `on_metadata_header_clicked`, `_show_search_page` (search vs an
-open template's results) and `on_provider_change` / `toggle_imagery_search` (search + catalog +
-processing at once). Each chooses between two controllers, which is exactly what a controller may
-not do (`spec/007_architecture.md:167`). None touches a widget any more, so none blocks acceptance.
+Acceptance: `ALLOWED` is empty, and `MAY_IMPORT` holds with no exemptions.
 
-Acceptance for the phase: no `self.dlg.<widget>` access in `mapflow.py`, and the layering test's
-allowlist is empty (`spec/007_architecture.md` invariants 1 and 5).
-Note on the first half: `mapflow.py` is the composition root, so it necessarily passes widgets to
-the controllers and views it builds. Read the criterion as *no widget access outside construction
-and wiring* — behaviour that reads or writes a widget must live in a view.
-The second half is a separate body of work from anything above: it means removing the `dlg`
-constructor argument from `ProcessingService`, `ProviderService`, `ProjectService`,
-`DataCatalogService`, `AreaCalculatorService`, `ProcessingApi` and `DataCatalogApi` — about 140
-`self.dlg` accesses across the five services, each of which changes that service's constructor and
-every test that builds it. Plan it as its own sequence of MRs, one service at a time, rather than
-as the tail of this item.
+### Phase C3 — fix what the refactoring found
+
+Nine defects surfaced while moving code. Each was left alone at the time because a behaviour change
+does not belong inside a move, and several are now **pinned as current behaviour by tests written
+during Phase C** — so the suite currently protects them. Those tests change with the fix.
+
+Grouped by whether the intended behaviour is obvious.
+
+**C3.1 and C3.2 are one MR — they mask each other.** Fixing C3.1 alone stops the cost being quoted
+for every model that has options; see the note under C3.2.
+
+[ ] C3.1 `enable_model_options` discards the user's saved model options
+    Two defects in one line pair (`main_dialog.py`):
+    (a) `if not can_start_processing: can_start_processing = True` makes the role argument a no-op,
+        so option checkboxes are never disabled for a role that may not start a processing.
+        **Decided: enforce it** — starting is already forbidden for those roles, so leaving the
+        options interactive offers a choice that cannot be acted on.
+    (b) `widget.setChecked(can_start_processing)` **force-ticks every option on every model change**,
+        overwriting the state `saved_model_options` just restored. Worse, `add_model_option`
+        connects `toggled` *after* setting the initial state, so this forced tick emits
+        `modelOptionsChanged` -> `on_options_change` -> `save_option_settings`, writing the
+        clobbered all-enabled state back to settings. The `wd/{workflow_id}/{block_name}` key in
+        `spec/003_local_storage.md` is therefore written but never effectively read back.
+        User-visible: unticked options return ticked, and options feed `get_price(enable_blocks=…)`,
+        so the user is quoted for blocks they turned off.
+    Fix: drop the override, and drop `setChecked` entirely — enabling is not ticking.
+    Migration is clean: settings currently hold all-enabled, so the first render is unchanged and
+    behaviour only diverges once someone unticks something, which then sticks.
+
+[ ] C3.2 A model whose blocks are all obligatory is never quoted
+    `on_model_change` quotes immediately only when `len(wd.blocks) == 0` — *all* blocks, while the
+    checkboxes come from `optional_blocks`. So: no blocks -> quoted; some optional -> quoted, but
+    **only because C3.1(b)'s forced tick emits**; all obligatory -> no checkbox ever fires and the
+    cost stays blank.
+    Fix: test `not wd.optional_blocks` — quote now precisely when no checkbox will ever fire.
+    Also correct the comment above that condition: it credits the emit to "adding its option
+    checkboxes", but creation cannot emit (the `toggled` connect comes after the initial
+    `setChecked`). The emit is C3.1(b)'s forced tick, which is why removing it breaks the quote.
+    Pinned by `test_a_model_whose_blocks_are_all_obligatory_is_not_quoted_on_selection`, which
+    changes with the fix.
+
+**Unambiguous — the current behaviour is not intended by anyone:**
+
+[ ] C3.3 `modelCombo.activated` is emitted but connected to nothing
+    Emitted in `mapflow.py` and `project_view.py:195`; only `currentIndexChanged` is connected. The
+    model refresh those emits intend happens by accident via `setCurrentText`. Either connect it or
+    delete the emits — but decide, because the accident is load-bearing today.
+[ ] C3.4 Error-report widgets can be garbage-collected before they appear
+    `report_unexpected_error` and `report_http_error` build an `ErrorMessageWidget` into a local and
+    call `.show()`. With no parent — `parent=None`, or `QApplication.activeWindow()` returning None —
+    the widget can be collected before it is drawn, so the user sees nothing. Folds naturally into
+    the error-reporting item below, which already rewrites both.
+[ ] C3.5 A template rename is dropped silently if the response shape drifts
+    The rename callback wraps its parse in a broad `except Exception`, so a changed payload looks
+    exactly like a successful rename that did not happen.
+
+**Test-surface gaps found in passing:**
+
+[ ] C3.6 `test-ui` proves nothing
+    The Makefile treats pytest's exit code 5 ("no tests collected") as a pass, so a green `test-ui`
+    is green on an empty tier. Remove the guard with the first UI test. Note this edits a **watched
+    file**, so plan it per the BRANCH MODEL.
+[ ] C3.7 `show_template_details` has no direct test (pre-existing; unchanged by the move).
+[ ] C3.8 Nothing replaces pyright's `reportPossiblyUnbound`
+    Use-before-assignment across branches is unchecked; flake8's `F821` covers undefined names only.
+    Accepted deliberately for qgis.org parity — revisit once the refactor lands type annotations.
+[ ] C3.9 `static/styles/aoi_templates_processing.qml` is referenced from nowhere
+    Confirm whether it is dead or a rename that lost its caller. (Also noted under Phase D.)
 
 ### Phase D — move the packages
 
 Mechanical, and cheaper here than earlier: the god object is gone, so fewer files churn.
+
+**Runs after C2**, not before: C2 rewrites five of the service files this phase relocates, and
+moving a file then rewriting it costs the review twice and makes each diff harder to read than
+either change alone. C3 is independent of both and can be interleaved wherever it suits.
 
 [ ] `functional/` dissolved: `api/`, `controller/`, `service/`, `view/` to the root; `app_context`
     → `context.py`; `geometry`, `helpers`, `styles` to the root; `auth` → `SessionService`;

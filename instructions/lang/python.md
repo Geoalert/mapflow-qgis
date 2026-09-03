@@ -74,6 +74,27 @@ Do not reach across layers: a dialog must not call `api/` directly, and `api/`/`
 - Entry points: `agent-make test-functional`, `agent-make test-qgis`, `agent-make test-ui`, and `agent-make test` for all three. See AGENTS.md COMMANDS and MAKE COMMAND POLICY.
 - `tests/ui/` is an empty harness today and its target passes on "no tests collected" — do not read a green `test-ui` as evidence your UI change works.
 
+### Three ways a test here fails invisibly
+
+Each of these produces a **passing or hanging** run rather than a failing one, so nothing tells you
+the test stopped testing. All three were hit repeatedly during the Phase C extractions.
+
+1. **A mocked view answers every question truthily.** After moving a read from `self.dlg.<widget>`
+   to a view method, any fixture still setting `dlg.<widget>` becomes inert — and a bare
+   `MagicMock()` returns a truthy stand-in for the new call, so guards like
+   `if view.row_count() == 0: return` silently stop firing. When a guard's *falsiness* is what the
+   test is about, set the view method's `return_value` explicitly; never rely on the default.
+   After any such move, grep the suite for the old `dlg.<widget>` fixture lines by hand.
+2. **`Class.__new__(Class)` on a QObject makes `connect()` a no-op.** Without
+   `QObject.__init__(obj)` the signal machinery is absent, so every connection silently does
+   nothing and any assertion on an emitted effect passes for the wrong reason. Call
+   `QObject.__init__` in the helper that builds it.
+3. **An unstubbed modal hangs the suite instead of failing it.** `alert()` and friends default to
+   `blocking=True`, which is `QMessageBox.exec()` — an event loop with nothing in the headless
+   container to close it. There is no output naming the test; the tier simply never finishes.
+   `tests/qgis/conftest.py` patches the dialog entry points suite-wide, so this is handled — do not
+   remove that guard, and when adding a new alert helper, add it there too.
+
 ## Stabilization Checklist (Python-specific, per fix cycle)
 - Imports remain at file top (PEP 8) — no lazy imports introduced by the fix.
 - Module-function pattern preserved; no incidental class wrapping.
