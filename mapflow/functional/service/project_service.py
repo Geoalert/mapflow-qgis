@@ -150,9 +150,12 @@ class ProjectService(QObject):
     def get_projects(self,
                      sort_by=ProjectSortBy.updated,
                      sort_order=ProjectSortOrder.descending,
-                     projects_filter: str = ""):
+                     projects_filter: str = "",
+                     offset: Optional[int] = None):
         """Request a page of projects. Sorting and filtering come from the panel, so the caller
-        reads them and passes them in."""
+        reads them and passes them in; `offset` is for restoring a remembered page."""
+        if offset is not None:
+            self.projects_page_offset = offset
         try:  # if something changed and offset is now >= projects count
             if self.projects_page_offset >= self.projects_data.total:
                 self.projects_page_offset = 0  # show first page

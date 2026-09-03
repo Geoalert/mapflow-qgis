@@ -341,6 +341,82 @@ def test_paging_moves_the_cursor_then_re_requests():
     controller.project_service.get_projects.assert_called_once()
 
 
+def test_leaving_a_project_sends_a_real_sort_not_a_flag():
+    """`show_projects` takes a bool for "restore the saved page". Passing it straight into
+    `get_projects` puts it where `sort_by` goes, and the backend rejects the body with
+    `Invalid value for: body (String at 'sortBy')` — a 400 the user sees on every exit."""
+    controller = _controller()
+    controller.processing_service = MagicMock()
+    controller.project_view.sort_projects.return_value = ("UPDATED", "DESC")
+    controller.project_view.projects_filter = ""
+
+    controller.show_projects(open_saved_page=False)
+
+    sort_by = controller.project_service.get_projects.call_args.args[0]
+    assert not isinstance(sort_by, bool)
+    assert sort_by == "UPDATED"
+
+
+def test_returning_to_projects_restores_the_page_the_user_left():
+    controller = _controller()
+    controller.processing_service = MagicMock()
+    controller.project_service.saved_projects_page.return_value = {
+        'offset': 20, 'sort_by': ProjectSortBy.name,
+        'sort_order': ProjectSortOrder.ascending, 'filter': "roads"}
+    controller.project_service.sort_combo_index.return_value = 0
+
+    controller.show_projects(open_saved_page=True)
+
+    # The widgets are set to match the query the request will carry...
+    controller.project_view.set_projects_filter.assert_called_once_with("roads")
+    controller.project_view.set_sort_index.assert_called_once_with(0)
+    # ...and the request asks for the remembered page, not the first one.
+    kwargs = controller.project_service.get_projects.call_args.kwargs
+    assert kwargs["offset"] == 20
+
+
+def test_a_restored_page_with_no_filter_leaves_the_filter_box_alone():
+    controller = _controller()
+    controller.processing_service = MagicMock()
+    controller.project_service.saved_projects_page.return_value = {
+        'offset': 0, 'sort_by': ProjectSortBy.updated,
+        'sort_order': ProjectSortOrder.descending, 'filter': ""}
+    controller.project_service.sort_combo_index.return_value = 4
+
+    controller.show_projects(open_saved_page=True)
+
+    controller.project_view.set_projects_filter.assert_not_called()
+
+
+def test_an_explicit_offset_overrides_the_current_page():
+    service = _service(total=50)
+    service.projects_page_offset = 5
+
+    service.get_projects(ProjectSortBy.name, ProjectSortOrder.ascending, "", offset=20)
+
+    assert service.api.get_projects.call_args.args[0].offset == 20
+
+
+def test_a_saved_page_past_the_end_falls_back_to_the_first():
+    """A remembered page outlives the projects it referred to: deleting enough of them leaves the
+    saved offset pointing past the end, and asking for it returns nothing at all."""
+    service = _service(total=3)
+
+    service.get_projects(ProjectSortBy.name, ProjectSortOrder.ascending, "", offset=20)
+
+    assert service.api.get_projects.call_args.args[0].offset == 0
+
+
+def test_the_sort_combo_index_round_trips_every_pair():
+    """`sort_combo_index` is the inverse of `ProjectView.sort_projects`; each (field, direction)
+    pair must land on exactly one row, or restoring a saved page selects the wrong sort."""
+    seen = set()
+    for sort_by in (ProjectSortBy.name, ProjectSortBy.created, ProjectSortBy.updated):
+        for sort_order in (ProjectSortOrder.ascending, ProjectSortOrder.descending):
+            seen.add(ProjectService.sort_combo_index(sort_by, sort_order))
+    assert seen == {0, 1, 2, 3, 4, 5}
+
+
 def test_unlocking_the_selection_restores_the_open_project():
     controller = _controller()
     controller.app_context.project_id = "p-1"

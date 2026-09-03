@@ -544,12 +544,30 @@ class ProjectProcessingController(QObject):
         """
         # Stop processing polling when leaving processings view
         self.processing_service.processing_fetch_timer.stop()
-        
-        # Fetch projects (handles saved page restoration internally)
-        self.project_service.get_projects(open_saved_page)
+
+        if open_saved_page:
+            self.restore_saved_projects_page()
+        else:
+            self.refresh_projects()
 
         # Switch view
         self.project_view.switch_to_projects()
+
+    def restore_saved_projects_page(self) -> None:
+        """Put the user back on the page, sort and filter they left.
+
+        The widgets are set before the request rather than after it, so the panel and the results
+        describe the same query — otherwise the list arrives sorted one way while the combo still
+        claims another.
+        """
+        page = self.project_service.saved_projects_page()
+        sort_by, sort_order = page['sort_by'], page['sort_order']
+        if page['filter']:
+            self.project_view.set_projects_filter(page['filter'])
+        self.project_view.set_sort_index(
+            self.project_service.sort_combo_index(sort_by, sort_order))
+        self.project_service.get_projects(sort_by, sort_order, page['filter'],
+                                          offset=int(page['offset']))
 
         # Remove old cost
         self.processing_service.update_processing_cost()
