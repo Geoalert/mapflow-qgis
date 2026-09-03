@@ -423,8 +423,9 @@ def test_start_processing_callback_refreshes_processings_for_regular_response():
     service.processings = {}
     service.processings_history = MagicMock()
     QObject.__init__(service)  # the refresh request is a signal now
-    asked = []
+    asked, added = [], []
     service.refreshRequested.connect(lambda: asked.append(True))
+    service.processingAdded.connect(added.append)
 
     response = MagicMock()
     response.readAll.return_value.data.return_value = b'{"id": "proc-1", "name": "Run 1"}'
@@ -435,7 +436,7 @@ def test_start_processing_callback_refreshes_processings_for_regular_response():
         service.start_processing_callback(response)
 
     assert asked == [True]
-    service.view.add_new_processing.assert_called_once()
+    assert added == [mock_processing]
     service.dlg.startProcessing.setEnabled.assert_called_with(True)
 
 
@@ -448,8 +449,9 @@ def test_start_processing_callback_refreshes_processings_for_template_response_s
     service.processings = {}
     service.processings_history = MagicMock()
     QObject.__init__(service)  # the refresh request is a signal now
-    asked = []
+    asked, added = [], []
     service.refreshRequested.connect(lambda: asked.append(True))
+    service.processingAdded.connect(added.append)
 
     response = MagicMock()
     response.readAll.return_value.data.return_value = b'{"template": {"id": "tpl-1"}, "searchResults": []}'
@@ -458,7 +460,7 @@ def test_start_processing_callback_refreshes_processings_for_template_response_s
         service.start_processing_callback(response)
 
     assert asked == [True]
-    service.view.add_new_processing.assert_not_called()
+    assert added == []
     service.dlg.startProcessing.setEnabled.assert_called_with(True)
 
 
@@ -740,7 +742,7 @@ def test_confirm_delete_processings_deletes_templates():
     service.processings = {}
     service.api = MagicMock()
     service.view = MagicMock()
-    service.view.selected_processing_ids.return_value = ["tpl-1"]
+    service.set_selected_ids(["tpl-1"])
     service._delete_state = {}
 
     with patch.object(processing_service_module, "alert", return_value=True):
@@ -823,6 +825,7 @@ def test_delete_processings_callback_continues_with_remaining_items():
 
 def test_get_processings_callback_requests_templates_for_current_project_only():
     service = ProcessingService.__new__(ProcessingService)
+    QObject.__init__(service)  # the rows are announced as a signal
     service.tr = lambda text: text
     service.app_context = SimpleNamespace(current_project=SimpleNamespace(id="project-1"))
     service.api = MagicMock()
@@ -833,6 +836,8 @@ def test_get_processings_callback_requests_templates_for_current_project_only():
     service.processings_page_offset = 0
     service.processings_history = None
     service.update_local_processings = MagicMock()
+    rendered = []
+    service.rowsChanged.connect(rendered.append)
 
     response = MagicMock()
     response.readAll.return_value.data.return_value = b'{"results": [], "total": 0}'
@@ -847,18 +852,21 @@ def test_get_processings_callback_requests_templates_for_current_project_only():
     service.api.get_templates.assert_not_called()
     # The table render is deferred to the combined render after templates resolve,
     # so the poll never flashes through a processings-only state.
-    service.view.update_processing_table.assert_not_called()
+    assert rendered == []
 
 
 def test_get_templates_callback_filters_templates_to_current_project():
     service = ProcessingService.__new__(ProcessingService)
+    QObject.__init__(service)  # the rows are announced as a signal
     service.tr = lambda text: text
     service.app_context = SimpleNamespace(current_project=SimpleNamespace(id="3fa85f64-5717-4562-b3fc-2c963f66afa6"))
     service.view = MagicMock()
-    service.view.sort_processings.return_value = ("CREATED", "DESC")
+    service.set_sort("CREATED", "DESC")
     service.processings = {}
     service.in_template_mode = False
     service.processing_fetch_timer = MagicMock()
+    rendered = []
+    service.rowsChanged.connect(rendered.append)
 
     response = MagicMock()
     response.readAll.return_value.data.return_value = (
@@ -873,20 +881,23 @@ def test_get_templates_callback_filters_templates_to_current_project():
     assert len(service.templates) == 1
     template = list(service.templates.values())[0]
     assert str(template.projectId) == "3fa85f64-5717-4562-b3fc-2c963f66afa6"
-    service.view.update_processing_table.assert_called_once()
+    assert len(rendered) == 1
 
 
 def test_get_templates_callback_builds_templates_without_hydration_request():
     """Project list omits searchParams; the poll must NOT fall back to the full list."""
     service = ProcessingService.__new__(ProcessingService)
+    QObject.__init__(service)  # the rows are announced as a signal
     service.tr = lambda text: text
     service.app_context = SimpleNamespace(current_project=SimpleNamespace(id="3fa85f64-5717-4562-b3fc-2c963f66afa6"))
     service.api = MagicMock()
     service.view = MagicMock()
-    service.view.sort_processings.return_value = ("CREATED", "DESC")
+    service.set_sort("CREATED", "DESC")
     service.processings = {}
     service.in_template_mode = False
     service.processing_fetch_timer = MagicMock()
+    rendered = []
+    service.rowsChanged.connect(rendered.append)
 
     response = MagicMock()
     response.readAll.return_value.data.return_value = (
@@ -900,5 +911,5 @@ def test_get_templates_callback_builds_templates_without_hydration_request():
     # No second request, and the template is still built and rendered once.
     service.api.get_templates.assert_not_called()
     assert len(service.templates) == 1
-    service.view.update_processing_table.assert_called_once()
+    assert len(rendered) == 1
 

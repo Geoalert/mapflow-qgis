@@ -55,12 +55,20 @@ def _requests(service):
     return asked
 
 
+def _added(service):
+    """The rows the service asked to have inserted optimistically."""
+    added = []
+    service.processingAdded.connect(added.append)
+    return added
+
+
 _PROCESSING = {"id": "p-1", "name": "Run 1", "status": "IN_PROGRESS"}
 
 
 def test_template_start_asks_for_a_rehydrate_and_skips_flat_add():
     service = _service(in_template_mode=True)
     asked = _requests(service)
+    added = _added(service)
 
     with patch.object(processing_service_module, "alert"):
         service.start_processing_callback(_response(_PROCESSING))
@@ -68,20 +76,21 @@ def test_template_start_asks_for_a_rehydrate_and_skips_flat_add():
     # A plain refresh would refetch the rows without rebinding the new processing to its AOI.
     assert asked == ["rehydrate"]
     # No flat optimistic add in template mode.
-    service.view.add_new_processing.assert_not_called()
+    assert added == []
     service.dlg.startProcessing.setEnabled.assert_called_once_with(True)
 
 
 def test_regular_start_does_flat_add_and_asks_for_a_plain_refresh():
     service = _service(in_template_mode=False)
     asked = _requests(service)
+    added = _added(service)
     fake_dto = SimpleNamespace(id="p-1", name="Run 1", status="IN_PROGRESS")
 
     with patch.object(processing_service_module, "alert"), \
             patch.object(processing_service_module.ProcessingDTO, "from_dict", return_value=fake_dto):
         service.start_processing_callback(_response(_PROCESSING))
 
-    service.view.add_new_processing.assert_called_once_with(fake_dto)
+    assert added == [fake_dto]
     assert asked == ["refresh"]
     service.api.get_template.assert_not_called()
 

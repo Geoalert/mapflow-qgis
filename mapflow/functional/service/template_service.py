@@ -905,7 +905,10 @@ class TemplateService(QObject):
     # ---------- what the table selection means for templates ----------
 
     def _selected_ids(self, limit=None):
-        return self.processing_service.view.selected_processing_ids(limit=limit)
+        """The same table selection `ProcessingService` resolves into processings, resolved here
+        into AOIs. It is held there because it is pushed in from the controller that owns the
+        table — reaching for the widget, or for that service's view, is not a service's to do."""
+        return self.processing_service.selected_ids(limit=limit)
 
     def selected_aois(self, limit=None) -> list:
         """Selected AOI rows (only meaningful inside the in-template view)."""

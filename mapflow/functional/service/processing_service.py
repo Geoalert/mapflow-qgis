@@ -26,6 +26,8 @@ from ..api.processing_api import ProcessingApi
 from ...schema import ProcessingDTO, UpdateProcessingSchema, ProcessingStatus, BillingType, PostProcessingSchemaV2
 from ...model.processing_history import ProcessingHistory
 from ...schema.processing import (
+    ProcessingSortBy,
+    ProcessingSortOrder,
     ProcessingsRequest,
     ProcessingsResult,
 )
@@ -73,6 +75,27 @@ class ProcessingService(QObject):
     #: refreshed. The refresh itself goes through `refreshRequested` like every other.
     reviewSubmitted = pyqtSignal()
 
+    # ---------- what the processings table must show ----------
+    #
+    # The table is `ProjectProcessingController`'s to render; this service only says what belongs
+    # in it. Everything below is announced, never drawn.
+
+    #: A request is in flight — put a "Loading…" placeholder up.
+    tableLoading = pyqtSignal()
+    #: The project's rows (templates above processings), ready to render.
+    rowsChanged = pyqtSignal(object)
+    #: (show the pager, page number, total pages).
+    pagerChanged = pyqtSignal(bool, int, int)
+    #: Whether the pager arrows may be clicked. Separate from `pagerChanged` because a request in
+    #: flight disables them without changing which page is being shown.
+    pagerEnabled = pyqtSignal(bool)
+    #: A processing was just started: add its row without waiting for the next poll.
+    processingAdded = pyqtSignal(object)
+    #: (processing id, new name) after a rename round trip.
+    processingRenamed = pyqtSignal(str, str)
+    #: The ids whose rows the server confirmed gone.
+    processingsDeleted = pyqtSignal(object)
+
     # Whether the last processings poll saw only final-state processings; combined with
     # template statuses to decide if the project poll can stop (see _apply_poll_timer_state).
     _processings_all_final = True
@@ -87,6 +110,14 @@ class ProcessingService(QObject):
     #: template open" rather than raising.
     _open_template = None
     _visible_processings = None
+
+    #: The table's current selection, its sort and its filter text. All three are read at times
+    #: this service is not on the stack — a fetch callback sorts rows minutes after the request —
+    #: so they are held here and pushed in, rather than fetched from a widget on demand.
+    _selected_ids = ()
+    _sort_by = ProcessingSortBy.created.value
+    _sort_order = ProcessingSortOrder.descending.value
+    _filter = ""
 
     def __init__(self,
                  http: Http,
@@ -130,6 +161,24 @@ class ProcessingService(QObject):
         """The pool a table row id resolves against: an open template's, or None for this
         service's own `processings`."""
         self._visible_processings = processings
+
+    def set_selected_ids(self, ids) -> None:
+        """The ids of the currently selected table rows, in table order."""
+        self._selected_ids = tuple(ids or ())
+
+    def selected_ids(self, limit=None) -> List[str]:
+        """The selection, at most `limit` rows. `TemplateService` reads this too — it resolves the
+        same rows into AOIs, and a service may not reach for the table itself."""
+        return list(self._selected_ids[:limit])
+
+    def set_sort(self, sort_by: str, sort_order: str) -> None:
+        """The sort the table is showing. Applied to the *next* request and to the rows it
+        returns, so a reply that lands after the user re-sorts is still ordered as requested."""
+        self._sort_by = sort_by
+        self._sort_order = sort_order
+
+    def set_filter(self, terms: str) -> None:
+        self._filter = terms or ""
 
     def load_processing_history(self):
         """
@@ -522,7 +571,7 @@ class ProcessingService(QObject):
             self.processings[new_processing.id] = new_processing
             self.processings_history.add(new_processing.id, new_processing.status)
             # display
-            self.view.add_new_processing(new_processing)
+            self.processingAdded.emit(new_processing)
         # Always refresh full list because template-started processings can affect
         # both processings and template status/counts in table.
         self.refreshRequested.emit()
@@ -560,27 +609,9 @@ class ProcessingService(QObject):
         if not self.app_context.current_project:
             return
         self.processings_page_offset = 0
-        self.view.set_table_loading()
+        self.tableLoading.emit()
         self.get_processings()
         self.processing_fetch_timer.start()
-
-    def connect_processings_pagination(self):
-        """Connect pagination, sorting and filtering signals. Called once during plugin init."""
-        self.dlg.processingsNextPageButton.clicked.connect(self.show_processings_next_page)
-        self.dlg.processingsPreviousPageButton.clicked.connect(self.show_processings_previous_page)
-        self.dlg.filterProcessings.textEdited.connect(self.get_filtered_processings)
-        self.dlg.sortProcessingsCombo.activated.connect(self._on_combo_sort_changed)
-        self.view.connect_header_sort(self._on_header_sort_changed)
-
-    def _on_combo_sort_changed(self):
-        """Combo sort resets any header-click override and re-fetches."""
-        self.view._header_sort_by = None
-        self.refreshRequested.emit()
-
-    def _on_header_sort_changed(self):
-        """Re-render the table with current data using the header sort. Both views sort, so this
-        asks for a re-render rather than rendering the project rows itself."""
-        self.rerenderRequested.emit()
 
     def get_processings(self):
         """Fetch the *project's* processings. Not the entry point for "refresh the table" — that
@@ -594,21 +625,19 @@ class ProcessingService(QObject):
                 self.processings_page_offset = 0
         except (AttributeError, TypeError):
             pass
-        sort_by, sort_order = self.view.sort_processings()
-        terms = self.dlg.filterProcessings.text() or None
         request_body = ProcessingsRequest(
             limit=self.processings_page_limit,
             offset=self.processings_page_offset,
-            terms=terms,
-            sortBy=sort_by,
-            sortOrder=sort_order,
+            terms=self._filter or None,
+            sortBy=self._sort_by,
+            sortOrder=self._sort_order,
         )
         self.api.get_processings(
             project_id=self.app_context.current_project.id,
             request_body=request_body,
             callback=self.get_processings_callback,
         )
-        self.view.enable_processings_pages(False)
+        self.pagerEnabled.emit(False)
 
     def get_processings_callback(self, response: QNetworkReply):
         """Update the processing table and user limit.
@@ -628,9 +657,9 @@ class ProcessingService(QObject):
             quotient, remainder = divmod(self.processings_data.total, self.processings_page_limit)
             total_pages = quotient + (remainder > 0)
             page_number = int(self.processings_page_offset / self.processings_page_limit) + 1
-            self.view.show_processings_pages(True, page_number, total_pages)
+            self.pagerChanged.emit(True, page_number, total_pages)
         else:
-            self.view.show_processings_pages(False)
+            self.pagerChanged.emit(False, 1, 1)
         self.update_local_processings(processings)
         current_project_id = getattr(self.app_context.current_project, "id", None)
         if current_project_id:
@@ -640,7 +669,7 @@ class ProcessingService(QObject):
             )
         else:
             self.templates = {}
-            self.view.update_processing_table(self.combined_processing_rows())
+            self.rowsChanged.emit(self.combined_processing_rows())
             self._apply_poll_timer_state()
 
     def get_templates_callback(self, response: QNetworkReply):
@@ -676,7 +705,7 @@ class ProcessingService(QObject):
             templates.append(template)
 
         self.templates = {template.id: template for template in templates}
-        self.view.update_processing_table(self.combined_processing_rows())
+        self.rowsChanged.emit(self.combined_processing_rows())
         self._apply_poll_timer_state()
 
     def _apply_poll_timer_state(self):
@@ -737,8 +766,7 @@ class ProcessingService(QObject):
     def combined_processing_rows(self):
         """The *project* rows: its templates above its processings. The in-template rows are
         `combined_template_rows`; which of the two the table wants is the controller's call."""
-        sort_by, sort_order = self.view.sort_processings()
-        reverse = sort_order == "DESC"
+        sort_by, reverse = self._sort_by, self._sort_order == "DESC"
         templates = sorted(self.templates.values(), key=lambda t: self._sort_key(t, sort_by), reverse=reverse)
         processings = sorted(self.processings.values(), key=lambda p: self._sort_key(p, sort_by), reverse=reverse)
         return list(templates) + list(processings)
@@ -832,7 +860,7 @@ class ProcessingService(QObject):
         response_data = json.loads(response.readAll().data())
         processing = ProcessingDTO.from_dict(response_data)
         self.save_processing(processing)
-        self.view.update_processing_name(processing_id=processing.id, new_name=processing.name)
+        self.processingRenamed.emit(str(processing.id), processing.name)
         self.processings[processing.id] = processing
 
     # ============ REVIEW AND RATING ============ #
@@ -1004,7 +1032,7 @@ class ProcessingService(QObject):
         """
         # Pause refreshing processings table to avoid conflicts
         self.processing_fetch_timer.stop()
-        selected_ids = self.view.selected_processing_ids()
+        selected_ids = self.selected_ids()
         # Filter to only items that exist (templates or processings)
         valid_ids = [pid for pid in selected_ids if pid in self.processings or pid in self.templates]
         # Ask for confirmation if there are selected rows
@@ -1020,7 +1048,7 @@ class ProcessingService(QObject):
                            failed: List):
         # todo: save and report error responses?
         if len(items) == 0:
-            self.view.delete_processings_from_table(deleted)
+            self.processingsDeleted.emit(deleted)
             if len(failed) > 0:
                 failed_ids = ', <br>'.join(str(f) for f in failed)
                 alert(self.tr(f"Failed to remove items with following ids: <center> {failed_ids}"))
@@ -1081,7 +1109,7 @@ class ProcessingService(QObject):
         self.processing_fetch_timer.deleteLater()
 
     def selected_processings(self, limit=None) -> List[ProcessingDTO]:
-        pids = self.view.selected_processing_ids(limit=limit)
+        pids = self.selected_ids(limit=limit)
         # In template view the table holds the template's processings, not the project's.
         pool = self.processings if self._visible_processings is None else self._visible_processings
         # limit None will give full selection
@@ -1096,7 +1124,7 @@ class ProcessingService(QObject):
     
     def selected_templates(self, limit=None) -> List[ProcessingTemplateDTO]:
         """Get selected templates from the table."""
-        pids = self.view.selected_processing_ids(limit=limit)
+        pids = self.selected_ids(limit=limit)
         # Filter to get only templates (not processings)
         selected_templates = [self.templates[pid] for pid in filter(lambda pid: pid in self.templates, pids)]
         return selected_templates
@@ -1120,7 +1148,7 @@ class ProcessingService(QObject):
 
     def is_only_templates_selected(self) -> bool:
         """True only when current table selection contains templates and no processings."""
-        pids = self.view.selected_processing_ids()
+        pids = self.selected_ids()
         if not pids:
             return False
         return all(pid in self.templates for pid in pids)

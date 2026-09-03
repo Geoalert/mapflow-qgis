@@ -21,8 +21,7 @@ OTHER = "user-2"
 
 def _service(user_role, user_id, selected_ids, templates):
     service = ProcessingService.__new__(ProcessingService)
-    service.view = MagicMock()
-    service.view.selected_processing_ids.return_value = list(selected_ids)
+    service.set_selected_ids(selected_ids)
     service.templates = templates
     ctx = AppContext()
     ctx.user_role = user_role

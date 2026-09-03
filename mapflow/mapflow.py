@@ -316,6 +316,11 @@ class Mapflow(QObject):
         self.aoi_service.editSessionEnded.connect(self.aoi_view.leave_edit_session)
         self.aoi_view.saveRequested.connect(self.aoi_service.save_session)
         self.aoi_view.cancelRequested.connect(self.aoi_service.cancel_session)
+        # Three controllers below react to a processings-table selection, and all three resolve
+        # that selection into objects through ProcessingService — which is told the ids rather
+        # than reading the table. So the push has to run before any of their handlers, and Qt
+        # calls slots in connection order: this connect must stay above them.
+        self.dlg.processingsTable.itemSelectionChanged.connect(self.push_processings_selection)
         self.processing_controller = ProcessingController(
             iface=self.iface,
             aoi_service=self.aoi_service,
@@ -448,7 +453,6 @@ class Mapflow(QObject):
         self.dlg.processingsTable.cellDoubleClicked.connect(
             self.project_processing_controller.load_results)
         self.dlg.deleteProcessings.clicked.connect(self.processing_service.confirm_delete_processings)
-        self.processing_service.connect_processings_pagination()
         # Entering and leaving a template is TemplateController's entirely — it owns the layers,
         # the search results and the view state they drive. What the processings-table selection
         # enables is split between the two controllers that own those widgets: the Start button is
@@ -553,6 +557,17 @@ class Mapflow(QObject):
         else:
             self.project_processing_controller.show_projects()
             self.project_service.setup_project_change_rights()
+
+    def push_processings_selection(self):
+        """Deliver the processings table's selection to the services that resolve it.
+
+        The work is `ProjectProcessingController`'s — it owns what the table's selection means —
+        but the connection has to be made here, before the controllers that react to the same
+        signal are built, because two of them read the resolved selection. Resolving the
+        attribute at call time keeps that possible: the controller exists long before a user can
+        click a row.
+        """
+        self.project_processing_controller.push_selection()
 
     def setup_add_layer_menu(self):
         self.add_layer_menu.addAction(self.draw_aoi)
@@ -1066,7 +1081,7 @@ class Mapflow(QObject):
             self.app_context.project_id = Config.PROJECT_ID
             self.project_view.setup_workflow_defs(default_project.workflowDefs, 
                                                           self.config.DEFAULT_MODEL)
-            self.processing_service.setup_processings_table()
+            self.project_processing_controller.open_processings_table()
         else:
             if self.app_context.project_id:
                 self.app_context.current_project = self.project_service.get_project(

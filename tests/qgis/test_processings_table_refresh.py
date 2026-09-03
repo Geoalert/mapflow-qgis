@@ -34,6 +34,8 @@ def controller():
     controller.processing_service = MagicMock()
     controller.template_service = MagicMock()
     controller.template_service.in_template_mode = False
+    controller.processing_view = MagicMock()
+    controller.processing_view.sort_processings.return_value = ("CREATED", "DESC")
     return controller
 
 
