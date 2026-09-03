@@ -55,17 +55,19 @@ The last large widget block in `mapflow.py` (instant filtering over fetched resu
 account-status polling both leave it. `SearchView` emits `tableRefilled` so the template view's
 new-image markers survive a refill without one controller calling another.
 
-[ ] Move the start fork out of `ProcessingService`
-`handle_processing_submission` still forks on `template_to_run()`, and `template_to_run` still
-lives in the service because `planned_processing_selection_error` calls it and is itself called
-from `update_processing_cost` — service-internal, on no path a controller drives. Moving the fork
-means moving the cost estimate with it, which is its own step. Nothing is blocked on it: the seam
-that made this urgent is already gone.
-
-Still in `mapflow.py` from this area: `load_results`, `download_results_file` and
-`download_aoi_file`, which are `ResultService`'s — Phase D names them separately. (`show_details`
-was listed with them, but it is a processings-table action rather than result loading, so it went
-to `ProjectProcessingController` with the rest of the table's actions in 2c.)
+**The start fork stays in `ProcessingService`, and this item is closed rather than done.**
+`handle_processing_submission` forks on `template_to_run()`, and moving that fork out means moving
+`template_to_run` — which `planned_processing_selection_error` calls, which `update_processing_cost`
+calls in turn. One of `update_processing_cost`'s callers is `AreaCalculatorService`
+(`area_calculator_service.py:191`), a **service**, which cannot compute a template and has no
+business knowing templates exist. So the parameter would have to be threaded through it, or the
+rule duplicated. The alternative shape — a controller calling `service.run_template(params)` or
+`service.create(params)` — splits one operation across two layers and gives the controller nothing
+it needs.
+`template_to_run` reads only `_open_template` (pushed to it), its own `selected_template()` and
+`app_context`; it reaches into no other service, so it is not a layering violation. The seam that
+made this urgent was deleted in 2c. Re-open only with a concrete reason the current shape blocks
+something.
 
 [ ] Session: login, logout and the token → `SessionService`
 The account half of this item is done (`AccountService`). What is left is `read_mapflow_token`,
@@ -74,23 +76,24 @@ fifth is startup orchestration and stays in `mapflow.py` beside `on_account_stat
 reason that one did.
 
 [ ] Reduce what remains of `mapflow.py` to initGui/unload, wiring and construction
-Four clusters left, in the order they are worth doing:
-1. **Imagery search / metadata** → `SearchController` + `SearchView`: `get_metadata`,
-   `handle_metadata_button_click`, `on_metadata_header_clicked`, the Search/Plan and Seen
-   dropdowns, the pager, and the three `sync_*` methods that keep the table and the footprint
-   layer in step. The sync pair is the delicate part — it disconnects and reconnects both
-   directions to avoid a signal loop, so it wants its own tests before it moves.
-2. **Providers** → a new `ProviderController` (`spec/007_architecture.md:165` names it):
-   `on_provider_change`, `on_zoom_change`, add/edit/remove provider, `setup_providers`,
-   `setup_search_providers`, `toggle_imagery_search`, `replace_search_provider`.
-   `on_provider_change` ends by refreshing the Start button's text, which would be a
-   controller-to-controller call — it needs a `ProviderService` signal that
-   `ProcessingController` subscribes to.
-3. **Results loading** → `ResultService`: `load_results`, `download_results_file`,
-   `download_aoi_file`, `_open_template`. Phase D also names this one.
-4. **Output directory and the error handlers**: `select_output_directory`,
+Search, providers and results loading are done. What is left:
+
+1. **Output directory and the error handlers**: `select_output_directory`,
    `check_if_output_directory_is_selected`, `prompt_output_directory`, `ensure_output_directory`,
-   `default_error_handler`, `report_http_error`.
+   `default_error_handler`, `report_http_error`. Two controllers currently take the directory
+   check as an injected callable (`SearchController.ensure_output_dir`,
+   `ProjectProcessingController.ensure_output_directory`); extracting this cluster is what turns
+   those into real collaborators.
+2. **Startup configuration**: `setup_providers`, `setup_search_providers`,
+   `_register_provider_min_areas`, `toggle_imagery_search`, `on_provider_change`, `log_in_callback`,
+   `on_account_status`, `main`. These are composition-root work and mostly *stay* — they sequence
+   several regions. What they must not keep is widget access; that is the acceptance below.
+
+**Cross-region forks that stay in `mapflow.py` by design**, not by omission:
+`handle_metadata_button_click`, `on_metadata_header_clicked`, `_show_search_page` (search vs an
+open template's results) and `on_provider_change` / `toggle_imagery_search` (search + catalog +
+processing at once). Each chooses between two controllers, which is exactly what a controller may
+not do (`spec/007_architecture.md:167`). None touches a widget any more, so none blocks acceptance.
 
 Acceptance for the phase: no `self.dlg.<widget>` access in `mapflow.py`, and the layering test's
 allowlist is empty (`spec/007_architecture.md` invariants 1 and 5).
@@ -111,6 +114,11 @@ Mechanical, and cheaper here than earlier: the god object is gone, so fewer file
 [ ] `functional/` dissolved: `api/`, `controller/`, `service/`, `view/` to the root; `app_context`
     → `context.py`; `geometry`, `helpers`, `styles` to the root; `auth` → `SessionService`;
     `layer_utils` → `ResultService` plus the layer-tree helpers in `view/`
+    Note: `ResultService` here means **`ResultsLoader`** — the requests, the layer building and the
+    styles. The user-facing result *actions* (`load_results`, `download_results_file`,
+    `download_aoi_file`) are not part of it: they read the table selection, read the tiles/local
+    radio and prompt for a working directory, which is controller work, and they now live in
+    `ProjectProcessingController` beside the other processings-table actions.
 [ ] `http`, `error_guard`, `report_throttle`, `log_config` → `infra/`
 Note: the `schema/` ⇄ `model/` split already happened in Phase A, so this phase is package
 moves only — no type is reclassified here.
