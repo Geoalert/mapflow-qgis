@@ -341,6 +341,36 @@ class DataCatalogView(QObject):
                 for row in selected_rows[:limit]]
         return pids
     
+    def display_mosaics_and_reselect(self, mosaics: list, mosaic_id):
+        """Redraw the mosaic list and reselect one cell. Selection is forbidden across the redraw
+        to dodge a Qt selection-model bug that the plain display path can trigger."""
+        self.dlg.mosaicTable.setSelectionMode(QAbstractItemView.NoSelection)
+        self.display_mosaics(mosaics)
+        self.dlg.mosaicTable.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        self.select_mosaic_cell(mosaic_id)
+
+    def clear_mosaic_selection(self):
+        self.dlg.mosaicTable.clearSelection()
+
+    def clear_image_selection(self):
+        self.dlg.imageTable.clearSelection()
+
+    def clear_image_table(self):
+        """Selecting a mosaic wipes the image table before its images are fetched."""
+        self.dlg.imageTable.clearSelection()
+        self.dlg.imageTable.setRowCount(0)
+
+    def reset_to_mosaics_table(self):
+        self.dlg.stackedLayout.setCurrentIndex(0)
+
+    def raise_dialog(self):
+        self.dlg.raise_()
+
+    def bind_source_image(self, image_id):
+        """After the image table refills, select the source image's row (a one-shot connection)."""
+        self.show_source_image_connection = self.dlg.imageTableFilled.connect(
+            lambda: self.select_image_cell(image_id))
+
     def select_mosaic_cell(self, mosaic_id):
         try:
             self.show_mosaics_table(None)

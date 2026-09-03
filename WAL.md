@@ -115,13 +115,11 @@ service without finishing it, which is the price of a reviewable diff.
     Blocked until `DataCatalogView` (C2.3) and `ProviderService` (C2.4) stop writing that button —
     only then can its state be pushed instead of read. Clears `dialog-param` / `widget-import`
     for `processing_service` together with C2.6 (`ProcessingApi(dlg=...)`).
-[ ] C2.3 `DataCatalogService` (29 dlg, 38 view) → `DataCatalogController` + `DataCatalogView`
-    **The largest item, not the mechanical one.** With 38 view calls against a 57-line controller,
-    this service *is* the My Imagery controller; turning those into signals would be the wrong
-    shape (nobody wants a service with 38 signals). The work is moving the view orchestration into
-    `DataCatalogController` and leaving the service with its requests and its state — so the
-    controller grows by roughly what the service loses. Consider splitting it: mosaics first,
-    then images.
+[ready-for-review] C2.3 `DataCatalogService` → `DataCatalogController` + `DataCatalogView`
+    Service now announces (signals) and is told the selection (`set_selected_*`); the controller
+    owns every dialog and renders. `ProcessingView`-style: `DataCatalogView` built in `mapflow.py`.
+    `service-imports-view` + `widget-import` cleared for data_catalog; `dialog-param` +
+    `service-imports-dialogs` stay until C2.6 (`DataCatalogApi(dlg=…)` + the `MainDialog` hint).
 
 #### Group B — the service reaches into other regions' widgets
 
