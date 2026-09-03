@@ -25,6 +25,7 @@ from .functional.controller.project_processing_controller import ProjectProcessi
 from .functional.controller.processing_controller import ProcessingController
 from .functional.controller.provider_controller import ProviderController
 from .functional.view.provider_view import ProviderView
+from .functional.view.project_view import ProjectView
 from .functional.controller.search_controller import SearchController
 from .functional.controller.template_controller import TemplateController
 from .functional.service.template_service import TemplateService
@@ -212,8 +213,10 @@ class Mapflow(QObject):
         # ========== 7. INITIALIZE PROJECT AND PROCESSING SERVICES ==========
         self.project_service = ProjectService(http=self.http,
                                             app_context=self.app_context,
-                                            dlg=self.dlg,
                                             config=self.config)
+        # The projects panel. Built here rather than by the service, which may not hold a view;
+        # `ProjectProcessingController` drives it.
+        self.project_view = ProjectView(self.dlg)
         
         self.provider_service = ProviderService.get_instance(providers=ProvidersList([]),
                                                             dlg=self.dlg,
@@ -379,7 +382,9 @@ class Mapflow(QObject):
             data_catalog_service=self.data_catalog_service,
             result_loader=self.result_loader,
             processing_view=self.processing_service.view,
-            ensure_output_directory=self.ensure_output_directory)
+            ensure_output_directory=self.ensure_output_directory,
+            project_view=self.project_view,
+            config=self.config)
 
         self.setup_add_layer_menu()
         # Add options menu functionality
@@ -1059,7 +1064,7 @@ class Mapflow(QObject):
         # Get all projects & setup processings table (see callback)
         if self.is_admin:
             self.app_context.project_id = Config.PROJECT_ID
-            self.project_service.view.setup_workflow_defs(default_project.workflowDefs, 
+            self.project_view.setup_workflow_defs(default_project.workflowDefs, 
                                                           self.config.DEFAULT_MODEL)
             self.processing_service.setup_processings_table()
         else:

@@ -180,6 +180,13 @@ for every model that has options; see the note under C3.2.
     call `.show()`. With no parent — `parent=None`, or `QApplication.activeWindow()` returning None —
     the widget can be collected before it is drawn, so the user sees nothing. Folds naturally into
     the error-reporting item below, which already rewrites both.
+[ ] C3.5a An account with no projects re-requests the list forever
+    `ProjectService.get_projects_callback` treats "no projects and no filter" as a stale page and
+    re-requests without parameters — which returns the same empty result, and asks again. It is
+    guarded only by the assumption that every account has a `Default` project. Asynchronous, so it
+    is an endless request loop rather than stack recursion, which makes it look like a hung plugin
+    talking to the server rather than a crash. Pinned as current behaviour by
+    `test_an_empty_unfiltered_result_asks_again_without_parameters`; that test changes with the fix.
 [ ] C3.5 A template rename is dropped silently if the response shape drifts
     The rename callback wraps its parse in a broad `except Exception`, so a changed payload looks
     exactly like a successful rename that did not happen.

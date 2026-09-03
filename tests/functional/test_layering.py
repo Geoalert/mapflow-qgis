@@ -73,7 +73,6 @@ ALLOWED = {
     ("dialog-param", "mapflow.functional.service.area_calculator_service"),
     ("dialog-param", "mapflow.functional.service.data_catalog"),
     ("dialog-param", "mapflow.functional.service.processing_service"),
-    ("dialog-param", "mapflow.functional.service.project_service"),
     ("dialog-param", "mapflow.functional.service.provider_service"),
     ("dialog-param", "mapflow.functional.api.data_catalog_api"),
     ("dialog-param", "mapflow.functional.api.processing_api"),
@@ -84,10 +83,8 @@ ALLOWED = {
     ("service-imports-dialogs", "mapflow.functional.service.area_calculator_service"),
     ("service-imports-dialogs", "mapflow.functional.service.data_catalog"),
     ("service-imports-dialogs", "mapflow.functional.service.processing_service"),
-    ("service-imports-dialogs", "mapflow.functional.service.project_service"),
     ("service-imports-view", "mapflow.functional.service.data_catalog"),
     ("service-imports-view", "mapflow.functional.service.processing_service"),
-    ("service-imports-view", "mapflow.functional.service.project_service"),
     ("view-imports-service", "mapflow.functional.view.processing_view"),
 }
 
