@@ -5,7 +5,7 @@ from uuid import UUID
 from typing import Dict, Optional, List, Tuple
 from PyQt5.QtCore import QObject, QTimer, pyqtSignal
 from PyQt5.QtNetwork import QNetworkReply
-from PyQt5.QtWidgets import QMessageBox, QApplication, QInputDialog
+from PyQt5.QtWidgets import QMessageBox, QApplication
 from .provider_service import (get_provider_params, 
                                setup_provider_info, 
                                validate_provider_params, 
@@ -14,14 +14,12 @@ from .provider_service import (get_provider_params,
                                
 from .. import helpers
 from ...dialogs.main_dialog import MainDialog
-from ...dialogs.confirm_processing_start_dialog import ConfirmProcessingStartDialog
 from ...errors import (BadProcessingInput,
                        ErrorMessage,
                        PluginError,
                        ImageIdRequired,
                        AoiNotIntersectsImage)
 from ...http import Http, api_message_parser
-from ..view.processing_view import ProcessingView
 from ..api.processing_api import ProcessingApi
 from ...schema import ProcessingDTO, UpdateProcessingSchema, ProcessingStatus, BillingType, PostProcessingSchemaV2
 from ...model.processing_history import ProcessingHistory
@@ -96,6 +94,35 @@ class ProcessingService(QObject):
     #: The ids whose rows the server confirmed gone.
     processingsDeleted = pyqtSignal(object)
 
+    # ---------- what the start panel must show ----------
+
+    #: (reason, clear the AOI area too) — a start is blocked and this is why.
+    startDisabled = pyqtSignal(str, bool)
+    #: Every check passed: enable Start and drop whatever reason was showing.
+    startUnblocked = pyqtSignal()
+    #: A submission is in flight (True) or has come back (False). Only the button moves — the
+    #: reason label is left alone, because nothing has been decided about it.
+    submissionInFlight = pyqtSignal(bool)
+    #: The server quoted this many credits.
+    costQuoted = pyqtSignal(int)
+    #: The run started under this name; clear the box only if it still reads it, since the user
+    #: may already have typed the next one.
+    processingNameCleared = pyqtSignal(str)
+    #: Prefill the name box (duplicating an existing processing).
+    processingNameSet = pyqtSignal(str)
+    #: Everything checks out but the user asked to confirm each start. Carries the validated
+    #: params; the dialog is the controller's to raise.
+    confirmationRequested = pyqtSignal(object)
+
+    #: "Tell me what the start panel says." Emitted immediately before this service reads its own
+    #: copy of it. Qt direct connections are synchronous, so `ProcessingController` has answered
+    #: with `set_start_panel` by the time `emit()` returns.
+    #:
+    #: This inversion earns its keep: `update_processing_cost` has six callers, two of them other
+    #: controllers and one another service, so the panel can be neither a parameter nor pushed on
+    #: a widget signal without pinning down the order three separate places wire things in.
+    startPanelNeeded = pyqtSignal()
+
     # Whether the last processings poll saw only final-state processings; combined with
     # template statuses to decide if the project poll can stop (see _apply_poll_timer_state).
     _processings_all_final = True
@@ -119,6 +146,17 @@ class ProcessingService(QObject):
     _sort_order = ProcessingSortOrder.descending.value
     _filter = ""
 
+    #: What the start panel says, refreshed via `startPanelNeeded`. `None` params means the panel
+    #: has never answered — treated as "no parameters", which is what an empty panel means anyway.
+    _start_params = None
+    _enabled_blocks = ()
+    #: Whether the option checkboxes have been built yet. A model that declares blocks is quoted
+    #: only once they exist, so "no widgets" is not the same as "no blocks ticked".
+    _has_option_widgets = False
+    #: Whether the AOI combo has a layer at all. It only picks between two error messages: a
+    #: chosen layer that yielded no AOI is corrupt, no layer is simply not chosen yet.
+    _aoi_layer_chosen = False
+
     def __init__(self,
                  http: Http,
                  dlg: MainDialog,
@@ -132,7 +170,6 @@ class ProcessingService(QObject):
         self.iface = iface
         self.result_loader = result_loader
         self.app_context = app_context
-        self.view = ProcessingView(dlg=dlg)
         self.api = ProcessingApi(http=http,
                                  dlg=dlg,
                                  iface=iface,
@@ -145,7 +182,7 @@ class ProcessingService(QObject):
         self.processings_page_limit = Config.PROCESSINGS_PAGE_LIMIT
         self.processings_page_offset = 0
         self.processings_history = None # ProcessingHistory() - local storage for active processings list
-        self.processing_fetch_timer = QTimer(dlg)
+        self.processing_fetch_timer = QTimer(self)
         self.processing_fetch_timer.setInterval(timer_interval)
         self._default_poll_interval = timer_interval
         self.processing_cost = 0
@@ -179,6 +216,27 @@ class ProcessingService(QObject):
 
     def set_filter(self, terms: str) -> None:
         self._filter = terms or ""
+
+    def set_start_panel(self, params, enabled_blocks=(), has_option_widgets: bool = False,
+                        aoi_layer_chosen: bool = False) -> None:
+        """The start panel's current reading, answering `startPanelNeeded`. `aoi_layer_chosen`
+        rides along because the only code that reads it runs inside the same validation pass that
+        asks for this — so one synchronous push carries the whole panel."""
+        self._start_params = params
+        self._enabled_blocks = tuple(enabled_blocks or ())
+        self._has_option_widgets = bool(has_option_widgets)
+        self._aoi_layer_chosen = bool(aoi_layer_chosen)
+
+    def _read_start_panel(self):
+        """Refresh `_start_params` from whoever owns the panel, then return it."""
+        self.startPanelNeeded.emit()
+        return self._start_params
+
+    @property
+    def _selected_search_indices(self):
+        """`local_index` of every selected search result. Lives on `app_context` next to
+        `search_footprints`, which it is the key into."""
+        return getattr(self.app_context, "selected_search_indices", None) or ()
 
     def load_processing_history(self):
         """
@@ -228,7 +286,7 @@ class ProcessingService(QObject):
                 alert(error)
                 disable_start = False
             if not self.app_context.aoi:
-                if self.dlg.polygonCombo.currentLayer():
+                if self._aoi_layer_chosen:
                     raise BadProcessingInput(self.tr('Processing area layer is corrupted or has invalid projection'))
                 else:
                     raise BadProcessingInput(self.tr('Please, select a valid area of interest'))
@@ -291,19 +349,16 @@ class ProcessingService(QObject):
         # provider the metadata-table selection (possibly stale) is irrelevant — bail early.
         if not isinstance(self.app_context.data_provider, ImagerySearchProvider):
             return None, None
-        selected = self.dlg.metadataTable.selectedItems()
+        selected = self._selected_search_indices
         if not selected:
             return None, None
         footprints = self.app_context.search_footprints or {}
         provider_min_areas = getattr(self.app_context, "provider_min_areas", None) or {}
         # Track the binding (largest) minimum so the reported provider name matches it.
         binding_min, binding_provider = None, None
-        for row in sorted({item.row() for item in selected}):
-            index_item = self.dlg.metadataTable.item(row, Config.LOCAL_INDEX_COLUMN)
-            if not index_item:
-                continue
+        for local_index in dict.fromkeys(selected):  # de-duplicated, order preserved
             try:
-                feature = footprints.get(int(index_item.text()))
+                feature = footprints.get(int(local_index))
             except (TypeError, ValueError):
                 feature = None
             if feature is None:
@@ -325,8 +380,11 @@ class ProcessingService(QObject):
         if planned_selection_error:
             return planned_selection_error
         if not self.app_context.aoi:
-            # Here the button must already be disabled, and the warning text set
-            if self.view.dlg.startProcessing.isEnabled():
+            # The only widget this service still reads. It exists because "the button is currently
+            # enabled" means "an earlier check already set a reason", and re-reporting "Set AOI"
+            # over that reason would hide it. The button is written from DataCatalogView and
+            # ProviderService too, so this cannot become pushed state until they stop (C2.2c).
+            if self.dlg.startProcessing.isEnabled():
                 if not self.app_context.user_role.can_start_processing:
                     error = self.tr('Not enough rights to start processing in a shared project ({})').format(self.app_context.user_role.value)
                 else:
@@ -335,8 +393,7 @@ class ProcessingService(QObject):
             error = self.tr("Error! Models are not initialized.\n"
                             "Please, make sure you have selected a project")
         elif self.app_context.billing_type != BillingType.credits:
-            self.view.dlg.startProcessing.setEnabled(True)
-            self.view.dlg.processingProblemsLabel.clear()
+            self.startUnblocked.emit()
             error = None
         return error
 
@@ -367,8 +424,7 @@ class ProcessingService(QObject):
         """Require an image selection only when a planned (template) start actually applies."""
         if not self.template_to_run():
             return None
-        selected_rows = {item.row() for item in self.dlg.metadataTable.selectedItems()}
-        if selected_rows:
+        if self._selected_search_indices:
             return None
         return self.tr("Select one or more images in search results to start planned processing")
 
@@ -380,15 +436,15 @@ class ProcessingService(QObject):
             # Keep the AOI area on screen even when the processing is blocked (e.g. area too
             # big/small): the size is known and useful. Genuinely-unknown-area cases clear the
             # label upstream (area_calculator), so never clear it on a validation error here.
-            self.dlg.disable_processing_start(error, clear_area=False)
+            self.startDisabled.emit(error, False)
             return
         elif not processing_params: # neither error nor params => return w/o disabling (empty name)
             return
-        
+
         # Check processing limits
         if not self.check_processing_limits():
             return
-        
+
         # Handle confirmation dialog or direct submission
         self.handle_processing_submission(processing_params)
 
@@ -413,50 +469,61 @@ class ProcessingService(QObject):
             return False
         return True
         
+    def confirm_before_start(self) -> bool:
+        """Whether the user asked to confirm every start.
+
+        Read from the setting rather than the checkbox that shows it: `MainDialog` initialises the
+        box from this key and writes it back on every toggle, so the two never disagree, and a
+        setting is not a widget."""
+        return str(self.app_context.settings.value("confirmProcessingStart", "true")).lower() == "true"
+
     def handle_processing_submission(self, processing_params: PostProcessingSchemaV2):
+        """Submit now, or ask for confirmation first.
+
+        The dialog itself is `ProcessingController`'s — a service may not build one — so this
+        announces that confirmation is wanted and stops. `submit_processing` is what the
+        controller calls back into once the user has agreed.
         """
-        Handle the actual processing submission, either directly or after confirmation.
-        """
-        def post_processing():
-            try:
-                self.dlg.startProcessing.setEnabled(False)
-                template = self.template_to_run()
-                if template:
-                    self.iface.messageBar().pushInfo(
-                        self.app_context.plugin_name,
-                        self.tr('Starting planned processing...')
-                    )
-                    self.api.run_template_processing(
-                        template_id=template.id,
-                        data=self._build_run_template_processing_schema(processing_params),
-                        callback=self.start_processing_callback,
-                        error_handler=self.start_processing_error_handler,
-                    )
-                else:
-                    self.iface.messageBar().pushInfo(
-                        self.app_context.plugin_name,
-                        self.tr('Starting the processing...')
-                    )
-                    self.api.create_processing(
-                        processing_params,
-                        self.start_processing_callback,
-                        self.start_processing_error_handler
-                    )
-            except Exception as e:
-                alert(self.tr("Could not launch processing! Error: {}.").format(str(e)))
-        
-        # Show confirmation dialog if enabled
-        if self.dlg.cornfirmProcessingStart.isChecked():
-            self.show_confirmation_dialog(processing_params, post_processing)
+        if self.confirm_before_start():
+            self.confirmationRequested.emit(processing_params)
         else:
-            post_processing()
+            self.submit_processing(processing_params)
+
+    def submit_processing(self, processing_params: PostProcessingSchemaV2):
+        """Send the run. Reached directly, or from the controller after the user confirmed."""
+        try:
+            self.submissionInFlight.emit(True)
+            template = self.template_to_run()
+            if template:
+                self.iface.messageBar().pushInfo(
+                    self.app_context.plugin_name,
+                    self.tr('Starting planned processing...')
+                )
+                self.api.run_template_processing(
+                    template_id=template.id,
+                    data=self._build_run_template_processing_schema(processing_params),
+                    callback=self.start_processing_callback,
+                    error_handler=self.start_processing_error_handler,
+                )
+            else:
+                self.iface.messageBar().pushInfo(
+                    self.app_context.plugin_name,
+                    self.tr('Starting the processing...')
+                )
+                self.api.create_processing(
+                    processing_params,
+                    self.start_processing_callback,
+                    self.start_processing_error_handler
+                )
+        except Exception as e:
+            alert(self.tr("Could not launch processing! Error: {}.").format(str(e)))
 
     def _build_run_template_processing_schema(
         self,
         processing_params: PostProcessingSchemaV2,
     ) -> RunTemplateProcessingSchema:
         wd_id = processing_params.wdId
-        wd_name = None if wd_id else self.dlg.modelCombo.currentText()
+        wd_name = None if wd_id else self.selected_model_name()
         return RunTemplateProcessingSchema(
             name=processing_params.name,
             description=processing_params.description,
@@ -469,52 +536,34 @@ class ProcessingService(QObject):
             updateTemplateGeometry=False,
         )
 
-    def show_confirmation_dialog(self, processing_params: PostProcessingSchemaV2, callback):
-        """
-        Show the processing confirmation dialog with current parameters.
-        """
-        dialog = ConfirmProcessingStartDialog(self.dlg)
-        
-        def set_start_confirmation():
-            if not dialog.checkBox.isChecked() != self.dlg.cornfirmProcessingStart.isChecked():
-                self.dlg.cornfirmProcessingStart.setChecked(not dialog.checkBox.isChecked())
-                self.app_context.settings.setValue(
-                    "confirmProcessingStart", 
-                    str(not dialog.checkBox.isChecked())
-                )
-        
-        dialog.checkBox.toggled.connect(set_start_confirmation)
-        dialog.accepted.connect(callback)
-        
-        # Prepare dialog parameters
-        price = self.tr("{cost} credits").format(cost=self.processing_cost) if self.app_context.billing_type == BillingType.credits else None
-        
-        ui_start_params = self.view.read_processing_start_params()
-        
-        dialog.setup(
-            name=processing_params.name,
-            price=price,
-            provider=setup_provider_info(self.app_context.data_provider),
-            zoom=str(ui_start_params.zoom),
-            area=str(round(self.app_context.aoi_size, 2)) + self.tr(" sq.km"),
-            model=self.dlg.modelCombo.currentText(),
-            blocks=[self.dlg.modelOptionsLayout.itemAt(i).widget()
-                    for i in range(self.dlg.modelOptionsLayout.count())]
-        )
-        dialog.deleteLater()
-        
+    def selected_model_name(self) -> Optional[str]:
+        """The model the start panel shows, refreshed on demand: a template run is built well
+        after the panel was last read."""
+        params = self._read_start_panel()
+        return params.wd_name if params else None
+
+    def confirmation_details(self) -> dict:
+        """What the confirmation dialog has to show, in plain values. The dialog is raised by
+        `ProcessingController`; this is the part of it that is domain, not widgets."""
+        return {
+            "price": self.tr("{cost} credits").format(cost=self.processing_cost)
+                     if self.app_context.billing_type == BillingType.credits else None,
+            "provider": setup_provider_info(self.app_context.data_provider),
+            "area": str(round(self.app_context.aoi_size, 2)) + self.tr(" sq.km"),
+        }
+
     def get_processing_schema(self, ui_start_params, provider):
-        if not provider or not self.app_context.aoi:
+        if not ui_start_params or not provider or not self.app_context.aoi:
             return None
-        
+
         wd = self.app_context.get_workflow_def(ui_start_params.wd_name)
         if not wd:
             return None
-        if len(wd.blocks) > 0 and len(self.dlg.modelOptions) == 0:
+        if len(wd.blocks) > 0 and not self._has_option_widgets:
             # Wait till options are added and this function is  re-called
             blocks = []
         else:
-            blocks = wd.get_enabled_blocks(self.dlg.enabled_blocks())
+            blocks = wd.get_enabled_blocks(list(self._enabled_blocks))
 
         provider_params, processing_meta = get_provider_params(provider=provider,
                                                                zoom=ui_start_params.zoom)
@@ -556,16 +605,16 @@ class ProcessingService(QObject):
             # ask for that rather than a plain refresh. Template run responses also may not be a
             # full ProcessingDTO, so we do not parse one here.
             if isinstance(response_data, dict) and response_data.get("name"):
-                self.view.clear_processing_name(response_data["name"])
+                self.processingNameCleared.emit(response_data["name"])
             self.templateRehydrateRequested.emit()
-            self.dlg.startProcessing.setEnabled(True)
+            self.submissionInFlight.emit(False)
             return
         new_processing = None
         # Template start responses may differ from processing-create responses.
         # Try optimistic local update only when payload looks like a Processing DTO.
         if isinstance(response_data, dict) and response_data.get("id") and response_data.get("name"):
             new_processing = ProcessingDTO.from_dict(response_data)
-            self.view.clear_processing_name(new_processing.name)
+            self.processingNameCleared.emit(new_processing.name)
         if new_processing is not None:
             # Add to history
             self.processings[new_processing.id] = new_processing
@@ -575,7 +624,7 @@ class ProcessingService(QObject):
         # Always refresh full list because template-started processings can affect
         # both processings and template status/counts in table.
         self.refreshRequested.emit()
-        self.dlg.startProcessing.setEnabled(True)
+        self.submissionInFlight.emit(False)
 
     def start_processing_error_handler(self, response: QNetworkReply) -> None:        
         """Error handler for processing creation requests.
@@ -602,7 +651,7 @@ class ProcessingService(QObject):
                                title=self.tr('Processing creation failed'),
                                email_body=email_body).show()
         if False not in self.app_context.allow_enable_processing.values():
-            self.dlg.startProcessing.setEnabled(True)
+            self.submissionInFlight.emit(False)
 
     # =============  REQUEST ================= #
     def setup_processings_table(self):
@@ -976,7 +1025,7 @@ class ProcessingService(QObject):
         if error:
             # Keep the AOI area visible even when blocked (area too big/small, provider minimum,
             # etc.) — we know the size. Unknown-area cases are cleared upstream (area_calculator).
-            self.dlg.disable_processing_start(error, clear_area=False)
+            self.startDisabled.emit(error, False)
             return
 
         # /cost itself is only meaningful when the user is billed in credits.
@@ -995,7 +1044,7 @@ class ProcessingService(QObject):
 
     def calculate_processing_cost_callback(self, response: QNetworkReply):
         self.processing_cost = int(response.readAll().data().decode())
-        self.view.set_processing_cost(self.processing_cost)
+        self.costQuoted.emit(self.processing_cost)
 
     def disable_processing_start(self, response: QNetworkReply):
         """
@@ -1022,7 +1071,7 @@ class ProcessingService(QObject):
                 reason = self.tr('Not enough rights to start processing in a shared project ({})').format(self.app_context.user_role.value)
             else:
                 reason = self.tr('Processing cost is not available:\n{message}').format(message=message)
-            self.view.disable_processing_start(reason, clear_area=False)
+            self.startDisabled.emit(reason, False)
 
     def confirm_delete_processings(self) -> None:
         """Delete one or more processings or templates from the server.
@@ -1176,9 +1225,9 @@ class ProcessingService(QObject):
         processing = self.selected_processing()
         if not processing:
             return
-        self.dlg.disable_processing_start("")
+        self.startDisabled.emit("", False)
         self.app_context.allow_enable_processing['aoi_loaded'] = False
-        self.dlg.processingName.setText(processing.name)
+        self.processingNameSet.emit(processing.name)
         duplicate_provider_and_model(processing)
         self.result_loader.download_aoi_file(pid=processing.id, callback=self.duplicate_aoi_callback)
 
@@ -1200,7 +1249,7 @@ class ProcessingService(QObject):
             return None, context_error
         
         # UI parameters validation
-        ui_start_params = self.view.read_processing_start_params()
+        ui_start_params = self._read_start_panel()
         provider = self.app_context.data_provider
         processing_params = self.get_processing_schema(ui_start_params, provider)
         params_error, disable_start = self.validate_processing_params(processing_params, allow_empty_name)

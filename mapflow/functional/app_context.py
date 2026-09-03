@@ -34,7 +34,6 @@ class AppContext:
     project_id: Optional[str] = None
     current_project: Optional["MapflowProject"] = None
     user_role: Optional["UserRole"] = UserRole.owner
-    selected_processing_ids: List[str] = field(default_factory=list)
 
     # === AOI State ===
     aoi: Optional[QgsGeometry] = None  # full AOI, used for search/metadata requests
@@ -84,6 +83,10 @@ class AppContext:
     metadata_layer: Optional[QgsVectorLayer] = None
     meta_layer_table_connection = None
     search_footprints: Dict[str, Any] = field(default_factory=dict)
+    # `local_index` of every selected search-result row. Pushed from the metadata table (a widget
+    # a service may not read) so `ProcessingService` can gate planned processing and look up a
+    # provider's minimum area — it is the key into `search_footprints` above, so it lives beside it.
+    selected_search_indices: List[str] = field(default_factory=list)
     search_page_offset: int = 0
     # Raw imagery-search results as returned by the API for the current view (regular search
     # or template) — a GeoJSON FeatureCollection with a per-feature ``local_index``. Retained

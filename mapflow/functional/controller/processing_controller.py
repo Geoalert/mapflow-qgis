@@ -36,7 +36,8 @@ class ProcessingController(QObject):
                  provider_service=None,
                  model_combo=None,
                  model_options_changed=None,
-                 metadata_table=None):
+                 metadata_table=None,
+                 start_button=None):
         super().__init__()
         self.iface = iface
         self.aoi_service = aoi_service
@@ -61,6 +62,20 @@ class ProcessingController(QObject):
         if processing_service is not None:
             processing_service.ratingLoaded.connect(self.processing_view.set_rating_labels)
             processing_service.reviewSubmitted.connect(self._on_review_submitted)
+            # The start panel: the service says what it must show, this renders it. The service
+            # holds no view and reads no widget but the one enabled-state it still needs (C2.2c).
+            processing_service.startPanelNeeded.connect(self._provide_start_panel)
+            processing_service.startDisabled.connect(self.processing_view.disable_processing_start)
+            processing_service.startUnblocked.connect(
+                self.processing_view.clear_problem_and_enable_start)
+            processing_service.submissionInFlight.connect(self._on_submission_in_flight)
+            processing_service.costQuoted.connect(self.processing_view.set_processing_cost)
+            processing_service.processingNameCleared.connect(
+                self.processing_view.clear_processing_name)
+            processing_service.processingNameSet.connect(self.processing_view.set_processing_name)
+            processing_service.confirmationRequested.connect(self._confirm_processing_start)
+        if start_button is not None:
+            start_button.clicked.connect(self.start_processing)
         if rating_submit_button is not None:
             rating_submit_button.clicked.connect(self.submit_rating)
         if rating_combo is not None:
@@ -133,7 +148,33 @@ class ProcessingController(QObject):
         if self.app_context.billing_type == BillingType.credits:
             self.processing_service.update_processing_cost()
 
-    # ---------- the start button ----------
+    # ---------- the start panel: what the service asks for, and starting ----------
+
+    def _provide_start_panel(self) -> None:
+        """Answer `startPanelNeeded`: hand the service the panel it is about to read. Synchronous,
+        so the service has it by the time its `emit()` returns."""
+        self.processing_service.set_start_panel(
+            params=self.processing_view.read_processing_start_params(),
+            enabled_blocks=self.processing_view.enabled_blocks(),
+            has_option_widgets=self.processing_view.has_option_widgets(),
+            aoi_layer_chosen=self.processing_view.aoi_layer_chosen())
+
+    def start_processing(self, *args) -> None:
+        """The Start button. The button is the start panel's, so its click is this controller's."""
+        self.processing_service.start_processing()
+
+    def _on_submission_in_flight(self, in_flight: bool) -> None:
+        """Disable Start while a run request is out; re-enable when it returns."""
+        self.processing_view.set_start_enabled(not in_flight)
+
+    def _confirm_processing_start(self, processing_params) -> None:
+        """The user asked to confirm each start: raise the dialog, and submit on OK. The dialog is
+        the view's — a service may not build one — and the values it shows are half domain
+        (from the service) and half panel (read by the view)."""
+        self.processing_view.confirm_processing_start(
+            name=processing_params.name,
+            details=self.processing_service.confirmation_details(),
+            on_accept=lambda: self.processing_service.submit_processing(processing_params))
 
     def update_start_processing_button_state(self, *args) -> None:
         """Render start button text and enforce planned-processing image selection gate."""

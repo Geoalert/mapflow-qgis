@@ -24,9 +24,8 @@ def _as_geojson(geometry: QgsGeometry) -> dict:
 
 def _service(processing_aoi):
     service = ProcessingService.__new__(ProcessingService)
-    service.dlg = MagicMock()
-    service.dlg.modelOptions = []
-    service.dlg.enabled_blocks.return_value = []
+    # The option checkboxes and their ticked state are pushed in, not read off a widget.
+    service.set_start_panel(params=None, enabled_blocks=[], has_option_widgets=False)
     workflow_def = SimpleNamespace(id="wd-1", blocks=[], get_enabled_blocks=lambda enabled: [])
     service.app_context = SimpleNamespace(
         project_id="project-1",

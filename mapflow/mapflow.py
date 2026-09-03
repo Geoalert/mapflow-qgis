@@ -36,6 +36,7 @@ from .functional.service.preview_service import PreviewService
 from .functional.service.search_service import SearchService
 from .functional.view.aoi_view import AoiView
 from .functional.view.search_view import SearchView
+from .functional.view.processing_view import ProcessingView
 from .functional.service import (DataCatalogService,
                                  ProcessingService,
                                  ProjectService,
@@ -230,7 +231,10 @@ class Mapflow(QObject):
                                                     result_loader=self.result_loader,
                                                     app_context=self.app_context,
                                                     timer_interval=self.config.PROCESSING_TABLE_REFRESH_INTERVAL * 1000)
-        
+        # The start panel's view. Built here, not by the service — a service holds no view
+        # (spec/007 § Services) — and handed to the controllers that render through it.
+        self.processing_view = ProcessingView(dlg=self.dlg)
+
         # ========== 8. LOAD PROVIDERS FROM SETTINGS ==========
         # load providers from settings before initializing area calculator service
         errors = []
@@ -321,6 +325,10 @@ class Mapflow(QObject):
         # than reading the table. So the push has to run before any of their handlers, and Qt
         # calls slots in connection order: this connect must stay above them.
         self.dlg.processingsTable.itemSelectionChanged.connect(self.push_processings_selection)
+        # Same reason for the search table: the start-button gate reads the selected images through
+        # the service, which is told them rather than reading the metadata table. Pushed before the
+        # controllers whose handlers read them back.
+        self.dlg.metadataTable.itemSelectionChanged.connect(self.push_search_selection)
         self.processing_controller = ProcessingController(
             iface=self.iface,
             aoi_service=self.aoi_service,
@@ -328,7 +336,7 @@ class Mapflow(QObject):
             add_layer_action=self.add_layer_action,
             remove_layer_action=self.remove_layer_action,
             processing_service=self.processing_service,
-            processing_view=self.processing_service.view,
+            processing_view=self.processing_view,
             app_context=self.app_context,
             review_dialog=self.review_dialog,
             rating_submit_button=self.dlg.ratingSubmitButton,
@@ -339,7 +347,8 @@ class Mapflow(QObject):
             provider_service=self.provider_service,
             model_combo=self.dlg.modelCombo,
             model_options_changed=self.dlg.modelOptionsChanged,
-            metadata_table=self.dlg.metadataTable)
+            metadata_table=self.dlg.metadataTable,
+            start_button=self.dlg.startProcessing)
 
         # Templates (MR-1): create / update-search-params / exclude-from-search.
         self.template_service = TemplateService(app_context=self.app_context,
@@ -369,7 +378,7 @@ class Mapflow(QObject):
             processings_table=self.dlg.processingsTable,
             see_processings_action=self.dlg.see_processings_action,
             see_search_results_action=self.dlg.see_search_results_action,
-            processing_view=self.processing_service.view,
+            processing_view=self.processing_view,
             rename_action=self.dlg.template_rename_action,
             pause_action=self.dlg.template_pause_action,
             resume_action=self.dlg.template_resume_action,
@@ -386,7 +395,7 @@ class Mapflow(QObject):
             aoi_service=self.aoi_service,
             data_catalog_service=self.data_catalog_service,
             result_loader=self.result_loader,
-            processing_view=self.processing_service.view,
+            processing_view=self.processing_view,
             ensure_output_directory=self.ensure_output_directory,
             project_view=self.project_view,
             config=self.config)
@@ -568,6 +577,14 @@ class Mapflow(QObject):
         click a row.
         """
         self.project_processing_controller.push_selection()
+
+    def push_search_selection(self):
+        """Deliver the search table's selected image indices to `app_context`, where they sit
+        beside `search_footprints` — the dict they are the key into. `ProcessingService` reads
+        them from there for the planned-processing gate and the provider-minimum-area check,
+        rather than touching the metadata table.
+        """
+        self.app_context.selected_search_indices = self.search_view.selected_local_indices()
 
     def setup_add_layer_menu(self):
         self.add_layer_menu.addAction(self.draw_aoi)

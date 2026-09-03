@@ -16,6 +16,14 @@ from mapflow.schema.processing import PostProcessingSchemaV2
 from mapflow.schema.template import RunTemplateProcessingSchema
 
 
+def _settings(confirm="true"):
+    """A settings stub whose `confirmProcessingStart` reads back as `confirm`."""
+    settings = MagicMock()
+    settings.value.side_effect = lambda key, default=None: (
+        confirm if key == "confirmProcessingStart" else default)
+    return settings
+
+
 def _processing_payload():
     return PostProcessingSchemaV2(
         name="Run 1",
@@ -31,13 +39,13 @@ def _processing_payload():
 
 def test_handle_processing_submission_uses_template_run_when_template_selected():
     service = ProcessingService.__new__(ProcessingService)
+    QObject.__init__(service)
     service.tr = lambda text: text
-    service.dlg = MagicMock()
-    service.dlg.cornfirmProcessingStart.isChecked.return_value = False
-    service.dlg.modelCombo.currentText.return_value = "Buildings"
     service.iface = MagicMock()
-    service.app_context = SimpleNamespace(plugin_name="Mapflow")
+    service.app_context = SimpleNamespace(plugin_name="Mapflow",
+                                          settings=_settings(confirm="false"))
     service.api = MagicMock()
+    service.set_start_panel(SimpleNamespace(wd_name="Buildings"))
     service.start_processing_callback = MagicMock()
     service.start_processing_error_handler = MagicMock()
     # A template run happens iff template_to_run() resolves (template + imagery-search source + open results).
@@ -57,11 +65,11 @@ def test_handle_processing_submission_uses_template_run_when_template_selected()
 
 def test_handle_processing_submission_uses_regular_processing_when_no_template_selected():
     service = ProcessingService.__new__(ProcessingService)
+    QObject.__init__(service)
     service.tr = lambda text: text
-    service.dlg = MagicMock()
-    service.dlg.cornfirmProcessingStart.isChecked.return_value = False
     service.iface = MagicMock()
-    service.app_context = SimpleNamespace(plugin_name="Mapflow")
+    service.app_context = SimpleNamespace(plugin_name="Mapflow",
+                                          settings=_settings(confirm="false"))
     service.api = MagicMock()
     service.start_processing_callback = MagicMock()
     service.start_processing_error_handler = MagicMock()
@@ -81,18 +89,15 @@ def test_handle_processing_submission_uses_regular_processing_when_no_template_s
 def test_planned_processing_selection_error_requires_selected_metadata_rows():
     service = ProcessingService.__new__(ProcessingService)
     service.tr = lambda text: text
-    service.dlg = MagicMock()
     # Planned image gate applies only when a planned start applies (template_to_run resolves).
     service.template_to_run = MagicMock(return_value=SimpleNamespace(id="template-1"))
 
-    service.dlg.metadataTable.selectedItems.return_value = []
+    service.app_context = SimpleNamespace(selected_search_indices=[])
     assert service.planned_processing_selection_error() == (
         "Select one or more images in search results to start planned processing"
     )
 
-    selected_item = MagicMock()
-    selected_item.row.return_value = 0
-    service.dlg.metadataTable.selectedItems.return_value = [selected_item]
+    service.app_context.selected_search_indices = ["0"]
     assert service.planned_processing_selection_error() is None
 
 
@@ -417,15 +422,14 @@ def test_on_metadata_table_cell_clicked_does_not_mark_seen():
 def test_start_processing_callback_refreshes_processings_for_regular_response():
     service = ProcessingService.__new__(ProcessingService)
     service.tr = lambda text: text
-    service.dlg = MagicMock()
-    service.view = MagicMock()
     service.processing_fetch_timer = MagicMock()
     service.processings = {}
     service.processings_history = MagicMock()
     QObject.__init__(service)  # the refresh request is a signal now
-    asked, added = [], []
+    asked, added, in_flight = [], [], []
     service.refreshRequested.connect(lambda: asked.append(True))
     service.processingAdded.connect(added.append)
+    service.submissionInFlight.connect(in_flight.append)
 
     response = MagicMock()
     response.readAll.return_value.data.return_value = b'{"id": "proc-1", "name": "Run 1"}'
@@ -437,21 +441,20 @@ def test_start_processing_callback_refreshes_processings_for_regular_response():
 
     assert asked == [True]
     assert added == [mock_processing]
-    service.dlg.startProcessing.setEnabled.assert_called_with(True)
+    assert in_flight[-1] is False  # the button is re-enabled once the run has been sent
 
 
 def test_start_processing_callback_refreshes_processings_for_template_response_shape():
     service = ProcessingService.__new__(ProcessingService)
     service.tr = lambda text: text
-    service.dlg = MagicMock()
-    service.view = MagicMock()
     service.processing_fetch_timer = MagicMock()
     service.processings = {}
     service.processings_history = MagicMock()
     QObject.__init__(service)  # the refresh request is a signal now
-    asked, added = [], []
+    asked, added, in_flight = [], [], []
     service.refreshRequested.connect(lambda: asked.append(True))
     service.processingAdded.connect(added.append)
+    service.submissionInFlight.connect(in_flight.append)
 
     response = MagicMock()
     response.readAll.return_value.data.return_value = b'{"template": {"id": "tpl-1"}, "searchResults": []}'
@@ -461,16 +464,18 @@ def test_start_processing_callback_refreshes_processings_for_template_response_s
 
     assert asked == [True]
     assert added == []
-    service.dlg.startProcessing.setEnabled.assert_called_with(True)
+    assert in_flight[-1] is False
 
 
 def test_disable_processing_start_uses_fallback_when_api_message_is_none():
     service = ProcessingService.__new__(ProcessingService)
+    QObject.__init__(service)  # the disable is announced as a signal
     service.tr = lambda text: text
-    service.view = MagicMock()
     service.app_context = SimpleNamespace(
         user_role=SimpleNamespace(can_start_processing=True, value="owner")
     )
+    disabled = []
+    service.startDisabled.connect(lambda *a: disabled.append(a))
 
     response = MagicMock()
     response.readAll.return_value.data.return_value = b"{}"
@@ -479,10 +484,7 @@ def test_disable_processing_start_uses_fallback_when_api_message_is_none():
     with patch.object(processing_service_module, "api_message_parser", return_value=None):
         service.disable_processing_start(response)
 
-    service.view.disable_processing_start.assert_called_once_with(
-        "Processing cost is not available:\nUnknown server error",
-        clear_area=False,
-    )
+    assert disabled == [("Processing cost is not available:\nUnknown server error", False)]
 
 
 def _rename_service(name="Old template"):
