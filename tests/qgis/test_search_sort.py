@@ -47,7 +47,7 @@ def _plugin(sort_by="ACQUISITION_DATE", sort_order="DESC", in_template=False, ro
     plugin.search_view = MagicMock()
     # The "have we searched yet" guard reads the row count through the view, not the dialog.
     plugin.search_view.metadata_row_count.return_value = rows
-    plugin.get_metadata = MagicMock()
+    plugin.search_controller = MagicMock()
     plugin.template_controller = MagicMock()
     return plugin
 
@@ -79,7 +79,7 @@ def test_click_new_sortable_column_sets_field_desc_and_researches():
 
     assert plugin.search_service.sort_by == "CLOUD_COVER"
     assert plugin.search_service.sort_order == "DESC"
-    plugin.get_metadata.assert_called_once()
+    plugin.search_controller.run_search.assert_called_once()
 
 
 def test_click_same_column_toggles_order():
@@ -90,7 +90,7 @@ def test_click_same_column_toggles_order():
     plugin.on_metadata_header_clicked(_column("acquisitionDate"))
     assert plugin.search_service.sort_order == "DESC"
     assert plugin.search_service.sort_by == "ACQUISITION_DATE"
-    assert plugin.get_metadata.call_count == 2
+    assert plugin.search_controller.run_search.call_count == 2
 
 
 def test_non_sortable_column_does_nothing():
@@ -100,7 +100,7 @@ def test_non_sortable_column_does_nothing():
     plugin.on_metadata_header_clicked(_column("preview"))
 
     assert plugin.search_service.sort_by == "ACQUISITION_DATE"  # unchanged
-    plugin.get_metadata.assert_not_called()
+    plugin.search_controller.run_search.assert_not_called()
 
 
 def test_template_mode_reloads_template_search_with_new_sort():
@@ -111,7 +111,7 @@ def test_template_mode_reloads_template_search_with_new_sort():
     # Template results re-fetch (first page) with the updated sort; the regular search is untouched.
     assert plugin.search_service.sort_by == "CLOUD_COVER"
     plugin.template_controller.load_search_page.assert_called_once_with(0)
-    plugin.get_metadata.assert_not_called()
+    plugin.search_controller.run_search.assert_not_called()
 
 
 def test_regular_mode_does_not_reload_template():
@@ -119,7 +119,7 @@ def test_regular_mode_does_not_reload_template():
 
     plugin.on_metadata_header_clicked(_column("cloudCover"))
 
-    plugin.get_metadata.assert_called_once()
+    plugin.search_controller.run_search.assert_called_once()
     plugin.template_controller.load_search_page.assert_not_called()
 
 
@@ -128,7 +128,7 @@ def test_no_results_yet_does_not_search():
 
     plugin.on_metadata_header_clicked(_column("cloudCover"))
 
-    plugin.get_metadata.assert_not_called()
+    plugin.search_controller.run_search.assert_not_called()
 
 
 def test_restore_sort_indicator_maps_token_to_its_column():

@@ -280,9 +280,8 @@ class Mapflow(QObject):
                                             config_search_columns=self.config_search_columns,
                                             result_loader=self.result_loader,
                                             provider_service=self.provider_service)
-        # Search wiring. Results/pager signals stay here for now — the run and pagination
-        # handlers they end at are still mapflow.py slots (see SearchController's docstring).
-        self.search_service.resultsReceived.connect(self._on_search_results)
+        # The pager signals drive the view directly; the results land in SearchController, which
+        # owns the run. Which endpoint a *page* comes from still forks on template mode below.
         self.search_service.pagerChanged.connect(self.search_view.show_pages)
         self.search_service.pagerHidden.connect(self.search_view.hide_pages)
         self.aoi_view = AoiView(dlg=self.dlg, iface=self.iface)
@@ -299,8 +298,10 @@ class Mapflow(QObject):
                                                   widen_warning_button=self.dlg.searchWidenWarning,
                                                   reset_filters_button=self.dlg.resetSearchFilters,
                                                   clear_search_button=self.dlg.clearSearch,
-                                                  aoi_view=self.aoi_view)
+                                                  aoi_view=self.aoi_view,
+                                                  ensure_output_dir=self.check_if_output_directory_is_selected)
         self.search_service.metadataLayerReady.connect(self.search_controller.on_metadata_layer_ready)
+        self.search_service.resultsReceived.connect(self.search_controller.on_search_results)
         # Template-AOI session wiring. It belongs to TemplateController, which the templates
         # step creates; until then mapflow.py holds the connects (the spec allows wiring here,
         # not domain logic).
@@ -705,16 +706,17 @@ class Mapflow(QObject):
         else:
             self.search_controller.clear_results()
 
-        self.dlg.setup_imagery_search(provider=self.app_context.search_provider,
-                                      columns=columns,
-                                      hidden_columns=hidden_columns,
-                                      sort_by=sort_by,
-                                      preview_zoom=current_zoom,
-                                      max_preview_zoom=max_zoom,
-                                      more_button_name=self.config.METADATA_MORE_BUTTON_OBJECT_NAME,
-                                      image_id_placeholder=image_id_placeholder,
-                                      image_id_tooltip=image_id_tooltip,
-                                      fill=geoms)
+        self.search_view.setup_imagery_search(
+            provider=self.app_context.search_provider,
+            columns=columns,
+            hidden_columns=hidden_columns,
+            sort_by=sort_by,
+            preview_zoom=current_zoom,
+            max_preview_zoom=max_zoom,
+            more_button_name=self.config.METADATA_MORE_BUTTON_OBJECT_NAME,
+            image_id_placeholder=image_id_placeholder,
+            image_id_tooltip=image_id_tooltip,
+            fill=geoms)
 
     def select_output_directory(self) -> str:
         """Open a file dialog for the user to select a directory where plugin files will be stored.
@@ -790,11 +792,6 @@ class Mapflow(QObject):
             provider_changed = True
         return provider_changed
 
-    def replace_search_provider_index(self):
-        # The logic moved to SearchView; the regular-search paths still call this until they move
-        # to SearchController.
-        self.search_view.ensure_search_provider(self.provider_service)
-
     def handle_metadata_button_click(self):
         """Which of the three things the Search button does. The fork spans the search and
         template regions, so it stays here: in `SearchController` the two `template_controller`
@@ -806,7 +803,7 @@ class Mapflow(QObject):
         if self.template_service.search_area_exceeds_limit():
             self.template_controller.prompt_plan_search()
             return
-        self.get_metadata()
+        self.search_controller.run_search()
 
     def on_metadata_header_clicked(self, column: int) -> None:
         """Clicking a *sortable* search column header re-runs the search sorted server-side by that
@@ -827,44 +824,7 @@ class Mapflow(QObject):
         if self.template_service.in_template_mode:
             self.template_controller.load_search_page(0)
         else:
-            self.get_metadata()
-
-    def get_metadata(self, _: Optional[bool] = False, offset: Optional[int] = 0) -> None:
-        """Metadata is image footprints with attributes like acquisition date or cloud cover."""
-        # Drop the previous Preview-cell connection so a refill does not stack it (multiple
-        # searches would otherwise fire the preview several times per click).
-        self.search_view.disconnect_cell_preview()
-        # If current provider does not support search, we should select ImagerySearchProvider to be able to search
-        self.replace_search_provider_index()
-        # A regular search replaces any template results, so a "Start" is no longer planned.
-        self.app_context.open_template_results_id = None
-
-        self.search_view.clear_table()
-        self.search_view.remove_more_button()
-        provider = self.provider_service.providers[self.search_view.provider_index()]
-        # Check if the AOI is defined
-        if self.app_context.aoi:
-            aoi = self.app_context.aoi
-        else:
-            self.alert(self.tr('Please, select a valid area of interest'))
-            return
-
-        if not self.check_if_output_directory_is_selected():
-            return  # only when outputDirectory is empty AND user closed selection dialog
-        # All imagery search goes through the Mapflow catalog API, which filters server-side.
-        # Every filter widget is read once, here, so the request is built from what the widgets
-        # said when Search was pressed rather than from whatever they say by the time it is sent.
-        self.search_service.search(aoi=aoi,
-                                   provider=provider,
-                                   aoi_layer=self.aoi_view.current_layer(),
-                                   baseline_filters=self.search_view.filter_baseline(),
-                                   offset=offset,
-                                   **self.search_view.search_parameters())
-
-    def _on_search_results(self, geoms) -> None:
-        """Built-in Qt sorting stays OFF: results already arrive in the server's sort order, and
-        a header click re-requests rather than sorting locally."""
-        self.search_view.fill_table(geoms, sort=False)
+            self.search_controller.run_search()
 
     def _register_provider_min_areas(self, providers_data):
         """Map provider name -> minimum AOI area (sq km) from /user/status provider data.
@@ -1232,7 +1192,7 @@ class Mapflow(QObject):
         if self.template_service.in_template_mode:
             self.template_controller.load_search_page(offset)
         else:
-            self.get_metadata(offset=offset)
+            self.search_controller.run_search(offset=offset)
     
     def selected_search_product_types(self):
         """Kept as a forwarder: template creation reads the same widgets, and that code moves in

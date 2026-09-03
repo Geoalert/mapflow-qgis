@@ -85,11 +85,11 @@ def test_search_area_at_exactly_the_limit_does_not_exceed():
 
 def _dispatch_plugin(exceeds, mode="search"):
     """`handle_metadata_button_click` stays in mapflow.py — it dispatches to the template
-    controller (plan / too-large) or to the search (get_metadata)."""
+    controller (plan / too-large) or to SearchController.run_search."""
     plugin = Mapflow.__new__(Mapflow)
     plugin.search_view = MagicMock()
     plugin.search_view.search_mode = mode
-    plugin.get_metadata = MagicMock()
+    plugin.search_controller = MagicMock()
     plugin.template_service = MagicMock()
     plugin.template_service.in_template_mode = False
     plugin.template_service.search_area_exceeds_limit.return_value = exceeds
@@ -103,7 +103,7 @@ def test_button_click_offers_plan_search_when_area_too_large():
     plugin.handle_metadata_button_click()
 
     plugin.template_controller.prompt_plan_search.assert_called_once()
-    plugin.get_metadata.assert_not_called()
+    plugin.search_controller.run_search.assert_not_called()
 
 
 def test_button_click_runs_search_when_within_limit():
@@ -111,7 +111,7 @@ def test_button_click_runs_search_when_within_limit():
 
     plugin.handle_metadata_button_click()
 
-    plugin.get_metadata.assert_called_once()
+    plugin.search_controller.run_search.assert_called_once()
     plugin.template_controller.prompt_plan_search.assert_not_called()
 
 
@@ -122,7 +122,7 @@ def test_button_click_in_plan_mode_creates_template_directly():
 
     plugin.template_controller.create_search_template.assert_called_once()
     plugin.template_controller.prompt_plan_search.assert_not_called()
-    plugin.get_metadata.assert_not_called()
+    plugin.search_controller.run_search.assert_not_called()
 
 
 def test_planned_search_default_name_has_prefix():
