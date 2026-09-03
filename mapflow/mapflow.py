@@ -37,6 +37,7 @@ from .functional.service.search_service import SearchService
 from .functional.view.aoi_view import AoiView
 from .functional.view.search_view import SearchView
 from .functional.view.processing_view import ProcessingView
+from .functional.view.data_catalog_view import DataCatalogView
 from .functional.service import (DataCatalogService,
                                  ProcessingService,
                                  ProjectService,
@@ -207,6 +208,15 @@ class Mapflow(QObject):
                                                     self.result_loader,
                                                     self.app_context.plugin_version,
                                                     app_context=self.app_context)
+        # The My Imagery panel's view. Built here, not by the service (a service holds no view);
+        # DataCatalogController renders through it.
+        self.data_catalog_view = DataCatalogView(dlg=self.dlg, app_context=self.app_context)
+        # The catalog tables' selection is resolved by the service (into mosaics/images) and by
+        # AreaCalculatorService (for the AOI area) — both told the ids, neither reading the table.
+        # The push runs before those handlers, so it is connected here, above them, in the raw
+        # signal's connection order (same rule as the processings/search tables).
+        self.dlg.mosaicTable.itemSelectionChanged.connect(self.push_catalog_mosaic_selection)
+        self.dlg.imageTable.itemSelectionChanged.connect(self.push_catalog_image_selection)
         # DataCatalogController is built after PreviewService (below): its two preview buttons
         # wire to that service, which in turn needs processing_service for the in-template
         # placement rules.
@@ -277,7 +287,9 @@ class Mapflow(QObject):
                                               data_catalog_service=self.data_catalog_service)
         self.data_catalog_controller = DataCatalogController(self.dlg,
                                                              self.data_catalog_service,
-                                                             self.preview_service)
+                                                             self.preview_service,
+                                                             view=self.data_catalog_view,
+                                                             app_context=self.app_context)
         # Before SearchService, which resolves sortable columns through it. Was created further
         # down with the provider-dialog wiring; construction order is load-bearing here.
         self.config_search_columns = ConfigColumns()
@@ -585,6 +597,16 @@ class Mapflow(QObject):
         rather than touching the metadata table.
         """
         self.app_context.selected_search_indices = self.search_view.selected_local_indices()
+
+    def push_catalog_mosaic_selection(self):
+        """Hand the selected mosaic-row ids to `DataCatalogService`, which resolves them into
+        mosaics. A service reads no table."""
+        self.data_catalog_service.set_selected_mosaic_ids(
+            self.data_catalog_view.selected_mosaic_ids())
+
+    def push_catalog_image_selection(self):
+        self.data_catalog_service.set_selected_image_ids(
+            self.data_catalog_view.selected_images_indecies())
 
     def setup_add_layer_menu(self):
         self.add_layer_menu.addAction(self.draw_aoi)

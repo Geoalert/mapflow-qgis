@@ -444,7 +444,7 @@ class ProviderService(QObject):
             image_id = provider.myImagery.imageIds[0]
             self.data_catalog_service.get_image(image_id)
         elif provider.myImagery.mosaicId:
-            self.data_catalog_service.view.select_mosaic_cell(provider.myImagery.mosaicId)
+            self.data_catalog_service.select_mosaic_cell(provider.myImagery.mosaicId)
         my_imagery_tab = self.dlg.tabWidget.findChild(QWidget, "catalogTab") 
         self.dlg.tabWidget.setCurrentWidget(my_imagery_tab)
         self.data_catalog_service.set_catalog_provider(self.providers)

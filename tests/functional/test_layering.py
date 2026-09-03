@@ -64,7 +64,6 @@ DIALOG_PARAMS = {"dlg", "dialog", "maindialog", "main_dialog"}
 ALLOWED = {
     # service/ and api/ importing Qt widgets — Phase C moves this to view/.
     ("widget-import", "mapflow.functional.service.alert_service"),
-    ("widget-import", "mapflow.functional.service.data_catalog"),
     ("widget-import", "mapflow.functional.service.processing_service"),
     ("widget-import", "mapflow.functional.service.provider_service"),
     ("widget-import", "mapflow.functional.api.data_catalog_api"),
@@ -82,7 +81,6 @@ ALLOWED = {
     ("service-imports-dialogs", "mapflow.functional.service.area_calculator_service"),
     ("service-imports-dialogs", "mapflow.functional.service.data_catalog"),
     ("service-imports-dialogs", "mapflow.functional.service.processing_service"),
-    ("service-imports-view", "mapflow.functional.service.data_catalog"),
     ("view-imports-service", "mapflow.functional.view.processing_view"),
 }
 
