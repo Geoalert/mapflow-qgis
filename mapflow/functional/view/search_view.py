@@ -274,6 +274,11 @@ class SearchView(QObject):
     def metadata_row_count(self) -> int:
         return self.dlg.metadataTable.rowCount()
 
+    def setup_imagery_search(self, **kwargs) -> None:
+        """Re-dress the search tab for a different provider: columns, the id field's placeholder
+        and tooltip, the zoom bounds, and any restored results."""
+        self.dlg.setup_imagery_search(**kwargs)
+
     # ---------- selection, for the table <-> footprint-layer sync ----------
 
     def selected_local_indices(self) -> List[str]:

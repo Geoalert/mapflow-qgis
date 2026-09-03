@@ -96,19 +96,19 @@ def test_pager_hidden_when_results_exactly_fill_one_page():
 def test_next_page_in_template_mode_refetches_template_page():
     plugin = _plugin(in_template_mode=True)
     plugin.template_controller = MagicMock()
-    plugin.get_metadata = MagicMock()
+    plugin.search_controller = MagicMock()
     plugin.search_service.page_offset = 0
 
     plugin.show_search_next_page()
 
     plugin.template_controller.load_search_page.assert_called_once_with(5)
-    plugin.get_metadata.assert_not_called()
+    plugin.search_controller.run_search.assert_not_called()
 
 
 def test_prev_page_in_template_mode_refetches_template_page():
     plugin = _plugin(in_template_mode=True)
     plugin.template_controller = MagicMock()
-    plugin.get_metadata = MagicMock()
+    plugin.search_controller = MagicMock()
     plugin.search_service.page_offset = 10
 
     plugin.show_search_previous_page()
@@ -119,12 +119,12 @@ def test_prev_page_in_template_mode_refetches_template_page():
 def test_next_page_outside_template_mode_uses_regular_search():
     plugin = _plugin(in_template_mode=False)
     plugin.template_controller = MagicMock()
-    plugin.get_metadata = MagicMock()
+    plugin.search_controller = MagicMock()
     plugin.search_service.page_offset = 5
 
     plugin.show_search_next_page()
 
-    plugin.get_metadata.assert_called_once_with(offset=10)
+    plugin.search_controller.run_search.assert_called_once_with(offset=10)
     plugin.template_controller.load_search_page.assert_not_called()
 
 

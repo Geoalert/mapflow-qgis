@@ -35,7 +35,8 @@ class SearchController(QObject):
                  reset_filters_button=None,
                  clear_search_button=None,
                  area_calculator_service=None,
-                 aoi_view=None):
+                 aoi_view=None,
+                 ensure_output_dir=None):
         super().__init__()
         self.search_service = search_service
         self.search_view = search_view
@@ -47,6 +48,11 @@ class SearchController(QObject):
         #: the AOI layer the combo currently names.
         self.area_calculator_service = area_calculator_service
         self.aoi_view = aoi_view
+        #: "Is there a usable working directory, asking the user if not." Passed in as a callable
+        #: because the output-directory prompt is still `mapflow.py`'s; it becomes a real
+        #: collaborator when that cluster is extracted. Defaults to yes so tests that do not care
+        #: about the directory need not stub it.
+        self.ensure_output_dir = ensure_output_dir or (lambda: True)
         #: The table->layer connection handle, so the layer->table direction can take it down
         #: while it drives. Set by `connect_table_selection`.
         self._table_selection_connection = None
@@ -71,6 +77,43 @@ class SearchController(QObject):
             reset_filters_button.clicked.connect(self.reset_filters)
         if clear_search_button is not None:
             clear_search_button.clicked.connect(self.clear_results)
+
+    # ---------- running a search ----------
+
+    def run_search(self, _=False, offset: Optional[int] = 0) -> None:
+        """Fetch image footprints for the current AOI and filter widgets.
+
+        Every filter widget is read once, here, so the request is built from what they said when
+        Search was pressed rather than from whatever they say by the time it is sent.
+        """
+        # Drop the previous Preview-cell connection so a refill does not stack it: several
+        # searches would otherwise fire the preview several times per click.
+        self.search_view.disconnect_cell_preview()
+        # A provider that cannot search would send the request nowhere.
+        self.search_view.ensure_search_provider(self.provider_service)
+        # A regular search replaces any template results, so a "Start" is no longer planned.
+        self.app_context.open_template_results_id = None
+
+        self.search_view.clear_table()
+        self.search_view.remove_more_button()
+        if not self.app_context.aoi:
+            alert(self.tr('Please, select a valid area of interest'))
+            return
+        # Results are written to the working directory, so refuse rather than search without one.
+        if not self.ensure_output_dir():
+            return
+        self.search_service.search(
+            aoi=self.app_context.aoi,
+            provider=self.provider_service.providers[self.search_view.provider_index()],
+            aoi_layer=self.aoi_view.current_layer(),
+            baseline_filters=self.search_view.filter_baseline(),
+            offset=offset,
+            **self.search_view.search_parameters())
+
+    def on_search_results(self, geoms) -> None:
+        """Built-in Qt sorting stays OFF: results already arrive in the server's sort order, and
+        a header click re-requests rather than sorting locally."""
+        self.search_view.fill_table(geoms, sort=False)
 
     def preview(self, *args) -> None:
         """Double-click / Preview: show tiles for the selected image."""
