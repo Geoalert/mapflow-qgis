@@ -77,7 +77,8 @@ Do not reach across layers: a dialog must not call `api/` directly, and `api/`/`
 ### Three ways a test here fails invisibly
 
 Each of these produces a **passing or hanging** run rather than a failing one, so nothing tells you
-the test stopped testing. All three were hit repeatedly during the Phase C extractions.
+the test stopped testing. Check for them whenever you move a widget read behind a view, build a
+QObject in a fixture, or add a code path that can alert.
 
 1. **A mocked view answers every question truthily.** After moving a read from `self.dlg.<widget>`
    to a view method, any fixture still setting `dlg.<widget>` becomes inert — and a bare

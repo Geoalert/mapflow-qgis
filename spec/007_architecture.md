@@ -170,27 +170,25 @@ adding a second listener never means editing the first controller.
 ### The composition root
 
 `mapflow.py` is the composition root: it builds the services, views and controllers, wires their
-signals, and sequences startup. Two consequences follow, and both were re-derived several times
-during Phase C before being written down here.
+signals, and sequences startup. Two things follow from that.
 
-**It necessarily names widgets.** Constructing a controller means handing it the widgets it owns,
-and restoring saved settings into widgets at startup is nobody else's job. "No widget access in
-`mapflow.py`" therefore means *no widget access outside construction and wiring* — behaviour that
+**It names widgets, and only there.** Constructing a controller means handing it the widgets it
+owns, and restoring saved settings into widgets at startup is nobody else's job. So "no widget
+access in `mapflow.py`" means *no widget access outside construction and wiring* — behaviour that
 reads or writes a widget belongs in a view.
 
-**It is the legitimate home for a fork between two regions.** When an action must choose which
-region handles it — the Search button choosing between an immediate search and creating a
-template, a results page coming from the catalogue or from an open template, switching the imagery
-source touching search, catalog and processing at once — that choice cannot live in either
-controller without one calling the other. It lives in the composition root.
+**A fork between two regions belongs here.** When an action must choose which region handles it —
+the Search button choosing between an immediate search and creating a template, a results page
+served from the catalogue or from an open template, an imagery-source change touching search,
+catalog and processing at once — that choice cannot sit in either controller without one calling
+the other.
 
-The test is whether the code *decides between* regions or *acts within* one. Deciding is the
-root's; acting is a controller's. A fork left in the root for this reason is not unfinished
-extraction, and moving it into a controller to "tidy up" reintroduces exactly the coupling the
-rule above forbids.
+The test is whether the code **decides between** regions or **acts within** one. Deciding belongs
+to the root; acting belongs to a controller. Moving such a fork into a controller reintroduces
+exactly the coupling the rule above forbids, so it is left where it is on purpose.
 
-This does not license leaving arbitrary logic in the root. A method there must be a fork, a
-construction step, or a startup sequence — anything else has an owner.
+This is not a licence to leave arbitrary logic in the root. A method here must be a fork, a
+construction step, or a startup sequence; anything else has an owner.
 
 ### Dialogs and .ui files
 
