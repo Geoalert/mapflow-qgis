@@ -87,14 +87,49 @@ No new pushed state is needed, because these services only touch widgets in thei
     The most self-contained: every widget is in the projects panel (`currentProjectLabel` ×7,
     `projectsTable` ×6, `filterProjects` ×4, the sort combo and pager). Both the controller and the
     view exist. This is the worked example the rest follow.
-[ ] C2.2 `DataCatalogService` (29) → `DataCatalogController` + `DataCatalogView`
-    Dominated by one widget (`mosaicTable` ×18, `imageTable` ×4), so mostly mechanical once C2.1
-    sets the pattern. `selected_mosaic_cell` / `selected_image_cell` ×4 are the dedup guard — they
-    are widget state the service consults, so they become pushed state or move to the controller.
-[ ] C2.3 `ProcessingService` (26) → `ProcessingController` + `ProcessingView`
-    Mostly its own region, but **four accesses reach other regions**: `metadataTable` ×3
-    (`SearchView`) and `polygonCombo` ×1 (`AoiView`). Those become pushed state, so this one needs
-    a small amount of Group B work; do it after C2.1–C2.2 have settled the easy pattern.
+**Size a step by its `self.view.` calls, not its `self.dlg.` count.** The dialog accesses say how
+much widget work there is; the view calls say how much of the *controller's job* the service is
+doing, and that is what has to be relocated. Measured:
+
+| service | `dlg` | `self.view.` | its controller |
+|---|---|---|---|
+| `ProjectService` | 28 | 8 | — (done) |
+| `DataCatalogService` | 29 | **38** | 57 lines |
+| `ProcessingService` | 26 | 26 | 268 lines |
+| `ProviderService` | 38 | 0 | 121 lines |
+| `AreaCalculatorService` | 17 | 0 | — |
+
+`ProcessingService` (26 dlg, 26 view) splits in two, because its widgets belong to two different
+controllers: the processings table is `ProjectProcessingController`'s region and the start panel is
+`ProcessingController`'s. One MR touching both would be ~600 lines against the most central service
+in the plugin. **The allowlist entries clear only when the second lands** — C2.2a shrinks the
+service without finishing it, which is the price of a reviewable diff.
+
+[ ] C2.2a The processings table → `ProjectProcessingController`
+    `selected_processing_ids` ×4, `update_processing_table` ×2, `show_processings_pages` ×2,
+    `sort_processings` ×2, `enable_processings_pages`, `set_table_loading`,
+    `delete_processings_from_table`, `add_new_processing`, `update_processing_name`,
+    `connect_header_sort`, plus the pager/filter/sort connections the service makes for itself
+    (`processing_service.py:569-572`) and `filterProcessings.text()`.
+[ ] C2.2b The start panel → `ProcessingController`
+    `read_processing_start_params` ×2, `disable_processing_start` ×3, `set_processing_cost`,
+    `clear_processing_name` ×2, `startProcessing` ×4, `cornfirmProcessingStart` ×3, `modelCombo`
+    ×2, `modelOptions`/`modelOptionsLayout`/`enabled_blocks` ×4, `processingName`.
+    Plus the **four cross-region reads**, which need pushed state: `metadataTable` ×3 (the search
+    selection, from `SearchController`) and `polygonCombo` ×1 (the chosen AOI layer, which only
+    picks between two error messages).
+
+Two things found while sizing this, both worth fixing as they are met rather than filed:
+`processing_service` reaches **through** its view to the dialog (`self.view.dlg` ×3), which defeats
+the view and is invisible to the `dialog-param` check because it is not `self.dlg`; and it reads a
+view's private `_header_sort_by`.
+[ ] C2.3 `DataCatalogService` (29 dlg, 38 view) → `DataCatalogController` + `DataCatalogView`
+    **The largest item, not the mechanical one.** With 38 view calls against a 57-line controller,
+    this service *is* the My Imagery controller; turning those into signals would be the wrong
+    shape (nobody wants a service with 38 signals). The work is moving the view orchestration into
+    `DataCatalogController` and leaving the service with its requests and its state — so the
+    controller grows by roughly what the service loses. Consider splitting it: mosaics first,
+    then images.
 
 #### Group B — the service reaches into other regions' widgets
 
