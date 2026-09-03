@@ -374,7 +374,8 @@ class Mapflow(QObject):
             aoi_service=self.aoi_service,
             data_catalog_service=self.data_catalog_service,
             result_loader=self.result_loader,
-            processing_view=self.processing_service.view)
+            processing_view=self.processing_service.view,
+            ensure_output_directory=self.ensure_output_directory)
 
         self.setup_add_layer_menu()
         # Add options menu functionality
@@ -423,7 +424,8 @@ class Mapflow(QObject):
         # Connect buttons
         self.dlg.logoutButton.clicked.connect(self.session_service.logout)
         self.dlg.selectOutputDirectory.clicked.connect(self.select_output_directory)
-        self.dlg.downloadResultsButton.clicked.connect(self.load_results)
+        self.dlg.downloadResultsButton.clicked.connect(
+            self.project_processing_controller.load_results)
         # Calculate AOI size
         self.dlg.polygonCombo.layerChanged.connect(self.area_calculator_service.calculate_aoi_area_polygon_layer)
         self.dlg.mosaicTable.itemSelectionChanged.connect(self.area_calculator_service.calculate_aoi_area_catalog)
@@ -434,7 +436,8 @@ class Mapflow(QObject):
         self.app_context.project.layersAdded.connect(self.setup_layers_context_menu)
         self.app_context.project.layersAdded.connect(self.monitor_polygon_layer_feature_selection)
         # Processings
-        self.dlg.processingsTable.cellDoubleClicked.connect(self.load_results)
+        self.dlg.processingsTable.cellDoubleClicked.connect(
+            self.project_processing_controller.load_results)
         self.dlg.deleteProcessings.clicked.connect(self.processing_service.confirm_delete_processings)
         self.processing_service.connect_processings_pagination()
         # Entering and leaving a template is TemplateController's entirely — it owns the layers,
@@ -554,8 +557,10 @@ class Mapflow(QObject):
         self.dlg.addAoiButton.setMenu(self.add_layer_menu)
 
     def setup_options_menu_connections(self):
-        self.dlg.save_result_action.triggered.connect(self.download_results_file)
-        self.dlg.download_aoi_action.triggered.connect(self.download_aoi_file)
+        self.dlg.save_result_action.triggered.connect(
+            self.project_processing_controller.download_results_file)
+        self.dlg.download_aoi_action.triggered.connect(
+            self.project_processing_controller.download_aoi_file)
         # 'See details' and the menu's own aboutToShow are wired by ProjectProcessingController,
         # which owns what the processings table offers for the current selection.
         self.dlg.processing_update_action.triggered.connect(self.processing_service.update_processing)
@@ -879,65 +884,6 @@ class Mapflow(QObject):
         return
 
     # =================== Results management ==================== #
-    def _open_template(self, template):
-        """Navigate into a template ('one step right').
-
-        The actual hydration (the poll omits ``searchParams``) and state switch happen in
-        the service; the layers, results and view state follow from ``templateOpened``, which
-        `TemplateController` listens to.
-        """
-        self.project_processing_controller.enter_template(template)
-
-    def load_results(self):
-        # Check if it's a template first
-        template = self.processing_service.selected_template()
-        if template:
-            self._open_template(template)
-            return
-
-        # Otherwise, it's a processing
-        processing = self.processing_service.selected_processing()
-        if not processing:
-            return
-        if not processing.status.is_ok:
-            self.alert(self.tr("Only the results of correctly finished processing can be loaded"))
-            return
-
-        if self.dlg.viewAsTiles.isChecked():
-            self.result_loader.load_result_tiles(processing=processing)
-        elif self.dlg.viewAsLocal.isChecked():
-            if not self.ensure_output_directory(
-                    self.tr("A working directory is required to save the processing results "
-                            "on your computer.")):
-                return  # user chose 'Later' — cancel the action that needs the directory
-            self.result_loader.download_results(processing=processing)
-
-    def download_results_file(self) -> None:
-        """
-        Download result and save directly to a geojson file
-        It is the most reliable way to get results, applicable if everything else failed
-        """
-        processing = self.processing_service.selected_processing()
-        if not processing:
-            return
-        if not processing.status.is_ok:
-            self.alert(self.tr("Only the results of correctly finished processing can be loaded"))
-            return
-        self.result_loader.download_results_file(pid=processing.id)
-
-    def download_aoi_file(self) -> None:
-        """
-        Download area of interest and save to a geojson file
-        """
-        processing = self.processing_service.selected_processing()
-        if not processing:
-            return
-        if not self.ensure_output_directory(
-                self.tr("A working directory is required to save the area of interest "
-                        "on your computer.")):
-            return  # user chose 'Later' — cancel the action that needs the directory
-        self.result_loader.download_aoi_file(pid=processing.id, callback=self.result_loader.download_aoi_file_callback)
-
     def alert(self, message: str, icon: QMessageBox.Icon = QMessageBox.Critical, blocking=True) -> None:
         return alert(message, icon, blocking)
 

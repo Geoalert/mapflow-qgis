@@ -373,6 +373,16 @@ class ProcessingView:
     def enable_restart_action(self, enabled: bool) -> None:
         self.dlg.enable_restart_action(enabled)
 
+    # ---------- how results should be loaded ----------
+
+    def results_as_tiles(self) -> bool:
+        """Stream the result from the server as vector tiles, without downloading it."""
+        return self.dlg.viewAsTiles.isChecked()
+
+    def results_as_local_file(self) -> bool:
+        """Download the result to the working directory and add it from disk."""
+        return self.dlg.viewAsLocal.isChecked()
+
     def set_processing_cost(self, cost: int):
         self.dlg.processingProblemsLabel.setPalette(self.dlg.default_palette)
         self.dlg.processingProblemsLabel.setText(self.tr("Processing cost: {cost} credits").format(cost=cost))

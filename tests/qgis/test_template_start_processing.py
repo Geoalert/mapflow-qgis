@@ -151,18 +151,21 @@ def test_a_reason_from_another_check_is_not_cleared():
 
 
 def test_load_results_double_click_template_enters_template_view():
-    """Double-clicking a template navigates 'one step right' via the controller."""
-    plugin = Mapflow.__new__(Mapflow)
-    plugin.processing_service = MagicMock()
-    plugin.template_service = MagicMock()
-    plugin.template_service.in_template_mode = False
+    """Double-clicking a template navigates 'one step right'. A template has no results of its
+    own — only the processings under it — so this is an open, not a load."""
+    from mapflow.functional.controller.project_processing_controller import (
+        ProjectProcessingController)
+    controller = ProjectProcessingController.__new__(ProjectProcessingController)
+    controller.processing_service = MagicMock()
     template = SimpleNamespace(id="template-1")
-    plugin.processing_service.selected_template.return_value = template
-    plugin.project_processing_controller = MagicMock()
+    controller.processing_service.selected_template.return_value = template
+    controller.result_loader = MagicMock()
+    controller.enter_template = MagicMock()
 
-    plugin.load_results()
+    controller.load_results()
 
-    plugin.project_processing_controller.enter_template.assert_called_once_with(template)
+    controller.enter_template.assert_called_once_with(template)
+    controller.result_loader.load_result_tiles.assert_not_called()
 
 
 def test_enter_template_view_hydrated_skips_refetch():

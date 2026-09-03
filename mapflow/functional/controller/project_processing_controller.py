@@ -33,7 +33,8 @@ class ProjectProcessingController(QObject):
                  aoi_service=None,
                  data_catalog_service=None,
                  result_loader=None,
-                 processing_view=None):
+                 processing_view=None,
+                 ensure_output_directory=None):
         super().__init__()
         self.dlg = dlg
         self.processing_service = processing_service
@@ -48,6 +49,10 @@ class ProjectProcessingController(QObject):
         self.data_catalog_service = data_catalog_service
         self.result_loader = result_loader
         self.processing_view = processing_view
+        #: "Is there a usable working directory, prompting with this reason if not." A callable
+        #: because the prompt is still `mapflow.py`'s; it becomes a real collaborator when the
+        #: output-directory cluster is extracted. Defaults to yes so tests need not stub it.
+        self.ensure_output_directory = ensure_output_directory or (lambda reason: True)
 
         self._setup_processing_bindings()
         self._setup_project_bindings()
@@ -345,6 +350,61 @@ class ProjectProcessingController(QObject):
         self.dlg.deleteProcessings.setToolTip(
             "" if can_delete
             else self.tr("Contributors can only delete their own planned processings"))
+
+    # ==== LOADING A PROCESSING'S RESULTS ==== #
+
+    def load_results(self, *args) -> None:
+        """Double-click, or the Download button. A template row means "open it" rather than
+        "load it": a template has no results of its own, only the processings under it."""
+        template = self.processing_service.selected_template()
+        if template:
+            self.enter_template(template)
+            return
+        processing = self.processing_service.selected_processing()
+        if not self._loadable(processing):
+            return
+        if self.processing_view.results_as_tiles():
+            self.result_loader.load_result_tiles(processing=processing)
+        elif self.processing_view.results_as_local_file():
+            # Downloading writes to the working directory, so ask for one before starting.
+            if not self.ensure_output_directory(
+                    self.tr("A working directory is required to save the processing results "
+                            "on your computer.")):
+                return  # the user chose 'Later' — cancel the action that needed it
+            self.result_loader.download_results(processing=processing)
+
+    def download_results_file(self, *args) -> None:
+        """'Save result' — write the GeoJSON straight to disk. The fallback when adding the layer
+        by either other route has failed."""
+        processing = self.processing_service.selected_processing()
+        if not self._loadable(processing):
+            return
+        self.result_loader.download_results_file(pid=processing.id)
+
+    def download_aoi_file(self, *args) -> None:
+        """'Download AOI' — the processing's area of interest, as GeoJSON.
+
+        No status check, unlike the two above: an AOI exists as soon as the processing does, so it
+        is worth having even when the run failed — often *because* it failed.
+        """
+        processing = self.processing_service.selected_processing()
+        if not processing:
+            return
+        if not self.ensure_output_directory(
+                self.tr("A working directory is required to save the area of interest "
+                        "on your computer.")):
+            return
+        self.result_loader.download_aoi_file(
+            pid=processing.id, callback=self.result_loader.download_aoi_file_callback)
+
+    def _loadable(self, processing) -> bool:
+        """Results exist only for a run that finished cleanly."""
+        if not processing:
+            return False
+        if not processing.status.is_ok:
+            alert(self.tr("Only the results of correctly finished processing can be loaded"))
+            return False
+        return True
 
     # ==== THE DETAILS DIALOG ==== #
 
