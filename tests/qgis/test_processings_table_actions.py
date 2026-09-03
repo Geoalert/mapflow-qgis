@@ -128,7 +128,6 @@ def _processing_service(processings):
     # silently never fires, and every assertion below would then pass for the wrong reason.
     QObject.__init__(service)
     service.processings = processings
-    service.view = MagicMock()
     return service
 
 
@@ -146,14 +145,14 @@ def _push(template_service, processing_service):
 
 def test_without_a_template_the_selection_resolves_against_the_projects_processings():
     service = _processing_service({"p-1": "project processing"})
-    service.view.selected_processing_ids.return_value = ["p-1"]
+    service.set_selected_ids(["p-1"])
 
     assert service.selected_processings() == ["project processing"]
 
 
 def test_an_open_template_switches_the_pool_the_selection_resolves_against():
     processing_service = _processing_service({"p-1": "project processing"})
-    processing_service.view.selected_processing_ids.return_value = ["p-2"]
+    processing_service.set_selected_ids(["p-2"])
     template_service = _template_service()
     _push(template_service, processing_service)
 
@@ -173,7 +172,7 @@ def test_leaving_the_template_puts_the_pool_back():
     template_service.in_template_mode = False
     template_service.template_processings = {}
 
-    processing_service.view.selected_processing_ids.return_value = ["p-1"]
+    processing_service.set_selected_ids(["p-1"])
     assert processing_service.selected_processings() == ["project processing"]
 
 
@@ -187,7 +186,7 @@ def test_processings_arriving_after_the_template_was_left_do_not_come_back_as_th
     template_service.in_template_mode = False  # already left
     template_service.template_processings = {"p-2": "late arrival"}
 
-    processing_service.view.selected_processing_ids.return_value = ["p-1"]
+    processing_service.set_selected_ids(["p-1"])
     assert processing_service.selected_processings() == ["project processing"]
 
 

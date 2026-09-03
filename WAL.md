@@ -105,7 +105,7 @@ controllers: the processings table is `ProjectProcessingController`'s region and
 in the plugin. **The allowlist entries clear only when the second lands** — C2.2a shrinks the
 service without finishing it, which is the price of a reviewable diff.
 
-[ ] C2.2a The processings table → `ProjectProcessingController`
+[ready-for-review] C2.2a The processings table → `ProjectProcessingController`
     `selected_processing_ids` ×4, `update_processing_table` ×2, `show_processings_pages` ×2,
     `sort_processings` ×2, `enable_processings_pages`, `set_table_loading`,
     `delete_processings_from_table`, `add_new_processing`, `update_processing_name`,

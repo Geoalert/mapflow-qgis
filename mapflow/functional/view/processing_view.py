@@ -62,6 +62,10 @@ class ProcessingView:
             lambda col: self._on_header_clicked(col, on_sort_changed)
         )
 
+    def clear_header_sort(self) -> None:
+        """Drop the column-click override so `sort_processings` reads the combo again."""
+        self._header_sort_by = None
+
     def _on_header_clicked(self, column: int, on_sort_changed):
         sort_by = self._COLUMN_SORT_MAP.get(column)
         if sort_by is None:
@@ -79,6 +83,10 @@ class ProcessingView:
     def tr(self, message: str) -> str:
         """Translate message using QCoreApplication."""
         return QCoreApplication.translate('ProcessingView', message)
+
+    @property
+    def processings_filter(self) -> str:
+        return self.dlg.filterProcessings.text()
 
     @property
     def processing_name(self):
@@ -443,8 +451,10 @@ class ProcessingView:
                        blocking=False)
 
     def selected_processing_ids(self, limit=None):
-        # add unique selected rows
-        selected_rows = list(set(index.row() for index in self.dlg.processingsTable.selectionModel().selectedIndexes()))
+        # Unique selected rows, in table order: `limit` slices this list, so an unordered set
+        # would make `limit=1` pick an arbitrary row of a multi-selection.
+        selected_rows = sorted({index.row()
+                                for index in self.dlg.processingsTable.selectionModel().selectedIndexes()})
         if not selected_rows:
             return []
         pids = [self.dlg.processingsTable.item(row,

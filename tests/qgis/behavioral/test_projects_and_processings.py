@@ -48,6 +48,29 @@ def test_the_processings_of_the_opened_project_are_listed(logged_in, network):
         "the loading placeholder is still there — the results never rendered")
 
 
+def test_selecting_a_processing_offers_the_actions_that_need_one(logged_in, network):
+    """Rating is disabled until a finished processing is picked, so this is the shortest
+    user-visible proof that the table's selection reaches everything that acts on it.
+
+    It is worth having as a journey rather than only as a unit: the selection travels from the
+    widget through several listeners, and the one this asserts on runs *first*. A change that
+    delivered the selection late would leave this button reflecting the previous click.
+    """
+    open_first_project(logged_in, network)
+    table = logged_in.dlg.processingsTable
+    assert not logged_in.dlg.ratingComboBox.isEnabled(), (
+        "nothing is selected yet, so there is nothing to rate")
+
+    name = fixture("processings_page")["results"][0]["name"]
+    row = next(r for r in range(table.rowCount())
+               for c in range(table.columnCount())
+               if table.item(r, c) and table.item(r, c).text() == name)
+    table.selectRow(row)
+
+    assert logged_in.dlg.ratingComboBox.isEnabled(), (
+        f"selecting '{name}' left the rating controls disabled")
+
+
 def test_opening_a_project_populates_the_model_list(logged_in, network):
     """Models arrive with the project, not with the account — see the startup journey."""
     open_first_project(logged_in, network)

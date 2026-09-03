@@ -86,8 +86,7 @@ class ProjectProcessingController(QObject):
         self.template_service.refreshRequested.connect(self.refresh_table)
         # The in-template view holds no widget and owns no timer, so its rebuilt rows and its
         # slower poll cadence arrive here to be applied.
-        self.template_service.templateRowsChanged.connect(
-            self.processing_service.view.update_processing_table)
+        self.template_service.templateRowsChanged.connect(self.render_rows)
         self.template_service.pollIntervalChanged.connect(self._set_poll_interval)
         # `ProcessingService` turns a table selection into objects, so it needs to know which view
         # the table is showing — but it must not reach into `TemplateService` to find out. The
@@ -96,6 +95,85 @@ class ProjectProcessingController(QObject):
         self.template_service.templateClosed.connect(self._on_template_closed)
         self.template_service.visibleProcessingsChanged.connect(
             self.processing_service.set_visible_processings)
+        self._setup_processings_table_bindings()
+
+    def _setup_processings_table_bindings(self):
+        """The processings table: what the service announces for it, and the pager/sort/filter
+        controls that drive it. `ProcessingService` made these connections for itself and drew
+        the results; it now only says what belongs in the table."""
+        self.processing_service.tableLoading.connect(self.render_loading)
+        self.processing_service.rowsChanged.connect(self.render_rows)
+        self.processing_service.pagerChanged.connect(self._render_processings_pager)
+        self.processing_service.pagerEnabled.connect(
+            self.processing_view.enable_processings_pages)
+        self.processing_service.processingAdded.connect(self._render_new_processing)
+        self.processing_service.processingRenamed.connect(self._render_processing_name)
+        self.processing_service.processingsDeleted.connect(self._render_deleted_processings)
+
+        self.dlg.processingsNextPageButton.clicked.connect(
+            self.processing_service.show_processings_next_page)
+        self.dlg.processingsPreviousPageButton.clicked.connect(
+            self.processing_service.show_processings_previous_page)
+        self.dlg.filterProcessings.textEdited.connect(
+            self.processing_service.get_filtered_processings)
+        self.dlg.sortProcessingsCombo.activated.connect(self.on_combo_sort_changed)
+        # A column-click sort needs no request: the rows are already held.
+        self.processing_view.connect_header_sort(self.rerender_rows)
+
+    # ==== RENDERING WHAT THE PROCESSING SERVICE ANNOUNCES ==== #
+
+    def render_loading(self):
+        self.processing_view.set_table_loading()
+        self.push_selection()
+
+    def render_rows(self, rows):
+        self.processing_view.update_processing_table(rows)
+        self.push_selection()
+
+    def _render_processings_pager(self, enable, page_number, total_pages):
+        if enable:
+            self.processing_view.show_processings_pages(True, page_number, total_pages)
+        else:
+            self.processing_view.show_processings_pages(False)
+
+    def _render_new_processing(self, processing):
+        self.processing_view.add_new_processing(processing)
+        self.push_selection()
+
+    def _render_processing_name(self, processing_id: str, new_name: str):
+        self.processing_view.update_processing_name(processing_id=processing_id,
+                                                    new_name=new_name)
+
+    def _render_deleted_processings(self, processing_ids):
+        self.processing_view.delete_processings_from_table(processing_ids)
+        self.push_selection()
+
+    # ==== WHAT THE TABLE CURRENTLY SAYS, PUSHED TO THE SERVICES THAT NEED IT ==== #
+
+    def push_selection(self):
+        """Hand the selected row ids to `ProcessingService`, which resolves them into processings
+        and templates — and which `TemplateService` reads in turn for the open template's AOIs.
+        Neither service may read the table itself.
+
+        Called from `Mapflow.push_processings_selection` on every selection change, and again
+        after each render here: a programmatic rebuild restores the selection with the table's
+        signals blocked, so nothing else would re-sync it.
+        """
+        self.processing_service.set_selected_ids(
+            self.processing_view.selected_processing_ids())
+
+    def _push_table_query(self):
+        """The sort and filter the table is showing. Pushed before every fetch and re-render
+        rather than read by the service, which needs them again in a callback that runs long
+        after the widgets were read."""
+        sort_by, sort_order = self.processing_view.sort_processings()
+        self.processing_service.set_sort(sort_by, sort_order)
+        self.processing_service.set_filter(self.processing_view.processings_filter)
+
+    def on_combo_sort_changed(self, *args):
+        """Picking from the sort combo drops any column-click override, then re-fetches."""
+        self.processing_view.clear_header_sort()
+        self.refresh_table()
 
     def _on_template_closed(self, _closed=None):
         """`templateClosed` carries the template that was closed, so it cannot be connected to
@@ -111,6 +189,7 @@ class ProjectProcessingController(QObject):
 
     def refresh_table(self):
         """Re-fetch whatever the table is showing."""
+        self._push_table_query()
         if self.template_service.in_template_mode:
             self.template_service.refresh_template_view()
         else:
@@ -118,11 +197,12 @@ class ProjectProcessingController(QObject):
 
     def rerender_rows(self):
         """Re-render the rows already held, for a sort that needs no request."""
+        self._push_table_query()
         if self.template_service.in_template_mode:
             rows = self.template_service.combined_template_rows()
         else:
             rows = self.processing_service.combined_processing_rows()
-        self.processing_service.view.update_processing_table(rows)
+        self.render_rows(rows)
 
     def rehydrate_template(self):
         """A processing was started inside a template: re-hydrate so it binds to its AOI."""
@@ -267,7 +347,7 @@ class ProjectProcessingController(QObject):
     def exit_template(self):
         """Return from the in-template view to the project's processings list."""
         self.template_service.exit_template_view()
-        self.processing_service.setup_processings_table()
+        self.open_processings_table()
         self._set_processings_tab_text(self.tr("Processing"))
         self._update_nav_buttons()
 
@@ -328,6 +408,11 @@ class ProjectProcessingController(QObject):
         self.project_view.switch_to_processings()
 
         # Setup processings table for the project
+        self.open_processings_table()
+
+    def open_processings_table(self):
+        """Put the project's own processings back in the table, from the first page."""
+        self._push_table_query()
         self.processing_service.setup_processings_table()
 
     # ==== WHAT THE TABLE OFFERS FOR THE CURRENT SELECTION ==== #
