@@ -66,7 +66,6 @@ ALLOWED = {
     ("widget-import", "mapflow.functional.service.alert_service"),
     ("widget-import", "mapflow.functional.service.data_catalog"),
     ("widget-import", "mapflow.functional.service.processing_service"),
-    ("widget-import", "mapflow.functional.service.project_service"),
     ("widget-import", "mapflow.functional.service.provider_service"),
     ("widget-import", "mapflow.functional.api.data_catalog_api"),
     # Services and two api modules taking the main dialog as a constructor argument.
