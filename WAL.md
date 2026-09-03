@@ -55,29 +55,76 @@ so it is **Phase C2** below rather than a footnote here.
 
 Empties the layering allowlist, which is Phase C's unmet acceptance criterion.
 
-`ProcessingService`, `ProviderService`, `ProjectService`, `DataCatalogService`,
-`AreaCalculatorService`, `ProcessingApi` and `DataCatalogApi` each take the main dialog as a
-constructor argument and reach through it — **138 `self.dlg` accesses**, measured. Each service
-needs its widget access moved to the matching view, its constructor changed, and every test that
-builds it updated. That is one MR per service; there is no shortcut that does several at once,
-because each constructor change ripples into a different set of tests.
+Five services and two api modules take the main dialog as a constructor argument and reach through
+it — **138 `self.dlg` accesses**, measured.
+
+**A service may not hold a view.** `MAY_IMPORT["service"]` is `{api, service, model, schema,
+errors}`, so "move the widget access into the matching view" is not the fix: the service could not
+call that view. Widget access leaves a service in exactly two directions —
+
+* **writes leave as signals**, which a controller connects to a view method;
+* **reads move up to a controller**, which passes plain values down; state the service needs
+  continuously is **pushed** to it (the shape `ProcessingService.set_open_template` already uses),
+  never pulled.
+
+Every step therefore has a controller part, named below. Where a controller does not exist for the
+region, that is called out — none of these need a new one.
 
 **Before Phase D**, deliberately: Phase D moves `functional/` wholesale, and five of the files it
 moves are the ones this rewrites. Doing D first means moving a file and then rewriting it.
 
-[ ] C2.1 `AreaCalculatorService` (17 accesses) — smallest, so the first MR is a complete worked
-    example: which reads become view methods, how the constructor changes, what happens to its tests.
-[ ] C2.2 `ProcessingService` (26)
-[ ] C2.3 `ProjectService` (28)
-[ ] C2.4 `DataCatalogService` (29)
-[ ] C2.5 `ProviderService` (38)
-[ ] C2.6 `ProcessingApi` and `DataCatalogApi` — last, and different in kind: they hold the dialog
-    only to hand it to the result loader, so the fix is a constructor change rather than a view.
+#### Group A — the service builds its own view (do these first)
 
-Each MR deletes its own entries from `tests/functional/test_layering.py`'s `ALLOWED`.
-`test_the_allowlist_has_no_stale_entries` fails if an exemption outlives its violation, so the list
-cannot silently drift — but note it only shrinks when someone removes the entry, so removing it is
-part of the MR, not a follow-up.
+`ProjectService`, `DataCatalogService` and `ProcessingService` each construct a view in their
+`__init__` (`self.view = ProjectView(self.dlg)`) and drive it directly. They hold **two** allowlist
+entries each — `dialog-param` and `service-imports-view` — and one change clears both.
+
+Recipe: the composition root builds the view and hands it to the controller; the service's
+`self.view.x` calls become signals; the controller connects them; `dlg` leaves the constructor.
+No new pushed state is needed, because these services only touch widgets in their own region.
+
+[ ] C2.1 `ProjectService` (28) → `ProjectController` + `ProjectView`
+    The most self-contained: every widget is in the projects panel (`currentProjectLabel` ×7,
+    `projectsTable` ×6, `filterProjects` ×4, the sort combo and pager). Both the controller and the
+    view exist. This is the worked example the rest follow.
+[ ] C2.2 `DataCatalogService` (29) → `DataCatalogController` + `DataCatalogView`
+    Dominated by one widget (`mosaicTable` ×18, `imageTable` ×4), so mostly mechanical once C2.1
+    sets the pattern. `selected_mosaic_cell` / `selected_image_cell` ×4 are the dedup guard — they
+    are widget state the service consults, so they become pushed state or move to the controller.
+[ ] C2.3 `ProcessingService` (26) → `ProcessingController` + `ProcessingView`
+    Mostly its own region, but **four accesses reach other regions**: `metadataTable` ×3
+    (`SearchView`) and `polygonCombo` ×1 (`AoiView`). Those become pushed state, so this one needs
+    a small amount of Group B work; do it after C2.1–C2.2 have settled the easy pattern.
+
+#### Group B — the service reaches into other regions' widgets
+
+No view of its own, and the widgets belong to two or three other regions. These need pushed state,
+which is why they are last.
+
+[ ] C2.4 `ProviderService` (38) → `ProviderController`, with reads pushed from `SearchController`
+    Spans three views: `metadataTable` ×11 (`SearchView`), `sourceCombo`/`zoomCombo`/`providerCombo`
+    ×8 (`ProviderView`), `modelCombo`/`modelOptions` ×5 (`ProcessingView`), plus `tabWidget` ×4 and
+    `startProcessing` ×2. The largest of the six and the one most likely to want splitting into two
+    MRs — decide once C2.3 has shown how much pushed state costs.
+[ ] C2.5 `AreaCalculatorService` (17, plus the `use_imagery_extent` checkbox it is handed directly)
+    → `ProcessingController` (`spec/007_architecture.md` assigns it "AOI and provider selection,
+    cost")
+    Fewest accesses but not the easiest: nine are writes that become signals
+    (`disable_processing_start` ×3, `labelAoiArea`, the checkbox ×5), three are `providerIndex()`
+    which `app_context.data_provider` already answers, and the remaining ten are pulled widget
+    state — the AOI polygon layer ×4, the search-image selection ×2, the catalog dedup guard ×4 —
+    each needing its own push. It is also called *by another service* (`ProjectService`), so
+    "let the caller read the widget" does not work here.
+
+#### Then the api modules
+
+[ ] C2.6 `ProcessingApi` and `DataCatalogApi` — different in kind: they hold the dialog only to
+    pass it to the result loader, so this is a constructor change, not a view extraction. Last
+    because the result loader's own home is decided in Phase D.
+
+Each MR deletes its own entries from `tests/functional/test_layering.py`'s `ALLOWED` — removing
+them is part of the MR, not a follow-up. `test_the_allowlist_has_no_stale_entries` then fails if an
+exemption outlives its violation, so the list cannot silently drift.
 
 Acceptance: `ALLOWED` is empty, and `MAY_IMPORT` holds with no exemptions.
 
