@@ -5,7 +5,7 @@ from ..app_context import AppContext
 from ..service.alert_service import alert
 from ..service.processing_service import ProcessingService
 from ..service.project_service import ProjectService
-from ...config import config
+from ...config import config, Config
 from ...dialogs import CreateProjectDialog, UpdateProjectDialog, MainDialog, UpdateProcessingDialog
 from ...dialogs.processing_details_dialog import ProcessingDetailsDialog
 from ...schema import ImagerySearchParams, MyImageryParams, UserDefinedParams
@@ -34,7 +34,9 @@ class ProjectProcessingController(QObject):
                  data_catalog_service=None,
                  result_loader=None,
                  processing_view=None,
-                 ensure_output_directory=None):
+                 ensure_output_directory=None,
+                 project_view=None,
+                 config=None):
         super().__init__()
         self.dlg = dlg
         self.processing_service = processing_service
@@ -53,6 +55,10 @@ class ProjectProcessingController(QObject):
         #: because the prompt is still `mapflow.py`'s; it becomes a real collaborator when the
         #: output-directory cluster is extracted. Defaults to yes so tests need not stub it.
         self.ensure_output_directory = ensure_output_directory or (lambda reason: True)
+        #: The projects panel. `ProjectService` no longer builds it — a service may not hold a
+        #: view — so it arrives here and this controller drives it.
+        self.project_view = project_view
+        self.config = config or Config
 
         self._setup_processing_bindings()
         self._setup_project_bindings()
@@ -129,14 +135,87 @@ class ProjectProcessingController(QObject):
         self.processing_service.processing_fetch_timer.start()
     
     def _setup_project_bindings(self):
-        """Project-specific UI connections."""
-        # Project service already sets up its own pagination/filter bindings in __init__
-        # Projects
+        """Project-specific UI connections, including the ones `ProjectService` used to make for
+        itself — it holds no widget now, so every read below happens here and is passed in."""
         self.dlg.createProject.clicked.connect(self.create_project)
         self.dlg.deleteProject.clicked.connect(self.delete_project)
         self.dlg.updateProject.clicked.connect(self.update_project)
-        self.project_service.projectsUpdated.connect(self.project_service.update_projects)
+        self.dlg.projectsNextPageButton.clicked.connect(self.show_projects_next_page)
+        self.dlg.projectsPreviousPageButton.clicked.connect(self.show_projects_previous_page)
+        self.dlg.filterProjects.textEdited.connect(self.on_projects_filter_edited)
+        self.dlg.sortProjectsCombo.activated.connect(self.refresh_projects)
+
+        self.project_service.projectsUpdated.connect(self.on_projects_updated)
         self.project_service.projectsFiltered.connect(self.connect_projects)
+        # What the panel must show. The service decides *what*; the view knows *how* — the project
+        # name is elided against the live label width, which only the widget can measure.
+        self.project_service.projectsLoaded.connect(self._render_projects_table)
+        self.project_service.pagerChanged.connect(self._render_pager)
+        self.project_service.currentProjectChanged.connect(self._render_current_project)
+        self.project_service.windowTitleChanged.connect(self.project_view.set_window_title)
+        self.project_service.projectChangeRightsChanged.connect(
+            self.project_view.enable_project_change)
+        self.project_service.sharedRoleApplied.connect(self.project_view.enable_shared_project)
+        self.project_service.selectionLocked.connect(self._lock_projects_selection)
+
+    # ==== RENDERING WHAT THE PROJECT SERVICE ANNOUNCES ==== #
+
+    def _render_projects_table(self, projects):
+        self.project_view.freeze_projects_sorting()
+        self.project_view.setup_projects_table(projects)
+
+    def _render_pager(self, enable, page_number, total_pages):
+        if enable:
+            self.project_view.show_projects_pages(True, page_number, total_pages)
+        else:
+            self.project_view.show_projects_pages(False)
+
+    def _render_current_project(self, project):
+        """Name the open project, and gate the 'go to processings' arrow on there being one."""
+        self.project_view.enable_switch_to_processings(project is not None)
+        if project is not None:
+            self.project_view.show_current_project(project.name)
+        if project is not None and project.workflowDefs:
+            self.project_view.setup_workflow_defs(project.workflowDefs, self.config.DEFAULT_MODEL)
+
+    def _lock_projects_selection(self, locked: bool):
+        if locked:
+            self.project_view.lock_projects_selection()
+        else:
+            self.project_view.unlock_projects_selection()
+            self.project_view.select_project(self.app_context.project_id)
+
+    # ==== DRIVING THE PROJECT SERVICE FROM THE PANEL ==== #
+
+    def refresh_projects(self, *args):
+        """Re-request the current page with whatever the sort and filter widgets now say."""
+        sort_by, sort_order = self.project_view.sort_projects()
+        self.project_service.get_projects(sort_by, sort_order, self.project_view.projects_filter)
+
+    def show_projects_next_page(self, *args):
+        self.project_service.to_next_page()
+        self.refresh_projects()
+
+    def show_projects_previous_page(self, *args):
+        self.project_service.to_previous_page()
+        self.refresh_projects()
+
+    def on_projects_filter_edited(self, *args):
+        """Typing in the filter resets to the first page — the page the user was on described a
+        different result set."""
+        self.project_service.to_first_page()
+        self.refresh_projects()
+
+    def on_projects_updated(self, *args):
+        if not self.project_service.projects:
+            self.project_view.clear_projects_table()
+        self.project_service.update_projects(self.project_view.projects_filter)
+        if self.app_context.project_id:
+            self.project_view.select_project(self.app_context.project_id)
+
+    def on_project_change(self, *args):
+        """The table's selection changed. Which project that is, is a widget read."""
+        self.project_service.on_project_change(self.project_view.selected_project_id())
 
     def _setup_navigation(self):
         """Navigation between projects, processings and in-template views."""
@@ -235,18 +314,18 @@ class ProjectProcessingController(QObject):
 
         # Save current projects page state before switching
         if save_page:
-            sort_by, sort_order = self.project_service.view.sort_projects()
+            sort_by, sort_order = self.project_view.sort_projects()
             projects_page = {
                 'offset': self.project_service.projects_page_offset,
                 'sort_by': sort_by,
                 'sort_order': sort_order,
-                'filter': self.project_service.view.projects_filter
+                'filter': self.project_view.projects_filter
             }
             self.app_context.settings.setValue('projectsPage', projects_page)
         # Load processing history
         self.processing_service.load_processing_history()
         # Switch view
-        self.project_service.view.switch_to_processings()
+        self.project_view.switch_to_processings()
 
         # Setup processings table for the project
         self.processing_service.setup_processings_table()
@@ -470,7 +549,7 @@ class ProjectProcessingController(QObject):
         self.project_service.get_projects(open_saved_page)
 
         # Switch view
-        self.project_service.view.switch_to_projects()
+        self.project_view.switch_to_projects()
 
         # Remove old cost
         self.processing_service.update_processing_cost()
@@ -506,4 +585,5 @@ class ProjectProcessingController(QObject):
         if self.project_connection is not None:
             self.dlg.projectsTable.itemSelectionChanged.disconnect(self.project_connection)
             self.project_connection = None
-        self.project_connection = self.dlg.projectsTable.itemSelectionChanged.connect(self.project_service.on_project_change)
+        self.project_connection = self.dlg.projectsTable.itemSelectionChanged.connect(
+            self.on_project_change)
