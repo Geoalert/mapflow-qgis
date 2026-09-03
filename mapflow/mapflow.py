@@ -1,9 +1,7 @@
 import json
 import logging
 import os.path
-import shutil
 from configparser import ConfigParser  # parse metadata.txt -> QGIS version check (compatibility)
-from pathlib import Path
 from typing import List, Optional, Callable
 
 from PyQt5.QtCore import (
@@ -12,8 +10,7 @@ from PyQt5.QtCore import (
 )
 from PyQt5.QtNetwork import QNetworkReply
 from PyQt5.QtWidgets import (
-    QAction, QApplication, QFileDialog,
-    QMenu, QMessageBox
+    QAction, QApplication, QMenu, QMessageBox
 )
 from qgis.core import (
     QgsDistanceArea, QgsMapLayer, QgsMapLayerType, QgsProject
@@ -44,6 +41,8 @@ from .functional.service import (DataCatalogService,
                                  ProviderService)
 from .functional.service.account_service import AccountService
 from .functional.service.session_service import SessionService
+from .functional.service.workdir_service import WorkdirService
+from .functional.view.workdir_view import WorkdirView
 from .functional.service.alert_service import AlertService, alert
 from .functional.service.area_calculator_service import AreaCalculatorService
 # HTTP
@@ -175,15 +174,20 @@ class Mapflow(QObject):
         # AlertService must exist before setup_tempdir: an unavailable working directory below (and
         # select_output_directory on a bad pick) shows a modal, and both run before section 6.
         AlertService(self.plugin_name)
-        tempdir_error = self.setup_tempdir()
+        self.workdir_service = WorkdirService(app_context=self.app_context)
+        self.workdir_view = WorkdirView(dlg=self.dlg,
+                                        main_window=self.main_window,
+                                        plugin_name=self.plugin_name)
+        tempdir_error = self.workdir_service.setup_tempdir()
         if tempdir_error:
             # Working directory is configured but unavailable (e.g. an unmounted external drive).
             # It's only needed to save results locally, so let the user fix it now or postpone —
             # a modal with an action beats a transient status-bar line for a blocking problem.
-            self.prompt_output_directory(
-                self.tr("The working directory '{dir}' is unavailable:<br>{error}<br><br>"
-                        "It is needed to save processing results on your computer.").format(
-                            dir=self.app_context.settings.value('outputDir'), error=tempdir_error))
+            if self.workdir_view.offer_to_choose(
+                    self.tr("The working directory '{dir}' is unavailable:<br>{error}<br><br>"
+                            "It is needed to save processing results on your computer.").format(
+                                dir=self.workdir_service.configured_path, error=tempdir_error)):
+                self.select_output_directory()
 
         # ========== 6. INITIALIZE INDEPENDENT SERVICES ==========
         self.result_loader = layer_utils.ResultsLoader(iface=self.iface,
@@ -723,63 +727,52 @@ class Mapflow(QObject):
             image_id_tooltip=image_id_tooltip,
             fill=geoms)
 
-    def select_output_directory(self) -> str:
-        """Open a file dialog for the user to select a directory where plugin files will be stored.
+    # ========= The working directory ============ #
+    #
+    # These four stay in the composition root rather than becoming a controller of their own:
+    # SearchController and ProjectProcessingController both need "is there a directory, ask if
+    # not", and a controller may not call another (`spec/007_architecture.md` § Controllers). They
+    # are handed `ensure_output_directory` as a callable instead. Nothing here touches a widget —
+    # the dialogs are WorkdirView's and the filesystem is WorkdirService's.
 
-        Returns the selected path, or None if user closed the dialog.
-        """
-        path = QFileDialog.getExistingDirectory(
-            QApplication.activeWindow(),
-            self.tr('Select output directory')
-        )
-        if path:
-            self.dlg.outputDirectory.setText(path)
-            self.app_context.settings.setValue('outputDir', path)
-            error = self.setup_tempdir()
-            if error:
-                # The chosen directory exists but is not usable (e.g. no write permission, or it
-                # lives on an unmounted volume). Tell the user exactly why and let them pick another.
-                self.alert(self.tr("Cannot use '{dir}' as the working directory:\n{error}\n\n"
-                                   "Please choose another directory.").format(dir=path, error=error),
-                           QMessageBox.Warning)
-            return path
+    def select_output_directory(self) -> str:
+        """Ask for a directory and adopt it. Returns the chosen path, or None if cancelled."""
+        path = self.workdir_view.ask_for_directory()
+        if not path:
+            return None
+        self.workdir_view.show_path(path)
+        self.workdir_service.remember(path)
+        error = self.workdir_service.setup_tempdir()
+        if error:
+            # The chosen directory exists but cannot be written to — no permission, or it lives on
+            # an unmounted volume. Name the reason so the user can pick a better one.
+            self.alert(self.tr("Cannot use '{dir}' as the working directory:\n{error}\n\n"
+                               "Please choose another directory.").format(dir=path, error=error),
+                       QMessageBox.Warning)
+        return path
 
     def check_if_output_directory_is_selected(self) -> bool:
-        """Check if the user specified an existing output dir.
-
-        Returns True if an existing directory is specified or a new directory has been selected, else False.
-        """
-        if os.path.exists(self.dlg.outputDirectory.text()) or self.select_output_directory():
+        """True if a directory is configured and present, or the user picks one now."""
+        if os.path.exists(self.workdir_view.shown_path()) or self.select_output_directory():
             return True
         self.alert(self.tr('Please, specify an existing output directory'))
         return False
 
-    def prompt_output_directory(self, message: str) -> bool:
-        """Modal prompt to set the working directory, explaining why it is needed.
-
-        Shows `message` with 'Select directory…' / 'Later' buttons. Returns True if the user picked
-        a usable directory (``temp_dir`` is now set), False if they postponed or the pick failed.
-        Used both at startup (a configured directory turned out unavailable) and before any action
-        that needs the directory (so 'Later' cancels that action)."""
-        box = QMessageBox(QMessageBox.Warning, self.plugin_name, message, parent=self.main_window)
-        box.setTextFormat(Qt.RichText)
-        select_button = box.addButton(self.tr("Select directory…"), QMessageBox.AcceptRole)
-        box.addButton(self.tr("Later"), QMessageBox.RejectRole)
-        box.exec()
-        if box.clickedButton() is not select_button:
-            return False
-        self.select_output_directory()  # alerts by itself if the newly picked directory is unusable
-        return self.app_context.temp_dir is not None
-
     def ensure_output_directory(self, reason: str) -> bool:
-        """Ensure a usable working directory exists before an action that writes to it.
+        """Ensure results can be written before starting an action that writes them.
 
-        Returns True if results can be saved (directory set and present); if not, prompts the user
-        with `reason` and returns whether they selected a usable directory (False = postponed)."""
-        temp_dir = self.app_context.temp_dir
-        if temp_dir is not None and temp_dir.exists():
+        Returns True when the directory is usable; otherwise explains why one is needed and
+        returns whether the user supplied one. False means "postponed", and every caller treats
+        that as cancelling the action.
+        """
+        if self.workdir_service.is_usable():
             return True
-        return self.prompt_output_directory(reason)
+        if not self.workdir_view.offer_to_choose(reason):
+            return False
+        # select_output_directory alerts by itself if the newly picked directory is unusable, so
+        # the answer is whether it actually became usable — not whether the user picked anything.
+        self.select_output_directory()
+        return self.workdir_service.is_usable()
 
     def replace_search_provider(self, provider: ProviderInterface):
         if not provider:
@@ -1147,35 +1140,6 @@ class Mapflow(QObject):
 
     def selected_search_providers(self):
         return self.search_view.search_providers()
-
-    def setup_tempdir(self) -> Optional[str]:
-        """Create the working ``Temp`` directory under the configured output directory.
-
-        Returns ``None`` on success (or when no output directory is configured), or a human-readable
-        error string when the directory is unavailable. Never raises: this runs during plugin startup
-        (``classFactory``), and any failure here must not abort the whole plugin. The directory can be
-        unusable for several reasons — an external drive that is not mounted (its ``/Volumes/<name>``
-        stub is left root-owned and unwritable -> ``PermissionError``), a deleted parent
-        (``FileNotFoundError``), a read-only or full filesystem, etc. — so we catch broadly and fall
-        back to "no working directory", letting the user pick another one.
-        """
-        output_dir = self.app_context.settings.value('outputDir')
-        if not output_dir:
-            return None # don't ask to specify tempdir at the plugin start
-        temp_dir = Path(output_dir, "Temp")
-        try:
-            shutil.rmtree(temp_dir) # remove old tempdir
-        except Exception as e:
-            # Best-effort cleanup of a stale directory; the run continues either way.
-            logger.warning("Could not remove old temp dir '%s': %s", temp_dir, e)
-        try:
-            temp_dir.mkdir(parents=True, exist_ok=True)
-        except Exception as e:
-            self.app_context.temp_dir = None
-            logger.exception("Working directory '%s' is unavailable", output_dir)
-            return str(e)
-        self.app_context.temp_dir = temp_dir
-        return None
 
     def check_dir_and_duplicate_processing(self):
         if not self.check_if_output_directory_is_selected():
