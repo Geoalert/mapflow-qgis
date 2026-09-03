@@ -2,6 +2,7 @@ from typing import List, Tuple, Union
 from PyQt5.QtCore import Qt, QCoreApplication
 from PyQt5.QtWidgets import QAbstractItemView, QTableWidgetItem, QMessageBox, QCheckBox
 from ...dialogs.main_dialog import MainDialog
+from ...dialogs.confirm_processing_start_dialog import ConfirmProcessingStartDialog
 from ...dialogs import icons
 from ...dialogs import colors
 from ...schema.processing import (ProcessingDTO,
@@ -110,11 +111,60 @@ class ProcessingView:
                              self.dlg.modelOptionsLayout.itemAt(i).widget().isChecked()]
         )
 
+    def has_option_widgets(self) -> bool:
+        """Whether the model-option checkboxes have been built. A model that declares blocks is
+        quoted only once these exist, so this is not the same as 'no options ticked'."""
+        return len(self.dlg.modelOptions) > 0
+
+    def aoi_layer_chosen(self) -> bool:
+        """Whether the AOI combo names a layer at all — the choice between the two
+        no-AOI error messages."""
+        return self.dlg.polygonCombo.currentLayer() is not None
+
     def clear_processing_name(self, name):
         # If the name is expected, we clear it after the processsing is launched;
         # Otherwise it means that the user has altered the text already and it should be preserved
         if self.dlg.processingName.text() == name:
             self.dlg.processingName.clear()
+
+    def set_processing_name(self, name: str) -> None:
+        self.dlg.processingName.setText(name)
+
+    def set_start_enabled(self, enabled: bool) -> None:
+        self.dlg.startProcessing.setEnabled(enabled)
+
+    def clear_problem_and_enable_start(self) -> None:
+        """AREA/NONE billing: nothing blocks a start, so drop any leftover reason and enable it."""
+        self.dlg.startProcessing.setEnabled(True)
+        self.dlg.processingProblemsLabel.clear()
+
+    def confirm_processing_start(self, name: str, details: dict, on_accept) -> None:
+        """Raise the start-confirmation dialog. The domain values (price, provider, area) come
+        from the service in `details`; the panel-derived ones (zoom, model, options) are read
+        here, because a service may not touch a widget and this is where they live."""
+        dialog = ConfirmProcessingStartDialog(self.dlg)
+
+        def sync_dont_ask_again():
+            # "Don't ask again" is the inverse of the Settings-tab checkbox. Setting that box
+            # persists the choice through its own toggled handler, so nothing writes settings here.
+            dont_ask = dialog.checkBox.isChecked()
+            if self.dlg.cornfirmProcessingStart.isChecked() != (not dont_ask):
+                self.dlg.cornfirmProcessingStart.setChecked(not dont_ask)
+
+        dialog.checkBox.toggled.connect(sync_dont_ask_again)
+        dialog.accepted.connect(on_accept)
+        ui_start_params = self.read_processing_start_params()
+        dialog.setup(
+            name=name,
+            price=details.get("price"),
+            provider=details.get("provider"),
+            zoom=str(ui_start_params.zoom),
+            area=details.get("area"),
+            model=self.dlg.modelCombo.currentText(),
+            blocks=[self.dlg.modelOptionsLayout.itemAt(i).widget()
+                    for i in range(self.dlg.modelOptionsLayout.count())],
+        )
+        dialog.deleteLater()
 
     def disable_processing_start(self, reason: str, clear_area: bool):
         self.dlg.disable_processing_start(reason=reason, clear_area=clear_area)

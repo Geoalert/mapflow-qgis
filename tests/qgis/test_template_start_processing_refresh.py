@@ -29,14 +29,19 @@ def _service(in_template_mode):
     service = ProcessingService.__new__(ProcessingService)
     QObject.__init__(service)  # the refresh requests are signals now
     service.tr = lambda text: text
-    service.dlg = MagicMock()
     service.api = MagicMock()
-    service.view = MagicMock()
     service.processing_fetch_timer = MagicMock()
     service.set_open_template(SimpleNamespace(id="tpl-1") if in_template_mode else None)
     service.processings = {}
     service.processings_history = MagicMock()
     return service
+
+
+def _in_flight(service):
+    """The submission-in-flight signals, in order (True on send, False when it returns)."""
+    seen = []
+    service.submissionInFlight.connect(seen.append)
+    return seen
 
 
 def _template_service(active_template=SimpleNamespace(id="tpl-1")):
@@ -69,6 +74,7 @@ def test_template_start_asks_for_a_rehydrate_and_skips_flat_add():
     service = _service(in_template_mode=True)
     asked = _requests(service)
     added = _added(service)
+    in_flight = _in_flight(service)
 
     with patch.object(processing_service_module, "alert"):
         service.start_processing_callback(_response(_PROCESSING))
@@ -77,7 +83,7 @@ def test_template_start_asks_for_a_rehydrate_and_skips_flat_add():
     assert asked == ["rehydrate"]
     # No flat optimistic add in template mode.
     assert added == []
-    service.dlg.startProcessing.setEnabled.assert_called_once_with(True)
+    assert in_flight[-1] is False  # the button is re-enabled once the run has been sent
 
 
 def test_regular_start_does_flat_add_and_asks_for_a_plain_refresh():

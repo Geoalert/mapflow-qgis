@@ -105,24 +105,16 @@ controllers: the processings table is `ProjectProcessingController`'s region and
 in the plugin. **The allowlist entries clear only when the second lands** — C2.2a shrinks the
 service without finishing it, which is the price of a reviewable diff.
 
-[ready-for-review] C2.2a The processings table → `ProjectProcessingController`
-    `selected_processing_ids` ×4, `update_processing_table` ×2, `show_processings_pages` ×2,
-    `sort_processings` ×2, `enable_processings_pages`, `set_table_loading`,
-    `delete_processings_from_table`, `add_new_processing`, `update_processing_name`,
-    `connect_header_sort`, plus the pager/filter/sort connections the service makes for itself
-    (`processing_service.py:569-572`) and `filterProcessings.text()`.
-[ ] C2.2b The start panel → `ProcessingController`
+[ready-for-review] C2.2b The start panel → `ProcessingController`
     `read_processing_start_params` ×2, `disable_processing_start` ×3, `set_processing_cost`,
-    `clear_processing_name` ×2, `startProcessing` ×4, `cornfirmProcessingStart` ×3, `modelCombo`
-    ×2, `modelOptions`/`modelOptionsLayout`/`enabled_blocks` ×4, `processingName`.
-    Plus the **four cross-region reads**, which need pushed state: `metadataTable` ×3 (the search
-    selection, from `SearchController`) and `polygonCombo` ×1 (the chosen AOI layer, which only
-    picks between two error messages).
-
-Two things found while sizing this, both worth fixing as they are met rather than filed:
-`processing_service` reaches **through** its view to the dialog (`self.view.dlg` ×3), which defeats
-the view and is invisible to the `dialog-param` check because it is not `self.dlg`; and it reads a
-view's private `_header_sort_by`.
+    `clear_processing_name` ×2, `startProcessing`, `cornfirmProcessingStart`, `modelCombo`,
+    `modelOptions`/`modelOptionsLayout`/`enabled_blocks`, `processingName`, plus the four
+    cross-region reads (search selection, AOI layer) now pushed via `app_context` /
+    `set_start_panel`. `ProcessingView` moved to `mapflow.py`; `service-imports-view` cleared.
+[ ] C2.2c The last widget read: `startProcessing.isEnabled()` in `validate_context_params`.
+    Blocked until `DataCatalogView` (C2.3) and `ProviderService` (C2.4) stop writing that button —
+    only then can its state be pushed instead of read. Clears `dialog-param` / `widget-import`
+    for `processing_service` together with C2.6 (`ProcessingApi(dlg=...)`).
 [ ] C2.3 `DataCatalogService` (29 dlg, 38 view) → `DataCatalogController` + `DataCatalogView`
     **The largest item, not the mechanical one.** With 38 view calls against a 57-line controller,
     this service *is* the My Imagery controller; turning those into signals would be the wrong

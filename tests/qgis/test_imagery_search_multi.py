@@ -377,10 +377,11 @@ class TestSetupProviderInfoMultiImage:
 class TestUpdateProcessingCostSkipsNonCredits:
     def _service(self, billing_type):
         from mapflow.functional.service.processing_service import ProcessingService
+        from PyQt5.QtCore import QObject
         service = ProcessingService.__new__(ProcessingService)
+        QObject.__init__(service)  # a disabled start is announced as a signal
         service.app_context = SimpleNamespace(billing_type=billing_type)
         service.api = MagicMock()
-        service.dlg = MagicMock()
         # Tag validate_all_processing_params so we can detect whether we got past the billing gate.
         service.validate_all_processing_params = MagicMock(return_value=(MagicMock(), None))
         return service
@@ -409,8 +410,10 @@ class TestUpdateProcessingCostSkipsNonCredits:
         service = self._service(BillingType.area)
         service.validate_all_processing_params = MagicMock(
             return_value=(None, "Models are not initialized"))
+        disabled = []
+        service.startDisabled.connect(lambda *a: disabled.append(a))
         service.update_processing_cost()
-        service.dlg.disable_processing_start.assert_called_once()
+        assert len(disabled) == 1
         service.api.get_cost.assert_not_called()
 
     def test_runs_when_billing_is_credits(self):

@@ -83,7 +83,6 @@ ALLOWED = {
     ("service-imports-dialogs", "mapflow.functional.service.data_catalog"),
     ("service-imports-dialogs", "mapflow.functional.service.processing_service"),
     ("service-imports-view", "mapflow.functional.service.data_catalog"),
-    ("service-imports-view", "mapflow.functional.service.processing_service"),
     ("view-imports-service", "mapflow.functional.view.processing_view"),
 }
 

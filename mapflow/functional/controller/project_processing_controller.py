@@ -67,8 +67,8 @@ class ProjectProcessingController(QObject):
         self.project_connection = None
     
     def _setup_processing_bindings(self):
-        """Processing-specific UI connections."""
-        self.dlg.startProcessing.clicked.connect(self.processing_service.start_processing)
+        """Processing-specific UI connections. The Start button belongs to the start panel, so its
+        click is `ProcessingController`'s — not made here."""
         self.dlg.processing_update_action.triggered.connect(self.update_processing)
         self.dlg.options_menu.aboutToShow.connect(self.update_processing_options_menu)
         self.dlg.see_details_action.triggered.connect(self.show_selected_details)
