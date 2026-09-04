@@ -46,7 +46,7 @@ from .functional.service.account_service import AccountService
 from .functional.service.session_service import SessionService
 from .functional.service.workdir_service import WorkdirService
 from .functional.view.workdir_view import WorkdirView
-from .functional.service.alert_service import AlertService, alert
+from .infra.alert_service import AlertService, alert
 from .functional.service.area_calculator_service import AreaCalculatorService
 # HTTP
 from .http import (Http,

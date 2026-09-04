@@ -8,12 +8,12 @@ from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest
 from qgis.core import QgsGeometry, QgsVectorLayer
 
 from ..app_context import AppContext
-from .alert_service import alert, alert_info
+from ...infra.alert_service import alert, alert_info
 from ...http import api_message_parser
 from ...model.provider import ImagerySearchProvider, ProviderInterface
 from ...schema import ImageCatalogRequestSchema, ImageCatalogResponseSchema
 from ...schema.catalog import ProductType
-from .alert_service import report_http_error
+from ...infra.alert_service import report_http_error
 
 logger = logging.getLogger(__name__)
 

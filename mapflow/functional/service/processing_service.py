@@ -39,7 +39,7 @@ from ...schema.template import (
     ProcessingTemplateDTO,
     ProcessingTemplateDetails,
 )
-from ..service.alert_service import alert, alert_info
+from ...infra.alert_service import alert, alert_info
 from ..app_context import AppContext
 from ...model.provider import ImagerySearchProvider
 from ...config import Config

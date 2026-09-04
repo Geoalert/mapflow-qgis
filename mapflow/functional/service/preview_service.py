@@ -10,7 +10,7 @@ from qgis.core import (QgsCoordinateReferenceSystem, QgsFeature, QgsGeometry,
 from .. import helpers
 from .. import layer_utils
 from ..app_context import AppContext
-from .alert_service import alert, alert_info, alert_warning, report_http_error
+from ...infra.alert_service import alert, alert_info, alert_warning, report_http_error
 from ...config import OSM
 from ...errors import ImageIdRequired
 from ...schema.catalog import MultiPreviewList, PreviewType

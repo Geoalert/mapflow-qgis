@@ -59,7 +59,7 @@ def alerts():
     """
     from PyQt5.QtWidgets import QFileDialog, QInputDialog, QMessageBox
 
-    from mapflow.functional.service.alert_service import AlertService
+    from mapflow.infra.alert_service import AlertService
 
     recorded = []
 
@@ -112,7 +112,7 @@ def fresh_singletons():
     from qgis.core import QgsSettings
 
     from mapflow.functional.app_context import AppContext
-    from mapflow.functional.service.alert_service import AlertService
+    from mapflow.infra.alert_service import AlertService
     from mapflow.functional.service.provider_service import ProviderService
 
     for service in (AlertService, ProviderService):

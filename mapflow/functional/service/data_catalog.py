@@ -11,7 +11,7 @@ from qgis.core import QgsRasterLayer
 from ...schema.data_catalog import PreviewSize, MosaicReturnSchema, ImageReturnSchema, UserLimitSchema
 from ...schema import MyImageryParams
 from ..api.data_catalog_api import DataCatalogApi
-from ..service.alert_service import alert
+from ...infra.alert_service import alert
 from ...http import Http
 from ...functional import helpers
 from ...functional.app_context import AppContext
