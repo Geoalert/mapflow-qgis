@@ -1,5 +1,5 @@
 from typing import Union, List, Optional
-from PyQt5.QtCore import QObject
+from PyQt5.QtCore import QObject, pyqtSignal
 from qgis.core import QgsVectorLayer, QgsWkbTypes, QgsGeometry, QgsFeature, QgsCoordinateReferenceSystem
 from ..app_context import AppContext
 from .. import layer_utils
@@ -11,29 +11,40 @@ from ...errors import (BadProcessingInput,
                        ImageIdRequired,
                        AoiNotIntersectsImage)
 from ..geometry import clip_aoi_to_image_extent
-from ...dialogs.main_dialog import MainDialog
 
 
 class AreaCalculatorService(QObject):
+    """Computes the processing AOI and its area, and prices it. It reads no widget: the AOI polygon
+    layer, the chosen provider and the selected search images all arrive on `app_context` (pushed
+    from the composition root), and what the panel must show leaves as a signal (`spec/007
+    § Services`)."""
+
+    #: (reason, clear the area label too) — a start is blocked.
+    startDisabled = pyqtSignal(str, bool)
+    #: The AOI area in sq.km, to show on the label.
+    areaChanged = pyqtSignal(float)
+    #: (enabled, label text) for the "Use imagery extent" action.
+    imageryExtentChanged = pyqtSignal(bool, str)
+
     def __init__(self,
                  iface,
                  app_context: AppContext,
-                 dlg: 'MainDialog',
                  config,
                  data_catalog_service,
                  processing_service,
-                 provider_service,
-                 use_imagery_extent
+                 provider_service
                  ):
         super().__init__()
         self.iface = iface
         self.app_context = app_context
-        self.dlg = dlg
         self.config = config
         self.data_catalog_service = data_catalog_service
         self.processing_service = processing_service
         self.provider_service = provider_service
-        self.use_imagery_extent = use_imagery_extent
+        #: The catalog AOI last priced, so a secondary multi-select that leaves the effective area
+        #: unchanged does not fire a redundant cost request. Content-based rather than the old
+        #: comparison of table cell indices, which a service can no longer read.
+        self._last_catalog_aoi_wkt = None
 
     def get_aoi_area_polygon_layer(self, layer: Union[QgsVectorLayer, None]) -> None:
         if not layer or layer.featureCount() == 0:
@@ -41,7 +52,7 @@ class AreaCalculatorService(QObject):
                 reason = self.tr('Not enough rights to start processing in a shared project ({})').format(self.app_context.user_role.value)
             else:
                 reason = self.tr('Set AOI to start processing')
-            self.dlg.disable_processing_start(reason, clear_area=True)
+            self.startDisabled.emit(reason, True)
             self.app_context.aoi = self.app_context.aoi_size = None
             return
 
@@ -66,7 +77,7 @@ class AreaCalculatorService(QObject):
                 reason = self.tr('Not enough rights to start processing in a shared project ({})').format(self.app_context.user_role.value)
             else:
                 reason = self.tr('AOI must contain not more than {} polygons').format(self.app_context.max_aois_per_processing)
-            self.dlg.disable_processing_start(reason, clear_area=True)
+            self.startDisabled.emit(reason, True)
             self.app_context.aoi = self.app_context.aoi_size = None
 
     def calculate_aoi_area_polygon_layer(self, layer: Union[QgsVectorLayer, None]) -> None:
@@ -76,20 +87,15 @@ class AreaCalculatorService(QObject):
         :param layer: The current polygon layer
         """
         self.get_aoi_area_polygon_layer(layer)
-        provider = self.provider_service.providers[self.dlg.providerIndex()]
-        if isinstance(provider, MyImageryProvider):
+        if isinstance(self.app_context.data_provider, MyImageryProvider):
             self.calculate_aoi_area_catalog()
 
     def calculate_aoi_area_use_image_extent(self) -> None:
-        """Get the AOI size when the Use image extent checkbox is toggled.
-
-        :param use_image_extent: The current state of the checkbox
-        """
-        provider = self.provider_service.providers[self.dlg.providerIndex()]
-        if isinstance(provider, MyImageryProvider):
+        """Get the AOI size when the Use image extent checkbox is toggled."""
+        if isinstance(self.app_context.data_provider, MyImageryProvider):
             self.calculate_aoi_area_catalog()
         else:
-            self.calculate_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
+            self.calculate_aoi_area_polygon_layer(self.app_context.aoi_layer)
 
     def calculate_aoi_area_catalog(self) -> None:
         """Get the AOI size when a new mosaic or image in 'My imagery' is selected.
@@ -99,31 +105,29 @@ class AreaCalculatorService(QObject):
         image = self.data_catalog_service.selected_image()
         mosaic = self.data_catalog_service.selected_mosaic()
         if image or mosaic:
-            self.use_imagery_extent.setEnabled(True)
             if image:
                 catalog_aoi = QgsGeometry().fromWkt(image.footprint)
-                self.use_imagery_extent.setText(self.tr("Use extent of '{name}'").format(name=image.filename))
+                self.imageryExtentChanged.emit(True, self.tr("Use extent of '{name}'").format(name=image.filename))
             else:
                 catalog_aoi = QgsGeometry().fromWkt(mosaic.footprint)
-                self.use_imagery_extent.setText(self.tr("Use extent of '{name}'").format(name=mosaic.name))
+                self.imageryExtentChanged.emit(True, self.tr("Use extent of '{name}'").format(name=mosaic.name))
             aoi = layer_utils.get_catalog_aoi(catalog_aoi=catalog_aoi,
                                               selected_aoi=self.app_context.aoi)
         else:
-            aoi = self.get_aoi_area_polygon_layer(self.dlg.polygonCombo.currentLayer())
-            self.use_imagery_extent.setText(self.tr("Use imagery extent"))
-            self.use_imagery_extent.setEnabled(False)
+            aoi = self.get_aoi_area_polygon_layer(self.app_context.aoi_layer)
+            self.imageryExtentChanged.emit(False, self.tr("Use imagery extent"))
         if not self.app_context.aoi:  # other error message is already shown
             pass
         elif not aoi:  # error after intersection
-            self.dlg.disable_processing_start(reason=self.tr("Selected AOI does not intersect the selected imagery"),
-                                              clear_area=True)
+            self.startDisabled.emit(self.tr("Selected AOI does not intersect the selected imagery"), True)
             return
-        # Don't recalculate AOI if first selected mosaic/image didn't change
-        selected_mosaics = self.dlg.mosaicTable.selectedIndexes()
-        selected_images = self.dlg.imageTable.selectedIndexes()
-        if len(selected_mosaics) > 1 and self.dlg.selected_mosaic_cell == selected_mosaics[0] \
-                or len(selected_images) > 1 and self.dlg.selected_image_cell == selected_images[0]:
+        # Don't re-price the catalog AOI if the effective area did not change (e.g. a secondary
+        # multi-select). Compared by geometry rather than by table cell, which is not the service's
+        # to read.
+        aoi_wkt = aoi.asWkt() if aoi else None
+        if aoi_wkt is not None and aoi_wkt == self._last_catalog_aoi_wkt:
             return
+        self._last_catalog_aoi_wkt = aoi_wkt
         self.calculate_aoi_area(aoi, helpers.WGS84)
 
     def calculate_aoi_area_selection(self, _: List[QgsFeature]) -> None:
@@ -131,14 +135,14 @@ class AreaCalculatorService(QObject):
 
         :param _: A list of currently selected features
         """
-        layer = self.dlg.polygonCombo.currentLayer()
+        layer = self.app_context.aoi_layer
         if layer == self.iface.activeLayer():
             self.calculate_aoi_area_polygon_layer(layer)
 
     def calculate_aoi_area_layer_edited(self) -> None:
         """Get the AOI size when a feature is added or remove from a layer."""
         layer = self.sender()
-        if layer == self.dlg.polygonCombo.currentLayer():
+        if layer == self.app_context.aoi_layer:
             self.calculate_aoi_area_polygon_layer(layer)
 
     def calculate_aoi_area(self, aoi: QgsGeometry, crs: QgsCoordinateReferenceSystem) -> None:
@@ -153,18 +157,13 @@ class AreaCalculatorService(QObject):
 
         self.app_context.aoi = aoi  # save for reuse in processing creation or metadata requests
 
-        # fetch UI data
-        provider_index = self.dlg.providerIndex()
-        selected_images = self.dlg.metadataTable.selectedItems()
-        if selected_images:
-            rows = list(set(image.row() for image in selected_images))
-            local_image_indices = [int(self.dlg.metadataTable.item(row, self.config.LOCAL_INDEX_COLUMN).text())
-                                   for row in rows]
-        else:
-            local_image_indices = []
+        # The chosen provider and the selected search images are pushed to app_context, so the
+        # service need not read the source combo or the metadata table.
+        provider = self.app_context.data_provider
+        local_image_indices = [int(index) for index in (self.app_context.selected_search_indices or [])]
         # This is AOI with respect to selected search images and raster image extent
         try:
-            real_aoi = self.get_aoi(provider_index=provider_index,
+            real_aoi = self.get_aoi(provider=provider,
                                     local_image_indices=local_image_indices,
                                     selected_aoi=self.app_context.aoi)
         except ImageIdRequired:
@@ -186,19 +185,18 @@ class AreaCalculatorService(QObject):
             # measureArea rejects what it was handed; an unmeasurable AOI prices as zero.
             self.app_context.aoi_size = 0
 
-        self.dlg.labelAoiArea.setText(self.tr('Area: {:.2f} sq.km').format(self.app_context.aoi_size))
+        self.areaChanged.emit(self.app_context.aoi_size)
         if self.app_context.aoi_size > 0:
             self.processing_service.update_processing_cost()
-    
+
     def get_aoi(self,
-                provider_index: Optional[int],
+                provider,
                 selected_aoi: QgsGeometry,
                 local_image_indices: Optional[List[int]]) -> QgsGeometry:
         if not helpers.check_aoi(selected_aoi):
             raise BadProcessingInput(self.tr('Bad AOI. AOI must be inside boundaries:'
                                              ' \n[-180, 180] by longitude, [-90, 90] by latitude'))
         else:
-            provider = self.provider_service.providers[provider_index]
             if not provider:
                 raise PluginError(self.tr('Providers are not initialized'))
             if len(local_image_indices) != 0:
@@ -230,7 +228,7 @@ class AreaCalculatorService(QObject):
             else:
                 aoi = selected_aoi
         return aoi
-    
+
     def crop_aoi_with_image_footprint(self,
                                       aoi: QgsFeature,
                                       local_image_indices: List[int]):
@@ -245,4 +243,3 @@ class AreaCalculatorService(QObject):
         except StopIteration:
             raise AoiNotIntersectsImage() from None
         return aoi
-    

@@ -130,6 +130,10 @@ class ProcessingView:
     def set_processing_name(self, name: str) -> None:
         self.dlg.processingName.setText(name)
 
+    def set_aoi_area(self, area_sqkm: float) -> None:
+        """Show the processing AOI area. `AreaCalculatorService` computes it and announces it."""
+        self.dlg.labelAoiArea.setText(self.tr('Area: {:.2f} sq.km').format(area_sqkm))
+
     def set_start_enabled(self, enabled: bool) -> None:
         self.dlg.startProcessing.setEnabled(enabled)
 
