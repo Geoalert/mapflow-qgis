@@ -105,22 +105,17 @@ controllers: the processings table is `ProjectProcessingController`'s region and
 in the plugin. **The allowlist entries clear only when the second lands** — C2.2a shrinks the
 service without finishing it, which is the price of a reviewable diff.
 
-[ ] C2.2c The last widget read: `startProcessing.isEnabled()` in `validate_context_params`.
-    Now unblocked — C2.3 and C2.4 have both stopped writing that button, so its state can be pushed
-    instead of read. Clears `dialog-param` / `widget-import` for `processing_service` together with
-    C2.6 (`ProcessingApi(dlg=...)`).
+[ready-for-review] C2.2c The last widget read: `startProcessing.isEnabled()` left
+    `validate_context_params` for the start-panel round trip (`start_enabled` on `set_start_panel`).
+    `ProcessingService` now touches no widget — `self.dlg` remains only to build `ProcessingApi`.
+    `dialog-param` / `widget-import` for `processing_service` still wait for C2.6 (the api's `dlg`,
+    and the QMessageBox/QApplication alert construction).
 
 #### Group B — the service reaches into other regions' widgets
 
 No view of its own, and the widgets belong to two or three other regions. These need pushed state,
 which is why they are last.
 
-[ready-for-review] C2.4 `ProviderService` → `ProviderController` + `ProviderView` (+ SearchView)
-    Read path (called by `processing_service`) reads the search selection off `app_context`
-    (`selected_search_indices` + new `selected_search_image_ids`); the duplicate cluster announces
-    via signals wired in `mapflow.py` to the view owning each widget. `dlg` param dropped entirely —
-    **both** allowlist entries (`widget-import` + `dialog-param`) cleared. Dead `get_data_provider`
-    / `get_current_provider_index` removed.
 [ ] C2.5 `AreaCalculatorService` (17, plus the `use_imagery_extent` checkbox it is handed directly)
     → `ProcessingController` (`spec/007_architecture.md` assigns it "AOI and provider selection,
     cost")
