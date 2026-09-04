@@ -11,7 +11,7 @@ from ..app_context import AppContext
 from ..geometry import geometry_from_geojson
 # Severity-named so the icon is chosen inside AlertService: picking a QMessageBox.Icon here
 # would mean importing QtWidgets, which a service may not do.
-from .alert_service import alert_info, alert_warning, ask_text
+from ...infra.alert_service import alert_info, alert_warning, ask_text
 from ...schema.template import (AddAoisSchema,
                                 AddSingleAoiSchema,
                                 AOI_NAME_MAX_LENGTH,

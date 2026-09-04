@@ -41,21 +41,28 @@ the other two tiers discard.
 
 ### Where each tier lives
 
-The **message** tier is `AlertService`, a service: `alert_*`, `ask_text` and anything else that
-needs a synchronous answer from the user. It owns the Qt types so its callers do not import
-them — a service asking the user a question is not a reason to hand control to something that
-can see a dialog.
+Both tiers live in `infra/` (`mapflow/infra/`): `alert_service` for the message tier, the reporter
+for the report tier. `infra/` is the one layer every other layer may import, and the one layer
+allowed to hold Qt types (`spec/007_architecture.md` § Layer rules).
 
-The **report** tier lives in `infra/`, not in a service. Two reasons, and the second is the
-binding one:
+The **message** tier is `AlertService`, in `infra/` — **not a service**: `alert_*`, `ask_text` and
+anything else that needs a synchronous answer from the user. It owns the Qt types so its callers do
+not import them. It is in `infra/`, not `service/`, because a service may not import a widget yet
+this tier builds `QMessageBox`/`QInputDialog`, and because a view may not import a service yet views
+legitimately raise message-tier alerts (e.g. the processings table's failed/finished
+notifications). `infra/` is the only home reachable from services, views, apis and controllers
+alike; a service-tier message helper is neither.
+
+The **report** tier lives in `infra/` too. Two reasons, and the second is the binding one:
 
 - it is reached from `Http`, which is itself infra and must not depend on a service singleton;
 - every layer may import `infra/`, so putting it there makes it reachable from services, api
   modules and controllers alike, whereas a service-tier reporter is reachable only downward.
 
-A service that needs to report an unexpected failure imports the reporter from `infra/`. It does
-not emit a signal for someone else to report on its behalf, and it does not construct
-`ErrorMessageWidget`.
+A service or api that needs to report an unexpected failure imports the reporter from `infra/`. It
+does not emit a signal for someone else to report on its behalf, and it does not construct
+`ErrorMessageWidget`. The reporter itself may import `ErrorMessageWidget` from `dialogs/` (an
+`infra → dialogs` edge, kept lazy so a headless context need not build the widget tree).
 
 ### Volume limit
 

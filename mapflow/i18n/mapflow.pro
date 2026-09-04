@@ -39,7 +39,7 @@ SOURCES = ../mapflow.py\
           ../functional/api/project_api.py\
           ../functional/controller/processing_controller.py\
           ../functional/controller/project_processing_controller.py\
-          ../functional/service/alert_service.py\
+          ../infra/alert_service.py\
           ../functional/service/aoi_service.py\
           ../functional/service/area_calculator_service.py\
           ../functional/service/data_catalog.py\

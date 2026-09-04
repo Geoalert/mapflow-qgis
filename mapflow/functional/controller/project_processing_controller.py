@@ -2,7 +2,7 @@ from PyQt5.QtCore import QObject
 from PyQt5.QtWidgets import QMessageBox, QWidget
 
 from ..app_context import AppContext
-from ..service.alert_service import alert
+from ...infra.alert_service import alert
 from ..service.processing_service import ProcessingService
 from ..service.project_service import ProjectService
 from ...config import config, Config

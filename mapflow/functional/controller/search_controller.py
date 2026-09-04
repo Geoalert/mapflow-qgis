@@ -3,7 +3,7 @@ from typing import List, Optional
 from PyQt5.QtCore import QCoreApplication, QObject
 from PyQt5.QtWidgets import QMessageBox
 
-from ..service.alert_service import alert
+from ...infra.alert_service import alert
 from ..service.local_filter_service import FilterCriteria, LocalFilterService
 from ..service.preview_service import PreviewService
 from ..service.provider_service import ProviderService

@@ -8,7 +8,7 @@ would be controller-to-controller. It stays in the composition root, driving vie
 from PyQt5.QtCore import QObject
 from PyQt5.QtWidgets import QMessageBox
 
-from ..service.alert_service import alert, alert_warning
+from ...infra.alert_service import alert, alert_warning
 from ..service.provider_service import ProviderService
 from ..view.provider_view import ProviderView
 from ...model.provider import create_provider

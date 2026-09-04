@@ -13,7 +13,7 @@ from ...model.provider import(ImagerySearchProvider,
                                BasicAuth,
                                ProvidersList,
                                create_provider)
-from ..service.alert_service import alert
+from ...infra.alert_service import alert
 from ...schema import (DataProviderParams, 
                        MyImageryParams, 
                        ImagerySearchParams, 
