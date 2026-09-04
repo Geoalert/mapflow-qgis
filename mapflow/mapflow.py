@@ -431,12 +431,15 @@ class Mapflow(QObject):
         # ========== 10. INITIALIZE AREA CALCULATOR SERVICE ==========
         self.area_calculator_service = AreaCalculatorService(iface=self.iface,
                                                              app_context=self.app_context,
-                                                             dlg=self.dlg,
                                                              config=self.config,
                                                              data_catalog_service=self.data_catalog_service,
                                                              processing_service=self.processing_service,
-                                                             provider_service=self.provider_service,
-                                                             use_imagery_extent=self.use_imagery_extent)
+                                                             provider_service=self.provider_service)
+        # The service holds no widget: what it computes for the panel leaves as a signal, and the
+        # views/actions that own those widgets are wired here.
+        self.area_calculator_service.startDisabled.connect(self.processing_view.disable_processing_start)
+        self.area_calculator_service.areaChanged.connect(self.processing_view.set_aoi_area)
+        self.area_calculator_service.imageryExtentChanged.connect(self._update_imagery_extent_action)
         self.project_service.area_calculator_service = self.area_calculator_service
         # SearchController is built well before this service (it is needed by the search wiring
         # above), so its cost-recompute collaborator is set here, as the other back-links are.
@@ -617,6 +620,13 @@ class Mapflow(QObject):
         """The AOI combo's current layer, pushed to `app_context` for `ProviderService`'s
         duplicated-search rebuild. `layerChanged` passes the new layer; on a bare call read it."""
         self.app_context.aoi_layer = layer if layer is not None else self.dlg.polygonCombo.currentLayer()
+
+    def _update_imagery_extent_action(self, enabled: bool, text: str) -> None:
+        """Apply what `AreaCalculatorService` decided for the 'Use imagery extent' action — it owns
+        the AOI-from-imagery logic but not the widget."""
+        self.use_imagery_extent.setEnabled(enabled)
+        if text:
+            self.use_imagery_extent.setText(text)
 
     def push_search_selection(self):
         """Deliver the search table's selection to `app_context`, where it sits beside

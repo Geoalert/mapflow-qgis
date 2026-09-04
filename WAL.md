@@ -105,26 +105,13 @@ controllers: the processings table is `ProjectProcessingController`'s region and
 in the plugin. **The allowlist entries clear only when the second lands** — C2.2a shrinks the
 service without finishing it, which is the price of a reviewable diff.
 
-[ready-for-review] C2.2c The last widget read: `startProcessing.isEnabled()` left
-    `validate_context_params` for the start-panel round trip (`start_enabled` on `set_start_panel`).
-    `ProcessingService` now touches no widget — `self.dlg` remains only to build `ProcessingApi`.
-    `dialog-param` / `widget-import` for `processing_service` still wait for C2.6 (the api's `dlg`,
-    and the QMessageBox/QApplication alert construction).
-
 #### Group B — the service reaches into other regions' widgets
 
-No view of its own, and the widgets belong to two or three other regions. These need pushed state,
-which is why they are last.
-
-[ ] C2.5 `AreaCalculatorService` (17, plus the `use_imagery_extent` checkbox it is handed directly)
-    → `ProcessingController` (`spec/007_architecture.md` assigns it "AOI and provider selection,
-    cost")
-    Fewest accesses but not the easiest: nine are writes that become signals
-    (`disable_processing_start` ×3, `labelAoiArea`, the checkbox ×5), three are `providerIndex()`
-    which `app_context.data_provider` already answers, and the remaining ten are pulled widget
-    state — the AOI polygon layer ×4, the search-image selection ×2, the catalog dedup guard ×4 —
-    each needing its own push. It is also called *by another service* (`ProjectService`), so
-    "let the caller read the widget" does not work here.
+[ready-for-review] C2.5 `AreaCalculatorService` computes without the dialog. Reads the provider /
+    AOI layer / search selection off `app_context` (pushed by C2.2b/C2.4); announces `startDisabled`,
+    `areaChanged`, `imageryExtentChanged`. `get_aoi` takes the provider object, not a combo index.
+    `dlg` + `use_imagery_extent` dropped from the constructor — **both** allowlist entries cleared.
+    Catalog dedup is now geometry-based (the table cells it compared are not a service's to read).
 
 #### Then the api modules
 

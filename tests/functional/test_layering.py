@@ -67,7 +67,6 @@ ALLOWED = {
     ("widget-import", "mapflow.functional.service.processing_service"),
     ("widget-import", "mapflow.functional.api.data_catalog_api"),
     # Services and two api modules taking the main dialog as a constructor argument.
-    ("dialog-param", "mapflow.functional.service.area_calculator_service"),
     ("dialog-param", "mapflow.functional.service.data_catalog"),
     ("dialog-param", "mapflow.functional.service.processing_service"),
     ("dialog-param", "mapflow.functional.api.data_catalog_api"),
@@ -76,7 +75,6 @@ ALLOWED = {
     # that module is clean — fixing four of five imports leaves the exemption in place.
     ("api-imports-dialogs", "mapflow.functional.api.data_catalog_api"),
     ("api-imports-dialogs", "mapflow.functional.api.processing_api"),
-    ("service-imports-dialogs", "mapflow.functional.service.area_calculator_service"),
     ("service-imports-dialogs", "mapflow.functional.service.data_catalog"),
     ("service-imports-dialogs", "mapflow.functional.service.processing_service"),
     ("view-imports-service", "mapflow.functional.view.processing_view"),
