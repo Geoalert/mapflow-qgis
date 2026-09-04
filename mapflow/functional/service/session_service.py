@@ -22,7 +22,7 @@ from ...errors import ProxyIsAlreadySet
 from ...http import Http
 # The icon-carrying helpers rather than `alert(..., icon=QMessageBox.X)`: naming an icon would
 # mean importing PyQt5.QtWidgets, which a service may not do (`spec/007_architecture.md`).
-from .alert_service import alert_info, alert_warning
+from ...infra.alert_service import alert_info, alert_warning
 
 logger = logging.getLogger(__name__)
 

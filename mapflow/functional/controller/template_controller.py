@@ -3,7 +3,7 @@ from PyQt5.QtWidgets import QMessageBox
 
 from ..app_context import AppContext
 from ..service.aoi_service import AoiService
-from ..service.alert_service import alert
+from ...infra.alert_service import alert
 from ..service.template_service import TemplateService
 from ..view.search_view import SearchView
 from ..view.template_view import TemplateView

@@ -58,7 +58,8 @@ mapflow/
   schema/              shapes that cross the network
   model/               types the plugin owns and persists locally
   errors/
-  infra/               http, error_guard, report_throttle, log_config
+  infra/               http, error_guard, report_throttle, log_config,
+                       alert_service (message tier), reporter (report tier)
 ```
 
 Deleted: `requests/`, `entity/`, `functional/` as a container, `constants.py`.
@@ -110,8 +111,9 @@ below it and from `model/`, `errors/`, `infra/`, `config`, `helpers`, `geometry`
 | `mapflow.py` | everything | contain domain logic |
 | `controller/` | service, view, model, schema | touch `Http`, hold domain state |
 | `view/` | model, schema, dialogs | issue requests, contain business rules |
-| `service/` | api, model, schema, other services | import `view/`, `dialogs/`, or touch a widget |
+| `service/` | api, model, schema, infra, other services | import `view/`, `dialogs/`, or touch a widget |
 | `api/` | model, schema, infra | know about widgets or business rules |
+| `infra/` | dialogs, model, schema, errors, config, Qt | hold domain state or business rules |
 | `model/` | schema, errors, config | import anything above it |
 | `schema/` | errors, config | import `model/`, or anything above it |
 
@@ -119,6 +121,12 @@ below it and from `model/`, `errors/`, `infra/`, `config`, `helpers`, `geometry`
 layering violation is an instance of it, and it is mechanically checkable — a service
 module must not import `PyQt5.QtWidgets`, `dialogs`, or `view`, and must not receive a
 `dlg` argument.
+
+**`infra/` is the exception that proves it: the one layer that may hold Qt, and the one
+every other layer may import.** The message tier (`alert_service`) and the report tier
+(`reporter`) live there for exactly that reason — a service may not build a `QMessageBox`
+and a view may not import a service, yet both must be able to alert. `infra/` holds
+cross-cutting mechanism (transport, reporting, alerts, logging), never domain state.
 
 **The rule that keeps the import cycle dead: `schema/` may not import `model/`.** The
 dependency between the two runs one way only, so the cycle cannot be reintroduced by
@@ -143,7 +151,6 @@ State and business rules. Each owns one question, and nobody else answers it.
 | `ProjectService` | projects CRUD, sharing, roles, the current project | |
 | `ResultService` | downloading and loading processing results, applying styles | from `layer_utils.ResultsLoader` |
 | `AreaCalculatorService` | area computation and limit comparison | unchanged |
-| `AlertService` | the *message* tier of `spec/006_error_reporting.md` | unchanged |
 
 Services communicate through Qt signals, never by calling a controller. Several already do
 this (`DataCatalogService.mosaicsUpdated`); it becomes the rule. A service that needs to tell

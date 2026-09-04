@@ -5,7 +5,7 @@ from PyQt5.QtWidgets import QMessageBox, QApplication, QFileDialog
 
 from ..service.data_catalog import DataCatalogService
 from ..service.preview_service import PreviewService
-from ..service.alert_service import alert
+from ...infra.alert_service import alert
 from ..view.data_catalog_view import DataCatalogView
 from ...dialogs.main_dialog import MainDialog
 from ...dialogs.mosaic_dialog import CreateMosaicDialog, UpdateMosaicDialog

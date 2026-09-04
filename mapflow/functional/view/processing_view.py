@@ -11,7 +11,7 @@ from ...schema.template import (ProcessingTemplateDTO, TemplateAoiDTO,
                                 AoiProcessingLink, TemplateProcessingSchema,
                                 NoAoiProcessingsRow)
 from ...config import config
-from ..service.alert_service import alert
+from ...infra.alert_service import alert
 
 class ProcessingView:
     """

@@ -30,6 +30,7 @@ LAYERS = {
     "service": "functional/service",
     "controller": "functional/controller",
     "view": "functional/view",
+    "infra": "infra",
     "dialogs": "dialogs",
     "model": "model",
     "schema": "schema",
@@ -47,11 +48,17 @@ UNCLASSIFIED = {
 }
 
 #: What each layer may depend on. Absent from a layer's set means forbidden.
+#:
+#: `infra` is the one tier every layer may import and the one that may hold Qt (the message tier
+#: `alert_service` and the report tier live there — a service may not import a widget, and a view
+#: may not import a service, yet both raise alerts). It appears in each importer's set below, and
+#: has its own row for what it may reach: `dialogs` (the report widget) and the domain layers.
 MAY_IMPORT = {
-    "controller": {"service", "view", "model", "schema", "errors", "dialogs"},
-    "view": {"model", "schema", "errors", "dialogs"},
-    "service": {"api", "service", "model", "schema", "errors"},
-    "api": {"model", "schema", "errors"},
+    "controller": {"service", "view", "infra", "model", "schema", "errors", "dialogs"},
+    "view": {"infra", "model", "schema", "errors", "dialogs"},
+    "service": {"api", "service", "infra", "model", "schema", "errors"},
+    "api": {"infra", "model", "schema", "errors"},
+    "infra": {"infra", "dialogs", "model", "schema", "errors"},
     "model": {"model", "schema", "errors"},
     "schema": {"schema", "errors"},
 }
@@ -62,18 +69,15 @@ MAY_IMPORT = {
 DIALOG_PARAMS = {"dlg", "dialog", "maindialog", "main_dialog"}
 
 ALLOWED = {
-    # service/ and api/ importing Qt widgets — Phase C moves this to view/.
-    ("widget-import", "mapflow.functional.service.alert_service"),
+    # service/ and api/ still constructing the error-report widget or an alert. Cleared as the
+    # error-reporting phase routes them through the infra reporter / message tier.
     ("widget-import", "mapflow.functional.service.processing_service"),
     ("widget-import", "mapflow.functional.api.data_catalog_api"),
-    # Reaching upwards for dialogs and views. One entry per module, so it clears only when
-    # that module is clean — fixing four of five imports leaves the exemption in place. These
-    # remaining ones are all the error-report widget (ErrorMessageWidget) construction still in
-    # a service/api, and one view reaching the alert helper — cleared by the error-reporting phase,
-    # which is sequenced after Phase C.
+    # The error-report widget (ErrorMessageWidget) still constructed inside a service/api. One
+    # entry per module, so it clears only when that module is clean. Cleared as the error-reporting
+    # phase routes each through the infra reporter.
     ("api-imports-dialogs", "mapflow.functional.api.data_catalog_api"),
     ("service-imports-dialogs", "mapflow.functional.service.processing_service"),
-    ("view-imports-service", "mapflow.functional.view.processing_view"),
 }
 
 #: Cycles that exist today, as the set of modules involved so the entry survives a change of

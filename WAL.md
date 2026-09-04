@@ -285,16 +285,32 @@ The state that motivates it, as measured on `dev`:
   missed both data_catalog ones. A further 26 sites opt out but pass their own handler, which is
   correct and out of scope.)
 
+**Layering sub-phase (empties `ALLOWED`).** The message/report tiers are being reclassified to a new
+`infra/` tier — a spec delta approved by the user (spec/006 § Where each tier lives, spec/007 §§
+Target structure / Layer rules / Services now put both tiers in `infra/`, not `service/`). This runs
+first because the reporter must be reachable from an `api` before the api can call it.
+
+[ready-for-review] MR-1 the message tier (`alert_service`) → `mapflow/infra/`. Clears
+    `widget-import·alert_service` and `view-imports-service·processing_view`. Pure move; `infra`
+    layer added to `test_layering`. `report_http_error` stays in the moved file until step 2.
+[ ] MR-2 `processing_service` stops building `ErrorMessageWidget`/`QMessageBox` — routes through the
+    infra reporter + `alert_info`. Clears `widget-import` + `service-imports-dialogs` for it.
+[ ] MR-3a `data_catalog_api`'s 6 `ErrorMessageWidget` sites → infra reporter. Clears
+    `api-imports-dialogs·data_catalog_api`.
+[ ] MR-3b `data_catalog_api` upload-progress `QProgressBar` → `DataCatalogController`. Clears
+    `widget-import·data_catalog_api` → **`ALLOWED` empty**.
+
 [ ] 1. Signature and throttle for the HTTP path
 `response_signature(response)` = Qt error code + endpoint path; `http._request_path` already
 computes that path, query-free, because it lands in a mail body. Carry `suppressed_count` into
 the dialog text and report body the way the exception path does.
 
 [ ] 2. One reporter, in `infra/`
-Both entry points behind one module owning the throttle, the dialog and the suppressed-count
-wording. This **moves `report_http_error` out of `AlertService`**, where the preview step put it:
-a service may import `infra/`, so it never needed to be in the message tier. `AlertService` keeps
-the message tier, which is what `spec/007_architecture.md` assigns it.
+Both entry points behind one module (`infra/reporter.py`) owning the throttle, the dialog and the
+suppressed-count wording. This folds `report_http_error` in next to `report_unexpected_error`;
+`report_http_error` currently lives in the moved `alert_service` (message tier) and comes out into
+the reporter here. Both tiers are in `infra/` (the reclassification above), so this is a move within
+`infra/`, not across a layer boundary.
 
 [ ] 3. Restore the six silent request paths
 With the throttle covering them, opting out has no remaining justification — `spec/006` already

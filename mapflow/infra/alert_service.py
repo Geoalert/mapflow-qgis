@@ -78,8 +78,8 @@ class AlertService(QObject):
         # gives for the same import: the dialog pulls in the Qt widget tree, and keeping it lazy
         # lets a headless context construct this service without one. Showing dialogs is this
         # tier's job, so the dependency itself is not the thing being avoided.
-        from ...dialogs.error_message_widget import ErrorMessageWidget
-        from ...http import get_error_report_body
+        from ..dialogs.error_message_widget import ErrorMessageWidget
+        from ..http import get_error_report_body
         response_body = response.readAll().data().decode()
         error_summary, email_body = get_error_report_body(
             response=response,
