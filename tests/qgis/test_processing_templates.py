@@ -227,7 +227,7 @@ class TestTemplateSchemas:
 class TestTemplateApi:
     def setup_method(self):
         self.http = MagicMock()
-        self.api = ProcessingApi(http=self.http, dlg=MagicMock(), iface=MagicMock(), result_loader=MagicMock())
+        self.api = ProcessingApi(http=self.http, iface=MagicMock(), result_loader=MagicMock())
 
     def test_get_templates_path(self):
         callback = MagicMock()

@@ -332,6 +332,9 @@ class DataCatalogView(QObject):
         self.dlg.imagePreview.setPixmap(QPixmap.fromImage(preview_image))
         self.dlg.imagePreview.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
 
+    def set_preview_unavailable(self):
+        self.dlg.imagePreview.setText(self.tr("Preview is unavailable"))
+
     def selected_mosaic_ids(self, limit=None):
         # Add unique selected rows
         selected_rows = list(set(index.row() for index in self.dlg.mosaicTable.selectionModel().selectedIndexes()))

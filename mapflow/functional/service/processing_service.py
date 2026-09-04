@@ -13,7 +13,6 @@ from .provider_service import (get_provider_params,
                                duplicate_provider_and_model)
                                
 from .. import helpers
-from ...dialogs.main_dialog import MainDialog
 from ...errors import (BadProcessingInput,
                        ErrorMessage,
                        PluginError,
@@ -160,19 +159,16 @@ class ProcessingService(QObject):
 
     def __init__(self,
                  http: Http,
-                 dlg: MainDialog,
                  iface,
                  result_loader: ResultsLoader,
                  app_context: AppContext,
                  timer_interval):
         super().__init__()
         self.http = http
-        self.dlg = dlg
         self.iface = iface
         self.result_loader = result_loader
         self.app_context = app_context
         self.api = ProcessingApi(http=http,
-                                 dlg=dlg,
                                  iface=iface,
                                  result_loader=self.result_loader)
         self.processings = {}

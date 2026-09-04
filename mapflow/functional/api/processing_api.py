@@ -4,7 +4,6 @@ from uuid import UUID
 
 from PyQt5.QtCore import QObject
 from ...http import Http
-from ...dialogs.main_dialog import MainDialog
 from ...schema.processing import (
     PostProcessingSchema,
     UpdateProcessingSchema,
@@ -33,13 +32,11 @@ class ProcessingApi(QObject):
 
     def __init__(self,
                  http: Http,
-                 dlg: MainDialog,
                  iface,
                  result_loader):
         super().__init__()
         self.http = http
         self.iface = iface
-        self.dlg = dlg
         self.result_loader = result_loader
 
     # project CRUD

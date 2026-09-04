@@ -66,16 +66,12 @@ ALLOWED = {
     ("widget-import", "mapflow.functional.service.alert_service"),
     ("widget-import", "mapflow.functional.service.processing_service"),
     ("widget-import", "mapflow.functional.api.data_catalog_api"),
-    # Services and two api modules taking the main dialog as a constructor argument.
-    ("dialog-param", "mapflow.functional.service.data_catalog"),
-    ("dialog-param", "mapflow.functional.service.processing_service"),
-    ("dialog-param", "mapflow.functional.api.data_catalog_api"),
-    ("dialog-param", "mapflow.functional.api.processing_api"),
     # Reaching upwards for dialogs and views. One entry per module, so it clears only when
-    # that module is clean — fixing four of five imports leaves the exemption in place.
+    # that module is clean — fixing four of five imports leaves the exemption in place. These
+    # remaining ones are all the error-report widget (ErrorMessageWidget) construction still in
+    # a service/api, and one view reaching the alert helper — cleared by the error-reporting phase,
+    # which is sequenced after Phase C.
     ("api-imports-dialogs", "mapflow.functional.api.data_catalog_api"),
-    ("api-imports-dialogs", "mapflow.functional.api.processing_api"),
-    ("service-imports-dialogs", "mapflow.functional.service.data_catalog"),
     ("service-imports-dialogs", "mapflow.functional.service.processing_service"),
     ("view-imports-service", "mapflow.functional.view.processing_view"),
 }
