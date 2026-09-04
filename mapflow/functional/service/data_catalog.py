@@ -8,7 +8,6 @@ from PyQt5.QtGui import QImage
 from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest
 from qgis.core import QgsRasterLayer
 
-from ...dialogs.main_dialog import MainDialog
 from ...schema.data_catalog import PreviewSize, MosaicReturnSchema, ImageReturnSchema, UserLimitSchema
 from ...schema import MyImageryParams
 from ..api.data_catalog_api import DataCatalogApi
@@ -79,20 +78,16 @@ class DataCatalogService(QObject):
     def __init__(self,
                  http: Http,
                  server: str,
-                 dlg: MainDialog,
                  iface,
                  result_loader,
                  plugin_version,
                  app_context: AppContext):
         super().__init__()
-        #: Held only to build `DataCatalogApi(dlg=…)`; the service itself touches no widget. The
-        #: dlg parameter and the api's own use of it are removed in C2.6.
-        self.dlg = dlg
         self.iface = iface
         self.app_context = app_context
         self.result_loader = result_loader
         self.plugin_version = plugin_version
-        self.api = DataCatalogApi(http=http, server=server, dlg=dlg, iface=iface, result_loader=self.result_loader, plugin_version=self.plugin_version)
+        self.api = DataCatalogApi(http=http, server=server, iface=iface, result_loader=self.result_loader, plugin_version=self.plugin_version)
         self.mosaics = {}
         self.images = []
         self.image_max_size_pixels = Config.MAX_FILE_SIZE_PIXELS

@@ -84,11 +84,9 @@ class TestDownloadApiUrl:
         """API client constructs correct download URL."""
         from mapflow.functional.api.data_catalog_api import DataCatalogApi
 
-        dlg_mock = MagicMock()
         api = DataCatalogApi(
             http=http_mock,
             server="https://whitemaps.mapflow.ai/rest",
-            dlg=dlg_mock,
             iface=MagicMock(),
             result_loader=MagicMock(),
             plugin_version="1.0.0",

@@ -12,7 +12,6 @@ from ...schema.data_catalog import PreviewSize, MosaicCreateSchema, ImageReturnS
 from ...http import Http, get_error_report_body, data_catalog_message_parser
 from ...functional import layer_utils
 from ...dialogs.error_message_widget import ErrorMessageWidget
-from ...dialogs.main_dialog import MainDialog
 
 logger = logging.getLogger(__name__)
 
@@ -23,10 +22,13 @@ class DataCatalogApi(QObject):
     """
     mosaicsUpdated = pyqtSignal()
 
+    #: A preview could not be loaded — the view should say so in the preview pane. The api holds
+    #: no widget; what it used to write to `imagePreview` it now announces.
+    previewUnavailable = pyqtSignal()
+
     def __init__(self,
                  http: Http,
                  server: str,
-                 dlg: MainDialog,
                  iface,
                  result_loader,
                  plugin_version):
@@ -34,7 +36,6 @@ class DataCatalogApi(QObject):
         self.server = server
         self.http = http
         self.iface = iface
-        self.dlg = dlg
         self.result_loader = result_loader
         self.plugin_version = plugin_version
 
@@ -304,7 +305,7 @@ class DataCatalogApi(QObject):
                      )
 
     def preview_s_error_handler(self, response: QNetworkReply):
-        self.dlg.imagePreview.setText("Preview is unavailable")
+        self.previewUnavailable.emit()
     
     def get_image_preview_l(self,
                             image: ImageReturnSchema,

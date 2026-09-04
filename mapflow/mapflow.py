@@ -203,7 +203,6 @@ class Mapflow(QObject):
 
         self.data_catalog_service = DataCatalogService(self.http,
                                                     self.server,
-                                                    self.dlg,
                                                     self.iface,
                                                     self.result_loader,
                                                     self.app_context.plugin_version,
@@ -211,6 +210,9 @@ class Mapflow(QObject):
         # The My Imagery panel's view. Built here, not by the service (a service holds no view);
         # DataCatalogController renders through it.
         self.data_catalog_view = DataCatalogView(dlg=self.dlg, app_context=self.app_context)
+        # A failed preview used to be written to the pane by the api; it announces now, the view draws.
+        self.data_catalog_service.api.previewUnavailable.connect(
+            self.data_catalog_view.set_preview_unavailable)
         # The catalog tables' selection is resolved by the service (into mosaics/images) and by
         # AreaCalculatorService (for the AOI area) — both told the ids, neither reading the table.
         # The push runs before those handlers, so it is connected here, above them, in the raw
@@ -240,7 +242,6 @@ class Mapflow(QObject):
         self.provider_service.imagerySourcesChanged.connect(self.provider_view.set_raster_sources)
 
         self.processing_service = ProcessingService(http=self.http,
-                                                    dlg=self.dlg,
                                                     iface=self.iface,
                                                     result_loader=self.result_loader,
                                                     app_context=self.app_context,

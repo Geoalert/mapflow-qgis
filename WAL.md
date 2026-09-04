@@ -105,25 +105,25 @@ controllers: the processings table is `ProjectProcessingController`'s region and
 in the plugin. **The allowlist entries clear only when the second lands** — C2.2a shrinks the
 service without finishing it, which is the price of a reviewable diff.
 
-#### Group B — the service reaches into other regions' widgets
-
-[ready-for-review] C2.5 `AreaCalculatorService` computes without the dialog. Reads the provider /
-    AOI layer / search selection off `app_context` (pushed by C2.2b/C2.4); announces `startDisabled`,
-    `areaChanged`, `imageryExtentChanged`. `get_aoi` takes the provider object, not a combo index.
-    `dlg` + `use_imagery_extent` dropped from the constructor — **both** allowlist entries cleared.
-    Catalog dedup is now geometry-based (the table cells it compared are not a service's to read).
-
 #### Then the api modules
 
-[ ] C2.6 `ProcessingApi` and `DataCatalogApi` — different in kind: they hold the dialog only to
-    pass it to the result loader, so this is a constructor change, not a view extraction. Last
-    because the result loader's own home is decided in Phase D.
+[ready-for-review] C2.6 `ProcessingApi` and `DataCatalogApi` drop the `dlg` constructor argument —
+    the last one held only to pass through. `ProcessingApi` never used it; `DataCatalogApi` used it
+    once (writing "Preview is unavailable"), now announced via `previewUnavailable` for the view.
+    Dropping it let `ProcessingService` and `DataCatalogService` drop their own `dlg` too. Six
+    allowlist entries cleared: all four `dialog-param`, `processing_api`'s `api-imports-dialogs`,
+    `data_catalog`'s `service-imports-dialogs`.
 
 Each MR deletes its own entries from `tests/functional/test_layering.py`'s `ALLOWED` — removing
 them is part of the MR, not a follow-up. `test_the_allowlist_has_no_stale_entries` then fails if an
 exemption outlives its violation, so the list cannot silently drift.
 
-Acceptance: `ALLOWED` is empty, and `MAY_IMPORT` holds with no exemptions.
+**Phase C2 done: every service is widget-free.** The six entries still in `ALLOWED` are not C2's:
+they are the error-report widget (`ErrorMessageWidget`) and alert (`QMessageBox`) construction still
+inside `processing_service` / `data_catalog_api` / `alert_service`, plus `processing_view` importing
+the alert helper. Those are the **error-reporting phase**'s to clear (spec/006, sequenced after
+Phase C). Acceptance ("`ALLOWED` empty, `MAY_IMPORT` with no exemptions") is reached there, not at
+C2.6.
 
 ### Phase C3 — fix what the refactoring found
 
