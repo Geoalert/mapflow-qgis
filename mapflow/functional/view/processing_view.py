@@ -133,6 +133,12 @@ class ProcessingView:
     def set_start_enabled(self, enabled: bool) -> None:
         self.dlg.startProcessing.setEnabled(enabled)
 
+    def start_enabled(self) -> bool:
+        """Whether Start is currently enabled. Read by `validate_context_params` to tell 'no check
+        has claimed the problems label yet' from 'another concern already disabled the button and
+        set a reason' — which is why it must not blank that reason with its own."""
+        return self.dlg.startProcessing.isEnabled()
+
     def clear_problem_and_enable_start(self) -> None:
         """AREA/NONE billing: nothing blocks a start, so drop any leftover reason and enable it."""
         self.dlg.startProcessing.setEnabled(True)

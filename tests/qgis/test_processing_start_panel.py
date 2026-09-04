@@ -116,6 +116,8 @@ def test_reading_the_panel_fills_it_before_returning():
     controller.processing_view.has_option_widgets.return_value = True
     controller.processing_view.aoi_layer_chosen.return_value = True
 
+    controller.processing_view.start_enabled.return_value = False
+
     returned = service._read_start_panel()
 
     assert returned is params
@@ -123,6 +125,37 @@ def test_reading_the_panel_fills_it_before_returning():
     assert service._enabled_blocks == (True, False)
     assert service._has_option_widgets is True
     assert service._aoi_layer_chosen is True
+
+
+def test_reading_start_enabled_fills_it_synchronously():
+    """The last widget read the service used to make (`startProcessing.isEnabled()`) is now the
+    same synchronous round trip: it asks, the controller answers off the real button, and the
+    answer is back before `_read_start_enabled` returns."""
+    service = _service()
+    controller = _controller(service)
+    controller.processing_view.start_enabled.return_value = False
+
+    assert service._read_start_enabled() is False
+
+    controller.processing_view.start_enabled.return_value = True
+    assert service._read_start_enabled() is True
+
+
+def test_context_validation_sets_the_aoi_reason_only_when_start_is_enabled():
+    """The read guards a message: if the button is enabled nothing else has claimed the problems
+    label, so 'Set AOI' may be shown; if it is disabled another concern owns the label and this
+    must stay silent rather than overwrite it."""
+    service = _service()
+    controller = _controller(service)
+    service.app_context = SimpleNamespace(aoi=None,
+                                          user_role=SimpleNamespace(can_start_processing=True))
+    service.planned_processing_selection_error = lambda: None
+
+    controller.processing_view.start_enabled.return_value = True
+    assert service.validate_context_params() == "Set AOI to start processing"
+
+    controller.processing_view.start_enabled.return_value = False
+    assert service.validate_context_params() is None
 
 
 def test_with_no_controller_listening_the_panel_reads_empty():
