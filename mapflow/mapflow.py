@@ -230,10 +230,14 @@ class Mapflow(QObject):
         self.project_view = ProjectView(self.dlg)
         
         self.provider_service = ProviderService.get_instance(providers=ProvidersList([]),
-                                                            dlg=self.dlg,
                                                             app_context=self.app_context,
                                                             config=self.config,
                                                             data_catalog_service=self.data_catalog_service)
+        # The provider/source combos are ProviderView's; the service announces the list, this
+        # renders it. Wired here, before the first `update_providers()` below fires them.
+        self.provider_view = ProviderView(dlg=self.dlg)
+        self.provider_service.providersListChanged.connect(self.provider_view.add_providers)
+        self.provider_service.imagerySourcesChanged.connect(self.provider_view.set_raster_sources)
 
         self.processing_service = ProcessingService(http=self.http,
                                                     dlg=self.dlg,
@@ -257,7 +261,7 @@ class Mapflow(QObject):
         if errors:
             self.alert(self.tr('We failed to import providers from the settings. Please add them again'),
                     icon=QMessageBox.Warning)
-        self.provider_service.update_providers()
+        self.provider_service.update_providers(self.dlg.modelCombo.currentText())
 
         # ========== 9. ADD LAYER MENU ==========
         self.add_layer_menu = QMenu()
@@ -463,6 +467,10 @@ class Mapflow(QObject):
             self.project_processing_controller.load_results)
         # Calculate AOI size
         self.dlg.polygonCombo.layerChanged.connect(self.area_calculator_service.calculate_aoi_area_polygon_layer)
+        # Push the chosen AOI layer so ProviderService can rebuild a duplicated search over it
+        # without reading the combo. Seed it with the current layer, then follow every change.
+        self.app_context.aoi_layer = self.dlg.polygonCombo.currentLayer()
+        self.dlg.polygonCombo.layerChanged.connect(self.push_aoi_layer)
         self.dlg.mosaicTable.itemSelectionChanged.connect(self.area_calculator_service.calculate_aoi_area_catalog)
         self.dlg.imageTable.itemSelectionChanged.connect(self.area_calculator_service.calculate_aoi_area_catalog)
         self.monitor_polygon_layer_feature_selection([
@@ -485,8 +493,7 @@ class Mapflow(QObject):
         # ========== 13. PROVIDERS ==========
         # searchImageryButton and the metadata table's double/cell-click previews are wired by
         # SearchController (constructed above); the add/edit/remove buttons and the zoom combo by
-        # ProviderController, which owns those handlers.
-        self.provider_view = ProviderView(dlg=self.dlg)
+        # ProviderController, which owns those handlers. `provider_view` is built in section 7.
         self.provider_controller = ProviderController(
             provider_service=self.provider_service,
             provider_view=self.provider_view,
@@ -497,6 +504,22 @@ class Mapflow(QObject):
             edit_button=self.dlg.editProvider,
             remove_button=self.dlg.removeProvider,
             zoom_combo=self.dlg.zoomCombo)
+        # ProviderService announces the rest of the provider panel; render it through the views it
+        # spans. The provider-list signals are wired in section 7 (they fire at first load, before
+        # this point); these are the duplicate-a-processing writes.
+        self.provider_service.startEnabled.connect(lambda: self.processing_view.set_start_enabled(True))
+        self.provider_service.startDisabled.connect(
+            lambda reason: self.processing_view.disable_processing_start(reason, False))
+        self.provider_service.modelSelected.connect(self.processing_view.select_model)
+        self.provider_service.modelOptionsSet.connect(self.processing_view.set_checked_options)
+        self.provider_service.dataProviderSelected.connect(self.provider_view.select_data_provider)
+        self.provider_service.sourceSelectedByName.connect(self.provider_view.select_source_by_name)
+        self.provider_service.providerIndexSet.connect(self.provider_view.set_provider_index)
+        self.provider_service.zoomSet.connect(self.provider_view.set_zoom_text)
+        self.provider_service.myImageryDuplicated.connect(self.provider_view.show_catalog_tab)
+        self.provider_service.imagerySearchDuplicated.connect(self.search_view.fill_duplicated_search)
+        self.provider_service.imagerySearchDuplicated.connect(
+            lambda _rows: self.provider_view.show_imagery_search_tab())
 
         self.search_controller.connect_table_selection()
         self.app_context.meta_layer_table_connection = None
@@ -590,13 +613,20 @@ class Mapflow(QObject):
         """
         self.project_processing_controller.push_selection()
 
+    def push_aoi_layer(self, layer=None):
+        """The AOI combo's current layer, pushed to `app_context` for `ProviderService`'s
+        duplicated-search rebuild. `layerChanged` passes the new layer; on a bare call read it."""
+        self.app_context.aoi_layer = layer if layer is not None else self.dlg.polygonCombo.currentLayer()
+
     def push_search_selection(self):
-        """Deliver the search table's selected image indices to `app_context`, where they sit
-        beside `search_footprints` — the dict they are the key into. `ProcessingService` reads
-        them from there for the planned-processing gate and the provider-minimum-area check,
-        rather than touching the metadata table.
+        """Deliver the search table's selection to `app_context`, where it sits beside
+        `search_footprints` — the dict the indices key into. `ProcessingService` reads the indices
+        for the planned-processing gate and the provider-minimum-area check; `ProviderService`
+        reads the indices and the image ids to build the processing's imageIds — neither touches
+        the metadata table.
         """
         self.app_context.selected_search_indices = self.search_view.selected_local_indices()
+        self.app_context.selected_search_image_ids = self.search_view.selected_image_ids()
 
     def push_catalog_mosaic_selection(self):
         """Hand the selected mosaic-row ids to `DataCatalogService`, which resolves them into

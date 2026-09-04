@@ -20,38 +20,13 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 
-def _make_table(rows):
-    """rows: list[list[str]] — table[r][c] = cell text. Returns a mock metadataTable."""
-    table = MagicMock()
-
-    def item(row, col):
-        try:
-            text = rows[row][col]
-        except IndexError:
-            return None
-        cell = MagicMock()
-        cell.text.return_value = text
-        return cell
-
-    table.item.side_effect = item
-
-    def selected_items():
-        selected = []
-        for r, row_cells in enumerate(rows):
-            for c, _ in enumerate(row_cells):
-                cell = MagicMock()
-                cell.row.return_value = r
-                cell.column.return_value = c
-                selected.append(cell)
-        return selected
-
-    table.selectedItems.side_effect = selected_items
-    return table
-
-
 def _make_service(rows, provider_names, product_types, zooms=None,
                   min_areas=None, aoi_size=None):
-    """Build the minimum ProviderService surface needed by the methods under test."""
+    """Build the minimum ProviderService surface needed by the methods under test.
+
+    The service reads no table now — the search selection is pushed to `app_context`
+    (`selected_search_indices` + `selected_search_image_ids`), so the fixture pushes there.
+    """
     from mapflow.functional.service.provider_service import ProviderService
     from mapflow.config import Config
 
@@ -59,9 +34,6 @@ def _make_service(rows, provider_names, product_types, zooms=None,
 
     ProviderService._instance = None
     ProviderService._initialized = False
-
-    dlg = MagicMock()
-    dlg.metadataTable = _make_table(rows)
 
     footprints = {}
     zooms = zooms or [None] * len(provider_names)
@@ -80,10 +52,14 @@ def _make_service(rows, provider_names, product_types, zooms=None,
 
         feature.attribute.side_effect = attribute
         footprints[idx] = feature
-    app_context = SimpleNamespace(search_footprints=footprints, aoi_size=aoi_size)
+    # The local index of each selected row is its position; the image id is the ID column.
+    selected_indices = [str(i) for i in range(len(provider_names))]
+    selected_image_ids = [row[config.SEARCH_ID_COLUMN_INDEX] for row in rows]
+    app_context = SimpleNamespace(search_footprints=footprints, aoi_size=aoi_size,
+                                  selected_search_indices=selected_indices,
+                                  selected_search_image_ids=selected_image_ids)
 
     service = ProviderService.__new__(ProviderService)
-    service.dlg = dlg
     service.app_context = app_context
     service.config = config
     service.imagery_search_provider_instance = SimpleNamespace(requires_id=None, image_ids=None)
@@ -283,42 +259,37 @@ class TestDuplicateImagerySearchMultiRow:
         from mapflow.functional.service.provider_service import ProviderService
         from mapflow.config import ConfigColumns
 
+        from PyQt5.QtCore import QObject
+
         ProviderService._instance = None
         ProviderService._initialized = False
 
         config = Config()
         service = ProviderService.__new__(ProviderService)
+        QObject.__init__(service)  # imagerySearchDuplicated is a signal now
         service.config = config
         service.config_search_columns = ConfigColumns().METADATA_TABLE_ATTRIBUTES
         service.tr = lambda msg: msg
-        service.app_context = SimpleNamespace(metadata_layer=None,
-                                              search_footprints={},
-                                              meta_layer_table_connection=None)
-        service.selection_sync_callback = lambda *_a, **_kw: None
-
-        dlg = MagicMock()
-        dlg.metadataTable = MagicMock()
-        row_count_holder = {"n": 0}
-        dlg.metadataTable.setRowCount.side_effect = lambda n: row_count_holder.__setitem__("n", n)
-        dlg.metadataTable.rowCount.side_effect = lambda: row_count_holder["n"]
-        set_items = []
-        dlg.metadataTable.setItem.side_effect = lambda r, c, item: set_items.append((r, c, item))
         # A real QgsGeometry, not a MagicMock: duplicate_imagery_search builds a real
         # in-memory QgsVectorLayer and calls QgsFeature.setGeometry(), which rejects
         # anything that is not a genuine geometry. This is why the file sits in the
-        # qgis tier — see the module docstring.
+        # qgis tier — see the module docstring. The AOI layer is pushed to app_context now.
         from qgis.core import QgsGeometry
         aoi_feature = MagicMock()
         aoi_feature.geometry.return_value = QgsGeometry.fromWkt("POLYGON((0 0, 0 1, 1 1, 1 0, 0 0))")
-        layer = MagicMock()
-        layer.getFeatures.return_value = [aoi_feature]
-        dlg.polygonCombo.currentLayer.return_value = layer
-        dlg.tabWidget.findChild.return_value = MagicMock()
-        dlg.sourceCombo = MagicMock()
-        dlg.metadataTableFilled = MagicMock()
-        service.dlg = dlg
+        aoi_layer = MagicMock()
+        aoi_layer.getFeatures.return_value = [aoi_feature]
+        service.app_context = SimpleNamespace(metadata_layer=None,
+                                              search_footprints={},
+                                              meta_layer_table_connection=None,
+                                              aoi_layer=aoi_layer)
+        service.selection_sync_callback = lambda *_a, **_kw: None
         type(service).imagery_search_provider_index = property(lambda self: 0)
         service.providers = []
+
+        # The table fill is announced as a signal for SearchView to draw; capture what it carries.
+        duplicated_rows = []
+        service.imagerySearchDuplicated.connect(duplicated_rows.append)
 
         image_ids = ["img-1", "img-2", "img-3"]
         params = ImagerySearchParams(
@@ -328,19 +299,14 @@ class TestDuplicateImagerySearchMultiRow:
         )
         service.duplicate_imagery_search(params)
 
-        assert row_count_holder["n"] == 3, "Should create one table row per imageId"
+        assert len(duplicated_rows) == 1
+        rows = duplicated_rows[0]
+        assert len(rows) == 3, "Should hand over one row per imageId"
 
         id_col = config.SEARCH_ID_COLUMN_INDEX
-        id_items = [(r, item) for (r, c, item) in set_items if c == id_col]
-        assert len(id_items) == 3
-        # Read the value off the real QTableWidgetItem rather than inspecting mock call
-        # history: the service constructs genuine items (setData(Qt.DisplayRole, value)),
-        # so there is no call_args_list — and asserting on stored state is the better
-        # check anyway, since it survives a refactor that sets the text differently.
-        from PyQt5.QtCore import Qt
-        seen_ids = {item.data(Qt.DisplayRole) for _r, item in id_items}
+        seen_ids = {row[id_col] for row in rows}
         assert seen_ids == set(image_ids)
-        # Keys must be ints — `get_local_image_indices` casts the table text via int(),
+        # Keys must be ints — `get_local_image_indices` casts the local index via int(),
         # so a string-keyed dict would KeyError downstream and leave the request without dataProvider.
         keys = list(service.app_context.search_footprints.keys())
         assert all(isinstance(k, int) for k in keys)

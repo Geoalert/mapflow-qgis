@@ -65,13 +65,11 @@ ALLOWED = {
     # service/ and api/ importing Qt widgets — Phase C moves this to view/.
     ("widget-import", "mapflow.functional.service.alert_service"),
     ("widget-import", "mapflow.functional.service.processing_service"),
-    ("widget-import", "mapflow.functional.service.provider_service"),
     ("widget-import", "mapflow.functional.api.data_catalog_api"),
     # Services and two api modules taking the main dialog as a constructor argument.
     ("dialog-param", "mapflow.functional.service.area_calculator_service"),
     ("dialog-param", "mapflow.functional.service.data_catalog"),
     ("dialog-param", "mapflow.functional.service.processing_service"),
-    ("dialog-param", "mapflow.functional.service.provider_service"),
     ("dialog-param", "mapflow.functional.api.data_catalog_api"),
     ("dialog-param", "mapflow.functional.api.processing_api"),
     # Reaching upwards for dialogs and views. One entry per module, so it clears only when

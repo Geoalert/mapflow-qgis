@@ -2,7 +2,7 @@ from typing import List, Optional, Tuple
 
 from PyQt5.QtCore import QObject, Qt, pyqtSignal
 from PyQt5.QtGui import QBrush, QColor
-from PyQt5.QtWidgets import QAbstractItemView, QMenu, QPushButton, QToolButton, QWidget
+from PyQt5.QtWidgets import QAbstractItemView, QMenu, QPushButton, QTableWidgetItem, QToolButton, QWidget
 
 from ..helpers import utc_date_from_iso
 from ...dialogs.main_dialog import MainDialog
@@ -288,6 +288,35 @@ class SearchView(QObject):
             return []
         return [self.dlg.metadataTable.item(cell.row(), self.config.LOCAL_INDEX_COLUMN).text()
                 for cell in selected]
+
+    def selected_image_ids(self) -> List[str]:
+        """The image id of every selected row, in row order. Pushed to `app_context` beside the
+        local indices so `ProviderService` builds a processing's imageIds without a table."""
+        selected = self.dlg.metadataTable.selectedItems()
+        if not selected:
+            return []
+        id_column = self.config.SEARCH_ID_COLUMN_INDEX
+        image_ids = []
+        for row in sorted({cell.row() for cell in selected}):
+            item = self.dlg.metadataTable.item(row, id_column)
+            image_ids.append(item.text() if item is not None else "")
+        return image_ids
+
+    def fill_duplicated_search(self, rows) -> None:
+        """Rebuild the results table for a duplicated processing: one row per image, each a map of
+        column index → value. Emits `metadataTableFilled` and selects every row, the way a real
+        search does, so the cost recalculation the selection drives runs."""
+        table = self.dlg.metadataTable
+        table.clearContents()
+        table.setRowCount(len(rows))
+        for row, columns in enumerate(rows):
+            for column, value in columns.items():
+                item = QTableWidgetItem()
+                item.setData(Qt.DisplayRole, value)
+                table.setItem(row, column, item)
+        self.dlg.metadataTableFilled.emit()
+        for row in range(len(rows)):
+            table.selectRow(row)
 
     def selected_zoom(self) -> Optional[str]:
         """The zoom of the first selected row. Different zooms across a multi-selection are not

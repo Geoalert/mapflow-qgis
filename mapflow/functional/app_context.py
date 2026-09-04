@@ -41,6 +41,10 @@ class AppContext:
     # what is sent for processing/cost (matches the displayed area); falls back to `aoi`.
     processing_aoi: Optional[QgsGeometry] = None
     aoi_size: Optional[float] = None
+    # The polygon layer currently chosen as the AOI (the AOI combo's layer). Pushed from the
+    # composition root so `ProviderService` can rebuild a duplicated search over it without
+    # reading the combo.
+    aoi_layer: Optional[QgsVectorLayer] = None
     # The list of layers usable as an AOI lives on AoiService — nothing else reads it.
 
     # === User/Account State ===
@@ -87,6 +91,10 @@ class AppContext:
     # a service may not read) so `ProcessingService` can gate planned processing and look up a
     # provider's minimum area — it is the key into `search_footprints` above, so it lives beside it.
     selected_search_indices: List[str] = field(default_factory=list)
+    # The image id of every selected search-result row, in the same order — pushed alongside
+    # `selected_search_indices` so `ProviderService` can build the processing's imageIds without
+    # reading the metadata table.
+    selected_search_image_ids: List[str] = field(default_factory=list)
     search_page_offset: int = 0
     # Raw imagery-search results as returned by the API for the current view (regular search
     # or template) — a GeoJSON FeatureCollection with a per-feature ``local_index``. Retained

@@ -32,6 +32,30 @@ class ProviderView(QObject):
     def set_provider_index(self, index: int) -> None:
         self.dlg.setProviderIndex(index)
 
+    def add_providers(self, provider_names: dict) -> None:
+        """Append {name: api_name} entries to the provider combo (the list changed)."""
+        for name, api_name in provider_names.items():
+            self.dlg.providerCombo.addItem(name, api_name)
+
+    def set_raster_sources(self, provider_names: dict, default_provider_names) -> None:
+        """Rebuild both source combos from the current providers, defaulting to the given names."""
+        self.dlg.set_raster_sources(provider_names=provider_names,
+                                    default_provider_names=default_provider_names)
+
+    def select_data_provider(self, index: int, zoom) -> None:
+        """Duplicating a processing: pick the source by index, and its zoom (index 0 = native)."""
+        self.dlg.sourceCombo.setCurrentIndex(index)
+        if zoom:
+            self.dlg.zoomCombo.setCurrentText(str(zoom))
+        else:
+            self.dlg.zoomCombo.setCurrentIndex(0)
+
+    def select_source_by_name(self, name: str) -> None:
+        self.dlg.sourceCombo.setCurrentText(name)
+
+    def set_zoom_text(self, zoom: str) -> None:
+        self.dlg.zoomCombo.setCurrentText(str(zoom))
+
     # ---------- the zoom combo ----------
 
     def enable_zoom(self, enabled: bool) -> None:
