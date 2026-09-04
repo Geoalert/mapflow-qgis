@@ -149,6 +149,7 @@ class ProcessingService(QObject):
     #: What the start panel says, refreshed via `startPanelNeeded`. `None` params means the panel
     #: has never answered — treated as "no parameters", which is what an empty panel means anyway.
     _start_params = None
+    _start_enabled = True
     _enabled_blocks = ()
     #: Whether the option checkboxes have been built yet. A model that declares blocks is quoted
     #: only once they exist, so "no widgets" is not the same as "no blocks ticked".
@@ -218,14 +219,21 @@ class ProcessingService(QObject):
         self._filter = terms or ""
 
     def set_start_panel(self, params, enabled_blocks=(), has_option_widgets: bool = False,
-                        aoi_layer_chosen: bool = False) -> None:
-        """The start panel's current reading, answering `startPanelNeeded`. `aoi_layer_chosen`
-        rides along because the only code that reads it runs inside the same validation pass that
-        asks for this — so one synchronous push carries the whole panel."""
+                        aoi_layer_chosen: bool = False, start_enabled: bool = True) -> None:
+        """The start panel's current reading, answering `startPanelNeeded`. `aoi_layer_chosen` and
+        `start_enabled` ride along because the only code that reads them runs inside the same
+        validation pass that asks for this — so one synchronous push carries the whole panel."""
         self._start_params = params
         self._enabled_blocks = tuple(enabled_blocks or ())
         self._has_option_widgets = bool(has_option_widgets)
         self._aoi_layer_chosen = bool(aoi_layer_chosen)
+        self._start_enabled = bool(start_enabled)
+
+    def _read_start_enabled(self) -> bool:
+        """Whether Start is currently enabled, refreshed from the panel. `validate_context_params`
+        asks before deciding whether it may set the 'Set AOI' reason (see there)."""
+        self.startPanelNeeded.emit()
+        return self._start_enabled
 
     def _read_start_panel(self):
         """Refresh `_start_params` from whoever owns the panel, then return it."""
@@ -380,11 +388,11 @@ class ProcessingService(QObject):
         if planned_selection_error:
             return planned_selection_error
         if not self.app_context.aoi:
-            # The only widget this service still reads. It exists because "the button is currently
-            # enabled" means "an earlier check already set a reason", and re-reporting "Set AOI"
-            # over that reason would hide it. The button is written from DataCatalogView and
-            # ProviderService too, so this cannot become pushed state until they stop (C2.2c).
-            if self.dlg.startProcessing.isEnabled():
+            # "Start is enabled" means no earlier check has claimed the problems label, so it is
+            # safe to set the 'Set AOI' reason; if it is disabled, another concern already set a
+            # reason and re-reporting 'Set AOI' over it would hide it. Pushed synchronously rather
+            # than read off the widget — this is what made the service widget-free.
+            if self._read_start_enabled():
                 if not self.app_context.user_role.can_start_processing:
                     error = self.tr('Not enough rights to start processing in a shared project ({})').format(self.app_context.user_role.value)
                 else:

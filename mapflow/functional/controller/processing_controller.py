@@ -157,7 +157,8 @@ class ProcessingController(QObject):
             params=self.processing_view.read_processing_start_params(),
             enabled_blocks=self.processing_view.enabled_blocks(),
             has_option_widgets=self.processing_view.has_option_widgets(),
-            aoi_layer_chosen=self.processing_view.aoi_layer_chosen())
+            aoi_layer_chosen=self.processing_view.aoi_layer_chosen(),
+            start_enabled=self.processing_view.start_enabled())
 
     def start_processing(self, *args) -> None:
         """The Start button. The button is the start panel's, so its click is this controller's."""
