@@ -28,21 +28,26 @@ from mapflow.functional.service import provider_service as provider_service_modu
 
 
 def _service():
-    """A ProviderService with just enough surface for the duplicate_* recovery path."""
+    """A ProviderService with just enough surface for the duplicate_* recovery path.
+
+    It holds no dialog now — re-enabling the Start button leaves as `startEnabled`, so the
+    fixture records that signal instead of inspecting a widget.
+    """
+    from PyQt5.QtCore import QObject
+
     ProviderService = provider_service_module.ProviderService
 
     ProviderService._instance = None
     ProviderService._initialized = False
 
     service = ProviderService.__new__(ProviderService)
-    service.dlg = MagicMock()
-    # Iterating a bare MagicMock raises TypeError, which would muddy which exception the
-    # handler actually saw; an empty list keeps the failure attributable to the DTO.
-    service.dlg.modelOptions = []
+    QObject.__init__(service)  # startEnabled is a signal
     service.app_context = SimpleNamespace(
         allow_enable_processing={"aoi_loaded": False, "my_mosaic_loaded": False}
     )
     service.tr = lambda message: message
+    service._start_reenabled = []
+    service.startEnabled.connect(lambda: service._start_reenabled.append(True))
     return service
 
 
@@ -51,7 +56,7 @@ def _assert_dialog_recovered(service):
         "every allow_enable_processing flag must be reset, or the dialog stays "
         "partially disabled"
     )
-    service.dlg.startProcessing.setEnabled.assert_called_with(True)
+    assert service._start_reenabled, "the Start button must be re-enabled (startEnabled emitted)"
 
 
 def test_abort_duplication_resets_flags_and_reenables_start():

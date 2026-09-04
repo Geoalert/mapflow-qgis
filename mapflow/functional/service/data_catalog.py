@@ -488,6 +488,11 @@ class DataCatalogService(QObject):
         no view of its own, nor another service's)."""
         self.sourceMosaicSelected.emit(mosaic_id)
 
+    def clear_mosaic_selection(self):
+        """Ask the panel to clear the mosaic selection. Called by ProviderService when it
+        duplicates a My Imagery source — it holds no view to do it itself."""
+        self.mosaicSelectionCleared.emit()
+
     def show_my_imagery_source(self,
                                source_params: MyImageryParams):
         if source_params.myImagery.imageIds: # if the source was an image:

@@ -403,6 +403,17 @@ class ProcessingView:
     def show_user_provider_info(self, source_params) -> str:
         return self.dlg.show_user_provider_info(source_params)
 
+    def select_model(self, name: str) -> None:
+        """Duplicating a processing: pick its model. Its availability was checked before this is
+        emitted, so setting the text here always lands on a real entry."""
+        self.dlg.modelCombo.setCurrentText(name)
+
+    def set_checked_options(self, enabled_labels) -> None:
+        """Duplicating a processing: tick the option checkboxes whose label is in `enabled_labels`,
+        untick the rest."""
+        for checkbox in self.dlg.modelOptions:
+            checkbox.setChecked(checkbox.text() in enabled_labels)
+
     # ---------- the review / rating panel ----------
 
     def set_rating_labels(self, processing_name: str, rating: int = 0, feedback: str = "") -> None:

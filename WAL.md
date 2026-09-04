@@ -105,32 +105,22 @@ controllers: the processings table is `ProjectProcessingController`'s region and
 in the plugin. **The allowlist entries clear only when the second lands** — C2.2a shrinks the
 service without finishing it, which is the price of a reviewable diff.
 
-[ready-for-review] C2.2b The start panel → `ProcessingController`
-    `read_processing_start_params` ×2, `disable_processing_start` ×3, `set_processing_cost`,
-    `clear_processing_name` ×2, `startProcessing`, `cornfirmProcessingStart`, `modelCombo`,
-    `modelOptions`/`modelOptionsLayout`/`enabled_blocks`, `processingName`, plus the four
-    cross-region reads (search selection, AOI layer) now pushed via `app_context` /
-    `set_start_panel`. `ProcessingView` moved to `mapflow.py`; `service-imports-view` cleared.
 [ ] C2.2c The last widget read: `startProcessing.isEnabled()` in `validate_context_params`.
-    Blocked until `DataCatalogView` (C2.3) and `ProviderService` (C2.4) stop writing that button —
-    only then can its state be pushed instead of read. Clears `dialog-param` / `widget-import`
-    for `processing_service` together with C2.6 (`ProcessingApi(dlg=...)`).
-[ready-for-review] C2.3 `DataCatalogService` → `DataCatalogController` + `DataCatalogView`
-    Service now announces (signals) and is told the selection (`set_selected_*`); the controller
-    owns every dialog and renders. `ProcessingView`-style: `DataCatalogView` built in `mapflow.py`.
-    `service-imports-view` + `widget-import` cleared for data_catalog; `dialog-param` +
-    `service-imports-dialogs` stay until C2.6 (`DataCatalogApi(dlg=…)` + the `MainDialog` hint).
+    Now unblocked — C2.3 and C2.4 have both stopped writing that button, so its state can be pushed
+    instead of read. Clears `dialog-param` / `widget-import` for `processing_service` together with
+    C2.6 (`ProcessingApi(dlg=...)`).
 
 #### Group B — the service reaches into other regions' widgets
 
 No view of its own, and the widgets belong to two or three other regions. These need pushed state,
 which is why they are last.
 
-[ ] C2.4 `ProviderService` (38) → `ProviderController`, with reads pushed from `SearchController`
-    Spans three views: `metadataTable` ×11 (`SearchView`), `sourceCombo`/`zoomCombo`/`providerCombo`
-    ×8 (`ProviderView`), `modelCombo`/`modelOptions` ×5 (`ProcessingView`), plus `tabWidget` ×4 and
-    `startProcessing` ×2. The largest of the six and the one most likely to want splitting into two
-    MRs — decide once C2.3 has shown how much pushed state costs.
+[ready-for-review] C2.4 `ProviderService` → `ProviderController` + `ProviderView` (+ SearchView)
+    Read path (called by `processing_service`) reads the search selection off `app_context`
+    (`selected_search_indices` + new `selected_search_image_ids`); the duplicate cluster announces
+    via signals wired in `mapflow.py` to the view owning each widget. `dlg` param dropped entirely —
+    **both** allowlist entries (`widget-import` + `dialog-param`) cleared. Dead `get_data_provider`
+    / `get_current_provider_index` removed.
 [ ] C2.5 `AreaCalculatorService` (17, plus the `use_imagery_extent` checkbox it is handed directly)
     → `ProcessingController` (`spec/007_architecture.md` assigns it "AOI and provider selection,
     cost")

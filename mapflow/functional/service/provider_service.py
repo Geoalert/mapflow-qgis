@@ -2,8 +2,7 @@
 import logging
 from typing import Optional
 
-from PyQt5.QtCore import Qt, QObject
-from PyQt5.QtWidgets import QTableWidgetItem, QWidget
+from PyQt5.QtCore import QObject, pyqtSignal
 from qgis.core import QgsVectorLayer, QgsFeature
 
 from . import DataCatalogService
@@ -45,16 +44,54 @@ def normalized_product_types(product_types) -> set:
 
 
 class ProviderService(QObject):
+    """Provider selection, validation and the duplicate-a-processing rebuild — as requests and
+    state, not widgets. It holds no dialog: the source/provider/zoom combos are `ProviderView`'s,
+    the model combo and its options `ProcessingView`'s, the search table `SearchView`'s. What the
+    service needs off those it is *told* (`app_context.selected_search_*`, the setters below); what
+    it wants drawn it *announces* (the signals below), for `ProviderController` (and, for the
+    search table, `SearchController`) to render. See `spec/007_architecture.md` § Services.
+    """
     _instance: Optional['ProviderService'] = None
     _initialized: bool = False
-    
-    def __init__(self, providers: ProvidersList, dlg, app_context: AppContext, config: Config, data_catalog_service: DataCatalogService):
+
+    # ---------- what the provider panel and the start button must show (announced, never drawn) ----------
+    #: A start is blocked, with this reason (the search-selection error path).
+    startDisabled = pyqtSignal(str)
+    #: A duplicate step (or its recovery) leaves the Start button usable.
+    startEnabled = pyqtSignal()
+    #: The provider list changed — refill the provider combo from this {name: api_name}.
+    providersListChanged = pyqtSignal(object)
+    #: The imagery sources changed — ({name: api_name}, [default names]) for the raster combos.
+    imagerySourcesChanged = pyqtSignal(object, object)
+    #: Duplication picked this model in the combo.
+    modelSelected = pyqtSignal(str)
+    #: Duplication resolved which option checkboxes to tick (by label).
+    modelOptionsSet = pyqtSignal(object)
+    #: Duplication chose a data provider: (source combo index, zoom or None).
+    dataProviderSelected = pyqtSignal(int, object)
+    #: Duplication matched an existing source by name.
+    sourceSelectedByName = pyqtSignal(str)
+    #: Duplication needs the provider index set (the imagery-search source, or a freshly added
+    #: user provider).
+    providerIndexSet = pyqtSignal(int)
+    #: Duplication set the zoom (a user provider carries its own).
+    zoomSet = pyqtSignal(str)
+    #: Duplication of a My Imagery source: reset the mosaic table and show the catalog tab.
+    myImageryDuplicated = pyqtSignal()
+    #: Duplication of an imagery search: the per-row column values to fill the metadata table with.
+    imagerySearchDuplicated = pyqtSignal(object)
+
+    #: The search table's selection, pushed from the composition root — the service reads no table.
+    #: `selected_search_indices` / `selected_search_image_ids` live on `app_context` beside
+    #: `search_footprints` (the dict they key into); the polygon layer used to rebuild a duplicated
+    #: search is pushed to `app_context.aoi_layer`.
+
+    def __init__(self, providers: ProvidersList, app_context: AppContext, config: Config, data_catalog_service: DataCatalogService):
         if ProviderService._initialized:
             return
         super().__init__()
         ProviderService._initialized = True
         self.providers = providers
-        self.dlg = dlg
         self.app_context = app_context
         self.config = config
         self.data_catalog_service = data_catalog_service
@@ -70,46 +107,44 @@ class ProviderService(QObject):
         if cls._instance is None:
             raise RuntimeError("ProviderService not initialized.")
         return cls._instance
-    
+
     @classmethod
-    def get_instance(cls, providers: ProvidersList, dlg, app_context: AppContext, config: Config, data_catalog_service: DataCatalogService) -> 'ProviderService':
+    def get_instance(cls, providers: ProvidersList, app_context: AppContext, config: Config, data_catalog_service: DataCatalogService) -> 'ProviderService':
         if cls._instance is None:
-            cls._instance = cls(providers, dlg, app_context, config, data_catalog_service)
+            cls._instance = cls(providers, app_context, config, data_catalog_service)
         return cls._instance
-        
-    def get_current_provider_index(self):
-        return self.dlg.providerIndex()
-    
-    def get_data_provider(self):
-        return self.providers[self.dlg.providerIndex()]
-    
+
+    # ---------- the search selection, read off app_context (pushed, never a table) ----------
+
+    def _selected_search_indices(self):
+        return list(self.app_context.selected_search_indices or [])
+
+    def _selected_search_image_ids(self):
+        return list(self.app_context.selected_search_image_ids or [])
+
     def update_providers_list(self, new_providers):
         for provider in self.providers:
             if isinstance(provider, MyImageryProvider):
                 self.my_imagery_provider_instance = provider
             if isinstance(provider, ImagerySearchProvider):
                 self.imagery_search_provider_instance = provider
-    
-    def update_providers(self) -> None:
-        """Update imagery & providers dropdown list after edit/add/remove
-        It works both ways: if providers is specified, it updates the settings;
-        otherwise loads providers list from settings
-        """
+
+    def update_providers(self, current_model: str = "") -> None:
+        """Persist the user providers and announce the refreshed combo list. The current model is
+        passed in (a `ProcessingView` read) so this touches no widget."""
         self.user_providers.to_settings(self.app_context.settings)
         provider_names = {p.name: getattr(p, 'api_name', p.name) for p in self.providers}
-        for name, api_name in provider_names.items():
-            self.dlg.providerCombo.addItem(name, api_name)
-        self.set_available_imagery_sources(self.dlg.modelCombo.currentText())
-    
+        self.providersListChanged.emit(provider_names)
+        self.set_available_imagery_sources(current_model)
+
     def set_available_imagery_sources(self, wd: str) -> None:
-        """Set the list of imagery sources (all search goes through the Mapflow catalog)."""
+        """Announce the list of imagery sources (all search goes through the Mapflow catalog)."""
         if self.providers == self.basemap_providers:
             # Providers did not change
             return
         self.providers = self.basemap_providers
         provider_names = {p.name: getattr(p, 'api_name', p.name) for p in self.providers}
-        self.dlg.set_raster_sources(provider_names=provider_names,
-                                    default_provider_names=['Mapbox', '🌍 Mapbox Satellite'])
+        self.imagerySourcesChanged.emit(provider_names, ['Mapbox', '🌍 Mapbox Satellite'])
 
     def get_provider_params(self, provider, zoom):
         meta = {'source-app': 'qgis',
@@ -141,13 +176,12 @@ class ProviderService(QObject):
             provider_names, product_types = [], []
             image_ids, selection_error = None, ""
 
-            selected_images = self.dlg.metadataTable.selectedItems()
-            if selected_images:
-                local_image_indices = self.get_local_image_indices(selected_images)
+            if self._selected_search_indices():
+                local_image_indices = self.get_local_image_indices()
                 provider_names, product_types = self.get_search_providers(local_image_indices)
                 image_ids, selection_error = self.get_search_images_ids(provider_names, product_types)
                 if selection_error:
-                    self.dlg.disable_processing_start(selection_error)
+                    self.startDisabled.emit(selection_error)
                 self.imagery_search_provider_instance.image_ids = image_ids
                 provider_name = provider_names[0] if provider_names else None # the same for all [i] if there was no 'selection_error'
             else:
@@ -181,14 +215,9 @@ class ProviderService(QObject):
             elif mosaic:
                 provider_text += " ({name})". format(name=mosaic.name)
         elif isinstance(provider, ImagerySearchProvider):
-            selected_cells = self.dlg.metadataTable.selectedItems()
-            if not selected_cells:
-                image_id = None
-                selected_rows_count = 0
-            else:
-                id_column_index = self.config.SEARCH_ID_COLUMN_INDEX
-                selected_rows_count = len({cell.row() for cell in selected_cells})
-                image_id = self.dlg.metadataTable.item(selected_cells[0].row(), id_column_index).text()
+            selected_image_ids = self._selected_search_image_ids()
+            selected_rows_count = len(self._selected_search_indices())
+            image_id = selected_image_ids[0] if selected_image_ids else None
             if selected_rows_count > 1:
                 provider_text += " ({count} images selected)".format(count=selected_rows_count)
             elif image_id:
@@ -207,11 +236,10 @@ class ProviderService(QObject):
             if not self.imagery_search_provider_instance.image_ids:
                 error = self.tr("This provider requires image ID. Use search tab to find imagery for you requirements, "
                                 "and select image in the table.")
-        # Check for zoom errors by examining the UI state
+        # Check for zoom errors by examining the current selection state
         if not error and isinstance(provider, ImagerySearchProvider):
-            selected_images = self.dlg.metadataTable.selectedItems()
-            if selected_images:
-                local_image_indices = self.get_local_image_indices(selected_images)
+            if self._selected_search_indices():
+                local_image_indices = self.get_local_image_indices()
                 provider_names, product_types = self.get_search_providers(local_image_indices)
                 # Check for zoom consistency
                 if local_image_indices:
@@ -283,14 +311,13 @@ class ProviderService(QObject):
                                                                providerMinArea=provider_min_area)
         return None
 
-    def get_local_image_indices(self, selected_images):
+    def get_local_image_indices(self):
+        """The `local_index` of every selected search row. Pushed from the search table, so this
+        reads no widget; the ints match `search_footprints`' keys."""
         try:
-            rows = list(set(image.row() for image in selected_images))
-            local_image_indices = [int(self.dlg.metadataTable.item(row, self.config.LOCAL_INDEX_COLUMN).text()) 
-                                   for row in rows]
-        except (AttributeError, KeyError):
-            local_image_indices = []
-        return local_image_indices
+            return [int(index) for index in self._selected_search_indices()]
+        except (TypeError, ValueError):
+            return []
     
     def get_search_providers(self, local_image_indices):
         try:
@@ -306,20 +333,7 @@ class ProviderService(QObject):
         return provider_names, product_types
     
     def get_search_images_ids(self, provider_names, product_types):
-        selected_cells = self.dlg.metadataTable.selectedItems()
-        if not selected_cells:
-            image_ids = None
-        else:
-            id_column_index = self.config.SEARCH_ID_COLUMN_INDEX
-            rows = sorted({cell.row() for cell in selected_cells})
-            image_ids = []
-            for row in rows:
-                cell = self.dlg.metadataTable.item(row, id_column_index)
-                text = cell.text() if cell is not None else ""
-                if text:
-                    image_ids.append(text)
-            if not image_ids:
-                image_ids = None
+        image_ids = [image_id for image_id in self._selected_search_image_ids() if image_id] or None
         selection_error = ""
         try:
             if len(set(provider_names)) > 1:
@@ -359,7 +373,7 @@ class ProviderService(QObject):
         alert(message)
         for key in self.app_context.allow_enable_processing:
             self.app_context.allow_enable_processing[key] = True
-        self.dlg.startProcessing.setEnabled(True)
+        self.startEnabled.emit()
 
     def duplicate_provider(self, processing: ProcessingDTO):
         message = self.tr("Duplication failed on copying data source")
@@ -383,12 +397,14 @@ class ProviderService(QObject):
     def duplicate_model(self, processing: ProcessingDTO):
         message = self.tr("Duplication failed on copying model")
         try:
-            if self.dlg.modelCombo.findText(processing.workflowDef.name) == -1: # index is -1, the item is not found
+            # Whether the model is available is a question about the account's workflow defs, not
+            # about the combo — the combo is filled from them. Asking the model avoids the widget.
+            if self.app_context.get_workflow_def(processing.workflowDef.name) is None:
                 self._abort_duplication(
                     self.tr("Model '{wd}' is not enabled for your account").format(wd=processing.workflowDef.name)
                 )
-            else: # item is found
-                self.dlg.modelCombo.setCurrentText(processing.workflowDef.name)
+            else:
+                self.modelSelected.emit(processing.workflowDef.name)
         except DUPLICATION_FAILURES:
             self._abort_duplication(message)
         except Exception:
@@ -398,19 +414,13 @@ class ProviderService(QObject):
     def duplicate_model_options(self, processing):
         message = self.tr("Duplication failed on copying model options")
         try:
-            model_options = []
-            enabled_options = []
-            for checkbox in self.dlg.modelOptions:
-                model_options.append(checkbox.text())
-            for block in processing.blocks:
-                if block.enabled:
-                    enabled_options.append(block.displayName)
+            # The available options are the current model's optional blocks (the checkboxes are
+            # built from them), so read them from the workflow def rather than the widgets.
+            wd = self.app_context.get_workflow_def(processing.workflowDef.name)
+            model_options = [block.displayName for block in wd.optional_blocks] if wd else []
+            enabled_options = [block.displayName for block in processing.blocks if block.enabled]
             options_to_enable = [option for option in enabled_options if option in model_options]
-            for checkbox in self.dlg.modelOptions:
-                if checkbox.text() in options_to_enable:
-                    checkbox.setChecked(True)
-                else:
-                    checkbox.setChecked(False) 
+            self.modelOptionsSet.emit(options_to_enable)
             deleted_options = [enabled_option for enabled_option in enabled_options if enabled_option not in model_options]
             if deleted_options:
                 self._abort_duplication(
@@ -425,38 +435,32 @@ class ProviderService(QObject):
 
     def duplicate_data_provider(self, provider: DataProviderParams):
         provider_name = provider.dataProvider.providerName
-        index = self.dlg.sourceCombo.findData(provider_name)
+        # The combo index equals the provider's index in `providers` (set_raster_sources fills it
+        # in that order), so resolve availability against `providers` instead of the combo.
+        index = next((i for i, p in enumerate(self.providers)
+                      if getattr(p, 'api_name', p.name) == provider_name), -1)
         if index == -1:
             self._abort_duplication(
                 self.tr("Provider '{provider}' is not enabled for your account").format(provider=provider_name)
             )
         else:
-            self.dlg.sourceCombo.setCurrentIndex(index)
-            if provider.dataProvider.zoom:
-                self.dlg.zoomCombo.setCurrentText(str(provider.dataProvider.zoom))
-            else:
-                self.dlg.zoomCombo.setCurrentIndex(0)
-    
+            zoom = str(provider.dataProvider.zoom) if provider.dataProvider.zoom else None
+            self.dataProviderSelected.emit(index, zoom)
+
     def duplicate_my_imagery(self, provider: MyImageryParams):
-        self.dlg.mosaicTable.clearSelection()
+        self.data_catalog_service.clear_mosaic_selection()
         if provider.myImagery.imageIds:
             self.app_context.allow_enable_processing['my_image_loaded'] = False
             image_id = provider.myImagery.imageIds[0]
             self.data_catalog_service.get_image(image_id)
         elif provider.myImagery.mosaicId:
             self.data_catalog_service.select_mosaic_cell(provider.myImagery.mosaicId)
-        my_imagery_tab = self.dlg.tabWidget.findChild(QWidget, "catalogTab") 
-        self.dlg.tabWidget.setCurrentWidget(my_imagery_tab)
+        self.myImageryDuplicated.emit()
         self.data_catalog_service.set_catalog_provider(self.providers)
 
     def duplicate_imagery_search(self, provider: ImagerySearchParams):
-        self.dlg.sourceCombo.setCurrentIndex(self.imagery_search_provider_index)
+        self.providerIndexSet.emit(self.imagery_search_provider_index)
         image_ids = list(provider.imagerySearch.imageIds or [])
-        # Setup table to have one row per duplicated image id (Bug #3 fix)
-        self.dlg.metadataTable.clearContents()
-        self.dlg.metadataTable.setRowCount(len(image_ids))
-        imagery_search_tab = self.dlg.tabWidget.findChild(QWidget, "providersTab")
-        self.dlg.tabWidget.setCurrentWidget(imagery_search_tab)
         # Only name, zoom and id are returned, so we map column indices to per-row value lookups
         def per_row_columns(row, image_id):
             return {
@@ -479,7 +483,9 @@ class ProviderService(QObject):
         # Fill the layer with one feature per (AOI x image_id) combination.
         # Individual image footprints aren't downloaded for duplicated processings,
         # so every row shares the AOI geometry — sufficient for selection-driven cost recalc.
-        aoi_features = list(self.dlg.polygonCombo.currentLayer().getFeatures())
+        # The AOI layer is pushed to app_context (the combo is not this service's to read).
+        aoi_layer = self.app_context.aoi_layer
+        aoi_features = list(aoi_layer.getFeatures()) if aoi_layer is not None else []
         for row, image_id in enumerate(image_ids):
             row_columns = per_row_columns(row, image_id)
             for aoi_feature in aoi_features:
@@ -493,12 +499,6 @@ class ProviderService(QObject):
                 self.app_context.metadata_layer.commitChanges()
         self.app_context.metadata_layer.updateExtents()
         self.app_context.meta_layer_table_connection = self.app_context.metadata_layer.selectionChanged.connect(self.selection_sync_callback)
-        # Fill metadata table with the returned values
-        for row, image_id in enumerate(image_ids):
-            for column, value in per_row_columns(row, image_id).items():
-                table_item = QTableWidgetItem()
-                table_item.setData(Qt.DisplayRole, value)
-                self.dlg.metadataTable.setItem(row, column, table_item)
         # Create pseudo footprints dict keyed by local_index so multi-image cost requests resolve correctly.
         # local_index is stored as a string in the in-memory layer field (no explicit type was given when
         # the layer was created), but the rest of the codebase expects integer keys
@@ -513,25 +513,25 @@ class ProviderService(QObject):
             _coerce_local_index(feature.attribute("local_index")): feature
             for feature in self.app_context.metadata_layer.getFeatures()
         }
-        self.dlg.metadataTableFilled.emit()
-        for row in range(len(image_ids)):
-            self.dlg.metadataTable.selectRow(row)
+        # The table fill and row selection belong to the search table (SearchView/SearchController);
+        # hand over one row of column→value maps per image and let it draw and select them.
+        self.imagerySearchDuplicated.emit(
+            [per_row_columns(row, image_id) for row, image_id in enumerate(image_ids)])
 
-    
     def duplicate_user_provider(self, provider: UserDefinedParams):
         duplicated_provider = None
         for p in self.providers:
             if isinstance(p, UsersProvider) and p.url == provider.userDefined.url:
                 duplicated_provider = p
-                self.dlg.sourceCombo.setCurrentText(duplicated_provider.name)
+                self.sourceSelectedByName.emit(duplicated_provider.name)
         if not duplicated_provider:
             provider_dict = dict(option_name=provider.userDefined.sourceType.lower(),
                                 name=self.tr("Duplicated user provider"),
                                 url=provider.userDefined.url,
-                                crs=(provider.userDefined.crs.upper() 
-                                     if provider.userDefined.crs 
+                                crs=(provider.userDefined.crs.upper()
+                                     if provider.userDefined.crs
                                      else None),
-                                credentials=BasicAuth(str(provider.userDefined.rasterLogin), 
+                                credentials=BasicAuth(str(provider.userDefined.rasterLogin),
                                                         str(provider.userDefined.rasterPassword))
                                                         if provider.userDefined.rasterLogin
                                                         else BasicAuth(),
@@ -540,8 +540,8 @@ class ProviderService(QObject):
             self.user_providers.append(duplicated_provider)
             provider_index = len(self.providers)
             self.update_providers()
-            self.dlg.setProviderIndex(provider_index)
-        self.dlg.zoomCombo.setCurrentText(str(provider.userDefined.zoom))
+            self.providerIndexSet.emit(provider_index)
+        self.zoomSet.emit(str(provider.userDefined.zoom))
 
     def duplicate_aoi(self, provider):
         if isinstance(provider, ImagerySearchParams):
@@ -551,7 +551,7 @@ class ProviderService(QObject):
         else: # if other two are True - enable start
             self.app_context.allow_enable_processing['aoi_loaded'] = True
             if False not in self.app_context.allow_enable_processing.values():
-                self.dlg.startProcessing.setEnabled(True)
+                self.startEnabled.emit()
     
     @property
     def basemap_providers(self):
@@ -564,9 +564,6 @@ class ProviderService(QObject):
                 return index
         return -1
 
-
-def get_data_provider():
-    return ProviderService.instance().get_data_provider()
 
 def update_providers_list(new_providers):
     ProviderService.instance().update_providers_list(new_providers)
