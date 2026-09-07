@@ -51,14 +51,12 @@ from .infra.alert_service import AlertService, alert
 from .functional.service.area_calculator_service import AreaCalculatorService
 # HTTP
 from .http import (Http,
-                   api_message_parser,
-                   get_error_report_body)
+                   api_message_parser)
 # Schema
 from .schema import ProviderReturnSchema
 from .schema.project import MapflowProject
 # Dialogs
-from .dialogs import (ErrorMessageWidget,
-                      MainDialog,
+from .dialogs import (MainDialog,
                       MapflowLoginDialog,
                       ProviderDialog,
                       ReviewDialog)
@@ -1103,16 +1101,13 @@ class Mapflow(QObject):
         :param title: The error message's title.
         :param error_message_parser: function to parse error message, depends on server which is requested.
             Default parser (if None) searches for 'message' section in response json
+
+        This is the default error handler's path — the highest-volume one — so it goes through the
+        throttled infra reporter like every other report; showing the dialog straight from here would
+        stack one per poll tick.
         """
-        response_body = response.readAll().data().decode()
-        error_summary, email_body = get_error_report_body(response=response,
-                                                          response_body=response_body,
-                                                          plugin_version=self.app_context.plugin_version,
-                                                          error_message_parser=error_message_parser)
-        ErrorMessageWidget(parent=QApplication.activeWindow(),
-                           text= error_summary,
-                           title=title,
-                           email_body=email_body).show()
+        from .infra.reporter import report_http_error
+        report_http_error(response, self.app_context.plugin_version, title, error_message_parser)
 
 
     def find_project(self, projects: List[MapflowProject], project_id: str):

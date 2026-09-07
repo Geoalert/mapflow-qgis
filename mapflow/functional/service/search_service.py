@@ -13,7 +13,7 @@ from ...http import api_message_parser
 from ...model.provider import ImagerySearchProvider, ProviderInterface
 from ...schema import ImageCatalogRequestSchema, ImageCatalogResponseSchema
 from ...schema.catalog import ProductType
-from ...infra.alert_service import report_http_error
+from ...infra.reporter import report_http_error
 
 logger = logging.getLogger(__name__)
 
