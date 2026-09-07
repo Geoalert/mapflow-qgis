@@ -435,7 +435,7 @@ def test_start_processing_callback_refreshes_processings_for_regular_response():
     response.readAll.return_value.data.return_value = b'{"id": "proc-1", "name": "Run 1"}'
     mock_processing = SimpleNamespace(id="proc-1", name="Run 1", status=SimpleNamespace())
 
-    with patch.object(processing_service_module, "alert"), \
+    with patch.object(processing_service_module, "alert_info"), \
             patch.object(processing_service_module.ProcessingDTO, "from_dict", return_value=mock_processing):
         service.start_processing_callback(response)
 
@@ -459,7 +459,7 @@ def test_start_processing_callback_refreshes_processings_for_template_response_s
     response = MagicMock()
     response.readAll.return_value.data.return_value = b'{"template": {"id": "tpl-1"}, "searchResults": []}'
 
-    with patch.object(processing_service_module, "alert"):
+    with patch.object(processing_service_module, "alert_info"):
         service.start_processing_callback(response)
 
     assert asked == [True]
@@ -747,7 +747,7 @@ def test_confirm_delete_processings_deletes_templates():
     service.set_selected_ids(["tpl-1"])
     service._delete_state = {}
 
-    with patch.object(processing_service_module, "alert", return_value=True):
+    with patch.object(processing_service_module, "alert_confirm", return_value=True):
         service.confirm_delete_processings()
 
     # delete_processings should be called with the template ID

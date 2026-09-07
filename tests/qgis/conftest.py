@@ -31,6 +31,14 @@ def pytest_configure(config):
     except Exception as error:  # pragma: no cover - environment capability probe
         print(f"QGIS Processing unavailable, geometry operations will not run: {error}")
 
+    # Initialise the message-tier singleton once. Service code calls `alert_info`/`alert_warning`/
+    # `alert_confirm` (module functions that go through `AlertService.instance()`), which raises if
+    # the singleton was never created. A unit test that triggers one without building the plugin
+    # would hit that RuntimeError; `_no_blocking_dialogs` already stops the dialog from opening, and
+    # this stops the lookup from failing — the same "make forgetting harmless" intent.
+    from mapflow.infra.alert_service import AlertService
+    AlertService("Mapflow")
+
 
 @pytest.fixture(autouse=True)
 def _no_blocking_dialogs(monkeypatch):

@@ -71,13 +71,11 @@ DIALOG_PARAMS = {"dlg", "dialog", "maindialog", "main_dialog"}
 ALLOWED = {
     # service/ and api/ still constructing the error-report widget or an alert. Cleared as the
     # error-reporting phase routes them through the infra reporter / message tier.
-    ("widget-import", "mapflow.functional.service.processing_service"),
     ("widget-import", "mapflow.functional.api.data_catalog_api"),
-    # The error-report widget (ErrorMessageWidget) still constructed inside a service/api. One
-    # entry per module, so it clears only when that module is clean. Cleared as the error-reporting
-    # phase routes each through the infra reporter.
+    # The error-report widget (ErrorMessageWidget) still constructed inside an api. One entry per
+    # module, so it clears only when that module is clean. Cleared as the error-reporting phase
+    # routes each through the infra reporter.
     ("api-imports-dialogs", "mapflow.functional.api.data_catalog_api"),
-    ("service-imports-dialogs", "mapflow.functional.service.processing_service"),
 }
 
 #: Cycles that exist today, as the set of modules involved so the entry survives a change of

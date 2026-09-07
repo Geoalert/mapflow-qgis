@@ -76,7 +76,7 @@ def test_template_start_asks_for_a_rehydrate_and_skips_flat_add():
     added = _added(service)
     in_flight = _in_flight(service)
 
-    with patch.object(processing_service_module, "alert"):
+    with patch.object(processing_service_module, "alert_info"):
         service.start_processing_callback(_response(_PROCESSING))
 
     # A plain refresh would refetch the rows without rebinding the new processing to its AOI.
@@ -92,7 +92,7 @@ def test_regular_start_does_flat_add_and_asks_for_a_plain_refresh():
     added = _added(service)
     fake_dto = SimpleNamespace(id="p-1", name="Run 1", status="IN_PROGRESS")
 
-    with patch.object(processing_service_module, "alert"), \
+    with patch.object(processing_service_module, "alert_info"), \
             patch.object(processing_service_module.ProcessingDTO, "from_dict", return_value=fake_dto):
         service.start_processing_callback(_response(_PROCESSING))
 

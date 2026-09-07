@@ -293,8 +293,11 @@ first because the reporter must be reachable from an `api` before the api can ca
 [ready-for-review] MR-1 the message tier (`alert_service`) → `mapflow/infra/`. Clears
     `widget-import·alert_service` and `view-imports-service·processing_view`. Pure move; `infra`
     layer added to `test_layering`. `report_http_error` stays in the moved file until step 2.
-[ ] MR-2 `processing_service` stops building `ErrorMessageWidget`/`QMessageBox` — routes through the
-    infra reporter + `alert_info`. Clears `widget-import` + `service-imports-dialogs` for it.
+[ready-for-review] MR-2 `processing_service` stops building `ErrorMessageWidget`/`QMessageBox` —
+    the error handler routes through `report_http_error` (given the already-read body, which gained
+    a `response_body` param so `readAll` is not called twice); the four `alert(…, QMessageBox.X)`
+    calls become `alert_info`/`alert_warning`/`alert_confirm`. Clears `widget-import` +
+    `service-imports-dialogs` for processing_service.
 [ ] MR-3a `data_catalog_api`'s 6 `ErrorMessageWidget` sites → infra reporter. Clears
     `api-imports-dialogs·data_catalog_api`.
 [ ] MR-3b `data_catalog_api` upload-progress `QProgressBar` → `DataCatalogController`. Clears
