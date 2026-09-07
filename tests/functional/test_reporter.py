@@ -11,7 +11,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from mapflow.infra import reporter
-from mapflow.http import response_signature, get_error_report_body
+from mapflow.http import response_signature
+from mapflow.infra.report_body import get_error_report_body
 from mapflow.report_throttle import ReportThrottle
 
 
@@ -75,7 +76,7 @@ def test_the_suppressed_count_reaches_the_dialog_text():
     clock = _FakeClock()
     reporter._throttle = ReportThrottle(first_window=60.0, global_floor=0.0, clock=clock)
     with patch.object(reporter, "_present") as present, \
-            patch("mapflow.http.get_error_report_body", return_value=("Server said no", "body")):
+            patch("mapflow.infra.reporter.get_error_report_body", return_value=("Server said no", "body")):
         for _ in range(5):  # one shown, four suppressed
             reporter.report_http_error(_response(), "1.0", response_body="{}")
         clock.now += 61.0
