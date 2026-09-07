@@ -5,8 +5,7 @@ from uuid import UUID
 from typing import Dict, Optional, List, Tuple
 from PyQt5.QtCore import QObject, QTimer, pyqtSignal
 from PyQt5.QtNetwork import QNetworkReply
-from PyQt5.QtWidgets import QMessageBox, QApplication
-from .provider_service import (get_provider_params, 
+from .provider_service import (get_provider_params,
                                setup_provider_info, 
                                validate_provider_params, 
                                duplicate_aoi_based_on_provider,
@@ -39,13 +38,12 @@ from ...schema.template import (
     ProcessingTemplateDTO,
     ProcessingTemplateDetails,
 )
-from ...infra.alert_service import alert, alert_info
+from ...infra.alert_service import (alert, alert_info, alert_warning, alert_confirm,
+                                    report_http_error)
 from ..app_context import AppContext
 from ...model.provider import ImagerySearchProvider
 from ...config import Config
 from ...functional.layer_utils import ResultsLoader, max_aoi_bbox_area
-from ...http import get_error_report_body
-from ...dialogs.error_message_widget import ErrorMessageWidget
 
 logger = logging.getLogger(__name__)
 
@@ -464,11 +462,10 @@ class ProcessingService(QObject):
             aoi_size=self.app_context.aoi_size,
             processing_cost=self.processing_cost
         ):
-            alert(
+            alert_warning(
                 self.tr('Processing limit exceeded. '
                     'Visit "<a href=\"https://app.mapflow.ai/account/balance\">Mapflow</a>" '
-                    'to top up your balance'),
-                icon=QMessageBox.Warning
+                    'to top up your balance')
             )
             return False
         return True
@@ -595,9 +592,8 @@ class ProcessingService(QObject):
 
     def start_processing_callback(self, response: QNetworkReply) -> None:
         """Display a success message and clear the processing name field."""
-        alert(
-            self.tr("Success! We'll notify you when the processing has finished."),
-            QMessageBox.Information
+        alert_info(
+            self.tr("Success! We'll notify you when the processing has finished.")
         )
         response_data = json.loads(response.readAll().data())
         self.processing_fetch_timer.start()  # start monitoring
@@ -639,21 +635,19 @@ class ProcessingService(QObject):
         response_body = response.readAll().data().decode()
         if error == QNetworkReply.ContentAccessDenied \
                 and "data provider" in response_body.lower():
-            alert(self.tr('The selected data provider is unavailable on your plan. \n '
-                          'Upgrade your subscription to get access to the data. \n'
-                          'See pricing at <a href=\"https://mapflow.ai/pricing\">mapflow.ai</a>'),
-                       QMessageBox.Information)
+            alert_info(self.tr('The selected data provider is unavailable on your plan. \n '
+                               'Upgrade your subscription to get access to the data. \n'
+                               'See pricing at <a href=\"https://mapflow.ai/pricing\">mapflow.ai</a>'))
             # provider ID is the last "word" in the message.
             # In this case, when "data provider" is in the message, there can't be index error
         else:
-            error_summary, email_body = get_error_report_body(response=response,
-                                                              response_body=response_body,
-                                                              plugin_version=self.app_context.plugin_version,
-                                                              error_message_parser=api_message_parser)
-            ErrorMessageWidget(parent=QApplication.activeWindow(),
-                               text= error_summary,
-                               title=self.tr('Processing creation failed'),
-                               email_body=email_body).show()
+            # The report tier builds and shows the dialog; the body was already read above, so it
+            # is handed over rather than re-read (`readAll` has drained the reply).
+            report_http_error(response=response,
+                              response_body=response_body,
+                              plugin_version=self.app_context.plugin_version,
+                              title=self.tr('Processing creation failed'),
+                              error_message_parser=api_message_parser)
         if False not in self.app_context.allow_enable_processing.values():
             self.submissionInFlight.emit(False)
 
@@ -1089,9 +1083,7 @@ class ProcessingService(QObject):
         # Filter to only items that exist (templates or processings)
         valid_ids = [pid for pid in selected_ids if pid in self.processings or pid in self.templates]
         # Ask for confirmation if there are selected rows
-        if valid_ids and alert(
-                self.tr('Delete selected items?'), QMessageBox.Question
-        ):
+        if valid_ids and alert_confirm(self.tr('Delete selected items?')):
             self.delete_processings(response=None, items=valid_ids, deleted=[], failed=[])
             
     def delete_processings(self, 
