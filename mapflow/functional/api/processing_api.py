@@ -131,7 +131,7 @@ class ProcessingApi(QObject):
         self.http.post(path=f"projects/{project_id}/processings/v2/page",
                        body=request_body.as_json().encode(),
                        callback=callback,
-                       use_default_error_handler=False,
+                       use_default_error_handler=True,
                        timeout=5)
 
 

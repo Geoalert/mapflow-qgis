@@ -1259,7 +1259,11 @@ class Mapflow(QObject):
         self.http.get(
             url=f'{self.server}/version',
             callback=self.check_plugin_version_callback,
-            use_default_error_handler=False  # ignore errors
+            # Best-effort probe: version_ok fails open (stays True unless the callback clears it),
+            # so an unreachable /version must NOT report — a report modal on every offline start is
+            # a non-bug the user cannot act on. This is the one path that stays opted out (spec/006
+            # § Consequences: an opt-out states why).
+            use_default_error_handler=False,
         )
         if not self.version_ok:
             self.dlg.close()
