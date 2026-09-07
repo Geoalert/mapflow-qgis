@@ -12,7 +12,7 @@ import pytest
 
 from mapflow import error_guard
 from mapflow.infra import reporter
-from mapflow.http import MAX_TRACEBACK_LINES, get_exception_report_body
+from mapflow.infra.report_body import MAX_TRACEBACK_LINES, get_exception_report_body
 from mapflow.report_throttle import ReportThrottle
 
 #: `report_unexpected_error` and the throttle moved to `infra.reporter`; `error_guard` re-exports the
@@ -63,7 +63,7 @@ def test_never_raises_even_if_the_dialog_fails(caplog):
     try:
         _raise_boom()
     except Boom as exc:
-        with patch("mapflow.http.get_exception_report_body", side_effect=RuntimeError("nope")), \
+        with patch("mapflow.infra.reporter.get_exception_report_body", side_effect=RuntimeError("nope")), \
                 caplog.at_level(logging.ERROR, logger=REPORTER_LOGGER):
             # Must not raise RuntimeError.
             error_guard.report_unexpected_error(exc, "doing the thing", "1.2.3")
@@ -213,7 +213,7 @@ def test_long_traceback_is_truncated_from_the_front():
     try:
         _raise_boom()
     except Boom as exc:
-        with patch("mapflow.http.MAX_TRACEBACK_LINES", 2):
+        with patch("mapflow.infra.report_body.MAX_TRACEBACK_LINES", 2):
             _summary, body = get_exception_report_body(exc, "1.0", "ctx")
 
     decoded = unquote(body)

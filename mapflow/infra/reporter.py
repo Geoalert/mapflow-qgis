@@ -15,6 +15,8 @@ import logging
 from typing import Callable, Optional
 
 from ..report_throttle import ReportThrottle, exception_signature
+from ..http import response_signature
+from .report_body import get_error_report_body, get_exception_report_body
 
 logger = logging.getLogger(__name__)
 
@@ -39,8 +41,10 @@ def _present(text: str, title: str = None, email_body: str = '', parent=None) ->
     """Show the report dialog. Never raises — it runs while already handling a failure, so an
     exception escaping here would replace the failure being reported with its own.
 
-    The widget retains itself until closed (see `ErrorMessageWidget`), so nothing here needs to
-    keep a reference alive.
+    The widget import stays local: it is the reporter's one true Qt-widget-tree dependency, and
+    keeping it here lets the report logic above (throttle, signature, body) be imported and
+    unit-tested with no widget/.ui machinery — the tests patch this function. The widget retains
+    itself until closed (see `ErrorMessageWidget`), so nothing here keeps a reference.
     """
     try:
         from PyQt5.QtWidgets import QApplication
@@ -70,7 +74,6 @@ def report_unexpected_error(exception: BaseException,
         return
 
     try:
-        from ..http import get_exception_report_body
         summary, email_body = get_exception_report_body(exception, plugin_version, context,
                                                         suppressed_count=suppressed_count)
         text = DEFAULT_USER_TEXT
@@ -94,7 +97,6 @@ def report_http_error(response,
     the buffer, so a caller that inspected the body itself must pass it here or the report would
     decode an empty one.
     """
-    from ..http import get_error_report_body, response_signature
     signature = response_signature(response)
     # Log every occurrence, before the throttle — suppression governs the dialog, never the log.
     logger.error("HTTP error: %s", signature)

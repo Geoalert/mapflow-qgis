@@ -8,7 +8,8 @@ from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest, QHttpMultiPart, QHtt
 from qgis.core import QgsMapLayer
 
 from ...schema.data_catalog import PreviewSize, MosaicCreateSchema, ImageReturnSchema, MosaicUpdateSchema
-from ...http import Http, get_error_report_body, data_catalog_message_parser
+from ...http import Http, data_catalog_message_parser
+from ...infra.report_body import get_error_report_body
 from ...functional import layer_utils
 from ...infra.alert_service import show_error_report
 
