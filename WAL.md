@@ -317,9 +317,13 @@ query carries ids/tokens); `Mapflow.report_http_error` (the default-handler path
 reporter; and C3.4 fixed at `ErrorMessageWidget` (self-retains until closed) so a report cannot be
 GC'd before it is painted. No spec delta needed — spec/006 § Volume limit already specifies all of it.
 
-[ ] 3. Restore the six silent request paths
-With the throttle covering them, opting out has no remaining justification — `spec/006` already
-says so. Each site takes the default handler back, or states in a comment why not.
+[ready-for-review] 3. Restore the silent request paths — FIVE, not six (the old count had stale
+pre-Phase-C line numbers). Four restored to the default (throttled) handler: `account_service.
+refresh_status` (`/user/status` poll), `processing_api.get_processings` (processings page poll),
+`data_catalog_api.get_mosaic` and `.get_mosaic_images`. One kept opted out with a WHY comment:
+`mapflow.main`'s `/version` probe, which fails open so a report on an offline start would be noise.
+`tests/functional/test_silent_opt_outs.py` (AST) now allowlists exactly that one; a new silent
+request fails it.
 
 [ ] 4. Apply `guard_entry_point` at the entry points
 `guard_entry_point` is written and tested but applied nowhere; only `Http.response_dispatcher` is

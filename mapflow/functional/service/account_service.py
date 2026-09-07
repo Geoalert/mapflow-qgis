@@ -75,7 +75,7 @@ class AccountService(QObject):
         self.http.get(
             url=f'{self.server}/user/status',
             callback=self.apply_status,
-            use_default_error_handler=False  # driven by a timer, so errors would stack up alerts
+            use_default_error_handler=True,  # the report throttle bounds the timer's repeats now
         )
 
     def request_status(self) -> None:

@@ -89,7 +89,7 @@ class DataCatalogApi(QObject):
     def get_mosaic(self, mosaic_id: UUID, callback: Callable):
         self.http.get(url=f"{self.server}/rasters/mosaic/{mosaic_id}",
                       callback=callback,
-                      use_default_error_handler=False
+                      use_default_error_handler=True
                      )
     
     def update_mosaic(self, mosaic_id, mosaic: MosaicUpdateSchema, callback: Callable, callback_kwargs: Optional[dict] = None):
@@ -225,7 +225,7 @@ class DataCatalogApi(QObject):
     def get_mosaic_images(self, mosaic_id: UUID, callback: Callable):
         self.http.get(url=f"{self.server}/rasters/mosaic/{mosaic_id}/image",
                       callback=callback,
-                      use_default_error_handler=False
+                      use_default_error_handler=True
                      )
 
     def get_image(self, image_id: UUID, callback: Callable, error_handler: Callable):
