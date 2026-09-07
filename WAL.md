@@ -298,10 +298,13 @@ first because the reporter must be reachable from an `api` before the api can ca
     a `response_body` param so `readAll` is not called twice); the four `alert(…, QMessageBox.X)`
     calls become `alert_info`/`alert_warning`/`alert_confirm`. Clears `widget-import` +
     `service-imports-dialogs` for processing_service.
-[ ] MR-3a `data_catalog_api`'s 6 `ErrorMessageWidget` sites → infra reporter. Clears
-    `api-imports-dialogs·data_catalog_api`.
-[ ] MR-3b `data_catalog_api` upload-progress `QProgressBar` → `DataCatalogController`. Clears
-    `widget-import·data_catalog_api` → **`ALLOWED` empty**.
+[ready-for-review] MR-3 `data_catalog_api` holds no widget. Its 6 `ErrorMessageWidget` sites route
+    through a new `show_error_report` infra primitive (for pre-composed messages, unlike
+    `report_http_error` which parses a response); its upload `QProgressBar` moves to a view-layer
+    `UploadProgressReporter` injected into the api. Clears both `data_catalog_api` entries —
+    **`ALLOWED` is now empty**. (The progress reporter went to `view/`, not the controller: the api
+    is built by the service before any controller exists, so it takes a plain injected collaborator
+    that may hold widgets.)
 
 [ ] 1. Signature and throttle for the HTTP path
 `response_signature(response)` = Qt error code + endpoint path; `http._request_path` already

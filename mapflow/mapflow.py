@@ -38,6 +38,7 @@ from .functional.view.aoi_view import AoiView
 from .functional.view.search_view import SearchView
 from .functional.view.processing_view import ProcessingView
 from .functional.view.data_catalog_view import DataCatalogView
+from .functional.view.upload_progress import UploadProgressReporter
 from .functional.service import (DataCatalogService,
                                  ProcessingService,
                                  ProjectService,
@@ -213,6 +214,9 @@ class Mapflow(QObject):
         # A failed preview used to be written to the pane by the api; it announces now, the view draws.
         self.data_catalog_service.api.previewUnavailable.connect(
             self.data_catalog_view.set_preview_unavailable)
+        # Upload progress is a message-bar widget; the api holds none, so the view-layer reporter
+        # (which may) is injected here, where iface is available.
+        self.data_catalog_service.api.progress_reporter = UploadProgressReporter(self.iface)
         # The catalog tables' selection is resolved by the service (into mosaics/images) and by
         # AreaCalculatorService (for the AOI area) — both told the ids, neither reading the table.
         # The push runs before those handlers, so it is connected here, above them, in the raw
