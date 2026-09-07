@@ -97,6 +97,18 @@ class AlertService(QObject):
                            title=title,
                            email_body=email_body).show()
 
+    def show_error_report(self, text: str, title: str = None, email_body: str = "") -> None:
+        """The *report* tier, for a caller that has already composed the failure text itself (an
+        expected error with a bespoke message, or one it parsed its own way). `report_http_error`
+        is the variant that parses a raw response; this one just shows what it is given, so a
+        service or api never has to import the report widget to raise it.
+        """
+        from ..dialogs.error_message_widget import ErrorMessageWidget
+        ErrorMessageWidget(parent=QApplication.activeWindow(),
+                           text=text,
+                           title=title,
+                           email_body=email_body).show()
+
     def ask_text(self, title: str, label: str, default: str = "") -> Tuple[str, bool]:
         """Ask the user for a line of text. Returns (text, accepted).
 
@@ -133,3 +145,6 @@ def report_http_error(response, plugin_version: str, title: str = None,
                       response_body: Optional[str] = None) -> None:
     return AlertService.instance().report_http_error(
         response, plugin_version, title, error_message_parser, response_body)
+
+def show_error_report(text: str, title: str = None, email_body: str = "") -> None:
+    return AlertService.instance().show_error_report(text, title, email_body)

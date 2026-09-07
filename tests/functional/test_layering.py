@@ -68,15 +68,9 @@ MAY_IMPORT = {
 #: anything a dependency check would notice.
 DIALOG_PARAMS = {"dlg", "dialog", "maindialog", "main_dialog"}
 
-ALLOWED = {
-    # service/ and api/ still constructing the error-report widget or an alert. Cleared as the
-    # error-reporting phase routes them through the infra reporter / message tier.
-    ("widget-import", "mapflow.functional.api.data_catalog_api"),
-    # The error-report widget (ErrorMessageWidget) still constructed inside an api. One entry per
-    # module, so it clears only when that module is clean. Cleared as the error-reporting phase
-    # routes each through the infra reporter.
-    ("api-imports-dialogs", "mapflow.functional.api.data_catalog_api"),
-}
+# Empty. Every service and api is free of widget and dialog imports — the goal of Phase C2 and the
+# error-reporting phase. An entry added here now records a real regression; fix the code instead.
+ALLOWED = set()
 
 #: Cycles that exist today, as the set of modules involved so the entry survives a change of
 #: traversal order. All three are the same shape: a package `__init__` imports its submodules
