@@ -15,8 +15,15 @@ def test_the_message_tier_is_importable_from_infra():
     # Safe in the no-QGIS functional tier: alert_service imports only PyQt5, not qgis.core.
     module = importlib.import_module("mapflow.infra.alert_service")
     for name in ("AlertService", "alert", "alert_info", "alert_warning", "alert_error",
-                 "alert_confirm", "ask_text", "report_http_error"):
+                 "alert_confirm", "ask_text", "show_error_report"):
         assert hasattr(module, name), f"infra.alert_service is missing {name}"
+
+
+def test_the_report_tier_is_importable_from_infra():
+    """The report tier (both entry points) lives in `infra.reporter`, behind one throttle."""
+    module = importlib.import_module("mapflow.infra.reporter")
+    for name in ("report_http_error", "report_unexpected_error", "_throttle"):
+        assert hasattr(module, name), f"infra.reporter is missing {name}"
 
 
 def test_the_old_service_path_is_gone():

@@ -29,6 +29,19 @@ def _request_path(response: QNetworkReply) -> str:
         return 'the server'
 
 
+def response_signature(response: QNetworkReply) -> str:
+    """Suppression identity for an HTTP failure (spec/006 § Volume limit): the Qt error code plus
+    the query-free endpoint path. There is no raising frame to key on, as there is for an
+    exception. Reuses `_request_path` so the signature and the report body carry the same string,
+    and no id or token from a query makes each occurrence of one failure look distinct.
+    """
+    try:
+        code = response.error()
+    except (AttributeError, RuntimeError):
+        code = 'unknown'
+    return f'{code}@{_request_path(response)}'
+
+
 class Http(QObject):
     """"""
 
@@ -280,7 +293,8 @@ def _format_email_body(report: dict) -> str:
 def get_error_report_body(response: QNetworkReply,
                           response_body: str,
                           plugin_version: str,
-                          error_message_parser: Optional[Callable] = None):
+                          error_message_parser: Optional[Callable] = None,
+                          suppressed_count: int = 0):
     if error_message_parser is None:
         error_message_parser = default_message_parser
     if response.error() == QNetworkReply.OperationCanceledError:
@@ -298,11 +312,17 @@ def get_error_report_body(response: QNetworkReply,
     report = {
         # escape in case the error text is HTML
         'Error summary': html.escape(send_error_text),
-        'URL': response.request().url().toDisplayString(),
+        # The path only, never the full URL: the signature keys on this same string, and a query
+        # would carry ids and tokens into a mail body the user sends us (see `_request_path`).
+        'URL': _request_path(response),
         'HTTP code': response.attribute(QNetworkRequest.HttpStatusCodeAttribute),
         'Qt code': response.error(),
-        **_environment_report(plugin_version),
     }
+    # Same wording as the exception path: a failure that fired 200 times sits on a timer, which a
+    # single dialog cannot reveal.
+    if suppressed_count:
+        report['Repeated'] = f'{suppressed_count} further occurrence(s) suppressed since the last report'
+    report.update(_environment_report(plugin_version))
     return show_error_text, _format_email_body(report)
 
 

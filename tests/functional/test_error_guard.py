@@ -11,8 +11,13 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from mapflow import error_guard
+from mapflow.infra import reporter
 from mapflow.http import MAX_TRACEBACK_LINES, get_exception_report_body
 from mapflow.report_throttle import ReportThrottle
+
+#: `report_unexpected_error` and the throttle moved to `infra.reporter`; `error_guard` re-exports the
+#: function and keeps only the entry-point guards. Its reporting now logs under the reporter's logger.
+REPORTER_LOGGER = "mapflow.infra.reporter"
 
 
 class Boom(Exception):
@@ -31,13 +36,13 @@ def fresh_throttle(monkeypatch):
     error would push every later one inside the global floor and silently turn its dialog
     assertions vacuous.
     """
-    monkeypatch.setattr(error_guard, "_throttle", ReportThrottle())
+    monkeypatch.setattr(reporter, "_throttle", ReportThrottle())
 
 
 # ---------- report_unexpected_error ----------
 
 def test_logs_with_traceback(caplog):
-    with caplog.at_level(logging.ERROR, logger="mapflow.error_guard"), \
+    with caplog.at_level(logging.ERROR, logger=REPORTER_LOGGER), \
             patch.object(error_guard, "report_unexpected_error",
                          wraps=error_guard.report_unexpected_error):
         try:
@@ -59,7 +64,7 @@ def test_never_raises_even_if_the_dialog_fails(caplog):
         _raise_boom()
     except Boom as exc:
         with patch("mapflow.http.get_exception_report_body", side_effect=RuntimeError("nope")), \
-                caplog.at_level(logging.ERROR, logger="mapflow.error_guard"):
+                caplog.at_level(logging.ERROR, logger=REPORTER_LOGGER):
             # Must not raise RuntimeError.
             error_guard.report_unexpected_error(exc, "doing the thing", "1.2.3")
 
@@ -70,7 +75,7 @@ def test_never_raises_even_if_the_dialog_fails(caplog):
 def test_a_repeated_failure_shows_one_dialog(caplog):
     """The whole point: a bug on a 6-second poll must not open a dialog every 6 seconds."""
     with patch("mapflow.dialogs.error_message_widget.ErrorMessageWidget") as widget, \
-            caplog.at_level(logging.ERROR, logger="mapflow.error_guard"):
+            caplog.at_level(logging.ERROR, logger=REPORTER_LOGGER):
         for _ in range(20):
             try:
                 _raise_boom()
@@ -94,7 +99,7 @@ def test_the_next_dialog_reports_how_many_were_hidden(monkeypatch):
     clock = _FakeClock()
     # The floor is irrelevant with a single signature; the per-signature window is the
     # mechanism under test.
-    monkeypatch.setattr(error_guard, "_throttle",
+    monkeypatch.setattr(reporter, "_throttle",
                         ReportThrottle(first_window=60.0, global_floor=0.0, clock=clock))
 
     with patch("mapflow.dialogs.error_message_widget.ErrorMessageWidget") as widget:

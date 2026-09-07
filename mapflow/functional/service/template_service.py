@@ -40,7 +40,8 @@ from ...config import Config
 from ..geometry import geometry_from_geojson
 from ..helpers import utc_date_from_iso
 from ...infra.alert_service import (alert, alert_confirm, alert_info, alert_warning,
-                            ask_text, report_http_error)
+                            ask_text)
+from ...infra.reporter import report_http_error
 from ...errors import ErrorMessage
 from ...http import api_message_parser
 from ...schema import ImageCatalogResponseSchema

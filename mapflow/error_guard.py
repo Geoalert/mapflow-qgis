@@ -21,25 +21,13 @@ import functools
 import logging
 from typing import Callable, Optional
 
-from .report_throttle import ReportThrottle, exception_signature
+# The reporting itself lives in the infra report tier, behind a single throttle shared with the
+# HTTP report path (spec/006 § Where each tier lives). This module keeps only the entry-point
+# guards below; `report_unexpected_error` is re-exported so both the guards here and any
+# `from mapflow.error_guard import report_unexpected_error` caller keep resolving the bare name.
+from .infra.reporter import report_unexpected_error
 
 logger = logging.getLogger(__name__)
-
-#: Shown above the traceback in the dialog. Deliberately plain: the user did nothing
-#: wrong, and the only useful action is sending the report.
-DEFAULT_USER_TEXT = (
-    "Mapflow hit an unexpected error and could not finish that action.\n\n"
-    "The plugin is still running — you can keep working. Sending the report below helps "
-    "us fix it."
-)
-
-#: Appended when the same failure recurred while suppressed. A single dialog reads as a
-#: one-off glitch; the count is what tells the user (and us) it is systematic.
-REPEATED_USER_TEXT = "\n\nThis has happened {count} more time(s) since the last message."
-
-#: Process-wide, because the storm it prevents is process-wide: every guarded call site
-#: shares one budget. Tests substitute their own instance rather than reaching in here.
-_throttle = ReportThrottle()
 
 
 def _resolve_plugin_version(obj: object) -> str:
@@ -57,49 +45,6 @@ def _resolve_plugin_version(obj: object) -> str:
         if isinstance(target, str) and target:
             return target
     return 'unknown'
-
-
-def report_unexpected_error(exception: BaseException,
-                            context: str,
-                            plugin_version: str = 'unknown',
-                            parent=None) -> None:
-    """Log with traceback, then offer the user a pre-filled report.
-
-    Never raises. A reporting path that can fail is worse than none: it would replace the
-    original exception with its own, losing the very thing being reported.
-
-    Logging happens for every occurrence; only the *dialog* is throttled. The log is where
-    a developer reconstructs how often something fired, so thinning it would trade the one
-    complete record for nothing the user benefits from.
-    """
-    logger.error("Unexpected error during %s", context, exc_info=exception)
-
-    suppressed_count = _throttle.should_report(exception_signature(exception))
-    if suppressed_count is None:
-        return
-
-    try:
-        # Imported here, not at module scope: this module is imported early, and the
-        # dialog pulls in the Qt widget tree. Keeping it lazy also means a headless
-        # context (tests) can call the logging half without a QApplication.
-        from PyQt5.QtWidgets import QApplication
-        from .dialogs.error_message_widget import ErrorMessageWidget
-        from .http import get_exception_report_body
-
-        summary, email_body = get_exception_report_body(exception, plugin_version, context,
-                                                        suppressed_count=suppressed_count)
-        text = DEFAULT_USER_TEXT
-        if suppressed_count:
-            text += REPEATED_USER_TEXT.format(count=suppressed_count)
-        widget = ErrorMessageWidget(parent=parent or QApplication.activeWindow(),
-                                    text=text,
-                                    title=summary,
-                                    email_body=email_body)
-        widget.show()
-    except Exception:
-        # The original failure is already in the log above; this only records that the
-        # user was not shown it.
-        logger.exception("Could not present the error report dialog for: %s", context)
 
 
 def guard_entry_point(context: str, reraise: bool = False) -> Callable:

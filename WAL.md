@@ -172,11 +172,10 @@ for every model that has options; see the note under C3.2.
     Emitted in `mapflow.py` and `project_view.py:195`; only `currentIndexChanged` is connected. The
     model refresh those emits intend happens by accident via `setCurrentText`. Either connect it or
     delete the emits — but decide, because the accident is load-bearing today.
-[ ] C3.4 Error-report widgets can be garbage-collected before they appear
-    `report_unexpected_error` and `report_http_error` build an `ErrorMessageWidget` into a local and
-    call `.show()`. With no parent — `parent=None`, or `QApplication.activeWindow()` returning None —
-    the widget can be collected before it is drawn, so the user sees nothing. Folds naturally into
-    the error-reporting item below, which already rewrites both.
+[fixed by error-reporting steps 1+2] C3.4 Error-report widgets can be garbage-collected before they
+    appear. Fixed at `ErrorMessageWidget`: it retains itself in a class-level set until closed
+    (`WA_DeleteOnClose` + `destroyed`→discard), covering all five construction sites at once. Pinned
+    by `tests/qgis/test_error_widget_gc.py` (nothing pinned it before).
 [ ] C3.5a An account with no projects re-requests the list forever
     `ProjectService.get_projects_callback` treats "no projects and no filter" as a stale page and
     re-requests without parameters — which returns the same empty result, and asks again. It is
@@ -306,17 +305,17 @@ first because the reporter must be reachable from an `api` before the api can ca
     is built by the service before any controller exists, so it takes a plain injected collaborator
     that may hold widgets.)
 
-[ ] 1. Signature and throttle for the HTTP path
-`response_signature(response)` = Qt error code + endpoint path; `http._request_path` already
-computes that path, query-free, because it lands in a mail body. Carry `suppressed_count` into
-the dialog text and report body the way the exception path does.
-
-[ ] 2. One reporter, in `infra/`
-Both entry points behind one module (`infra/reporter.py`) owning the throttle, the dialog and the
-suppressed-count wording. This folds `report_http_error` in next to `report_unexpected_error`;
-`report_http_error` currently lives in the moved `alert_service` (message tier) and comes out into
-the reporter here. Both tiers are in `infra/` (the reclassification above), so this is a move within
-`infra/`, not across a layer boundary.
+[ready-for-review] Steps 1+2 (unified, user-approved) — Signature, throttle, and one reporter.
+`mapflow/infra/reporter.py` now owns BOTH report entry points behind one shared `_throttle`:
+`report_unexpected_error` (moved from `error_guard`, which keeps the guards and re-exports it) and
+`report_http_error` (moved from `alert_service`, now throttled). `http.response_signature` = Qt code
++ query-free path (`_request_path`); `get_error_report_body` carries `suppressed_count` into the
+body, the dialog text gets it too. One throttle across both paths because the 10s global floor must
+hold between an HTTP and an exception report rotating through the same poll tick. Also: the report
+body now carries the query-free path, not the full URL (code catching up to spec/006 + privacy — a
+query carries ids/tokens); `Mapflow.report_http_error` (the default-handler path) folded onto the
+reporter; and C3.4 fixed at `ErrorMessageWidget` (self-retains until closed) so a report cannot be
+GC'd before it is painted. No spec delta needed — spec/006 § Volume limit already specifies all of it.
 
 [ ] 3. Restore the six silent request paths
 With the throttle covering them, opting out has no remaining justification — `spec/006` already

@@ -2,6 +2,7 @@ import logging
 from pathlib import Path
 
 from PyQt5 import uic
+from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QWidget, QApplication
 
 
@@ -10,10 +11,20 @@ ui_path = Path(__file__).parent/'static'/'ui'
 logger = logging.getLogger(__name__)
 
 class ErrorMessageWidget(*uic.loadUiType(ui_path / 'error_message.ui')):
+    #: Every open dialog holds a reference to itself here. This dialog is often shown parentless
+    #: (`QApplication.activeWindow()` can be None while a report fires from a network callback),
+    #: and a top-level widget shown with `.show()` is then owned only by the local that built it —
+    #: the reporter returns, the local goes out of scope, and Qt can collect it before it is ever
+    #: painted. Self-retention until close is what keeps a reported error actually visible.
+    _alive = set()
+
     def __init__(self, parent: QWidget, text: str, title: str = None, email_body: str = '') -> None:
         """A message box notifying user about a plugin error, with a 'Send a report' button."""
         super().__init__(parent)
         self.setupUi(self)
+        type(self)._alive.add(self)
+        self.setAttribute(Qt.WA_DeleteOnClose)
+        self.destroyed.connect(lambda: type(self)._alive.discard(self))
         try:
             self.setWindowIcon(QApplication.activeWindow().windowIcon())
             self.setWindowTitle(QApplication.activeWindow().windowTitle())

@@ -38,8 +38,8 @@ from ...schema.template import (
     ProcessingTemplateDTO,
     ProcessingTemplateDetails,
 )
-from ...infra.alert_service import (alert, alert_info, alert_warning, alert_confirm,
-                                    report_http_error)
+from ...infra.alert_service import alert, alert_info, alert_warning, alert_confirm
+from ...infra.reporter import report_http_error
 from ..app_context import AppContext
 from ...model.provider import ImagerySearchProvider
 from ...config import Config
