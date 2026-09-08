@@ -336,16 +336,7 @@ The expensive half is `spec/006` § "A guarded callback is interrupted, not comp
 converted is checked for cleanup placed after code that can raise — the bug that polled
 `/user/status` twice a second for a whole session.
 
-[ready-for-review] 5. Throttle the message tier too
-`alert()` is `exec()`-modal like the report dialog and reachable from polled paths, so it stacks the
-same way. It now shares the report tier's mechanism — its own `ReportThrottle`, keyed on
-icon+message, with the suppressed count carried into the message; `Question`/`ask_text` are exempt
-(interactive dialogs must return a real answer). Throttle parameters (60 s window, ×2 backoff,
-30 min cap, 10 s global floor) now live in `config.py` and are pushed into BOTH budgets at startup
-via an interim `configure_throttle` call — because config.py is QGIS-bound and the throttles are
-Qt-free. The config split below removes that indirection.
-
-[ ] Fix E — connectivity errors use the message tier, not the report tier
+[ready-for-review] Fix E — connectivity errors use the message tier, not the report tier
 `Mapflow.default_error_handler` routes network/connectivity errors (offline, host-not-found,
 unknown-network, timeout, 503, proxy, 403 rights) to the report tier ("Let us know") and mislabels
 `UnknownNetworkError` as "Proxy error". Per spec/006 the report tier is unexpected (plugin-bug)
