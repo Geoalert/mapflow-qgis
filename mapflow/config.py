@@ -126,9 +126,11 @@ class Config:
 
     # ERROR REPORTING — the suppression budget (spec/006 § Volume limit). Tunable here without a
     # code change; the values match report_throttle.py's Qt-free fallback defaults. Mapflow.__init__
-    # pushes them into both budgets (report tier and message tier) at startup. (report_throttle
-    # cannot import config directly — config is QGIS-bound and the throttle is Qt-free by contract;
-    # the scheduled config split removes this indirection.)
+    # pushes them into both budgets (report tier and message tier) at startup, because
+    # report_throttle cannot import config directly — config is QGIS-bound (it reads QgsSettings in
+    # its class body) and the throttle is Qt-free by contract. Kept as a small startup push on
+    # purpose: making config itself Qt-free would mean splitting this pervasively-shared object,
+    # which fragments it for far less benefit than the shim costs.
     REPORT_THROTTLE_FIRST_WINDOW_SECONDS = 60.0
     REPORT_THROTTLE_MAX_WINDOW_SECONDS = 30 * 60.0
     REPORT_THROTTLE_GLOBAL_FLOOR_SECONDS = 10.0

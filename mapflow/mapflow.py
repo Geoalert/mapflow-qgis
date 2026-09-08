@@ -178,8 +178,8 @@ class Mapflow(QObject):
         AlertService(self.plugin_name)
         # Push the throttle parameters (spec/006 § Volume limit) from config into both suppression
         # budgets at startup: config.py is the single tunable source, but report_throttle/reporter/
-        # alert_service stay Qt-free and cannot import the QGIS-bound config themselves. The
-        # scheduled config split lets report_throttle read them directly and drops this block.
+        # alert_service stay Qt-free and cannot import the QGIS-bound config themselves. This small
+        # push is deliberate — making config Qt-free would mean splitting a pervasively-shared object.
         from .infra import reporter as _reporter
         from .infra import alert_service as _alert_service
         for _module in (_reporter, _alert_service):
