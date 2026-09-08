@@ -87,3 +87,29 @@ def call_guarded(func: Callable,
     except Exception as exception:
         report_unexpected_error(exception, context, plugin_version)
         return None
+
+
+def guarded_connect(signal, slot: Callable, context: str = None, version_source: object = None):
+    """Connect `slot` to a Qt-owned `signal` so an unexpected failure becomes a report instead of
+    escaping to Qt's event loop.
+
+    Use this at every Qt-source connection — a widget/action/timer/layer/project/dialog signal —
+    which is where a fresh call stack enters plugin code (`spec/007_architecture.md` § Entry points).
+    A slot on a plugin `pyqtSignal` does NOT need it: that signal emits synchronously inside some
+    other entry point's stack, so it is already covered.
+
+    Returns whatever `signal.connect()` returns, so a caller that disconnects later can keep the
+    token. `context` names the failing operation for the report (defaults to the slot's name);
+    `version_source` is any object carrying `plugin_version`/`app_context.plugin_version` for the
+    report body, or None for 'unknown'.
+
+    PyQt keeps a strong reference to a connected Python callable for the connection's lifetime, so
+    the wrapper is not collected while connected (pinned by `test_guarded_connect`'s keep-alive test).
+    """
+    resolved_context = context or f"a UI action ({getattr(slot, '__name__', 'slot')})"
+
+    def _guarded(*args, **kwargs):
+        return call_guarded(slot, resolved_context, _resolve_plugin_version(version_source),
+                            *args, **kwargs)
+
+    return signal.connect(_guarded)
