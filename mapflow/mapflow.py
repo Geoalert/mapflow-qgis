@@ -1012,6 +1012,19 @@ class Mapflow(QObject):
 
     def unload(self) -> None:
         """Remove the plugin icon & toolbar from QGIS GUI."""
+        # Persist the metadata filter the user set BEFORE any teardown. unload is reached from QGIS
+        # at plugin removal, and the teardown below can raise (a service stop, a dialog close); with
+        # these writes left at the tail a raise would strand them and lose the filter on the next
+        # start (spec/006 § a guarded callback is interrupted). Reading the values before close() is
+        # equivalent — close() hides the dialog, it does not destroy it.
+        if self.dlg:
+            self.app_context.settings.setValue('metadataMinIntersection', self.dlg.minIntersection.value())
+            self.app_context.settings.setValue('metadataMaxCloudCover', self.dlg.maxCloudCover.value())
+            off_nadir_min, off_nadir_max = self.dlg.off_nadir_range()
+            self.app_context.settings.setValue('metadataMinOffNadir', off_nadir_min)
+            self.app_context.settings.setValue('metadataMaxOffNadir', off_nadir_max)
+            self.app_context.settings.setValue('metadataFrom', self.dlg.metadataFrom.date())
+            self.app_context.settings.setValue('metadataTo', self.dlg.metadataTo.date())
         self.processing_service.stop()
         self.account_service.stop_refreshing()
         self.iface.removeCustomActionForLayerType(self.add_layer_action)
@@ -1020,13 +1033,6 @@ class Mapflow(QObject):
             if dlg:
                 dlg.close()
         del self.toolbar
-        self.app_context.settings.setValue('metadataMinIntersection', self.dlg.minIntersection.value())
-        self.app_context.settings.setValue('metadataMaxCloudCover', self.dlg.maxCloudCover.value())
-        off_nadir_min, off_nadir_max = self.dlg.off_nadir_range()
-        self.app_context.settings.setValue('metadataMinOffNadir', off_nadir_min)
-        self.app_context.settings.setValue('metadataMaxOffNadir', off_nadir_max)
-        self.app_context.settings.setValue('metadataFrom', self.dlg.metadataFrom.date())
-        self.app_context.settings.setValue('metadataTo', self.dlg.metadataTo.date())
 
     def default_error_handler(self,
                               response: QNetworkReply,

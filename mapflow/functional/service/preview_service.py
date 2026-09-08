@@ -312,12 +312,16 @@ class PreviewService(QObject):
             georeferenced_previews_list.append(georeferenced_preview)
         # Final part: merge all collected images into one VRT
         if len(previews) == 0:
+            # The multi-part download is finished the moment we reach this branch, so clear the
+            # in-flight guard first: building the VRT below can raise, and the callback is
+            # guard-wrapped, so a discard left at the tail would strand the id and block every
+            # later preview of this image (spec/006 § a guarded callback is interrupted).
+            self._pending_preview_ids.discard(image_id)  # multi-part download finished
             vrt_path = os.path.join(self.app_context.temp_dir, os.urandom(32).hex())
             vrt = gdal.BuildVRT(vrt_path, georeferenced_previews_list)
             vrt.FlushCache()
             vrt = None
             vrt_layer = QgsRasterLayer(vrt_path, f"{image_id} preview", 'gdal')
-            self._pending_preview_ids.discard(image_id)  # multi-part download finished
             self.result_loader.add_layer(vrt_layer)
             self._add_aoi_to_preview_if_needed()
             self._relocate_to_template_group(vrt_layer)

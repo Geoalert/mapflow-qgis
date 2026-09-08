@@ -106,7 +106,6 @@ ALLOWED_UNGUARDED = {
     ('mapflow/functional/controller/template_controller.py', '__init__', 'itemSelectionChanged'),
     ('mapflow/functional/controller/template_controller.py', '__init__', 'triggered'),
     ('mapflow/functional/service/account_service.py', '__init__', 'timeout'),
-    ('mapflow/functional/service/data_catalog.py', 'save_downloaded', 'finished'),
     ('mapflow/functional/service/provider_service.py', 'duplicate_imagery_search', 'selectionChanged'),
     ('mapflow/functional/view/aoi_view.py', 'enter_edit_session', 'clicked'),
     ('mapflow/functional/view/processing_view.py', 'confirm_processing_start', 'accepted'),

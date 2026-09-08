@@ -12,6 +12,7 @@ from ...schema.data_catalog import PreviewSize, MosaicReturnSchema, ImageReturnS
 from ...schema import MyImageryParams
 from ..api.data_catalog_api import DataCatalogApi
 from ...infra.alert_service import alert
+from ...error_guard import guarded_connect
 from ...http import Http
 from ...functional import helpers
 from ...functional.app_context import AppContext
@@ -406,7 +407,12 @@ class DataCatalogService(QObject):
         request = QNetworkRequest(QUrl(url))
         nam = self.api.http.nam
         reply = nam.get(request)
-        reply.finished.connect(lambda: self._save_downloaded_file(reply, save_path))
+        # Route the reply through the guard: `finished` is a Qt-owned signal and an unexpected
+        # raise in the slot would otherwise reach the event loop unguarded (spec/007 invariant 7).
+        guarded_connect(reply.finished,
+                        lambda: self._save_downloaded_file(reply, save_path),
+                        "saving a downloaded image",
+                        self.app_context)
 
     def _save_downloaded_file(self, reply: QNetworkReply, save_path: str):
         if reply.error() != QNetworkReply.NoError:
