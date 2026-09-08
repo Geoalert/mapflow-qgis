@@ -176,6 +176,19 @@ class Mapflow(QObject):
         # AlertService must exist before setup_tempdir: an unavailable working directory below (and
         # select_output_directory on a bad pick) shows a modal, and both run before section 6.
         AlertService(self.plugin_name)
+        # Push the throttle parameters (spec/006 § Volume limit) from config into both suppression
+        # budgets at startup: config.py is the single tunable source, but report_throttle/reporter/
+        # alert_service stay Qt-free and cannot import the QGIS-bound config themselves. The
+        # scheduled config split lets report_throttle read them directly and drops this block.
+        from .infra import reporter as _reporter
+        from .infra import alert_service as _alert_service
+        for _module in (_reporter, _alert_service):
+            _module.configure_throttle(
+                first_window=self.config.REPORT_THROTTLE_FIRST_WINDOW_SECONDS,
+                max_window=self.config.REPORT_THROTTLE_MAX_WINDOW_SECONDS,
+                global_floor=self.config.REPORT_THROTTLE_GLOBAL_FLOOR_SECONDS,
+                backoff=self.config.REPORT_THROTTLE_BACKOFF_FACTOR,
+            )
         self.workdir_service = WorkdirService(app_context=self.app_context)
         self.workdir_view = WorkdirView(dlg=self.dlg,
                                         main_window=self.main_window,

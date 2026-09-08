@@ -2,6 +2,25 @@ from typing import Optional, Tuple
 from PyQt5.QtWidgets import QApplication, QInputDialog, QMessageBox
 from PyQt5.QtCore import Qt, QObject
 
+from ..report_throttle import ReportThrottle
+
+#: Message-tier suppression budget (spec/006 § Volume limit). A separate instance from the report
+#: tier's: a dialog storm is same-tier repetition, which each budget bounds on its own. Tests
+#: substitute a fresh one; configure_throttle() rebuilds it from config at startup.
+_throttle = ReportThrottle()
+
+#: Appended to a message the throttle lets through after hiding repeats of it, so a recurring
+#: failure reads as systematic rather than a one-off.
+REPEATED_MESSAGE_SUFFIX = "\n\n(Repeated {count} more time(s) since this was last shown.)"
+
+
+def configure_throttle(first_window: float, max_window: float,
+                       global_floor: float, backoff: float) -> None:
+    """Rebuild the message-tier budget from config values; called once at startup."""
+    global _throttle
+    _throttle = ReportThrottle(first_window=first_window, max_window=max_window,
+                               global_floor=global_floor, backoff=backoff)
+
 
 class AlertService(QObject):
     """Singleton service for displaying alerts and notifications."""
@@ -40,6 +59,19 @@ class AlertService(QObject):
         :param blocking: Opened as modal - code below will only be executed when the alert is closed
         :return: True if user clicked OK (for Question dialogs), False otherwise
         """
+        # Volume limit (spec/006 § Volume limit): an informational modal on a polled path stacks
+        # exactly like a report dialog — exec() runs a nested event loop, so QTimer keeps firing and
+        # dialogs pile up. Suppress a repeat of the same message within the throttle window and carry
+        # the hidden count into the next one that gets through. Question is exempt: an interactive
+        # prompt must return a real answer, never a suppressed default. The signature is icon+message
+        # text — the only stable key a message alert has; a fixed poll message keys stably, while an
+        # id-bearing one-off never suppresses, which is fine because it does not storm.
+        if icon != QMessageBox.Question:
+            suppressed = _throttle.should_report(f"{int(icon)}:{message}")
+            if suppressed is None:
+                return False
+            if suppressed:
+                message += REPEATED_MESSAGE_SUFFIX.format(count=suppressed)
         box = QMessageBox(icon, self._plugin_name, message, parent=QApplication.activeWindow())
         box.setTextFormat(Qt.RichText)
         if icon == QMessageBox.Question:

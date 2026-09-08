@@ -37,6 +37,17 @@ REPEATED_USER_TEXT = "\n\nThis has happened {count} more time(s) since the last 
 _throttle = ReportThrottle()
 
 
+def configure_throttle(first_window: float, max_window: float,
+                       global_floor: float, backoff: float) -> None:
+    """Rebuild the report-tier budget from config values; called once at startup by the composition
+    root. Qt-free like the rest of this module — it only constructs a ReportThrottle, and the caller
+    passes the numbers because this module cannot import the QGIS-bound config itself.
+    """
+    global _throttle
+    _throttle = ReportThrottle(first_window=first_window, max_window=max_window,
+                               global_floor=global_floor, backoff=backoff)
+
+
 def _present(text: str, title: str = None, email_body: str = '', parent=None) -> None:
     """Show the report dialog. Never raises — it runs while already handling a failure, so an
     exception escaping here would replace the failure being reported with its own.

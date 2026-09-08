@@ -127,3 +127,13 @@ def test_the_report_body_states_how_many_http_repeats_were_suppressed():
     _summary, body = get_error_report_body(_response(), '{"message": "no"}', "1.0",
                                            suppressed_count=41)
     assert "41" in unquote(body) and "suppressed" in unquote(body)
+
+
+# ---------- the budget is configured from config at startup (error-reporting step 5) ----------
+
+def test_configure_throttle_replaces_the_report_budget():
+    reporter.configure_throttle(first_window=5.0, max_window=50.0, global_floor=1.0, backoff=3.0)
+    budget = reporter._throttle
+
+    assert (budget._first_window, budget._max_window,
+            budget._global_floor, budget._backoff) == (5.0, 50.0, 1.0, 3.0)

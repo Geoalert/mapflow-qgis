@@ -31,6 +31,10 @@ MAX_WINDOW_SECONDS = 30 * 60.0
 #: dialog every 6 seconds while each individual signature stayed within its window.
 GLOBAL_FLOOR_SECONDS = 10.0
 
+#: Factor the per-signature window grows by on each further report (2.0 = doubling). A fallback
+#: default: config.py holds the tunable value, pushed in at startup (see config REPORT_THROTTLE_*).
+BACKOFF_FACTOR = 2.0
+
 
 def exception_signature(exception: BaseException) -> str:
     """Identity of a failure for suppression purposes: type plus the line it failed on.
@@ -82,10 +86,12 @@ class ReportThrottle:
                  first_window: float = FIRST_WINDOW_SECONDS,
                  max_window: float = MAX_WINDOW_SECONDS,
                  global_floor: float = GLOBAL_FLOOR_SECONDS,
+                 backoff: float = BACKOFF_FACTOR,
                  clock: Callable[[], float] = time.monotonic) -> None:
         self._first_window = first_window
         self._max_window = max_window
         self._global_floor = global_floor
+        self._backoff = backoff
         self._clock = clock
         self._states: Dict[str, _SignatureState] = {}
         self._last_shown_at: Optional[float] = None
@@ -111,9 +117,9 @@ class ReportThrottle:
             return None
 
         if state.shown_at is not None:
-            # Doubling starts only from the second report: the first one defines the
+            # Backoff starts only from the second report: the first one defines the
             # baseline window rather than consuming it.
-            state.window = min(state.window * 2, self._max_window)
+            state.window = min(state.window * self._backoff, self._max_window)
         state.shown_at = now
         self._last_shown_at = now
 
