@@ -132,21 +132,25 @@ def test_selecting_a_template_row_offers_a_planned_start():
     dlg.disable_processing_start.assert_called_once()
 
 
-def test_without_a_template_the_button_returns_to_a_plain_start():
+def test_without_a_template_selection_does_not_force_start_on():
+    """The gate only DISABLES a planned start; enabling Start is the validation's job. A non-template
+    selection (e.g. double-clicking a finished processing to load its results) must not turn Start on
+    — otherwise Start would enable with no AOI set, and a refused price would be undone by the next
+    selection."""
     controller = _start_button_controller(template_to_run=None, gate_error=None)
 
     controller.update_start_processing_button_state()
 
     dlg = controller.processing_view.dlg
     dlg.startProcessing.setText.assert_called_with("Start processing")
-    dlg.startProcessing.setEnabled.assert_called_with(True)
-    dlg.processingProblemsLabel.clear.assert_called_once()
-    dlg.disable_processing_start.assert_not_called()
+    dlg.disable_processing_start.assert_not_called()      # the gate passed, so nothing is disabled
+    dlg.startProcessing.setEnabled.assert_not_called()    # but it does not force-enable either
+    dlg.processingProblemsLabel.clear.assert_not_called()  # and does not touch the reason label
 
 
-def test_a_reason_from_another_check_is_not_cleared():
-    """Only the planned-start reason is this gate's to clear. Blanking anything else would hide
-    a live reason the processing cannot start — the AOI being too large, say."""
+def test_a_reason_from_another_check_survives_a_gate_ok_selection():
+    """A reason set by another check — the AOI being too large, say — must not be wiped by a
+    selection whose planned gate happens to pass. This method leaves the label to the validation."""
     controller = _start_button_controller(template_to_run=None, gate_error=None)
     controller.processing_view.dlg.processingProblemsLabel.text.return_value = "AOI is too large"
 

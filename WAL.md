@@ -354,23 +354,16 @@ Throttle parameters move into `config.py` so they can be tuned during live UX te
 code change — the current values (60 s window, ×2 backoff, 30 min cap, 10 s global floor) were
 reasoned from poll intervals, not measured against users.
 
-[ ] A refused price is undone by the next UI refresh
-When `/processing/cost/v2` refuses, `ProcessingService.disable_processing_start` correctly
-disables Start and formats the server's reason — and then both effects are thrown away.
-`update_start_processing_button_state` (`mapflow.py:700`) re-enables the button whenever there
-is no *planned-processing* gate error; it knows nothing about pricing. The label goes the same
-way: the user ends up reading "Set AOI to start processing" with the AOI plainly set and the
-area showing a real figure (3.12 sq.km in the behavioral run).
-Two consequences, the second serious:
-- the actual cause is invisible — in the captured case a workflow-def the backend does not
-  recognise;
-- **Start becomes clickable again for a processing the backend refused to price**, so the user
-  can submit it.
-Reproduced behaviourally: price one AOI successfully (Start enabled), then switch to an AOI
-whose pricing is refused — Start stays enabled.
-The fix is for the enable/disable decision to have one owner rather than several writers, which
-is what the Phase C extraction is for. `tests/qgis/behavioral/test_cost_estimate.py` asserts
-only that changing the AOI re-prices, and says why it stops there.
+[fixed] A refused price (and any disable) is undone by the next selection
+`update_start_processing_button_state` re-enabled Start whenever there was no *planned-processing*
+gate error — knowing nothing about pricing, the AOI, the model or the provider. So a refused
+`/processing/cost/v2`, or a "Set AOI" disable, was thrown away by the next processings- or
+metadata-table selection: Start became clickable again (submittable) and the real reason label was
+lost. Also the user-reported case: double-clicking a processing to load its results turned Start on
+with no AOI set.
+Fixed by giving the enable one owner: the method now only *disables* on the planned-image gate and
+never force-enables — the enabled state is the validation's (`update_processing_cost`), which runs on
+every change that affects it. `test_without_a_template_selection_does_not_force_start_on` pins it.
 
 [ ] Check whether the behavioral tier reaches the real backend
 The fake network replaces `QgsNetworkAccessManager` for everything the plugin requests through
