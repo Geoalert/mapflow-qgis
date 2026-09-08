@@ -63,6 +63,17 @@ def _no_blocking_dialogs(monkeypatch):
                         raising=False)
 
 
+@pytest.fixture(autouse=True)
+def _fresh_alert_throttle(monkeypatch):
+    """A private message-tier budget per test. `alert_service._throttle` is process-wide, so without
+    this a message shown in one test would suppress the same message in a later one (the 60 s window
+    outlasts a whole test run), failing an unrelated test. Mirrors test_reporter.py's fresh_throttle.
+    """
+    from mapflow.infra import alert_service
+    from mapflow.report_throttle import ReportThrottle
+    monkeypatch.setattr(alert_service, "_throttle", ReportThrottle())
+
+
 @pytest.fixture()
 def iface():
     """Mock QgisInterface for tests that need a plugin iface reference."""

@@ -124,6 +124,16 @@ class Config:
     #: hiccup — but an unreachable server must not leave it retrying for the whole session.
     STARTUP_STATUS_MAX_ATTEMPTS = 20
 
+    # ERROR REPORTING — the suppression budget (spec/006 § Volume limit). Tunable here without a
+    # code change; the values match report_throttle.py's Qt-free fallback defaults. Mapflow.__init__
+    # pushes them into both budgets (report tier and message tier) at startup. (report_throttle
+    # cannot import config directly — config is QGIS-bound and the throttle is Qt-free by contract;
+    # the scheduled config split removes this indirection.)
+    REPORT_THROTTLE_FIRST_WINDOW_SECONDS = 60.0
+    REPORT_THROTTLE_MAX_WINDOW_SECONDS = 30 * 60.0
+    REPORT_THROTTLE_GLOBAL_FLOOR_SECONDS = 10.0
+    REPORT_THROTTLE_BACKOFF_FACTOR = 2.0
+
     MAX_FILE_SIZE_PIXELS = 30_000
     MAX_FILE_SIZE_BYTES = 2*(1024**3)
 

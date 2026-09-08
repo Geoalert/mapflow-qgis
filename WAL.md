@@ -329,16 +329,6 @@ request fails it.
 into PRs; mechanism + two spec deltas approved by the user (guarded-connect helper at connect sites,
 decorator for non-connect entries; new invariant 7 enforced by an AST test).
 
-[ready-for-review] 4-PR1 The mechanism + enforcement scaffold. `error_guard.guarded_connect` wraps a
-    slot in `call_guarded` at the connection site; `test_entry_points_guarded.py` (AST) fails any
-    raw `.connect` to a Qt-owned signal not in its only-shrinking `ALLOWED_UNGUARDED`. spec/007
-    § Entry points + § Invariants/Enforcement amended. `provider_controller` converted as the worked
-    example (its rows dropped from the allowlist). No behaviour change.
-[ready-for-review] 4-PR2 Cleanup-after-raise fixes (live bugs, independent of the wiring): `start_processing_callback`
-    + `submit_processing` leave Start disabled for the session if the payload drifts (RISK 1);
-    `preview_multiple_png` discards the in-flight id after a raise (RISK 2); `save_downloaded` wires
-    `reply.finished` past the guard (RISK 3 — route via `guarded_connect`); `unload` skips settings
-    persistence on a teardown raise (RISK 4).
 [ ] 4-PR3..6 Roll `guarded_connect` across the remaining regions (poll/submission controllers →
     other controllers → `mapflow.py` + initGui/unload/main → views/dialogs), each PR deleting its
     allowlist rows until `ALLOWED_UNGUARDED` holds only the response_dispatcher wiring.
@@ -346,13 +336,32 @@ The expensive half is `spec/006` § "A guarded callback is interrupted, not comp
 converted is checked for cleanup placed after code that can raise — the bug that polled
 `/user/status` twice a second for a whole session.
 
-[ ] 5. Throttle the message tier too
-Decided with the above: the contract says *no failure* may produce unbounded dialogs, and
-`alert()` is `exec()`-modal like the report dialog. It is reachable from polled paths (the
-template callbacks hang off the 6 s processing poll), so the same storm is possible there.
-Throttle parameters move into `config.py` so they can be tuned during live UX testing without a
-code change — the current values (60 s window, ×2 backoff, 30 min cap, 10 s global floor) were
-reasoned from poll intervals, not measured against users.
+[ready-for-review] 5. Throttle the message tier too
+`alert()` is `exec()`-modal like the report dialog and reachable from polled paths, so it stacks the
+same way. It now shares the report tier's mechanism — its own `ReportThrottle`, keyed on
+icon+message, with the suppressed count carried into the message; `Question`/`ask_text` are exempt
+(interactive dialogs must return a real answer). Throttle parameters (60 s window, ×2 backoff,
+30 min cap, 10 s global floor) now live in `config.py` and are pushed into BOTH budgets at startup
+via an interim `configure_throttle` call — because config.py is QGIS-bound and the throttles are
+Qt-free. The config split below removes that indirection.
+
+[ ] Fix E — connectivity errors use the message tier, not the report tier
+`Mapflow.default_error_handler` routes network/connectivity errors (offline, host-not-found,
+unknown-network, timeout, 503, proxy, 403 rights) to the report tier ("Let us know") and mislabels
+`UnknownNetworkError` as "Proxy error". Per spec/006 the report tier is unexpected (plugin-bug)
+failures only; a dropped connection is expected and user-actionable → message tier (plain `alert`,
+now throttled by step 5). **500 stays message-tier** ("try again") by user decision; only the final
+`else` (truly unclassified) stays report tier. No spec delta. Do after step 5 — the message tier had
+to be throttled before connectivity storms could land on it, which is why step 5 came first.
+
+[ ] Split `config.py` into a Qt-free `config.py` + `qt_config.py`
+config.py is imported everywhere but calls `QgsSettings()`/`QCoreApplication.translate` in its class
+body, so importing it needs QGIS — which blocks Qt-free/early modules (`report_throttle`, `http`)
+from reading it. Move the QGIS/settings-derived values (MAPFLOW_ENV, SERVER, PROJECT_ID,
+SHOW_RAW_ERROR, MAX_AOIS_PER_PROCESSING, AUTH_CONFIG_*, ConfigColumns) to `qt_config.py`; leave the
+static constants (incl. REPORT_THROTTLE_*) in a now-Qt-free config.py. ~25 sites across ~10 files;
+no behaviour change. Then `report_throttle` imports the throttle params directly, and step 5's
+`configure_throttle` startup plumbing plus report_throttle's fallback constants both go away.
 
 [fixed] A refused price (and any disable) is undone by the next selection
 `update_start_processing_button_state` re-enabled Start whenever there was no *planned-processing*
