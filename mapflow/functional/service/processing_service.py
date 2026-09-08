@@ -283,6 +283,10 @@ class ProcessingService(QObject):
             return error, disable_start
         
         try:
+            # The name is the one precondition that does not block pricing: update_processing_cost
+            # validates with allow_empty_name=True, so the cost is computed and shown before the
+            # processing is named. It is therefore prompted at commit — a modal, with Start left
+            # enabled (disable_start=False) — rather than disabling Start the way a missing AOI does.
             if not processing_params.name and not allow_empty_name:
                 error = self.tr('Please, specify a name for your processing')
                 alert(error)
