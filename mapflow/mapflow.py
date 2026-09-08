@@ -1052,13 +1052,21 @@ class Mapflow(QObject):
                               ) -> bool:
         """Handle general networking errors: offline, timeout, server errors.
 
+        Connectivity and server-availability failures are *expected* and user-actionable, so they
+        use the message tier (a plain, throttled alert), never the report tier's "Send a report":
+        spec/006 reserves reports for unexpected failures — the plugin being wrong — and a dropped
+        connection or an unreachable server is neither. Only a genuinely unclassified error (the
+        final branch) still offers a report.
+
         :param response: The HTTP response.
-        :param: error_message_parser: function to parse the message from the particular API
         Returns True if the error has been handled, otherwise returns False.
         """
         error = response.error()
         service = 'Mapflow'
         parser = api_message_parser
+        # The message tier does not log; log every handled network error here so the record survives
+        # (the report-tier branch logs again in the reporter, with a signature — acceptable overlap).
+        logger.warning("Network error %s: %s", error, response.errorString())
         if error == QNetworkReply.AuthenticationRequiredError:  # invalid/empty credentials
             # Prevent deadlocks
             if self.app_context.logged_in:  # token re-issued during a plugin session
@@ -1071,40 +1079,48 @@ class Mapflow(QObject):
         elif error in (
                 QNetworkReply.OperationCanceledError,  # timeout
                 QNetworkReply.ServiceUnavailableError,  # HTTP 503
-                QNetworkReply.InternalServerError,  # HTTP 500
+                QNetworkReply.InternalServerError,  # HTTP 500 — a server problem, not the plugin's:
+                                                    # message tier, "try again" (user decision)
                 QNetworkReply.ConnectionRefusedError,
                 QNetworkReply.RemoteHostClosedError,
                 QNetworkReply.NetworkSessionFailedError,
         ):
-            self.report_http_error(response, self.tr(
+            self.alert(self.tr(
                 service + ' is not responding. Please, try again.\n\n'
                           'If you are behind a proxy or firewall,\ncheck your QGIS proxy settings.\n'),
-                                   error_message_parser=parser)
+                       QMessageBox.Warning)
             return True
         elif error == QNetworkReply.HostNotFoundError:  # offline
-            self.alert(self.tr(service + ' not found. Check your Internet connection'))
+            self.alert(self.tr(service + ' not found. Check your Internet connection'),
+                       QMessageBox.Warning)
+            return True
+        elif error == QNetworkReply.UnknownNetworkError:
+            # Qt's catch-all for a connection dropped mid-request. It is NOT a proxy problem —
+            # reporting it as one (as this branch used to, lumped in with the proxy errors) misled
+            # every user who has no proxy configured.
+            self.alert(self.tr('Connection to ' + service + ' was lost. '
+                               'Check your Internet connection and try again.'),
+                       QMessageBox.Warning)
             return True
         elif error in (
-                QNetworkReply.UnknownNetworkError,
                 QNetworkReply.ProxyConnectionRefusedError,
                 QNetworkReply.ProxyConnectionClosedError,
                 QNetworkReply.ProxyNotFoundError,
                 QNetworkReply.ProxyTimeoutError,
                 QNetworkReply.ProxyAuthenticationRequiredError,
         ):
-            self.report_http_error(response, self.tr('Proxy error. Please, check your proxy settings.'))
+            self.alert(self.tr('Proxy error. Please, check your proxy settings.'), QMessageBox.Warning)
             return True
         elif error == QNetworkReply.ContentAccessDenied:
             if not self.app_context.user_role.can_delete_rename_project:
-                self.report_http_error(response,
-                                       self.tr("Not enough rights for this action\n"+
-                                                "in a shared project '{project_name}' ({user_role})").format(project_name=self.app_context.current_project.name, 
-                                                                                                            user_role=self.app_context.user_role.value),
-                                       error_message_parser=parser)
+                self.alert(self.tr("Not enough rights for this action\n"
+                                   "in a shared project '{project_name}' ({user_role})").format(
+                                       project_name=self.app_context.current_project.name,
+                                       user_role=self.app_context.user_role.value),
+                           QMessageBox.Warning)
             else:
-                self.report_http_error(response,
-                                       self.tr("This operation is forbidden for your account, contact us"),
-                                       error_message_parser=parser)
+                self.alert(self.tr("This operation is forbidden for your account, contact us"),
+                           QMessageBox.Warning)
             return True
         else:
             self.report_http_error(response, self.tr("Error"), error_message_parser=parser)
