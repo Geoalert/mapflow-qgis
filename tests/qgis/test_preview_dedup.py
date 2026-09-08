@@ -62,3 +62,20 @@ def test_error_handler_clears_in_flight_flag(service, monkeypatch):
 
     assert "IMG-1" not in service._pending_preview_ids
     reported.assert_called_once()
+
+
+def test_final_merge_clears_in_flight_flag_even_if_vrt_build_raises(service, monkeypatch):
+    # The multi-part download is complete once the final merge runs (previews empty). If BuildVRT
+    # then raises, the in-flight id must already be cleared: the callback is guard-wrapped, so a
+    # discard left at the tail would strand the id and block every later preview of this image.
+    service.app_context.temp_dir = "/tmp"
+    service._pending_preview_ids = {"IMG-1"}
+    monkeypatch.setattr("mapflow.functional.service.preview_service.gdal.BuildVRT",
+                        MagicMock(side_effect=RuntimeError("corrupt part")))
+
+    with pytest.raises(RuntimeError):
+        service.preview_multiple_png(response=None, previews=[], footprint=MagicMock(),
+                                     image_id="IMG-1",
+                                     georeferenced_previews_list=["/tmp/part.tif"])
+
+    assert "IMG-1" not in service._pending_preview_ids  # cleared before the raise

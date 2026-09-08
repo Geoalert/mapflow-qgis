@@ -3,6 +3,8 @@ from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import MagicMock, call, patch
 
+import pytest
+
 from PyQt5.QtCore import QObject
 
 from mapflow.functional.controller.template_controller import TemplateController
@@ -469,6 +471,51 @@ def test_start_processing_callback_refreshes_processings_for_template_response_s
     assert asked == [True]
     assert added == []
     assert in_flight[-1] is False
+
+
+def test_start_processing_callback_clears_in_flight_even_when_the_body_is_malformed():
+    # A drifted run response (not JSON) makes json.loads raise. The callback is guard-wrapped in
+    # production, so that raise is swallowed; the button must still be re-enabled, or Start stays
+    # disabled for the rest of the session (spec/006 § a guarded callback is interrupted).
+    service = ProcessingService.__new__(ProcessingService)
+    service.tr = lambda text: text
+    service.processing_fetch_timer = MagicMock()
+    service.processings = {}
+    service.processings_history = MagicMock()
+    service._open_template = None
+    QObject.__init__(service)
+    in_flight = []
+    service.submissionInFlight.connect(in_flight.append)
+
+    response = MagicMock()
+    response.readAll.return_value.data.return_value = b'<html>not json</html>'
+
+    with patch.object(processing_service_module, "alert_info"):
+        with pytest.raises(json.JSONDecodeError):
+            service.start_processing_callback(response)
+
+    assert in_flight[-1] is False  # the finally re-enabled Start despite the parse error
+
+
+def test_submit_processing_reenables_start_when_request_setup_raises():
+    # If building/sending the request raises, the async callback never fires, so the emit(True)
+    # that disabled Start would never be undone. The except must re-enable it.
+    service = ProcessingService.__new__(ProcessingService)
+    service.tr = lambda text: text
+    service.iface = MagicMock()
+    service.app_context = SimpleNamespace(plugin_name="Mapflow")
+    service.api = MagicMock()
+    service.api.create_processing.side_effect = RuntimeError("boom")
+    service.template_to_run = MagicMock(return_value=None)  # take the create_processing branch
+    QObject.__init__(service)
+    in_flight = []
+    service.submissionInFlight.connect(in_flight.append)
+
+    with patch.object(processing_service_module, "alert"):
+        service.submit_processing(MagicMock())
+
+    assert in_flight[0] is True     # disabled while the run is being sent
+    assert in_flight[-1] is False   # re-enabled after setup failed
 
 
 def test_disable_processing_start_uses_fallback_when_api_message_is_none():

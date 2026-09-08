@@ -521,6 +521,10 @@ class ProcessingService(QObject):
                     self.start_processing_error_handler
                 )
         except Exception as e:
+            # The run never left, so re-enable Start (undo the emit(True) above). Not a `finally`:
+            # on success the request is genuinely in flight and the flag must stay set until the
+            # async callback returns and clears it.
+            self.submissionInFlight.emit(False)
             alert(self.tr("Could not launch processing! Error: {}.").format(str(e)))
 
     def _build_run_template_processing_schema(
@@ -596,39 +600,44 @@ class ProcessingService(QObject):
 
     def start_processing_callback(self, response: QNetworkReply) -> None:
         """Display a success message and clear the processing name field."""
-        alert_info(
-            self.tr("Success! We'll notify you when the processing has finished.")
-        )
-        response_data = json.loads(response.readAll().data())
-        self.processing_fetch_timer.start()  # start monitoring
-        if self._open_template is not None:
-            # In a template the new processing is shown grouped UNDER its AOI. That binding
-            # lives in the template's aoiDetails, which the run response does not carry, so a
-            # flat optimistic add would place the processing under the "No AOI" separator until
-            # the user re-entered the template (feedback 8.2). Re-hydrating is what binds it, so
-            # ask for that rather than a plain refresh. Template run responses also may not be a
-            # full ProcessingDTO, so we do not parse one here.
-            if isinstance(response_data, dict) and response_data.get("name"):
-                self.processingNameCleared.emit(response_data["name"])
-            self.templateRehydrateRequested.emit()
+        try:
+            alert_info(
+                self.tr("Success! We'll notify you when the processing has finished.")
+            )
+            response_data = json.loads(response.readAll().data())
+            self.processing_fetch_timer.start()  # start monitoring
+            if self._open_template is not None:
+                # In a template the new processing is shown grouped UNDER its AOI. That binding
+                # lives in the template's aoiDetails, which the run response does not carry, so a
+                # flat optimistic add would place the processing under the "No AOI" separator until
+                # the user re-entered the template (feedback 8.2). Re-hydrating is what binds it, so
+                # ask for that rather than a plain refresh. Template run responses also may not be a
+                # full ProcessingDTO, so we do not parse one here.
+                if isinstance(response_data, dict) and response_data.get("name"):
+                    self.processingNameCleared.emit(response_data["name"])
+                self.templateRehydrateRequested.emit()
+                return
+            new_processing = None
+            # Template start responses may differ from processing-create responses.
+            # Try optimistic local update only when payload looks like a Processing DTO.
+            if isinstance(response_data, dict) and response_data.get("id") and response_data.get("name"):
+                new_processing = ProcessingDTO.from_dict(response_data)
+                self.processingNameCleared.emit(new_processing.name)
+            if new_processing is not None:
+                # Add to history
+                self.processings[new_processing.id] = new_processing
+                self.processings_history.add(new_processing.id, new_processing.status)
+                # display
+                self.processingAdded.emit(new_processing)
+            # Always refresh full list because template-started processings can affect
+            # both processings and template status/counts in table.
+            self.refreshRequested.emit()
+        finally:
+            # Clearing the in-flight flag is this callback's own state transition, so it goes in
+            # `finally`: the response is guard-wrapped (http.call_guarded), so a parse error on a
+            # drifted payload is swallowed and a tail emit would never run — leaving Start disabled
+            # for the rest of the session (spec/006 § a guarded callback is interrupted).
             self.submissionInFlight.emit(False)
-            return
-        new_processing = None
-        # Template start responses may differ from processing-create responses.
-        # Try optimistic local update only when payload looks like a Processing DTO.
-        if isinstance(response_data, dict) and response_data.get("id") and response_data.get("name"):
-            new_processing = ProcessingDTO.from_dict(response_data)
-            self.processingNameCleared.emit(new_processing.name)
-        if new_processing is not None:
-            # Add to history
-            self.processings[new_processing.id] = new_processing
-            self.processings_history.add(new_processing.id, new_processing.status)
-            # display
-            self.processingAdded.emit(new_processing)
-        # Always refresh full list because template-started processings can affect
-        # both processings and template status/counts in table.
-        self.refreshRequested.emit()
-        self.submissionInFlight.emit(False)
 
     def start_processing_error_handler(self, response: QNetworkReply) -> None:        
         """Error handler for processing creation requests.

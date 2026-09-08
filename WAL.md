@@ -334,7 +334,7 @@ decorator for non-connect entries; new invariant 7 enforced by an AST test).
     raw `.connect` to a Qt-owned signal not in its only-shrinking `ALLOWED_UNGUARDED`. spec/007
     § Entry points + § Invariants/Enforcement amended. `provider_controller` converted as the worked
     example (its rows dropped from the allowlist). No behaviour change.
-[ ] 4-PR2 Cleanup-after-raise fixes (live bugs, independent of the wiring): `start_processing_callback`
+[ready-for-review] 4-PR2 Cleanup-after-raise fixes (live bugs, independent of the wiring): `start_processing_callback`
     + `submit_processing` leave Start disabled for the session if the payload drifts (RISK 1);
     `preview_multiple_png` discards the in-flight id after a raise (RISK 2); `save_downloaded` wires
     `reply.finished` past the guard (RISK 3 — route via `guarded_connect`); `unload` skips settings
