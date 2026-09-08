@@ -178,16 +178,23 @@ class ProcessingController(QObject):
             on_accept=lambda: self.processing_service.submit_processing(processing_params))
 
     def update_start_processing_button_state(self, *args) -> None:
-        """Render start button text and enforce planned-processing image selection gate."""
+        """Update the start button text, and block a planned start with no images selected.
+
+        Connected to the processings- and metadata-table selection. This method owns exactly one
+        input to the Start button: the planned-processing image gate. When a template would run but
+        no search images are selected, Start is disabled here with that reason.
+
+        It does NOT enable the button. Whether Start may be pressed depends on the AOI, the model,
+        the provider and billing — validated as one by `update_processing_cost`, which runs on every
+        change that affects them (a new AOI, a provider or model switch, an image selection). Forcing
+        Start on here would override that: selecting a finished processing to load its results would
+        turn Start on with no AOI set, and a refused price would be undone by the next selection. So
+        the enable is left to the validation, which is the single source of truth for it.
+        """
         self.update_start_processing_button_text()
         error = self.processing_service.planned_processing_selection_error()
         if error:
             self.processing_view.disable_processing_start(reason=error, clear_area=False)
-            return
-        # No gate error: re-enable the button and clear any planned-processing reason label.
-        self.processing_view.enable_processing_start(
-            clear_reason=self.tr("Select one or more images in search results "
-                                 "to start planned processing"))
 
     def update_start_processing_button_text(self, *args) -> None:
         # Mirror what the start action actually does: "Start planned processing" only when a
