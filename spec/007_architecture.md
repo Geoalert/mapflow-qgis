@@ -225,14 +225,26 @@ matching `.py` contains behaviour only.
 
 ### Entry points
 
-A controller method connected to a Qt signal is **the** definition of an entry point in
-this plugin. That matters beyond tidiness: `error_guard.guard_entry_point` is applied at
-entry points, and today "entry point" cannot be identified because `mapflow.py` mixes
-slots, callbacks and helpers in one class. Once controllers own the signal connections,
-the set of places needing the guard is enumerable rather than a judgement call.
+A slot connected to a **Qt-owned** signal — a widget, `QAction`, `QTimer`, `QgsVectorLayer`,
+`QgsProject`, or dialog — is an entry point: its invocation begins a fresh call stack from Qt's
+event loop, so an unexpected exception there escapes to QGIS's raw dialog unless it is guarded. A
+slot connected to a plugin `pyqtSignal` is **not** a separate entry point: that signal emits
+synchronously inside some other entry point's stack, so guarding every Qt-owned connection covers
+it transitively.
+
+The guard is applied two ways:
+
+* **At the connection site, `error_guard.guarded_connect(signal, slot, context, version_source)`** —
+  used instead of a raw `signal.connect(slot)` for every Qt-owned signal. It wraps the slot in
+  `call_guarded` and returns the connection token. This covers what a decorator cannot without
+  changing call semantics: lambdas, signal-to-signal forwards, and connections made directly to a
+  service or view method.
+* **`error_guard.guard_entry_point` (the decorator)** for entry points that are not `.connect`
+  sites — the Qt/QGIS event-handler overrides `initGui`, `unload`, `main`, `resizeEvent`.
 
 See `spec/006_error_reporting.md` for what the guard does and the constraint that a
-guarded callback is interrupted rather than completed.
+guarded callback is interrupted rather than completed — a slot that owns a state transition
+(stopping a timer, clearing an in-flight flag) must perform it before anything that can raise.
 
 ### The test surface that survives a move
 
@@ -290,12 +302,21 @@ restore the several hundred kilobytes the raw responses carry.
 4. One concept has one home. A type is defined once — no parallel copies across packages.
 5. `mapflow.py` contains no `self.dlg.<widget>` access.
 6. New and moved code adds nothing to the `.flake8` debt ledger. The ledger only shrinks.
+7. Every Qt-owned signal is connected through `error_guard.guarded_connect`, so no unexpected
+   failure at an entry point escapes to Qt's event loop. (Plugin-`pyqtSignal` connections are
+   exempt — they are covered transitively; see § Entry points.)
 
 ### Enforcement
 
 Invariants 1–3 are checked by a test, not by review. `tests/functional/test_layering.py`
 walks the import statements of each package and fails with the offending module and import
 when a rule is broken.
+
+Invariant 7 is checked the same way by `tests/functional/test_entry_points_guarded.py`: it walks
+every `.connect` call, and a connection to a Qt-owned signal made with a raw `.connect` (rather than
+`guarded_connect`) fails unless it is in that test's `ALLOWED_UNGUARDED` allowlist. The allowlist
+holds the connections not yet converted; it only shrinks, and a stale entry (a site now guarded)
+fails too — the same discipline as the layering allowlist and `test_silent_opt_outs.py`.
 
 This is deliberate, and `tests/functional/test_tier_layout.py` is the precedent: the
 stranded-test-file problem it now guards against had survived review for a long time

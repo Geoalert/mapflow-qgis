@@ -325,16 +325,26 @@ refresh_status` (`/user/status` poll), `processing_api.get_processings` (process
 `tests/functional/test_silent_opt_outs.py` (AST) now allowlists exactly that one; a new silent
 request fails it.
 
-[ ] 4. Apply `guard_entry_point` at the entry points
-`guard_entry_point` is written and tested but applied nowhere; only `Http.response_dispatcher` is
-guarded. Everything entering plugin code from Qt without passing through `Http` still escapes to
-QGIS's raw unhandled-exception dialog: button clicks, selection changes, timer ticks,
-drag-and-drop, dialog accept/reject. 203 `.connect()` sites today, 109 still in `mapflow.py` —
-which is why this waits for Phase C, where a controller slot becomes the definition of an entry
-point (`spec/007_architecture.md` § Entry points).
-The decorator is the cheap half. The expensive half is `spec/006` § "A guarded callback is
-interrupted, not completed": every slot needs checking for cleanup placed after code that can
-raise. That is the bug that polled `/user/status` twice a second for a whole session.
+4. Guard the entry points — ~179 Qt-source connects (measured; the old "203/109" was stale). Split
+into PRs; mechanism + two spec deltas approved by the user (guarded-connect helper at connect sites,
+decorator for non-connect entries; new invariant 7 enforced by an AST test).
+
+[ready-for-review] 4-PR1 The mechanism + enforcement scaffold. `error_guard.guarded_connect` wraps a
+    slot in `call_guarded` at the connection site; `test_entry_points_guarded.py` (AST) fails any
+    raw `.connect` to a Qt-owned signal not in its only-shrinking `ALLOWED_UNGUARDED`. spec/007
+    § Entry points + § Invariants/Enforcement amended. `provider_controller` converted as the worked
+    example (its rows dropped from the allowlist). No behaviour change.
+[ ] 4-PR2 Cleanup-after-raise fixes (live bugs, independent of the wiring): `start_processing_callback`
+    + `submit_processing` leave Start disabled for the session if the payload drifts (RISK 1);
+    `preview_multiple_png` discards the in-flight id after a raise (RISK 2); `save_downloaded` wires
+    `reply.finished` past the guard (RISK 3 — route via `guarded_connect`); `unload` skips settings
+    persistence on a teardown raise (RISK 4).
+[ ] 4-PR3..6 Roll `guarded_connect` across the remaining regions (poll/submission controllers →
+    other controllers → `mapflow.py` + initGui/unload/main → views/dialogs), each PR deleting its
+    allowlist rows until `ALLOWED_UNGUARDED` holds only the response_dispatcher wiring.
+The expensive half is `spec/006` § "A guarded callback is interrupted, not completed": every slot
+converted is checked for cleanup placed after code that can raise — the bug that polled
+`/user/status` twice a second for a whole session.
 
 [ ] 5. Throttle the message tier too
 Decided with the above: the contract says *no failure* may produce unbounded dialogs, and

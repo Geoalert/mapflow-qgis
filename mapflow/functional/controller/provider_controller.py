@@ -8,6 +8,7 @@ would be controller-to-controller. It stays in the composition root, driving vie
 from PyQt5.QtCore import QObject
 from PyQt5.QtWidgets import QMessageBox
 
+from ...error_guard import guarded_connect
 from ...infra.alert_service import alert, alert_warning
 from ..service.provider_service import ProviderService
 from ..view.provider_view import ProviderView
@@ -36,15 +37,17 @@ class ProviderController(QObject):
         self.processing_service = processing_service
 
         if add_button is not None:
-            add_button.clicked.connect(self.add_provider)
+            guarded_connect(add_button.clicked, self.add_provider, "adding a provider", app_context)
         if edit_button is not None:
-            edit_button.clicked.connect(self.edit_provider)
+            guarded_connect(edit_button.clicked, self.edit_provider, "editing a provider", app_context)
         if remove_button is not None:
-            remove_button.clicked.connect(self.remove_provider)
+            guarded_connect(remove_button.clicked, self.remove_provider, "removing a provider", app_context)
         if zoom_combo is not None:
-            zoom_combo.currentIndexChanged.connect(self.on_zoom_change)
+            guarded_connect(zoom_combo.currentIndexChanged, self.on_zoom_change,
+                            "changing the zoom", app_context)
         if provider_dialog is not None:
-            provider_dialog.accepted.connect(self.commit_provider)
+            guarded_connect(provider_dialog.accepted, self.commit_provider,
+                            "saving a provider", app_context)
 
     # ---------- the zoom ----------
 
