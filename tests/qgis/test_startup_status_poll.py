@@ -60,6 +60,25 @@ def test_the_next_tick_retries_once_the_previous_request_failed(service):
     assert service.startup_timer.isActive(), "a single failure is not fatal"
 
 
+def test_main_starts_the_periodic_refresh_even_if_the_immediate_one_fails():
+    """The timer is the durable mechanism and cannot fail; the immediate request can. Starting the
+    timer second meant one failed refresh cost the session every later one — silently, now that the
+    entry point is guarded."""
+    plugin = Mapflow.__new__(Mapflow)
+    plugin.http = MagicMock()
+    plugin.server = "https://example.invalid/api"
+    plugin.version_ok = True
+    plugin.dlg = MagicMock()
+    plugin.app_context = SimpleNamespace(logged_in=True)
+    plugin.account_service = MagicMock()
+    plugin.account_service.request_status.side_effect = RuntimeError("could not send")
+
+    with pytest.raises(RuntimeError):
+        plugin.main()
+
+    plugin.account_service.start_refreshing.assert_called_once()
+
+
 def test_a_request_that_fails_to_dispatch_does_not_stall_the_poll(service):
     """If sending the request raises, neither callback runs, so nothing clears the in-flight flag.
     The tick is reached through the guard, which swallows the raise — so without clearing the flag

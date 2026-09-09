@@ -329,12 +329,19 @@ request fails it.
 into PRs; mechanism + two spec deltas approved by the user (guarded-connect helper at connect sites,
 decorator for non-connect entries; new invariant 7 enforced by an AST test).
 
-[ready-for-review] 4-PR4 The remaining controllers: `data_catalog_controller`, `search_controller`,
-    `template_controller` and `provider_service`'s selection sync — 19 allowlist rows removed. The
-    audit found nothing this time: the selection-sync slots already reconnect in `finally`.
-[ ] 4-PR5..6 Roll `guarded_connect` across the rest (`mapflow.py` + initGui/unload/main →
-    views/dialogs), each PR deleting its allowlist rows until `ALLOWED_UNGUARDED` holds only the
-    response_dispatcher wiring.
+[ready-for-review] 4-PR5 The composition root: every Qt-source connection in `mapflow.py`
+    (`__init__`, `initGui`, `main`, the menus, the login dialog, the per-layer AOI monitoring) —
+    22 allowlist rows removed, plus the local-filter loop the AST test cannot see. The audit found
+    one live bug: `main` started the periodic status refresh *after* the one-off request, so a
+    failed immediate refresh cost the session every later one.
+[ ] 4-PR6 Views and dialogs — the last regions. When they land, `ALLOWED_UNGUARDED` holds only
+    the `response_dispatcher` wiring, which IS the guard, and Phase 4 is complete.
+[ ] Close the entry-point enforcement gap the rollout exposed
+    `test_entry_points_guarded` classifies a connection by the attribute the `.connect` hangs off,
+    so `for signal in (...): signal.connect(...)` is invisible to it — the receiver is a bare name.
+    `mapflow.py`'s local-filter block was exactly that shape (nine Qt widget signals) and was
+    guarded only because the rollout read the code. Either resolve simple loop variables in the
+    visitor, or fail on a `.connect` whose receiver cannot be classified.
 The expensive half is `spec/006` § "A guarded callback is interrupted, not completed": every slot
 converted is checked for cleanup placed after code that can raise — the bug that polled
 `/user/status` twice a second for a whole session.

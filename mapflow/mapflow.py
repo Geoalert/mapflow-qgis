@@ -17,6 +17,7 @@ from qgis.core import (
 )
 
 from .config import Config, ConfigColumns
+from .error_guard import guarded_connect
 # Functional
 from .functional import helpers, layer_utils
 from .functional.app_context import AppContext
@@ -232,8 +233,12 @@ class Mapflow(QObject):
         # AreaCalculatorService (for the AOI area) — both told the ids, neither reading the table.
         # The push runs before those handlers, so it is connected here, above them, in the raw
         # signal's connection order (same rule as the processings/search tables).
-        self.dlg.mosaicTable.itemSelectionChanged.connect(self.push_catalog_mosaic_selection)
-        self.dlg.imageTable.itemSelectionChanged.connect(self.push_catalog_image_selection)
+        guarded_connect(self.dlg.mosaicTable.itemSelectionChanged,
+                        self.push_catalog_mosaic_selection,
+                        "pushing the mosaic selection", self.app_context)
+        guarded_connect(self.dlg.imageTable.itemSelectionChanged,
+                        self.push_catalog_image_selection,
+                        "pushing the image selection", self.app_context)
         # DataCatalogController is built after PreviewService (below): its two preview buttons
         # wire to that service, which in turn needs processing_service for the in-template
         # placement rules.
@@ -356,11 +361,14 @@ class Mapflow(QObject):
         # that selection into objects through ProcessingService — which is told the ids rather
         # than reading the table. So the push has to run before any of their handlers, and Qt
         # calls slots in connection order: this connect must stay above them.
-        self.dlg.processingsTable.itemSelectionChanged.connect(self.push_processings_selection)
+        guarded_connect(self.dlg.processingsTable.itemSelectionChanged,
+                        self.push_processings_selection,
+                        "pushing the processings selection", self.app_context)
         # Same reason for the search table: the start-button gate reads the selected images through
         # the service, which is told them rather than reading the metadata table. Pushed before the
         # controllers whose handlers read them back.
-        self.dlg.metadataTable.itemSelectionChanged.connect(self.push_search_selection)
+        guarded_connect(self.dlg.metadataTable.itemSelectionChanged, self.push_search_selection,
+                        "pushing the search selection", self.app_context)
         self.processing_controller = ProcessingController(
             iface=self.iface,
             aoi_service=self.aoi_service,
@@ -438,10 +446,14 @@ class Mapflow(QObject):
         # Layer actions
         iface.addCustomActionForLayerType(self.add_layer_action, None, QgsMapLayerType.VectorLayer, True)
         iface.addCustomActionForLayerType(self.remove_layer_action, None, QgsMapLayerType.VectorLayer, False)
-        self.add_layer_action.triggered.connect(self.processing_controller.use_current_layer_as_aoi)
-        self.remove_layer_action.triggered.connect(
-            self.processing_controller.stop_using_current_layer_as_aoi)
-        self.dlg.useAllVectorLayers.stateChanged.connect(self.toggle_all_layers)
+        guarded_connect(self.add_layer_action.triggered,
+                        self.processing_controller.use_current_layer_as_aoi,
+                        "using the current layer as the AOI", self.app_context)
+        guarded_connect(self.remove_layer_action.triggered,
+                        self.processing_controller.stop_using_current_layer_as_aoi,
+                        "removing the current layer as the AOI", self.app_context)
+        guarded_connect(self.dlg.useAllVectorLayers.stateChanged, self.toggle_all_layers,
+                        "toggling all vector layers", self.app_context)
         self.processing_controller.refresh_excepted_layers()
 
         # ========== 10. INITIALIZE AREA CALCULATOR SERVICE ==========
@@ -478,29 +490,46 @@ class Mapflow(QObject):
         # ========== 12. SET UP SIGNALS & SLOTS ==========
         # The model combo and its option checkboxes are wired by ProcessingController.
         # Memorize dialog element sizes & positioning
-        self.dlg.finished.connect(self.save_dialog_state)
+        guarded_connect(self.dlg.finished, self.save_dialog_state,
+                        "saving the dialog state", self.app_context)
         # Connect buttons
-        self.dlg.logoutButton.clicked.connect(self.session_service.logout)
-        self.dlg.selectOutputDirectory.clicked.connect(self.select_output_directory)
-        self.dlg.downloadResultsButton.clicked.connect(
-            self.project_processing_controller.load_results)
+        guarded_connect(self.dlg.logoutButton.clicked, self.session_service.logout,
+                        "logging out", self.app_context)
+        guarded_connect(self.dlg.selectOutputDirectory.clicked, self.select_output_directory,
+                        "choosing the output directory", self.app_context)
+        guarded_connect(self.dlg.downloadResultsButton.clicked,
+                        self.project_processing_controller.load_results,
+                        "loading the results", self.app_context)
         # Calculate AOI size
-        self.dlg.polygonCombo.layerChanged.connect(self.area_calculator_service.calculate_aoi_area_polygon_layer)
+        guarded_connect(self.dlg.polygonCombo.layerChanged,
+                        self.area_calculator_service.calculate_aoi_area_polygon_layer,
+                        "calculating the AOI area", self.app_context)
         # Push the chosen AOI layer so ProviderService can rebuild a duplicated search over it
         # without reading the combo. Seed it with the current layer, then follow every change.
         self.app_context.aoi_layer = self.dlg.polygonCombo.currentLayer()
-        self.dlg.polygonCombo.layerChanged.connect(self.push_aoi_layer)
-        self.dlg.mosaicTable.itemSelectionChanged.connect(self.area_calculator_service.calculate_aoi_area_catalog)
-        self.dlg.imageTable.itemSelectionChanged.connect(self.area_calculator_service.calculate_aoi_area_catalog)
+        guarded_connect(self.dlg.polygonCombo.layerChanged, self.push_aoi_layer,
+                        "changing the AOI layer", self.app_context)
+        guarded_connect(self.dlg.mosaicTable.itemSelectionChanged,
+                        self.area_calculator_service.calculate_aoi_area_catalog,
+                        "calculating the catalog AOI area", self.app_context)
+        guarded_connect(self.dlg.imageTable.itemSelectionChanged,
+                        self.area_calculator_service.calculate_aoi_area_catalog,
+                        "calculating the catalog AOI area", self.app_context)
         self.monitor_polygon_layer_feature_selection([
             self.app_context.project.mapLayer(layer_id) for layer_id in self.app_context.project.mapLayers(validOnly=True)
         ])
-        self.app_context.project.layersAdded.connect(self.setup_layers_context_menu)
-        self.app_context.project.layersAdded.connect(self.monitor_polygon_layer_feature_selection)
+        guarded_connect(self.app_context.project.layersAdded, self.setup_layers_context_menu,
+                        "setting up the layer context menu", self.app_context)
+        guarded_connect(self.app_context.project.layersAdded,
+                        self.monitor_polygon_layer_feature_selection,
+                        "monitoring an added polygon layer", self.app_context)
         # Processings
-        self.dlg.processingsTable.cellDoubleClicked.connect(
-            self.project_processing_controller.load_results)
-        self.dlg.deleteProcessings.clicked.connect(self.processing_service.confirm_delete_processings)
+        guarded_connect(self.dlg.processingsTable.cellDoubleClicked,
+                        self.project_processing_controller.load_results,
+                        "loading the results", self.app_context)
+        guarded_connect(self.dlg.deleteProcessings.clicked,
+                        self.processing_service.confirm_delete_processings,
+                        "deleting processings", self.app_context)
         # Entering and leaving a template is TemplateController's entirely — it owns the layers,
         # the search results and the view state they drive. What the processings-table selection
         # enables is split between the two controllers that own those widgets: the Start button is
@@ -542,11 +571,17 @@ class Mapflow(QObject):
 
         self.search_controller.connect_table_selection()
         self.app_context.meta_layer_table_connection = None
-        self.dlg.getMetadata.clicked.connect(self.handle_metadata_button_click)
-        self.dlg.metadataTable.cellClicked.connect(self.on_metadata_table_cell_clicked)
-        self.dlg.metadataTable.horizontalHeader().sectionClicked.connect(self.on_metadata_header_clicked)
-        self.dlg.rasterSourceChanged.connect(self.on_provider_change)
-        self.dlg.metadataTableFilled.connect(self.search_controller.apply_local_filter)
+        guarded_connect(self.dlg.getMetadata.clicked, self.handle_metadata_button_click,
+                        "searching for imagery", self.app_context)
+        guarded_connect(self.dlg.metadataTable.cellClicked, self.on_metadata_table_cell_clicked,
+                        "clicking a search result", self.app_context)
+        guarded_connect(self.dlg.metadataTable.horizontalHeader().sectionClicked,
+                        self.on_metadata_header_clicked,
+                        "sorting the search results", self.app_context)
+        guarded_connect(self.dlg.rasterSourceChanged, self.on_provider_change,
+                        "changing the imagery source", self.app_context)
+        guarded_connect(self.dlg.metadataTableFilled, self.search_controller.apply_local_filter,
+                        "applying the local filter", self.app_context)
         # Instant local filtering: changing a filter widget re-filters the already-fetched
         # results in place (no server request), for both regular search and templates.
         # The handler and the Reset/(!) buttons are SearchController's; only these
@@ -562,9 +597,15 @@ class Mapflow(QObject):
                        self.dlg.hideUnavailableResults.toggled,
                        self.dlg.searchMosaicCheckBox.toggled,
                        self.dlg.searchImageCheckBox.toggled):
-            signal.connect(self.search_controller.apply_local_filter)
-        self.dlg.searchRightButton.clicked.connect(self.show_search_next_page)
-        self.dlg.searchLeftButton.clicked.connect(self.show_search_previous_page)
+            # Guarded like every other Qt-source connection. The AST enforcement cannot see these —
+            # the receiver is a loop variable, not an attribute access — so they are easy to leave
+            # behind; they are Qt widget signals all the same.
+            guarded_connect(signal, self.search_controller.apply_local_filter,
+                            "applying the local filter", self.app_context)
+        guarded_connect(self.dlg.searchRightButton.clicked, self.show_search_next_page,
+                        "the next search page", self.app_context)
+        guarded_connect(self.dlg.searchLeftButton.clicked, self.show_search_previous_page,
+                        "the previous search page", self.app_context)
         self.search_view.searchModeChanged.connect(self.template_controller.on_search_mode_changed)
         self.search_view.setup_search_mode_dropdown()
         self.search_view.setup_seen_dropdown(
@@ -669,30 +710,47 @@ class Mapflow(QObject):
         self.add_layer_menu.addAction(self.use_imagery_extent)
         self.add_layer_menu.addAction(self.create_aoi_from_map_action)
         
-        self.draw_aoi.triggered.connect(self.processing_controller.draw_aoi)
-        self.use_imagery_extent.triggered.connect(self.processing_controller.create_aoi_from_imagery)
-        self.create_aoi_from_map_action.triggered.connect(
-            self.processing_controller.create_aoi_from_map_extent)
+        guarded_connect(self.draw_aoi.triggered, self.processing_controller.draw_aoi,
+                        "drawing an AOI", self.app_context)
+        guarded_connect(self.use_imagery_extent.triggered,
+                        self.processing_controller.create_aoi_from_imagery,
+                        "creating an AOI from the imagery extent", self.app_context)
+        guarded_connect(self.create_aoi_from_map_action.triggered,
+                        self.processing_controller.create_aoi_from_map_extent,
+                        "creating an AOI from the map extent", self.app_context)
         self.dlg.addAoiButton.setMenu(self.add_layer_menu)
 
     def setup_options_menu_connections(self):
-        self.dlg.save_result_action.triggered.connect(
-            self.project_processing_controller.download_results_file)
-        self.dlg.download_aoi_action.triggered.connect(
-            self.project_processing_controller.download_aoi_file)
+        guarded_connect(self.dlg.save_result_action.triggered,
+                        self.project_processing_controller.download_results_file,
+                        "saving the results to a file", self.app_context)
+        guarded_connect(self.dlg.download_aoi_action.triggered,
+                        self.project_processing_controller.download_aoi_file,
+                        "downloading the AOI", self.app_context)
         # 'See details' and the menu's own aboutToShow are wired by ProjectProcessingController,
         # which owns what the processings table offers for the current selection.
-        self.dlg.processing_update_action.triggered.connect(self.processing_service.update_processing)
-        self.dlg.processing_restart_action.triggered.connect(self.processing_service.restart_processing)
-        self.dlg.processing_duplicate_action.triggered.connect(self.check_dir_and_duplicate_processing)
+        guarded_connect(self.dlg.processing_update_action.triggered,
+                        self.processing_service.update_processing,
+                        "renaming a processing", self.app_context)
+        guarded_connect(self.dlg.processing_restart_action.triggered,
+                        self.processing_service.restart_processing,
+                        "restarting a processing", self.app_context)
+        guarded_connect(self.dlg.processing_duplicate_action.triggered,
+                        self.check_dir_and_duplicate_processing,
+                        "duplicating a processing", self.app_context)
         # The template run-state actions are wired by TemplateController, which owns their handlers.
         # AOI actions (in-template view)
-        self.dlg.aoi_rename_action.triggered.connect(self.template_service.rename_aoi)
-        self.dlg.aoi_delete_action.triggered.connect(self.template_service.delete_aoi)
-        self.dlg.aoi_add_action.triggered.connect(self.add_aoi_from_layer_dialog)
-        self.dlg.aoi_update_geometry_action.triggered.connect(
-            self.aoi_service.start_update_session)
-        self.dlg.aoi_draw_action.triggered.connect(self.aoi_service.start_draw_session)
+        guarded_connect(self.dlg.aoi_rename_action.triggered, self.template_service.rename_aoi,
+                        "renaming an AOI", self.app_context)
+        guarded_connect(self.dlg.aoi_delete_action.triggered, self.template_service.delete_aoi,
+                        "deleting an AOI", self.app_context)
+        guarded_connect(self.dlg.aoi_add_action.triggered, self.add_aoi_from_layer_dialog,
+                        "adding an AOI from a layer", self.app_context)
+        guarded_connect(self.dlg.aoi_update_geometry_action.triggered,
+                        self.aoi_service.start_update_session,
+                        "updating an AOI's geometry", self.app_context)
+        guarded_connect(self.dlg.aoi_draw_action.triggered, self.aoi_service.start_draw_session,
+                        "drawing an AOI", self.app_context)
         self.dlg.saveOptionsButton.setMenu(self.dlg.options_menu)
 
     # ==================== AOI edit/draw/add sessions ==================== #
@@ -718,8 +776,9 @@ class Mapflow(QObject):
         dlg_login.setWindowTitle(helpers.generate_plugin_header(self.tr("Log in ") + self.plugin_name,
                                                                      self.config.MAPFLOW_ENV,
                                                                      None, None, None))
-        dlg_login.logIn.clicked.connect(self.log_in)
-        dlg_login.useOauth.toggled.connect(self.session_service.set_auth_type)
+        guarded_connect(dlg_login.logIn.clicked, self.log_in, "logging in", self.app_context)
+        guarded_connect(dlg_login.useOauth.toggled, self.session_service.set_auth_type,
+                        "switching the authentication type", self.app_context)
         return dlg_login
 
     def log_in(self) -> None:
@@ -790,10 +849,18 @@ class Mapflow(QObject):
             # processing cost a second time on every image click — skip it.
             if self.search_service.is_search_metadata_layer(layer):
                 continue
-            layer.selectionChanged.connect(self.area_calculator_service.calculate_aoi_area_selection)
-            layer.geometryChanged.connect(self.area_calculator_service.calculate_aoi_area_layer_edited)
-            layer.featureAdded.connect(self.area_calculator_service.calculate_aoi_area_layer_edited)
-            layer.featuresDeleted.connect(self.area_calculator_service.calculate_aoi_area_layer_edited)
+            guarded_connect(layer.selectionChanged,
+                            self.area_calculator_service.calculate_aoi_area_selection,
+                            "calculating the selected AOI area", self.app_context)
+            guarded_connect(layer.geometryChanged,
+                            self.area_calculator_service.calculate_aoi_area_layer_edited,
+                            "recalculating the AOI area after an edit", self.app_context)
+            guarded_connect(layer.featureAdded,
+                            self.area_calculator_service.calculate_aoi_area_layer_edited,
+                            "recalculating the AOI area after an edit", self.app_context)
+            guarded_connect(layer.featuresDeleted,
+                            self.area_calculator_service.calculate_aoi_area_layer_edited,
+                            "recalculating the AOI area after an edit", self.app_context)
 
     def toggle_imagery_search(self,
                               provider):
@@ -1009,9 +1076,11 @@ class Mapflow(QObject):
                                                                project_owner=None))
         # Display plugin icon in own toolbar
         plugin_button = QAction(self.plugin_icon, self.plugin_name, self.main_window)
-        plugin_button.triggered.connect(self.main)
+        guarded_connect(plugin_button.triggered, self.main,
+                        "opening the plugin", self.app_context)
         self.toolbar.addAction(plugin_button)
-        self.app_context.project.readProject.connect(self.set_layer_group)
+        guarded_connect(self.app_context.project.readProject, self.set_layer_group,
+                        "restoring the layer group for the opened project", self.app_context)
         self.dlg.processingsTable.sortByColumn(self.config.PROCESSING_TABLE_SORT_COLUMN_INDEX, Qt.DescendingOrder)
 
     def set_layer_group(self) -> None:
@@ -1308,8 +1377,13 @@ class Mapflow(QObject):
             # with any auth method
             self.dlg.show()
             self.dlg.raise_()
-            self.account_service.request_status()
+            # Start the periodic refresh BEFORE the one-off request. Starting a timer cannot fail,
+            # while dispatching the request can raise — and with the order reversed a failed
+            # immediate refresh also cost the session its periodic one, so the balance and the
+            # remaining limit would never update again. This entry point is guarded now, which
+            # would make that silent (spec/006 § a guarded callback is interrupted).
             self.account_service.start_refreshing()
+            self.account_service.request_status()
             return
 
         token = self.session_service.saved_token
