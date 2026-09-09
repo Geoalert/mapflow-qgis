@@ -3,6 +3,7 @@ from typing import List, Optional
 from PyQt5.QtCore import QCoreApplication, QObject
 from PyQt5.QtWidgets import QMessageBox
 
+from ...error_guard import guarded_connect
 from ...infra.alert_service import alert
 from ..service.local_filter_service import FilterCriteria, LocalFilterService
 from ..service.preview_service import PreviewService
@@ -67,16 +68,21 @@ class SearchController(QObject):
         self._widen_details: List[str] = []
 
         # Owned handlers, so the connections are owned here too.
-        search_button.clicked.connect(self.preview_or_search)
-        metadata_table.cellDoubleClicked.connect(self.preview)
+        guarded_connect(search_button.clicked, self.preview_or_search,
+                        "running a search", self.app_context)
+        guarded_connect(metadata_table.cellDoubleClicked, self.preview,
+                        "previewing an image", self.app_context)
         # cellClicked -> preview is rewired on every table refill (see reconnect_cell_preview).
         self.reconnect_cell_preview()
         if widen_warning_button is not None:
-            widen_warning_button.clicked.connect(self.show_widen_details)
+            guarded_connect(widen_warning_button.clicked, self.show_widen_details,
+                            "showing the widen details", self.app_context)
         if reset_filters_button is not None:
-            reset_filters_button.clicked.connect(self.reset_filters)
+            guarded_connect(reset_filters_button.clicked, self.reset_filters,
+                            "resetting the search filters", self.app_context)
         if clear_search_button is not None:
-            clear_search_button.clicked.connect(self.clear_results)
+            guarded_connect(clear_search_button.clicked, self.clear_results,
+                            "clearing the search results", self.app_context)
 
     # ---------- running a search ----------
 
@@ -153,8 +159,11 @@ class SearchController(QObject):
 
     def on_metadata_layer_ready(self, layer) -> None:
         """A new footprint layer: selecting a footprint should select its table row."""
-        self.app_context.meta_layer_table_connection = layer.selectionChanged.connect(
-            self.sync_layer_selection_with_table)
+        # guarded_connect returns the connection token, which the table->layer direction
+        # disconnects while it drives (see sync_table_selection_with_layer).
+        self.app_context.meta_layer_table_connection = guarded_connect(
+            layer.selectionChanged, self.sync_layer_selection_with_table,
+            "syncing the map selection to the table", self.app_context)
 
     def connect_table_selection(self) -> None:
         """Wire the table->layer direction, remembering the handle so the other direction can
@@ -178,15 +187,17 @@ class SearchController(QObject):
             pass
         except Exception:
             # Reconnect before propagating, or the map silently stops driving the table.
-            self.app_context.meta_layer_table_connection = layer.selectionChanged.connect(
-                self.sync_layer_selection_with_table)
+            self.app_context.meta_layer_table_connection = guarded_connect(
+                layer.selectionChanged, self.sync_layer_selection_with_table,
+                "syncing the map selection to the table", self.app_context)
             raise
         # The zoom is adopted BEFORE the cost is recomputed, and with the combo silent — see
         # `set_zoom_silently` for why the order and the blocking both matter.
         self.search_view.set_zoom_silently(self.search_view.selected_zoom())
         self.area_calculator_service.calculate_aoi_area_polygon_layer(self.aoi_view.current_layer())
-        self.app_context.meta_layer_table_connection = layer.selectionChanged.connect(
-            self.sync_layer_selection_with_table)
+        self.app_context.meta_layer_table_connection = guarded_connect(
+            layer.selectionChanged, self.sync_layer_selection_with_table,
+            "syncing the map selection to the table", self.app_context)
 
     def sync_layer_selection_with_table(self, selected_ids: List[int]) -> None:
         """Footprints were selected on the map: select the matching rows.

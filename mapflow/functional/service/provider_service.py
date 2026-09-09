@@ -13,6 +13,7 @@ from ...model.provider import(ImagerySearchProvider,
                                BasicAuth,
                                ProvidersList,
                                create_provider)
+from ...error_guard import guarded_connect
 from ...infra.alert_service import alert
 from ...schema import (DataProviderParams, 
                        MyImageryParams, 
@@ -498,7 +499,9 @@ class ProviderService(QObject):
                 data_provider.addFeatures([feature])
                 self.app_context.metadata_layer.commitChanges()
         self.app_context.metadata_layer.updateExtents()
-        self.app_context.meta_layer_table_connection = self.app_context.metadata_layer.selectionChanged.connect(self.selection_sync_callback)
+        self.app_context.meta_layer_table_connection = guarded_connect(
+            self.app_context.metadata_layer.selectionChanged, self.selection_sync_callback,
+            "syncing the duplicated search selection", self.app_context)
         # Create pseudo footprints dict keyed by local_index so multi-image cost requests resolve correctly.
         # local_index is stored as a string in the in-memory layer field (no explicit type was given when
         # the layer was created), but the rest of the codebase expects integer keys
