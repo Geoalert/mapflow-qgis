@@ -53,6 +53,8 @@ def _controller():
     QObject.__init__(controller)
     controller.tr = lambda text: text
     controller.dlg = MagicMock()
+    # The bindings are made with `guarded_connect`, which takes the context as its version source.
+    controller.app_context = SimpleNamespace(plugin_version="test")
     controller.processing_service = MagicMock()
     controller.template_service = MagicMock()
     controller.template_service.in_template_mode = False

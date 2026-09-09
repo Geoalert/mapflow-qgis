@@ -18,6 +18,7 @@ and handled where they occur — surfacing those through a report dialog would t
 to ignore it, which defeats the purpose.
 """
 import functools
+import inspect
 import logging
 from typing import Callable, Optional
 
@@ -89,6 +90,29 @@ def call_guarded(func: Callable,
         return None
 
 
+def _accepted_positionals(slot: Callable) -> Optional[int]:
+    """How many positional arguments `slot` can take, or None for "as many as offered".
+
+    PyQt inspects a slot and passes only the leading signal arguments it can accept, so
+    `button.clicked` (which carries a `checked` bool) may be connected to a no-argument method. The
+    guard's wrapper below takes `*args`, which makes PyQt hand it the signal's *full* argument list
+    — so the wrapper has to reproduce that trimming itself. Without it, guarding a no-argument slot
+    turns a working connection into a TypeError on every click.
+    """
+    try:
+        parameters = inspect.signature(slot).parameters.values()
+    except (TypeError, ValueError):  # C callables and builtins are not introspectable
+        return None
+    accepted = 0
+    for parameter in parameters:
+        if parameter.kind is inspect.Parameter.VAR_POSITIONAL:
+            return None  # *args takes whatever it is given
+        if parameter.kind in (inspect.Parameter.POSITIONAL_ONLY,
+                              inspect.Parameter.POSITIONAL_OR_KEYWORD):
+            accepted += 1
+    return accepted
+
+
 def guarded_connect(signal, slot: Callable, context: str = None, version_source: object = None):
     """Connect `slot` to a Qt-owned `signal` so an unexpected failure becomes a report instead of
     escaping to Qt's event loop.
@@ -107,8 +131,11 @@ def guarded_connect(signal, slot: Callable, context: str = None, version_source:
     the wrapper is not collected while connected (pinned by `test_guarded_connect`'s keep-alive test).
     """
     resolved_context = context or f"a UI action ({getattr(slot, '__name__', 'slot')})"
+    accepted = _accepted_positionals(slot)
 
     def _guarded(*args, **kwargs):
+        if accepted is not None:
+            args = args[:accepted]
         return call_guarded(slot, resolved_context, _resolve_plugin_version(version_source),
                             *args, **kwargs)
 
