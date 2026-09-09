@@ -3,6 +3,7 @@ from PyQt5.QtWidgets import QMessageBox
 
 from ..app_context import AppContext
 from ..service.aoi_service import AoiService
+from ...error_guard import guarded_connect
 from ...infra.alert_service import alert
 from ..service.template_service import TemplateService
 from ..view.search_view import SearchView
@@ -56,25 +57,38 @@ class TemplateController(QObject):
         self.app_context = app_context
         self.iface = iface
 
-        update_search_button.clicked.connect(self.update_template_search_params)
-        exclude_action.triggered.connect(self.template_service.exclude_processing_from_search)
+        guarded_connect(update_search_button.clicked, self.update_template_search_params,
+                        "updating the template search", self.app_context)
+        guarded_connect(exclude_action.triggered,
+                        self.template_service.exclude_processing_from_search,
+                        "excluding a processing from the search", self.app_context)
         # Run-state actions on the selected template. Which of them the context menu offers is
         # still decided in `mapflow.py`, because that decision reads the navigation state.
-        rename_action.triggered.connect(self.template_service.rename_template)
-        pause_action.triggered.connect(self.template_service.pause_template)
-        resume_action.triggered.connect(self.template_service.resume_template)
-        restart_action.triggered.connect(self.template_service.restart_template)
+        guarded_connect(rename_action.triggered, self.template_service.rename_template,
+                        "renaming a template", self.app_context)
+        guarded_connect(pause_action.triggered, self.template_service.pause_template,
+                        "pausing a template", self.app_context)
+        guarded_connect(resume_action.triggered, self.template_service.resume_template,
+                        "resuming a template", self.app_context)
+        guarded_connect(restart_action.triggered, self.template_service.restart_template,
+                        "restarting a template", self.app_context)
         # The Seen / Seen-all actions are created later (setup_metadata_seen_dropdown), so
         # mapflow.py wires them to mark_selected_images_seen / mark_all_images_seen.
 
         # In-template navigation: the map layers a template draws, plus the selection-driven
         # effects that only apply while a template is open. The processings table itself is the
         # ProjectProcessingController's region; these listeners react to it for template concerns.
-        see_processings_action.triggered.connect(self.select_template_processings)
-        see_search_results_action.triggered.connect(self.show_template_search_results)
-        processings_table.itemSelectionChanged.connect(self.sync_processing_area_to_selected_aois)
-        processings_table.itemSelectionChanged.connect(self.filter_search_by_selected_aoi)
-        processings_table.cellClicked.connect(self.on_no_aoi_processing_clicked)
+        guarded_connect(see_processings_action.triggered, self.select_template_processings,
+                        "selecting the template's processings", self.app_context)
+        guarded_connect(see_search_results_action.triggered, self.show_template_search_results,
+                        "showing the template's search results", self.app_context)
+        guarded_connect(processings_table.itemSelectionChanged,
+                        self.sync_processing_area_to_selected_aois,
+                        "syncing the processing area to the selected AOIs", self.app_context)
+        guarded_connect(processings_table.itemSelectionChanged, self.filter_search_by_selected_aoi,
+                        "filtering the search by the selected AOI", self.app_context)
+        guarded_connect(processings_table.cellClicked, self.on_no_aoi_processing_clicked,
+                        "clicking a processing without an AOI", self.app_context)
         template_service.templateAoisChanged.connect(self.on_template_aois_changed)
         template_service.templateProcessingsLoaded.connect(self.on_template_processings_loaded)
         template_service.templateOpened.connect(self.on_template_opened)

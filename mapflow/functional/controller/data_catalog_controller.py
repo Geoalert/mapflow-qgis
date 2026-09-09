@@ -5,6 +5,7 @@ from PyQt5.QtWidgets import QMessageBox, QApplication, QFileDialog
 
 from ..service.data_catalog import DataCatalogService
 from ..service.preview_service import PreviewService
+from ...error_guard import guarded_connect
 from ...infra.alert_service import alert
 from ..view.data_catalog_view import DataCatalogView
 from ...dialogs.main_dialog import MainDialog
@@ -49,40 +50,64 @@ class DataCatalogController(QObject):
 
     def _connect_buttons(self):
         # Mosaic
-        self.dlg.editMosaicButton.clicked.connect(self.update_mosaic)
-        self.dlg.previewMosaicButton.clicked.connect(self.preview_service.preview_my_imagery_mosaic)
+        guarded_connect(self.dlg.editMosaicButton.clicked, self.update_mosaic,
+                        "editing a mosaic", self.app_context)
+        guarded_connect(self.dlg.previewMosaicButton.clicked,
+                        self.preview_service.preview_my_imagery_mosaic,
+                        "previewing a mosaic", self.app_context)
         # itemSelectionChanged (not selectionModel().selectionChanged), so this runs in the same
         # signal whose first slot — connected in mapflow.py above every reader — pushes the
         # selected ids to the service. The dedup/resolve below then reads fresh pushed state.
-        self.dlg.mosaicTable.itemSelectionChanged.connect(self.check_mosaic_selection)
-        self.dlg.showImagesButton.clicked.connect(self.show_images_table)
-        self.dlg.seeImagesButton.clicked.connect(self.show_images_table)
-        self.dlg.mosaicTable.cellDoubleClicked.connect(self.show_images_table)
-        self.dlg.nextImageButton.clicked.connect(self.service.get_next_preview)
-        self.dlg.previousImageButton.clicked.connect(self.service.get_previous_preview)
+        guarded_connect(self.dlg.mosaicTable.itemSelectionChanged, self.check_mosaic_selection,
+                        "selecting a mosaic", self.app_context)
+        guarded_connect(self.dlg.showImagesButton.clicked, self.show_images_table,
+                        "showing the images table", self.app_context)
+        guarded_connect(self.dlg.seeImagesButton.clicked, self.show_images_table,
+                        "showing the images table", self.app_context)
+        guarded_connect(self.dlg.mosaicTable.cellDoubleClicked, self.show_images_table,
+                        "opening a mosaic", self.app_context)
+        guarded_connect(self.dlg.nextImageButton.clicked, self.service.get_next_preview,
+                        "the next image preview", self.app_context)
+        guarded_connect(self.dlg.previousImageButton.clicked, self.service.get_previous_preview,
+                        "the previous image preview", self.app_context)
 
         # Image
         self.dlg.addImageButton.setMenu(self.view.upload_image_menu)
-        self.view.upload_from_file.triggered.connect(self.upload_images_to_mosaic)
-        self.view.choose_raster_layer.triggered.connect(self.choose_raster_layers)
-        self.dlg.imageInfoButton.clicked.connect(self.image_info)
-        self.dlg.renameImageButton.clicked.connect(self.show_rename_image_dialog)
-        self.dlg.previewImageButton.clicked.connect(self.preview_service.preview_my_imagery_image)
-        self.dlg.downloadImageButton.clicked.connect(self.service.download_image)
-        self.dlg.imageTable.itemSelectionChanged.connect(self.check_image_selection)
-        self.dlg.seeMosaicsButton.clicked.connect(self.switch_to_mosaics_table)
+        guarded_connect(self.view.upload_from_file.triggered, self.upload_images_to_mosaic,
+                        "uploading images", self.app_context)
+        guarded_connect(self.view.choose_raster_layer.triggered, self.choose_raster_layers,
+                        "choosing raster layers", self.app_context)
+        guarded_connect(self.dlg.imageInfoButton.clicked, self.image_info,
+                        "showing image info", self.app_context)
+        guarded_connect(self.dlg.renameImageButton.clicked, self.show_rename_image_dialog,
+                        "renaming an image", self.app_context)
+        guarded_connect(self.dlg.previewImageButton.clicked,
+                        self.preview_service.preview_my_imagery_image,
+                        "previewing an image", self.app_context)
+        guarded_connect(self.dlg.downloadImageButton.clicked, self.service.download_image,
+                        "downloading an image", self.app_context)
+        guarded_connect(self.dlg.imageTable.itemSelectionChanged, self.check_image_selection,
+                        "selecting an image", self.app_context)
+        guarded_connect(self.dlg.seeMosaicsButton.clicked, self.switch_to_mosaics_table,
+                        "showing the mosaics table", self.app_context)
 
         # Mosaic or image (depending on selection)
-        self.dlg.addCatalogButton.clicked.connect(self.add_mosaic_or_image)
-        self.dlg.deleteCatalogButton.clicked.connect(self.delete_mosaic_or_image)
-        self.dlg.sortCatalogCombo.activated.connect(self.view.sort_catalog)
-        self.dlg.refreshCatalogButton.clicked.connect(self.service.refresh_catalog)
-        self.dlg.filterCatalog.textChanged.connect(self.view.filter_catalog_table)
+        guarded_connect(self.dlg.addCatalogButton.clicked, self.add_mosaic_or_image,
+                        "adding to the catalog", self.app_context)
+        guarded_connect(self.dlg.deleteCatalogButton.clicked, self.delete_mosaic_or_image,
+                        "deleting from the catalog", self.app_context)
+        guarded_connect(self.dlg.sortCatalogCombo.activated, self.view.sort_catalog,
+                        "sorting the catalog", self.app_context)
+        guarded_connect(self.dlg.refreshCatalogButton.clicked, self.service.refresh_catalog,
+                        "refreshing the catalog", self.app_context)
+        guarded_connect(self.dlg.filterCatalog.textChanged, self.view.filter_catalog_table,
+                        "filtering the catalog", self.app_context)
 
         # Show free and taken space if limit is not None
         self.service.mosaicsUpdated.connect(self.service.get_user_limit)
 
-        self.dlg.myImageryDocsButton.clicked.connect(self.service.open_imagery_docs)
+        guarded_connect(self.dlg.myImageryDocsButton.clicked, self.service.open_imagery_docs,
+                        "opening the imagery docs", self.app_context)
 
     def _connect_service_signals(self):
         """What the service announces, rendered here."""
@@ -208,7 +233,8 @@ class DataCatalogController(QObject):
 
     def create_mosaic(self, *args):
         dialog = CreateMosaicDialog(self.dlg)
-        dialog.accepted.connect(lambda: self._create_mosaic_from_options(dialog))
+        guarded_connect(dialog.accepted, lambda: self._create_mosaic_from_options(dialog),
+                        "creating a mosaic", self.app_context)
         dialog.setup()
         dialog.deleteLater()
 
@@ -231,8 +257,9 @@ class DataCatalogController(QObject):
         if not mosaic:
             return
         dialog = UpdateMosaicDialog(self.dlg)
-        dialog.accepted.connect(
-            lambda: self.service.update_mosaic(mosaic.id, dialog.mosaic()))
+        guarded_connect(dialog.accepted,
+                        lambda: self.service.update_mosaic(mosaic.id, dialog.mosaic()),
+                        "saving a mosaic edit", self.app_context)
         dialog.setup(mosaic)
         dialog.deleteLater()
 
@@ -277,7 +304,8 @@ class DataCatalogController(QObject):
             for item in dialog.listWidget.selectedItems():
                 paths.append(item.data(Qt.UserRole))
 
-        dialog.accepted.connect(collect)
+        guarded_connect(dialog.accepted, collect,
+                        "choosing raster layers to upload", self.app_context)
         layers = [layer for layer in self.app_context.project.mapLayers().values()
                   if Path(layer.source()).suffix.lower() in ['.tif', '.tiff']]
         dialog.setup(layers)
@@ -289,7 +317,9 @@ class DataCatalogController(QObject):
         if not image:
             return
         dialog = RenameImageDialog(self.dlg)
-        dialog.accepted.connect(lambda: self.service.rename_image(image.id, dialog.image()))
+        guarded_connect(dialog.accepted,
+                        lambda: self.service.rename_image(image.id, dialog.image()),
+                        "renaming an image", self.app_context)
         dialog.setup(image)
         dialog.deleteLater()
 
