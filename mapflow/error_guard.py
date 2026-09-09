@@ -30,6 +30,25 @@ from .infra.reporter import report_unexpected_error
 
 logger = logging.getLogger(__name__)
 
+#: The running plugin version, recorded once at startup by `Mapflow.__init__` (it parses
+#: metadata.txt). `_resolve_plugin_version` falls back to this when the object a guard was given
+#: carries no version of its own: dialogs and views hold neither `plugin_version` nor `app_context`,
+#: so every report raised from a widget slot used to arrive saying "unknown" — the one field that
+#: makes a report actionable, missing on a whole tier of them.
+_plugin_version: Optional[str] = None
+
+
+def set_plugin_version(version: str) -> None:
+    """Record the running plugin version for reports raised where no version source is at hand.
+
+    Module state rather than an argument threaded through every `guarded_connect` call: the version
+    is a property of the running plugin, identical for every report, and the alternative is handing
+    it to widgets that otherwise have no reason to know it.
+    """
+    global _plugin_version
+    if isinstance(version, str) and version:
+        _plugin_version = version
+
 
 def _attribute_or_none(obj: object, attribute: str):
     """`getattr` that cannot raise.
@@ -65,7 +84,7 @@ def _resolve_plugin_version(obj: object) -> str:
                 break
         if isinstance(target, str) and target:
             return target
-    return 'unknown'
+    return _plugin_version or 'unknown'
 
 
 def guard_entry_point(context: str, reraise: bool = False) -> Callable:

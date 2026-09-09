@@ -131,11 +131,48 @@ def test_the_plugin_version_comes_from_the_version_source():
     assert reported.call_args.args[2] == "9.9.9"
 
 
-def test_a_version_source_that_raises_on_attribute_access_still_reports():
+def test_a_report_with_no_version_source_falls_back_to_the_recorded_version(monkeypatch):
+    """Dialogs and views hold neither `plugin_version` nor `app_context`, so every report raised
+    from a widget slot said "unknown" — the field that makes a report actionable, missing on a whole
+    tier of them. `Mapflow.__init__` records the version once and the guard falls back to it."""
+    monkeypatch.setattr(error_guard, "_plugin_version", None)
+    error_guard.set_plugin_version("3.7.0")
+    signal = _FakeSignal()
+
+    def slot(*args):
+        raise Boom("x")
+
+    with patch.object(error_guard, "report_unexpected_error") as reported:
+        # No version_source at all — the shape every dialog and view conversion uses.
+        error_guard.guarded_connect(signal, slot, "editing a name")
+        signal.connected()
+
+    assert reported.call_args.args[2] == "3.7.0"
+
+
+def test_an_explicit_version_source_still_wins_over_the_recorded_one(monkeypatch):
+    monkeypatch.setattr(error_guard, "_plugin_version", "3.7.0")
+    signal = _FakeSignal()
+
+    class Owner:
+        plugin_version = "9.9.9"
+
+    def slot(*args):
+        raise Boom("x")
+
+    with patch.object(error_guard, "report_unexpected_error") as reported:
+        error_guard.guarded_connect(signal, slot, "x", version_source=Owner())
+        signal.connected()
+
+    assert reported.call_args.args[2] == "9.9.9"
+
+
+def test_a_version_source_that_raises_on_attribute_access_still_reports(monkeypatch):
     """The resolver runs while a failure is already being handled, so it must not add one of its
     own. `getattr(x, name, default)` only swallows AttributeError — a sip-wrapped Qt object whose
     C++ base was never constructed raises RuntimeError, and a property can raise anything. Escaping
     here would take the guard's own report down and reach the event loop unguarded."""
+    monkeypatch.setattr(error_guard, "_plugin_version", None)  # no fallback: isolate the resolver
     signal = _FakeSignal()
 
     class Hostile:
