@@ -53,83 +53,22 @@ so it is **Phase C2** below rather than a footnote here.
 
 ### Phase C2 — take the dialog out of the services
 
-Empties the layering allowlist, which is Phase C's unmet acceptance criterion.
-
-Five services and two api modules take the main dialog as a constructor argument and reach through
-it — **138 `self.dlg` accesses**, measured.
-
-**A service may not hold a view.** `MAY_IMPORT["service"]` is `{api, service, model, schema,
-errors}`, so "move the widget access into the matching view" is not the fix: the service could not
-call that view. Widget access leaves a service in exactly two directions —
-
-* **writes leave as signals**, which a controller connects to a view method;
-* **reads move up to a controller**, which passes plain values down; state the service needs
-  continuously is **pushed** to it (the shape `ProcessingService.set_open_template` already uses),
-  never pulled.
-
-Every step therefore has a controller part, named below. Where a controller does not exist for the
-region, that is called out — none of these need a new one.
-
-**Before Phase D**, deliberately: Phase D moves `functional/` wholesale, and five of the files it
-moves are the ones this rewrites. Doing D first means moving a file and then rewriting it.
-
-#### Group A — the service builds its own view (do these first)
-
-`ProjectService`, `DataCatalogService` and `ProcessingService` each construct a view in their
-`__init__` (`self.view = ProjectView(self.dlg)`) and drive it directly. They hold **two** allowlist
-entries each — `dialog-param` and `service-imports-view` — and one change clears both.
-
-Recipe: the composition root builds the view and hands it to the controller; the service's
-`self.view.x` calls become signals; the controller connects them; `dlg` leaves the constructor.
-No new pushed state is needed, because these services only touch widgets in their own region.
-
-[ ] C2.1 `ProjectService` (28) → `ProjectController` + `ProjectView`
-    The most self-contained: every widget is in the projects panel (`currentProjectLabel` ×7,
-    `projectsTable` ×6, `filterProjects` ×4, the sort combo and pager). Both the controller and the
-    view exist. This is the worked example the rest follow.
-**Size a step by its `self.view.` calls, not its `self.dlg.` count.** The dialog accesses say how
-much widget work there is; the view calls say how much of the *controller's job* the service is
-doing, and that is what has to be relocated. Measured:
-
-| service | `dlg` | `self.view.` | its controller |
-|---|---|---|---|
-| `ProjectService` | 28 | 8 | — (done) |
-| `DataCatalogService` | 29 | **38** | 57 lines |
-| `ProcessingService` | 26 | 26 | 268 lines |
-| `ProviderService` | 38 | 0 | 121 lines |
-| `AreaCalculatorService` | 17 | 0 | — |
-
-`ProcessingService` (26 dlg, 26 view) splits in two, because its widgets belong to two different
-controllers: the processings table is `ProjectProcessingController`'s region and the start panel is
-`ProcessingController`'s. One MR touching both would be ~600 lines against the most central service
-in the plugin. **The allowlist entries clear only when the second lands** — C2.2a shrinks the
-service without finishing it, which is the price of a reviewable diff.
-
-#### Then the api modules
-
-[ready-for-review] C2.6 `ProcessingApi` and `DataCatalogApi` drop the `dlg` constructor argument —
-    the last one held only to pass through. `ProcessingApi` never used it; `DataCatalogApi` used it
-    once (writing "Preview is unavailable"), now announced via `previewUnavailable` for the view.
-    Dropping it let `ProcessingService` and `DataCatalogService` drop their own `dlg` too. Six
-    allowlist entries cleared: all four `dialog-param`, `processing_api`'s `api-imports-dialogs`,
-    `data_catalog`'s `service-imports-dialogs`.
-
-Each MR deletes its own entries from `tests/functional/test_layering.py`'s `ALLOWED` — removing
-them is part of the MR, not a follow-up. `test_the_allowlist_has_no_stale_entries` then fails if an
-exemption outlives its violation, so the list cannot silently drift.
-
-**Phase C2 done: every service is widget-free.** The six entries still in `ALLOWED` are not C2's:
-they are the error-report widget (`ErrorMessageWidget`) and alert (`QMessageBox`) construction still
-inside `processing_service` / `data_catalog_api` / `alert_service`, plus `processing_view` importing
-the alert helper. Those are the **error-reporting phase**'s to clear (spec/006, sequenced after
-Phase C). Acceptance ("`ALLOWED` empty, `MAY_IMPORT` with no exemptions") is reached there, not at
-C2.6.
+Landed. All five services and both api modules dropped the main dialog — 138 `self.dlg` accesses
+gone. Writes left as signals a controller connects to a view; reads moved up to controllers, which
+push plain values down. `test_layering.py`'s `ALLOWED` is now `set()`: Phase C's unmet acceptance
+criterion is met, the last entries having been cleared by the error-reporting phase rather than by
+C2 itself. The WHY of each step is in its commit message; the layer rules are in
+`spec/007_architecture.md`.
 
 ### Phase C3 — fix what the refactoring found
 
 Nine defects surfaced while moving code. Each was left alone at the time because a behaviour change
 does not belong inside a move, and several are now **pinned as current behaviour by tests written
 during Phase C** — so the suite currently protects them. Those tests change with the fix.
+
+Re-verified against the code on 2026-09-09, after the error-reporting phase: every entry below is
+still live except C3.4 (fixed, entry removed), with C3.5 and C3.7 weakened as annotated. Nothing
+here was fixed incidentally, so the list is real work rather than inherited paperwork.
 
 Grouped by whether the intended behaviour is obvious.
 
@@ -172,10 +111,6 @@ for every model that has options; see the note under C3.2.
     Emitted in `mapflow.py` and `project_view.py:195`; only `currentIndexChanged` is connected. The
     model refresh those emits intend happens by accident via `setCurrentText`. Either connect it or
     delete the emits — but decide, because the accident is load-bearing today.
-[fixed by error-reporting steps 1+2] C3.4 Error-report widgets can be garbage-collected before they
-    appear. Fixed at `ErrorMessageWidget`: it retains itself in a class-level set until closed
-    (`WA_DeleteOnClose` + `destroyed`→discard), covering all five construction sites at once. Pinned
-    by `tests/qgis/test_error_widget_gc.py` (nothing pinned it before).
 [ ] C3.5a An account with no projects re-requests the list forever
     `ProjectService.get_projects_callback` treats "no projects and no filter" as a stale page and
     re-requests without parameters — which returns the same empty result, and asks again. It is
@@ -183,9 +118,12 @@ for every model that has options; see the note under C3.2.
     is an endless request loop rather than stack recursion, which makes it look like a hung plugin
     talking to the server rather than a crash. Pinned as current behaviour by
     `test_an_empty_unfiltered_result_asks_again_without_parameters`; that test changes with the fix.
-[ ] C3.5 A template rename is dropped silently if the response shape drifts
-    The rename callback wraps its parse in a broad `except Exception`, so a changed payload looks
-    exactly like a successful rename that did not happen.
+[ ] C3.5 A template rename tells the user nothing when the response shape drifts
+    (Re-checked 2026-09-09 — weaker than first written.) The broad `except Exception` around the
+    parse now logs via `logger.exception`, forced by Phase A's rule, and `refreshRequested` re-syncs
+    from the server afterwards, so the table ends up correct and the drift is recorded. What remains
+    is that the *user* gets no signal: a rename the plugin failed to apply locally looks identical
+    to one that worked. Decide whether that warrants a message tier alert or is fine as a log line.
 
 **Test-surface gaps found in passing:**
 
@@ -194,6 +132,8 @@ for every model that has options; see the note under C3.2.
     is green on an empty tier. Remove the guard with the first UI test. Note this edits a **watched
     file**, so plan it per the BRANCH MODEL.
 [ ] C3.7 `show_template_details` has no direct test (pre-existing; unchanged by the move).
+    Re-checked 2026-09-09: `test_processings_table_actions.py` now covers that the controller *calls*
+    it, so the wiring is pinned — the method's own behaviour still is not.
 [ ] C3.8 Nothing replaces pyright's `reportPossiblyUnbound`
     Use-before-assignment across branches is unchecked; flake8's `F821` covers undefined names only.
     Accepted deliberately for qgis.org parity — revisit once the refactor lands type annotations.
@@ -266,76 +206,15 @@ Against `spec/003_local_storage.md`; drop what is no longer read.
 
 ### Error reporting — one suppression policy for every dialog
 
-Planned in full and approved; **sequenced after Phase C by decision, and not to be re-raised
-unless a discovery changes that order.** Steps 1–3 are independent of the extractions and fix a
-live violation of `spec/006_error_reporting.md`; step 4 genuinely needs Phase C finished.
+**Delivered.** Both tiers live in `infra/` and are throttled from one set of `config.py`
+parameters; the report tier is reserved for unexpected failures while connectivity and server
+errors use the message tier; every silent request path but the `/version` probe was restored; and
+every Qt entry point reaches plugin code through `guarded_connect`, leaving `ALLOWED_UNGUARDED`
+with only the `response_dispatcher` row, which IS the guard. The WHY of each step is in its commit
+message; the durable rules are in `spec/006` and `spec/007`.
 
-The state that motivates it, as measured on `dev`:
+Two follow-ups it left behind:
 
-* two report paths do the same job with different plumbing — `report_unexpected_error`
-  (exception → `get_exception_report_body`) and `report_http_error` (response →
-  `get_error_report_body`) — and both build `ErrorMessageWidget` themselves, with different
-  wording conventions;
-* **only the exception path is throttled.** The response path can stack dialogs without bound,
-  which is exactly what the volume-limit contract forbids and why the opt-outs below exist;
-* **six request sites opt out of error handling and supply no handler**, so their server errors
-  reach nobody: `mapflow.py:475,2617,3732`, `functional/api/processing_api.py:86`,
-  `functional/api/data_catalog_api.py:97,257`. (A previous version of this entry said three; it
-  missed both data_catalog ones. A further 26 sites opt out but pass their own handler, which is
-  correct and out of scope.)
-
-**Layering sub-phase (empties `ALLOWED`).** The message/report tiers are being reclassified to a new
-`infra/` tier — a spec delta approved by the user (spec/006 § Where each tier lives, spec/007 §§
-Target structure / Layer rules / Services now put both tiers in `infra/`, not `service/`). This runs
-first because the reporter must be reachable from an `api` before the api can call it.
-
-[ready-for-review] MR-1 the message tier (`alert_service`) → `mapflow/infra/`. Clears
-    `widget-import·alert_service` and `view-imports-service·processing_view`. Pure move; `infra`
-    layer added to `test_layering`. `report_http_error` stays in the moved file until step 2.
-[ready-for-review] MR-2 `processing_service` stops building `ErrorMessageWidget`/`QMessageBox` —
-    the error handler routes through `report_http_error` (given the already-read body, which gained
-    a `response_body` param so `readAll` is not called twice); the four `alert(…, QMessageBox.X)`
-    calls become `alert_info`/`alert_warning`/`alert_confirm`. Clears `widget-import` +
-    `service-imports-dialogs` for processing_service.
-[ready-for-review] MR-3 `data_catalog_api` holds no widget. Its 6 `ErrorMessageWidget` sites route
-    through a new `show_error_report` infra primitive (for pre-composed messages, unlike
-    `report_http_error` which parses a response); its upload `QProgressBar` moves to a view-layer
-    `UploadProgressReporter` injected into the api. Clears both `data_catalog_api` entries —
-    **`ALLOWED` is now empty**. (The progress reporter went to `view/`, not the controller: the api
-    is built by the service before any controller exists, so it takes a plain injected collaborator
-    that may hold widgets.)
-
-[ready-for-review] Steps 1+2 (unified, user-approved) — Signature, throttle, and one reporter.
-`mapflow/infra/reporter.py` now owns BOTH report entry points behind one shared `_throttle`:
-`report_unexpected_error` (moved from `error_guard`, which keeps the guards and re-exports it) and
-`report_http_error` (moved from `alert_service`, now throttled). `http.response_signature` = Qt code
-+ query-free path (`_request_path`); `get_error_report_body` carries `suppressed_count` into the
-body, the dialog text gets it too. One throttle across both paths because the 10s global floor must
-hold between an HTTP and an exception report rotating through the same poll tick. Also: the report
-body now carries the query-free path, not the full URL (code catching up to spec/006 + privacy — a
-query carries ids/tokens); `Mapflow.report_http_error` (the default-handler path) folded onto the
-reporter; and C3.4 fixed at `ErrorMessageWidget` (self-retains until closed) so a report cannot be
-GC'd before it is painted. No spec delta needed — spec/006 § Volume limit already specifies all of it.
-
-[ready-for-review] 3. Restore the silent request paths — FIVE, not six (the old count had stale
-pre-Phase-C line numbers). Four restored to the default (throttled) handler: `account_service.
-refresh_status` (`/user/status` poll), `processing_api.get_processings` (processings page poll),
-`data_catalog_api.get_mosaic` and `.get_mosaic_images`. One kept opted out with a WHY comment:
-`mapflow.main`'s `/version` probe, which fails open so a report on an offline start would be noise.
-`tests/functional/test_silent_opt_outs.py` (AST) now allowlists exactly that one; a new silent
-request fails it.
-
-4. Guard the entry points — ~179 Qt-source connects (measured; the old "203/109" was stale). Split
-into PRs; mechanism + two spec deltas approved by the user (guarded-connect helper at connect sites,
-decorator for non-connect entries; new invariant 7 enforced by an AST test).
-
-[ready-for-review] 4-PR6 Views and dialogs — the last regions. `ALLOWED_UNGUARDED` now holds only
-    the `response_dispatcher` wiring, which IS the guard, so **step 4 is complete**. Three bugs
-    found: `_resolve_plugin_version` could raise while building a report and escape the guard
-    entirely (a slot's failure then reached the event loop unguarded); the source/provider combo
-    pair reconnected its sibling at the tail, so one raising handler stopped the combos syncing for
-    the session; and `aoi_view`'s save/cancel were Qt -> plugin-signal passthroughs, leaving nothing
-    between the button and `aoi_service` guarded at all.
 [ ] Close the entry-point enforcement gap the rollout exposed
     `test_entry_points_guarded` classifies a connection by the attribute the `.connect` hangs off,
     so `for signal in (...): signal.connect(...)` is invisible to it — the receiver is a bare name.
@@ -347,20 +226,6 @@ decorator for non-connect entries; new invariant 7 enforced by an AST test).
     views carry neither it nor `app_context`, so a report raised from one says "unknown". The version
     is parsed once in `Mapflow.__init__` from metadata.txt — a one-time module-level fallback in
     `error_guard` would fix every such site at once.
-The expensive half was `spec/006` § "A guarded callback is interrupted, not completed": every slot
-converted was checked for cleanup placed after code that can raise. That audit is what found the
-stalled startup poll, the stranded submission flag, the lost periodic refresh and the combo pair.
-
-[fixed] A refused price (and any disable) is undone by the next selection
-`update_start_processing_button_state` re-enabled Start whenever there was no *planned-processing*
-gate error — knowing nothing about pricing, the AOI, the model or the provider. So a refused
-`/processing/cost/v2`, or a "Set AOI" disable, was thrown away by the next processings- or
-metadata-table selection: Start became clickable again (submittable) and the real reason label was
-lost. Also the user-reported case: double-clicking a processing to load its results turned Start on
-with no AOI set.
-Fixed by giving the enable one owner: the method now only *disables* on the planned-image gate and
-never force-enables — the enabled state is the validation's (`update_processing_cost`), which runs on
-every change that affects it. `test_without_a_template_selection_does_not_force_start_on` pins it.
 
 [ ] Check whether the behavioral tier reaches the real backend
 The fake network replaces `QgsNetworkAccessManager` for everything the plugin requests through
