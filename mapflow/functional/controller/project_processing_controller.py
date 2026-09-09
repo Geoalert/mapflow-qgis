@@ -2,6 +2,7 @@ from PyQt5.QtCore import QObject
 from PyQt5.QtWidgets import QMessageBox, QWidget
 
 from ..app_context import AppContext
+from ...error_guard import guarded_connect
 from ...infra.alert_service import alert
 from ..service.processing_service import ProcessingService
 from ..service.project_service import ProjectService
@@ -69,17 +70,23 @@ class ProjectProcessingController(QObject):
     def _setup_processing_bindings(self):
         """Processing-specific UI connections. The Start button belongs to the start panel, so its
         click is `ProcessingController`'s — not made here."""
-        self.dlg.processing_update_action.triggered.connect(self.update_processing)
-        self.dlg.options_menu.aboutToShow.connect(self.update_processing_options_menu)
-        self.dlg.see_details_action.triggered.connect(self.show_selected_details)
+        guarded_connect(self.dlg.processing_update_action.triggered, self.update_processing,
+                        "renaming a processing", self.app_context)
+        guarded_connect(self.dlg.options_menu.aboutToShow, self.update_processing_options_menu,
+                        "opening the processing options menu", self.app_context)
+        guarded_connect(self.dlg.see_details_action.triggered, self.show_selected_details,
+                        "showing processing details", self.app_context)
         # The Delete button follows the selection for a contributor. `ProcessingController`
         # subscribes to this same signal for the Start button: two regions reading one widget
         # signal, rather than one controller calling the other (`spec/007_architecture.md`).
-        self.dlg.processingsTable.itemSelectionChanged.connect(self.update_delete_button_state)
+        guarded_connect(self.dlg.processingsTable.itemSelectionChanged,
+                        self.update_delete_button_state,
+                        "updating the Delete button", self.app_context)
         # The poll tick, and every action that wants the table refreshed, come here rather than
         # going straight to a service: the table serves two views and picking between them is
         # navigation, which is this controller's region.
-        self.processing_service.processing_fetch_timer.timeout.connect(self.refresh_table)
+        guarded_connect(self.processing_service.processing_fetch_timer.timeout, self.refresh_table,
+                        "the processings poll", self.app_context)
         self.processing_service.refreshRequested.connect(self.refresh_table)
         self.processing_service.rerenderRequested.connect(self.rerender_rows)
         self.processing_service.templateRehydrateRequested.connect(self.rehydrate_template)
@@ -110,13 +117,17 @@ class ProjectProcessingController(QObject):
         self.processing_service.processingRenamed.connect(self._render_processing_name)
         self.processing_service.processingsDeleted.connect(self._render_deleted_processings)
 
-        self.dlg.processingsNextPageButton.clicked.connect(
-            self.processing_service.show_processings_next_page)
-        self.dlg.processingsPreviousPageButton.clicked.connect(
-            self.processing_service.show_processings_previous_page)
-        self.dlg.filterProcessings.textEdited.connect(
-            self.processing_service.get_filtered_processings)
-        self.dlg.sortProcessingsCombo.activated.connect(self.on_combo_sort_changed)
+        guarded_connect(self.dlg.processingsNextPageButton.clicked,
+                        self.processing_service.show_processings_next_page,
+                        "the next processings page", self.app_context)
+        guarded_connect(self.dlg.processingsPreviousPageButton.clicked,
+                        self.processing_service.show_processings_previous_page,
+                        "the previous processings page", self.app_context)
+        guarded_connect(self.dlg.filterProcessings.textEdited,
+                        self.processing_service.get_filtered_processings,
+                        "filtering the processings", self.app_context)
+        guarded_connect(self.dlg.sortProcessingsCombo.activated, self.on_combo_sort_changed,
+                        "sorting the processings", self.app_context)
         # A column-click sort needs no request: the rows are already held.
         self.processing_view.connect_header_sort(self.rerender_rows)
 
@@ -217,13 +228,21 @@ class ProjectProcessingController(QObject):
     def _setup_project_bindings(self):
         """Project-specific UI connections, including the ones `ProjectService` used to make for
         itself — it holds no widget now, so every read below happens here and is passed in."""
-        self.dlg.createProject.clicked.connect(self.create_project)
-        self.dlg.deleteProject.clicked.connect(self.delete_project)
-        self.dlg.updateProject.clicked.connect(self.update_project)
-        self.dlg.projectsNextPageButton.clicked.connect(self.show_projects_next_page)
-        self.dlg.projectsPreviousPageButton.clicked.connect(self.show_projects_previous_page)
-        self.dlg.filterProjects.textEdited.connect(self.on_projects_filter_edited)
-        self.dlg.sortProjectsCombo.activated.connect(self.refresh_projects)
+        guarded_connect(self.dlg.createProject.clicked, self.create_project,
+                        "creating a project", self.app_context)
+        guarded_connect(self.dlg.deleteProject.clicked, self.delete_project,
+                        "deleting a project", self.app_context)
+        guarded_connect(self.dlg.updateProject.clicked, self.update_project,
+                        "editing a project", self.app_context)
+        guarded_connect(self.dlg.projectsNextPageButton.clicked, self.show_projects_next_page,
+                        "the next projects page", self.app_context)
+        guarded_connect(self.dlg.projectsPreviousPageButton.clicked,
+                        self.show_projects_previous_page,
+                        "the previous projects page", self.app_context)
+        guarded_connect(self.dlg.filterProjects.textEdited, self.on_projects_filter_edited,
+                        "filtering the projects", self.app_context)
+        guarded_connect(self.dlg.sortProjectsCombo.activated, self.refresh_projects,
+                        "sorting the projects", self.app_context)
 
         self.project_service.projectsUpdated.connect(self.on_projects_updated)
         self.project_service.projectsFiltered.connect(self.connect_projects)
@@ -300,13 +319,19 @@ class ProjectProcessingController(QObject):
     def _setup_navigation(self):
         """Navigation between projects, processings and in-template views."""
         # Left arrow: back one level (template -> processings -> projects).
-        self.dlg.switchProjectsButton.clicked.connect(self.navigate_back)
-        self.dlg.switchProcessingsButton.clicked.connect(lambda: self.show_processings(save_page=True))
+        guarded_connect(self.dlg.switchProjectsButton.clicked, self.navigate_back,
+                        "navigating back", self.app_context)
+        guarded_connect(self.dlg.switchProcessingsButton.clicked,
+                        lambda: self.show_processings(save_page=True),
+                        "showing the processings", self.app_context)
         # Right arrow (the former placeholder): enter the selected template ("one step right").
-        self.dlg.switchProcessingsFakeButton.clicked.connect(self.navigate_into_template)
-        self.dlg.projectsTable.doubleClicked.connect(self._on_project_double_clicked)
+        guarded_connect(self.dlg.switchProcessingsFakeButton.clicked, self.navigate_into_template,
+                        "entering a template", self.app_context)
+        guarded_connect(self.dlg.projectsTable.doubleClicked, self._on_project_double_clicked,
+                        "opening a project", self.app_context)
         # Keep the "enter template" arrow enabled only when a single template is selected.
-        self.dlg.processingsTable.itemSelectionChanged.connect(self._update_nav_buttons)
+        guarded_connect(self.dlg.processingsTable.itemSelectionChanged, self._update_nav_buttons,
+                        "updating the navigation buttons", self.app_context)
         # Entering a template is async when its aoiDetails must be fetched (the project poll
         # omits them), so `in_template_mode` flips only in the hydrate callback. Refresh the nav
         # buttons on the actual open/close signals — otherwise the "enter template" arrow stays
@@ -588,8 +613,9 @@ class ProjectProcessingController(QObject):
         if processing.messages:
             error = processing.error_message(raw=config.SHOW_RAW_ERROR)
         dialog = ProcessingDetailsDialog(self.dlg)
-        dialog.toSourceButton.clicked.connect(
-            lambda: self.show_processing_source(processing=processing, window=dialog))
+        guarded_connect(dialog.toSourceButton.clicked,
+                        lambda: self.show_processing_source(processing=processing, window=dialog),
+                        "opening the processing source", self.app_context)
         dialog.setup(processing, error or None)
         dialog.deleteLater()
 
@@ -614,8 +640,10 @@ class ProjectProcessingController(QObject):
         if not processing:
             return
         dialog = UpdateProcessingDialog(self.dlg)
-        dialog.accepted.connect(lambda: self.processing_service.update_processing(processing_id=processing.id,
-                                                                                  processing=dialog.processing()))
+        guarded_connect(dialog.accepted,
+                        lambda: self.processing_service.update_processing(
+                            processing_id=processing.id, processing=dialog.processing()),
+                        "saving a processing rename", self.app_context)
         dialog.setup(processing)
         dialog.deleteLater()
 
@@ -659,14 +687,18 @@ class ProjectProcessingController(QObject):
 
     def create_project(self):
         dialog = CreateProjectDialog(self.dlg)
-        dialog.accepted.connect(lambda: self.project_service.create_project(dialog.project()))
+        guarded_connect(dialog.accepted,
+                        lambda: self.project_service.create_project(dialog.project()),
+                        "saving a new project", self.app_context)
         dialog.setup()
         dialog.deleteLater()
 
     def update_project(self):
         dialog = UpdateProjectDialog(self.dlg)
-        dialog.accepted.connect(lambda: self.project_service.update_project(self.app_context.current_project.id,
-                                                                            dialog.project()))
+        guarded_connect(dialog.accepted,
+                        lambda: self.project_service.update_project(
+                            self.app_context.current_project.id, dialog.project()),
+                        "saving a project edit", self.app_context)
         dialog.setup(self.app_context.current_project)
         dialog.deleteLater()
 
@@ -688,5 +720,7 @@ class ProjectProcessingController(QObject):
         if self.project_connection is not None:
             self.dlg.projectsTable.itemSelectionChanged.disconnect(self.project_connection)
             self.project_connection = None
-        self.project_connection = self.dlg.projectsTable.itemSelectionChanged.connect(
-            self.on_project_change)
+        # guarded_connect returns the connection token, so the disconnect above still works.
+        self.project_connection = guarded_connect(
+            self.dlg.projectsTable.itemSelectionChanged, self.on_project_change,
+            "selecting a project", self.app_context)

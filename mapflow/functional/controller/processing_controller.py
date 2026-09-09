@@ -4,6 +4,7 @@ from qgis.core import QgsMapLayer
 from .. import layer_utils
 from ..service.aoi_service import AoiService
 from ..view.aoi_view import AoiView
+from ...error_guard import guarded_connect
 from ...schema import BillingType
 
 
@@ -56,7 +57,8 @@ class ProcessingController(QObject):
         self.aoi_service.currentAoiLayerChanged.connect(self.aoi_view.set_current_layer)
 
         if model_combo is not None:
-            model_combo.currentIndexChanged.connect(self.on_model_change)
+            guarded_connect(model_combo.currentIndexChanged, self.on_model_change,
+                            "changing the model", app_context)
         if model_options_changed is not None:
             model_options_changed.connect(self.on_options_change)
         if processing_service is not None:
@@ -75,29 +77,40 @@ class ProcessingController(QObject):
             processing_service.processingNameSet.connect(self.processing_view.set_processing_name)
             processing_service.confirmationRequested.connect(self._confirm_processing_start)
         if start_button is not None:
-            start_button.clicked.connect(self.start_processing)
+            guarded_connect(start_button.clicked, self.start_processing,
+                            "starting a processing", app_context)
         if rating_submit_button is not None:
-            rating_submit_button.clicked.connect(self.submit_rating)
+            guarded_connect(rating_submit_button.clicked, self.submit_rating,
+                            "submitting a rating", app_context)
         if rating_combo is not None:
-            rating_combo.activated.connect(self.refresh_feedback_controls)
+            guarded_connect(rating_combo.activated, self.refresh_feedback_controls,
+                            "choosing a rating", app_context)
         if accept_button is not None:
-            accept_button.clicked.connect(self.accept_processing)
+            guarded_connect(accept_button.clicked, self.accept_processing,
+                            "accepting a processing", app_context)
         if review_button is not None:
-            review_button.clicked.connect(self.show_review_dialog)
+            guarded_connect(review_button.clicked, self.show_review_dialog,
+                            "opening the review dialog", app_context)
         if review_dialog is not None:
-            review_dialog.accepted.connect(self.submit_review)
+            guarded_connect(review_dialog.accepted, self.submit_review,
+                            "submitting a review", app_context)
         if processings_table is not None:
-            processings_table.itemSelectionChanged.connect(self.refresh_feedback_controls)
-            processings_table.cellClicked.connect(self.load_current_rating)
+            guarded_connect(processings_table.itemSelectionChanged, self.refresh_feedback_controls,
+                            "refreshing the feedback controls", app_context)
+            guarded_connect(processings_table.cellClicked, self.load_current_rating,
+                            "loading the processing rating", app_context)
             # Which template a Start would run depends on the processings-table selection, so
             # the button follows it. `ProjectProcessingController` subscribes to the same signal
             # for the Delete button — two regions reading one widget signal is how they stay
             # independent (`spec/007_architecture.md`: controllers must not call each other).
-            processings_table.itemSelectionChanged.connect(
-                self.update_start_processing_button_state)
+            guarded_connect(processings_table.itemSelectionChanged,
+                            self.update_start_processing_button_state,
+                            "updating the Start button", app_context)
         if metadata_table is not None:
             # The planned-processing gate counts selected search images.
-            metadata_table.itemSelectionChanged.connect(self.update_start_processing_button_state)
+            guarded_connect(metadata_table.itemSelectionChanged,
+                            self.update_start_processing_button_state,
+                            "updating the Start button", app_context)
 
     # ---------- the model and its options ----------
 

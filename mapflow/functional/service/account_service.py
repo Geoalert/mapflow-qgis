@@ -18,6 +18,7 @@ from PyQt5.QtCore import QObject, QTimer, pyqtSignal
 from PyQt5.QtNetwork import QNetworkReply
 
 from ..app_context import AppContext
+from ...error_guard import guarded_connect
 from ...http import Http
 from ...schema import BillingType
 
@@ -54,11 +55,13 @@ class AccountService(QObject):
         #: The steady-state refresh while the plugin is open.
         self.refresh_timer = QTimer(self)
         self.refresh_timer.setInterval(config.USER_STATUS_UPDATE_INTERVAL * 1000)
-        self.refresh_timer.timeout.connect(self.refresh_status)
+        guarded_connect(self.refresh_timer.timeout, self.refresh_status,
+                        "refreshing the account status", app_context)
         #: The post-login retry, on a much shorter interval, until the first response arrives.
         self.startup_timer = QTimer(self)
         self.startup_timer.setInterval(config.STARTUP_STATUS_RETRY_INTERVAL)
-        self.startup_timer.timeout.connect(self.request_startup_status)
+        guarded_connect(self.startup_timer.timeout, self.request_startup_status,
+                        "requesting the account status at startup", app_context)
         self._startup_attempts = 0
         self._startup_pending = False
         self._startup_given_up = False
@@ -112,12 +115,21 @@ class AccountService(QObject):
             return
         self._startup_attempts += 1
         self._startup_pending = True
-        self.http.get(
-            url=f'{self.server}/user/status',
-            callback=self.startup_status_callback,
-            error_handler=self.startup_status_error_handler,
-            use_default_error_handler=False
-        )
+        try:
+            self.http.get(
+                url=f'{self.server}/user/status',
+                callback=self.startup_status_callback,
+                error_handler=self.startup_status_error_handler,
+                use_default_error_handler=False
+            )
+        except Exception:
+            # The request never left, so neither callback will clear the in-flight flag — and this
+            # slot is reached through the guard, which swallows the raise. Without this the flag
+            # stays set and every later tick returns at the check above: the startup poll stalls for
+            # the whole session and the plugin never gets the status it cannot configure itself
+            # without (spec/006 § a guarded callback is interrupted, not completed).
+            self._startup_pending = False
+            raise
 
     def startup_status_callback(self, response: QNetworkReply) -> None:
         """Apply the startup configuration carried by the first `/user/status` response.

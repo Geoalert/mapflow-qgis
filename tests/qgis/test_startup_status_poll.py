@@ -60,6 +60,22 @@ def test_the_next_tick_retries_once_the_previous_request_failed(service):
     assert service.startup_timer.isActive(), "a single failure is not fatal"
 
 
+def test_a_request_that_fails_to_dispatch_does_not_stall_the_poll(service):
+    """If sending the request raises, neither callback runs, so nothing clears the in-flight flag.
+    The tick is reached through the guard, which swallows the raise — so without clearing the flag
+    here, every later tick would return early and the plugin would never get the status it cannot
+    configure itself without (spec/006 § a guarded callback is interrupted)."""
+    service.http.get.side_effect = RuntimeError("could not send")
+
+    with pytest.raises(RuntimeError):
+        service.request_startup_status()
+
+    service.http.get.side_effect = None
+    service.request_startup_status()  # the next tick still gets through
+
+    assert service.http.get.call_count == 2
+
+
 def test_polling_stops_and_the_user_is_told_after_the_attempt_budget(service):
     warnings = []
     service.startupGaveUp.connect(warnings.append)

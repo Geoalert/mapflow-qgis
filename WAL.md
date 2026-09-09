@@ -329,9 +329,13 @@ request fails it.
 into PRs; mechanism + two spec deltas approved by the user (guarded-connect helper at connect sites,
 decorator for non-connect entries; new invariant 7 enforced by an AST test).
 
-[ ] 4-PR3..6 Roll `guarded_connect` across the remaining regions (poll/submission controllers →
-    other controllers → `mapflow.py` + initGui/unload/main → views/dialogs), each PR deleting its
-    allowlist rows until `ALLOWED_UNGUARDED` holds only the response_dispatcher wiring.
+[ready-for-review] 4-PR3 The poll/submission region: `processing_controller`,
+    `project_processing_controller` (including the processings poll timer) and `account_service`'s
+    two poll timers — 25 allowlist rows removed. The audit found one live bug (a startup-status
+    request that fails to dispatch stranded the in-flight flag and stalled the poll for the session).
+[ ] 4-PR4..6 Roll `guarded_connect` across the rest (other controllers → `mapflow.py` +
+    initGui/unload/main → views/dialogs), each PR deleting its allowlist rows until
+    `ALLOWED_UNGUARDED` holds only the response_dispatcher wiring.
 The expensive half is `spec/006` § "A guarded callback is interrupted, not completed": every slot
 converted is checked for cleanup placed after code that can raise — the bug that polled
 `/user/status` twice a second for a whole session.
