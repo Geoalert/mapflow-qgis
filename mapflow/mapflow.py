@@ -17,7 +17,7 @@ from qgis.core import (
 )
 
 from .config import Config, ConfigColumns
-from .error_guard import guarded_connect
+from .error_guard import guarded_connect, set_plugin_version
 # Functional
 from .functional import helpers, layer_utils
 from .functional.app_context import AppContext
@@ -136,6 +136,9 @@ class Mapflow(QObject):
         metadata_parser = ConfigParser()
         metadata_parser.read(os.path.join(self.plugin_dir, 'metadata.txt'))
         self.app_context.plugin_version = metadata_parser.get('general', 'version')
+        # Give the guard a version for reports raised where no version source is at hand — a widget
+        # slot has no `app_context` to resolve one from (spec/006: the report must be actionable).
+        set_plugin_version(self.app_context.plugin_version)
         self.dlg.help.setText(
             self.dlg.help.text().replace('Mapflow', f'{self.plugin_name} {self.app_context.plugin_version}', 1)
         )

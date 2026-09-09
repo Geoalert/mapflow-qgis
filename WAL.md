@@ -215,17 +215,11 @@ message; the durable rules are in `spec/006` and `spec/007`.
 
 Two follow-ups it left behind:
 
-[ ] Close the entry-point enforcement gap the rollout exposed
-    `test_entry_points_guarded` classifies a connection by the attribute the `.connect` hangs off,
-    so `for signal in (...): signal.connect(...)` is invisible to it — the receiver is a bare name.
-    `mapflow.py`'s local-filter block was exactly that shape (nine Qt widget signals) and was
-    guarded only because the rollout read the code. Either resolve simple loop variables in the
-    visitor, or fail on a `.connect` whose receiver cannot be classified.
-[ ] Give dialog-originated reports a plugin version
-    `guarded_connect`'s `version_source` resolves `plugin_version` off the passed object; dialogs and
-    views carry neither it nor `app_context`, so a report raised from one says "unknown". The version
-    is parsed once in `Mapflow.__init__` from metadata.txt — a one-time module-level fallback in
-    `error_guard` would fix every such site at once.
+[ready-for-review] Close the entry-point enforcement gap, and give reports a plugin version.
+    The classifier now fails closed on a `.connect` whose receiver it cannot name, instead of
+    skipping it; that immediately found an injected plugin signal nobody had noticed. And
+    `error_guard` records the version once at startup, so reports raised from dialogs and views no
+    longer say "unknown".
 
 [ ] Check whether the behavioral tier reaches the real backend
 The fake network replaces `QgsNetworkAccessManager` for everything the plugin requests through
