@@ -6,6 +6,7 @@ from qgis.core import Qgis, QgsMapLayer, QgsVectorLayer
 
 from ...dialogs.main_dialog import MainDialog
 from ...dialogs.select_aoi_layers_dialog import SelectAoiLayersDialog
+from ...error_guard import guarded_connect
 
 
 class AoiView(QObject):
@@ -67,8 +68,15 @@ class AoiView(QObject):
         layout.addStretch(1)
         save_button = QPushButton(self.tr("Save AOI"))
         cancel_button = QPushButton(self.tr("Cancel"))
-        save_button.clicked.connect(self.saveRequested)
-        cancel_button.clicked.connect(self.cancelRequested)
+        # Qt -> plugin-signal passthroughs, and the Qt boundary for the whole save/cancel chain:
+        # `saveRequested` is connected to `aoi_service.save_session` as a plugin signal, and plugin
+        # signals are left raw because they emit inside an already-guarded stack. That only holds if
+        # the stack starts guarded, so it starts here. The lambdas take no arguments, so the guard
+        # trims `clicked`'s `checked` bool away — these signals carry none.
+        guarded_connect(save_button.clicked, lambda: self.saveRequested.emit(),
+                        "saving the AOI edit session", self)
+        guarded_connect(cancel_button.clicked, lambda: self.cancelRequested.emit(),
+                        "cancelling the AOI edit session", self)
         layout.addWidget(save_button)
         layout.addWidget(cancel_button)
         self._edit_bar_item = self.iface.messageBar().pushWidget(widget, Qgis.Info)

@@ -31,6 +31,26 @@ from .infra.reporter import report_unexpected_error
 logger = logging.getLogger(__name__)
 
 
+def _attribute_or_none(obj: object, attribute: str):
+    """`getattr` that cannot raise.
+
+    `getattr(x, name, default)` only swallows AttributeError, and the default is no help against
+    anything else: a sip-wrapped Qt object whose C++ base was never constructed raises RuntimeError
+    on any attribute access, and a property can raise whatever it likes. This is reached while a
+    failure is already being reported, so an exception escaping here would both replace that failure
+    with its own and escape the guard to the event loop — turning one bug into exactly the unguarded
+    crash the guard exists to prevent.
+    """
+    try:
+        return getattr(obj, attribute, None)
+    except Exception as error:
+        # Debug, not error: the report this feeds is already being built for a real failure, and a
+        # missing version degrades it rather than breaking it. The trace still says which attribute
+        # refused and why.
+        logger.debug("Could not read %r for the error report: %s", attribute, error)
+        return None
+
+
 def _resolve_plugin_version(obj: object) -> str:
     """Best-effort plugin version from a bound instance.
 
@@ -40,7 +60,7 @@ def _resolve_plugin_version(obj: object) -> str:
     for path in (('plugin_version',), ('app_context', 'plugin_version')):
         target = obj
         for attribute in path:
-            target = getattr(target, attribute, None)
+            target = _attribute_or_none(target, attribute)
             if target is None:
                 break
         if isinstance(target, str) and target:

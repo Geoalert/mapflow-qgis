@@ -129,3 +129,30 @@ def test_the_plugin_version_comes_from_the_version_source():
         signal.connected()
 
     assert reported.call_args.args[2] == "9.9.9"
+
+
+def test_a_version_source_that_raises_on_attribute_access_still_reports():
+    """The resolver runs while a failure is already being handled, so it must not add one of its
+    own. `getattr(x, name, default)` only swallows AttributeError — a sip-wrapped Qt object whose
+    C++ base was never constructed raises RuntimeError, and a property can raise anything. Escaping
+    here would take the guard's own report down and reach the event loop unguarded."""
+    signal = _FakeSignal()
+
+    class Hostile:
+        @property
+        def plugin_version(self):
+            raise RuntimeError("super-class __init__() was never called")
+
+        @property
+        def app_context(self):
+            raise RuntimeError("super-class __init__() was never called")
+
+    def slot(*args):
+        raise Boom("x")
+
+    with patch.object(error_guard, "report_unexpected_error") as reported:
+        error_guard.guarded_connect(signal, slot, "x", version_source=Hostile())
+        signal.connected()  # must not raise
+
+    reported.assert_called_once()
+    assert reported.call_args.args[2] == "unknown"

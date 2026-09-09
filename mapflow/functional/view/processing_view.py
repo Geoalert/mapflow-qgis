@@ -11,6 +11,7 @@ from ...schema.template import (ProcessingTemplateDTO, TemplateAoiDTO,
                                 AoiProcessingLink, TemplateProcessingSchema,
                                 NoAoiProcessingsRow)
 from ...config import config
+from ...error_guard import guarded_connect
 from ...infra.alert_service import alert
 
 class ProcessingView:
@@ -59,9 +60,9 @@ class ProcessingView:
 
     def connect_header_sort(self, on_sort_changed):
         """Connect column header clicks to a templates-first re-sort."""
-        self.dlg.processingsTable.horizontalHeader().sectionClicked.connect(
-            lambda col: self._on_header_clicked(col, on_sort_changed)
-        )
+        guarded_connect(self.dlg.processingsTable.horizontalHeader().sectionClicked,
+                        lambda col: self._on_header_clicked(col, on_sort_changed),
+                        "sorting the processings by a column header", self)
 
     def clear_header_sort(self) -> None:
         """Drop the column-click override so `sort_processings` reads the combo again."""
@@ -161,8 +162,9 @@ class ProcessingView:
             if self.dlg.cornfirmProcessingStart.isChecked() != (not dont_ask):
                 self.dlg.cornfirmProcessingStart.setChecked(not dont_ask)
 
-        dialog.checkBox.toggled.connect(sync_dont_ask_again)
-        dialog.accepted.connect(on_accept)
+        guarded_connect(dialog.checkBox.toggled, sync_dont_ask_again,
+                        "toggling 'don't ask again'", self)
+        guarded_connect(dialog.accepted, on_accept, "confirming the processing start", self)
         ui_start_params = self.read_processing_start_params()
         dialog.setup(
             name=name,

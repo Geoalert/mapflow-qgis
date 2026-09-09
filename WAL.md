@@ -329,22 +329,27 @@ request fails it.
 into PRs; mechanism + two spec deltas approved by the user (guarded-connect helper at connect sites,
 decorator for non-connect entries; new invariant 7 enforced by an AST test).
 
-[ready-for-review] 4-PR5 The composition root: every Qt-source connection in `mapflow.py`
-    (`__init__`, `initGui`, `main`, the menus, the login dialog, the per-layer AOI monitoring) —
-    22 allowlist rows removed, plus the local-filter loop the AST test cannot see. The audit found
-    one live bug: `main` started the periodic status refresh *after* the one-off request, so a
-    failed immediate refresh cost the session every later one.
-[ ] 4-PR6 Views and dialogs — the last regions. When they land, `ALLOWED_UNGUARDED` holds only
-    the `response_dispatcher` wiring, which IS the guard, and Phase 4 is complete.
+[ready-for-review] 4-PR6 Views and dialogs — the last regions. `ALLOWED_UNGUARDED` now holds only
+    the `response_dispatcher` wiring, which IS the guard, so **step 4 is complete**. Three bugs
+    found: `_resolve_plugin_version` could raise while building a report and escape the guard
+    entirely (a slot's failure then reached the event loop unguarded); the source/provider combo
+    pair reconnected its sibling at the tail, so one raising handler stopped the combos syncing for
+    the session; and `aoi_view`'s save/cancel were Qt -> plugin-signal passthroughs, leaving nothing
+    between the button and `aoi_service` guarded at all.
 [ ] Close the entry-point enforcement gap the rollout exposed
     `test_entry_points_guarded` classifies a connection by the attribute the `.connect` hangs off,
     so `for signal in (...): signal.connect(...)` is invisible to it — the receiver is a bare name.
     `mapflow.py`'s local-filter block was exactly that shape (nine Qt widget signals) and was
     guarded only because the rollout read the code. Either resolve simple loop variables in the
     visitor, or fail on a `.connect` whose receiver cannot be classified.
-The expensive half is `spec/006` § "A guarded callback is interrupted, not completed": every slot
-converted is checked for cleanup placed after code that can raise — the bug that polled
-`/user/status` twice a second for a whole session.
+[ ] Give dialog-originated reports a plugin version
+    `guarded_connect`'s `version_source` resolves `plugin_version` off the passed object; dialogs and
+    views carry neither it nor `app_context`, so a report raised from one says "unknown". The version
+    is parsed once in `Mapflow.__init__` from metadata.txt — a one-time module-level fallback in
+    `error_guard` would fix every such site at once.
+The expensive half was `spec/006` § "A guarded callback is interrupted, not completed": every slot
+converted was checked for cleanup placed after code that can raise. That audit is what found the
+stalled startup poll, the stranded submission flag, the lost periodic refresh and the combo pair.
 
 [fixed] A refused price (and any disable) is undone by the next selection
 `update_start_processing_button_state` re-enabled Start whenever there was no *planned-processing*
@@ -371,11 +376,14 @@ No evidence of a plugin defect here — the vector-tile assertions (source and e
 the only stall came from a deliberately unroutable host.
 
 [ ] Detach the plugin from QgsProject on unload
-`unload()` closes the dialogs but never disconnects the `QgsProject` subscriptions made in
-`mapflow.py:349-350` and `:4028` (`layersAdded` ×2, `readProject`). After a QGIS plugin reload
-the previous instance is still subscribed, so adding a layer runs its handlers against a
-closed dialog — and against whatever state that instance was left in, which can take a branch
-the live instance never would.
+`unload()` closes the dialogs but never disconnects the `QgsProject` subscriptions
+(`layersAdded` ×2, `readProject`). After a QGIS plugin reload the previous instance is still
+subscribed, so adding a layer runs its handlers against a closed dialog — and against whatever
+state that instance was left in, which can take a branch the live instance never would.
+The entry-point rollout makes this **more certain, not less**: `guarded_connect` connects a
+closure rather than a bound method, so PyQt's auto-disconnect-when-the-receiver-dies no longer
+applies. `QgsProject` outlives the plugin, so these subscriptions now survive until something
+disconnects them explicitly — which is exactly what this step must add.
 Found because the behavioral suite builds a plugin per test: opening a mosaic in one journey
 made a *later, unrelated* journey fail, with the traceback running through the previous
 plugin's dialog. `tests/qgis/behavioral/conftest.py` disconnects those signals at teardown to
