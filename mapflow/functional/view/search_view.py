@@ -6,6 +6,7 @@ from PyQt5.QtWidgets import QAbstractItemView, QMenu, QPushButton, QTableWidgetI
 
 from ..helpers import utc_date_from_iso
 from ...dialogs.main_dialog import MainDialog
+from ...error_guard import guarded_connect
 from ...schema.catalog import ProductType
 from ...schema.template import SearchParams
 
@@ -48,8 +49,10 @@ class SearchView(QObject):
         self._search_menu = QMenu(self.dlg.getMetadata)
         search_action = self._search_menu.addAction(self.tr("Search"))
         plan_action = self._search_menu.addAction(self.tr("Plan search"))
-        search_action.triggered.connect(lambda: self.set_search_mode("search"))
-        plan_action.triggered.connect(lambda: self.set_search_mode("plan"))
+        guarded_connect(search_action.triggered, lambda: self.set_search_mode("search"),
+                        "choosing the search mode", self)
+        guarded_connect(plan_action.triggered, lambda: self.set_search_mode("plan"),
+                        "choosing the plan-search mode", self)
         self.dlg.getMetadata.setPopupMode(QToolButton.MenuButtonPopup)
         self.dlg.getMetadata.setMenu(self._search_menu)
         self.set_search_mode("search")
@@ -68,8 +71,8 @@ class SearchView(QObject):
         self._seen_menu = QMenu(self.dlg.markSeenButton)
         seen_action = self._seen_menu.addAction(self.tr("Seen"))
         seen_all_action = self._seen_menu.addAction(self.tr("Seen all"))
-        seen_action.triggered.connect(on_seen)
-        seen_all_action.triggered.connect(on_seen_all)
+        guarded_connect(seen_action.triggered, on_seen, "marking images seen", self)
+        guarded_connect(seen_all_action.triggered, on_seen_all, "marking all images seen", self)
         self.dlg.markSeenButton.setPopupMode(QToolButton.MenuButtonPopup)
         self.dlg.markSeenButton.setMenu(self._seen_menu)
         self.dlg.markSeenButton.setDefaultAction(seen_action)
@@ -244,7 +247,8 @@ class SearchView(QObject):
         several preview layers (feedback 4.2). The prior connection is dropped first.
         """
         self.disconnect_cell_preview()
-        self._cell_preview_connection = self.dlg.metadataTable.cellClicked.connect(handler)
+        self._cell_preview_connection = guarded_connect(
+            self.dlg.metadataTable.cellClicked, handler, "previewing a search result", self)
 
     def disconnect_cell_preview(self) -> None:
         try:
@@ -364,7 +368,8 @@ class SearchView(QObject):
         return bool(self.dlg.metadataTable.findItems(text, Qt.MatchExactly))
 
     def connect_table_selection(self, handler):
-        return self.dlg.metadataTable.itemSelectionChanged.connect(handler)
+        return guarded_connect(self.dlg.metadataTable.itemSelectionChanged, handler,
+                               "syncing the table selection to the map", self)
 
     def disconnect_table_selection(self, connection) -> None:
         """Drop the table->layer handler while the layer is driving the table.

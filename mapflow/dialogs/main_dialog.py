@@ -12,6 +12,7 @@ from qgis.gui import QgsRangeSlider
 
 from . import icons
 from ..config import config, ConfigColumns
+from ..error_guard import guarded_connect
 from ..schema import BillingType, UserRole
 from ..model.provider import ProviderInterface
 from ..functional import helpers
@@ -69,9 +70,15 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         coin_pixmap = icons.coins_icon.pixmap(16, 16)
         self.labelCoins_1.setPixmap(coin_pixmap)
 
-        self.modelInfo.clicked.connect(lambda: helpers.open_model_info(model_name=self.modelCombo.currentText()))
-        self.topUpBalanceButton.clicked.connect(lambda: helpers.open_url(config.TOP_UP_URL))
-        self.billingHistoryButton.clicked.connect(lambda: helpers.open_url(config.BILLING_HISTORY_URL))
+        guarded_connect(self.modelInfo.clicked,
+                        lambda: helpers.open_model_info(model_name=self.modelCombo.currentText()),
+                        "opening the model info", self)
+        guarded_connect(self.topUpBalanceButton.clicked,
+                        lambda: helpers.open_url(config.TOP_UP_URL),
+                        "opening the top-up page", self)
+        guarded_connect(self.billingHistoryButton.clicked,
+                        lambda: helpers.open_url(config.BILLING_HISTORY_URL),
+                        "opening the billing history", self)
 
         self.alert_palette = QPalette()
         self.default_palette = QPalette()
@@ -92,12 +99,20 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         # current state to compare with on change
         self.current_raster_source = self.sourceCombo.currentText()
         # connect raster/provider combos
-        self.raster_provider_connection = self.sourceCombo.currentTextChanged.connect(self.switch_provider_combo)
-        self.provider_raster_connection = self.providerCombo.currentTextChanged.connect(self.switch_raster_combo)
+        # These two keep their connection tokens: each combo's handler takes the other's connection
+        # down while it drives, so they do not ping-pong. `guarded_connect` returns whatever
+        # `signal.connect()` returns, so the stored tokens still disconnect.
+        self.raster_provider_connection = guarded_connect(
+            self.sourceCombo.currentTextChanged, self.switch_provider_combo,
+            "switching the imagery source", self)
+        self.provider_raster_connection = guarded_connect(
+            self.providerCombo.currentTextChanged, self.switch_raster_combo,
+            "switching the provider", self)
 
         self.modelOptions = []
         # Save on toggle
-        self.buttonGroup.buttonClicked.connect(self.save_view_results_mode)
+        guarded_connect(self.buttonGroup.buttonClicked, self.save_view_results_mode,
+                        "choosing how results are viewed", self)
 
         # Restored saved state
         self.set_state_from_settings()
@@ -186,12 +201,16 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
             self.viewAsLocal.setChecked(True)
         self.useAllVectorLayers.setChecked(str(self.settings.value('useAllVectorLayers', "true")).lower() == "true")
         self.cornfirmProcessingStart.setChecked(str(self.settings.value('confirmProcessingStart', "true")).lower() == "true")
-        self.cornfirmProcessingStart.toggled.connect(lambda: self.settings.setValue("confirmProcessingStart",
-                                                                                    self.cornfirmProcessingStart.isChecked()))
+        guarded_connect(self.cornfirmProcessingStart.toggled,
+                        lambda: self.settings.setValue(
+                            "confirmProcessingStart", self.cornfirmProcessingStart.isChecked()),
+                        "toggling the start confirmation", self)
         # The "Providers" filter is only relevant when the search is limited to available
         # providers, so show it only while that checkbox is set.
         self._search_providers_available = False
-        self.hideUnavailableResults.toggled.connect(self.update_search_providers_filter_visibility)
+        guarded_connect(self.hideUnavailableResults.toggled,
+                        self.update_search_providers_filter_visibility,
+                        "toggling unavailable search results", self)
         self.update_search_providers_filter_visibility()
 
     # connect raster/provider combos funcs
@@ -203,9 +222,17 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.current_raster_source = text
 
         self.providerCombo.currentTextChanged.disconnect(self.provider_raster_connection)
-        self.providerCombo.setCurrentText(text)
-        self.rasterSourceChanged.emit()
-        self.provider_raster_connection = self.providerCombo.currentTextChanged.connect(self.switch_raster_combo)
+        try:
+            self.providerCombo.setCurrentText(text)
+            self.rasterSourceChanged.emit()
+        finally:
+            # Reconnect even when a `rasterSourceChanged` handler raises. Left at the tail, one
+            # failure stopped the two combos driving each other for the rest of the session — and
+            # this slot is guarded, so that loss would be silent (spec/006 § a guarded callback is
+            # interrupted).
+            self.provider_raster_connection = guarded_connect(
+                self.providerCombo.currentTextChanged, self.switch_raster_combo,
+                "switching the provider", self)
 
     def switch_raster_combo(self, text):
         # We want to skip the signal emission if the actual text did not change
@@ -213,9 +240,15 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
             return
         self.current_raster_source = text
         self.sourceCombo.currentTextChanged.disconnect(self.raster_provider_connection)
-        self.sourceCombo.setCurrentText(text)
-        self.rasterSourceChanged.emit()
-        self.raster_provider_connection = self.sourceCombo.currentTextChanged.connect(self.switch_provider_combo)
+        try:
+            self.sourceCombo.setCurrentText(text)
+            self.rasterSourceChanged.emit()
+        finally:
+            # Same reason as switch_provider_combo above: the reconnect must survive a raising
+            # handler, or the combos stop syncing for the session.
+            self.raster_provider_connection = guarded_connect(
+                self.sourceCombo.currentTextChanged, self.switch_provider_combo,
+                "switching the imagery source", self)
 
     def set_raster_sources(self,
                            provider_names: Dict[str, str],
@@ -230,22 +263,29 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.providerCombo.currentTextChanged.disconnect(self.provider_raster_connection)
         self.sourceCombo.currentTextChanged.disconnect(self.raster_provider_connection)
 
-        self.sourceCombo.clear()
-        for name, api_name in provider_names.items():
-            self.sourceCombo.addItem(name, api_name)
-        self.providerCombo.clear()
-        for name, api_name in provider_names.items():
-            self.providerCombo.addItem(name, api_name)
+        try:
+            self.sourceCombo.clear()
+            for name, api_name in provider_names.items():
+                self.sourceCombo.addItem(name, api_name)
+            self.providerCombo.clear()
+            for name, api_name in provider_names.items():
+                self.providerCombo.addItem(name, api_name)
 
-        for name in default_provider_names:
-            if name in provider_names:
-                self.sourceCombo.setCurrentText(name)
-                self.providerCombo.setCurrentText(name)
-        self.current_raster_source = self.sourceCombo.currentText()
-
-        # Now, after all is set, we can unblock the signals and emit a new one
-        self.provider_raster_connection = self.providerCombo.currentTextChanged.connect(self.switch_raster_combo)
-        self.raster_provider_connection = self.sourceCombo.currentTextChanged.connect(self.switch_provider_combo)
+            for name in default_provider_names:
+                if name in provider_names:
+                    self.sourceCombo.setCurrentText(name)
+                    self.providerCombo.setCurrentText(name)
+            self.current_raster_source = self.sourceCombo.currentText()
+        finally:
+            # Both combos are deliberately deaf for the block above, so restoring them belongs in
+            # `finally`: a raise while repopulating would otherwise leave them disconnected for the
+            # rest of the session, with no visible sign that the pair stopped syncing.
+            self.provider_raster_connection = guarded_connect(
+                self.providerCombo.currentTextChanged, self.switch_raster_combo,
+                "switching the provider", self)
+            self.raster_provider_connection = guarded_connect(
+                self.sourceCombo.currentTextChanged, self.switch_provider_combo,
+                "switching the imagery source", self)
         self.rasterSourceChanged.emit()
 
     def set_processing_visible_columns(self):
@@ -263,7 +303,8 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
 
     def connect_processing_column_checkboxes(self):
         for checkbox in self.processing_columns:
-            checkbox.toggled.connect(self.set_processing_column_visibility)
+            guarded_connect(checkbox.toggled, self.set_processing_column_visibility,
+                            "showing or hiding a processings column", self)
 
     def set_processing_column_visibility(self):
         """
@@ -443,7 +484,8 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.modelOptionsLayout.addWidget(checkbox)
         self.modelOptions.append(checkbox)
         checkbox.setChecked(checked)
-        checkbox.toggled.connect(lambda: self.modelOptionsChanged.emit())
+        guarded_connect(checkbox.toggled, lambda: self.modelOptionsChanged.emit(),
+                        "toggling a model option", self)
 
     def enabled_blocks(self):
         """
@@ -649,7 +691,8 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
     
     def connect_search_column_checkboxes(self):
         for checkbox in self.search_columns:
-            checkbox.toggled.connect(self.set_search_column_visibility)
+            guarded_connect(checkbox.toggled, self.set_search_column_visibility,
+                            "showing or hiding a search column", self)
 
     OFF_NADIR_MIN = 0
     OFF_NADIR_MAX = 30
@@ -691,9 +734,12 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         self.layoutMetadataFilters.addWidget(self.labelOffNadir, row, 0)
         self.layoutMetadataFilters.addWidget(self.offNadirSlider, row, 1)
         self.layoutMetadataFilters.addLayout(spin_row, row, 2)
-        self.offNadirSlider.rangeChanged.connect(self._sync_off_nadir_spinboxes)
-        self.minOffNadirSpinBox.valueChanged.connect(self._sync_off_nadir_slider)
-        self.maxOffNadirSpinBox.valueChanged.connect(self._sync_off_nadir_slider)
+        guarded_connect(self.offNadirSlider.rangeChanged, self._sync_off_nadir_spinboxes,
+                        "dragging the off-nadir slider", self)
+        guarded_connect(self.minOffNadirSpinBox.valueChanged, self._sync_off_nadir_slider,
+                        "editing the minimum off-nadir angle", self)
+        guarded_connect(self.maxOffNadirSpinBox.valueChanged, self._sync_off_nadir_slider,
+                        "editing the maximum off-nadir angle", self)
 
     def _off_nadir_spinbox(self, value: int) -> QSpinBox:
         box = QSpinBox()

@@ -40,39 +40,16 @@ QT_SIGNALS = {
 }
 
 #: (path relative to repo root, enclosing function, signal name) for each Qt-source connection still
-#: made with a raw `.connect`. Only shrinks — see the module docstring. Seeded with the set that
-#: existed when the guard rollout began (PR-1), minus `provider_controller`, converted as the worked
-#: example. Each later entry-point PR routes its region through `guarded_connect` and deletes its rows.
+#: made with a raw `.connect`. Only shrinks — see the module docstring. It began as every Qt-source
+#: connection in the plugin and is now down to one, which is not a gap:
+#:
+#: `send_request` wires the finished signal to `response_dispatcher`, which IS the guard (it wraps
+#: every callback in `call_guarded`). It is the one `.connect` that need not go through the helper —
+#: routing the guard through itself would be circular.
+#:
+#: So a new row here is a regression, not a step: every other Qt entry point in the plugin reaches
+#: plugin code through `guarded_connect`.
 ALLOWED_UNGUARDED = {
-    ('mapflow/dialogs/image_dialog.py', '__init__', 'textChanged'),
-    ('mapflow/dialogs/main_dialog.py', '__init__', 'clicked'),
-    ('mapflow/dialogs/main_dialog.py', '__init__', 'currentTextChanged'),
-    ('mapflow/dialogs/main_dialog.py', '_setup_off_nadir_filter', 'valueChanged'),
-    ('mapflow/dialogs/main_dialog.py', 'add_model_option', 'toggled'),
-    ('mapflow/dialogs/main_dialog.py', 'connect_processing_column_checkboxes', 'toggled'),
-    ('mapflow/dialogs/main_dialog.py', 'connect_search_column_checkboxes', 'toggled'),
-    ('mapflow/dialogs/main_dialog.py', 'set_raster_sources', 'currentTextChanged'),
-    ('mapflow/dialogs/main_dialog.py', 'set_state_from_settings', 'toggled'),
-    ('mapflow/dialogs/main_dialog.py', 'switch_provider_combo', 'currentTextChanged'),
-    ('mapflow/dialogs/main_dialog.py', 'switch_raster_combo', 'currentTextChanged'),
-    ('mapflow/dialogs/mosaic_dialog.py', '__init__', 'textChanged'),
-    ('mapflow/dialogs/processing_dialog.py', '__init__', 'textChanged'),
-    ('mapflow/dialogs/project_dialog.py', '__init__', 'textChanged'),
-    ('mapflow/dialogs/provider_dialog.py', '__init__', 'currentTextChanged'),
-    ('mapflow/dialogs/provider_dialog.py', '__init__', 'textChanged'),
-    ('mapflow/dialogs/provider_dialog.py', '__init__', 'toggled'),
-    ('mapflow/dialogs/review_dialog.py', 'setup', 'layerChanged'),
-    ('mapflow/dialogs/review_dialog.py', 'setup', 'textChanged'),
-    ('mapflow/functional/view/aoi_view.py', 'enter_edit_session', 'clicked'),
-    ('mapflow/functional/view/processing_view.py', 'confirm_processing_start', 'accepted'),
-    ('mapflow/functional/view/processing_view.py', 'confirm_processing_start', 'toggled'),
-    ('mapflow/functional/view/processing_view.py', 'connect_header_sort', 'sectionClicked'),
-    ('mapflow/functional/view/search_view.py', 'connect_cell_preview', 'cellClicked'),
-    ('mapflow/functional/view/search_view.py', 'connect_table_selection', 'itemSelectionChanged'),
-    ('mapflow/functional/view/search_view.py', 'setup_search_mode_dropdown', 'triggered'),
-    ('mapflow/functional/view/search_view.py', 'setup_seen_dropdown', 'triggered'),
-    # `send_request` wires the finished signal to `response_dispatcher`, which IS the guard (it wraps
-    # every callback in `call_guarded`). It is the one `.connect` that need not go through the helper.
     ('mapflow/http.py', 'send_request', 'finished'),
 }
 

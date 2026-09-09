@@ -34,6 +34,23 @@ def _table(rows):
     return table
 
 
+def _select_row(plugin, row: int) -> None:
+    """Arrange a table selection without firing the table->layer handler.
+
+    The fixture wires that handler for real, so an unblocked `selectRow` runs the very method most
+    of these tests then call explicitly, and the assertions would count both. Blocking the signal
+    keeps arranging the selection separate from the action under test. (This only started mattering
+    once the connection went through `guarded_connect`: connecting a bound method of the fixture's
+    half-built QObject left it inert, so the setup used to be silent by accident.)
+    """
+    table = plugin.dlg.metadataTable
+    table.blockSignals(True)
+    try:
+        table.selectRow(row)
+    finally:
+        table.blockSignals(False)
+
+
 @pytest.fixture
 def plugin():
     """A `SearchController` with a real results table and real `SearchView` widget access.
@@ -72,7 +89,7 @@ def plugin():
 def test_the_layer_handler_is_disconnected_while_the_table_drives(plugin):
     """The selectByExpression below fires the layer's selectionChanged; if the table handler is
     still attached it calls straight back into this method."""
-    plugin.dlg.metadataTable.selectRow(0)
+    _select_row(plugin, 0)
 
     plugin.sync_table_selection_with_layer()
 
@@ -83,7 +100,7 @@ def test_the_layer_handler_is_disconnected_while_the_table_drives(plugin):
 
 
 def test_the_selected_rows_local_indices_reach_the_layer(plugin):
-    plugin.dlg.metadataTable.selectRow(1)
+    _select_row(plugin, 1)
 
     plugin.sync_table_selection_with_layer()
 
@@ -114,7 +131,7 @@ def test_the_zoom_combo_is_written_with_signals_blocked(plugin):
     """zoomCombo.currentIndexChanged -> on_zoom_change fires a second, duplicate cost request,
     and it would use the stale zoom. The block is the fix; this pins it."""
     plugin.dlg.zoomCombo.findText.return_value = 2
-    plugin.dlg.metadataTable.selectRow(0)
+    _select_row(plugin, 0)
 
     plugin.sync_table_selection_with_layer()
 
@@ -125,7 +142,7 @@ def test_the_zoom_combo_is_written_with_signals_blocked(plugin):
 
 def test_an_unknown_zoom_falls_back_to_the_first_entry(plugin):
     plugin.dlg.zoomCombo.findText.return_value = -1
-    plugin.dlg.metadataTable.selectRow(0)
+    _select_row(plugin, 0)
 
     plugin.sync_table_selection_with_layer()
 
@@ -133,7 +150,7 @@ def test_an_unknown_zoom_falls_back_to_the_first_entry(plugin):
 
 
 def test_the_cost_is_recomputed_after_the_zoom_is_set(plugin):
-    plugin.dlg.metadataTable.selectRow(0)
+    _select_row(plugin, 0)
 
     plugin.sync_table_selection_with_layer()
 
@@ -161,7 +178,7 @@ def test_the_table_handler_is_disconnected_while_the_layer_drives(plugin):
 
 
 def test_no_selected_features_clears_the_table(plugin):
-    plugin.dlg.metadataTable.selectRow(0)
+    _select_row(plugin, 0)
 
     plugin.sync_layer_selection_with_table([])
 
@@ -188,7 +205,7 @@ def test_several_footprints_select_several_rows(plugin):
 # ---------- image id -> table ----------
 
 def test_an_empty_image_id_clears_the_selection(plugin):
-    plugin.dlg.metadataTable.selectRow(0)
+    _select_row(plugin, 0)
 
     plugin.sync_image_id_with_table("")
 
@@ -196,7 +213,7 @@ def test_an_empty_image_id_clears_the_selection(plugin):
 
 
 def test_an_unknown_image_id_clears_the_selection(plugin):
-    plugin.dlg.metadataTable.selectRow(0)
+    _select_row(plugin, 0)
 
     plugin.sync_image_id_with_table("no-such-image")
 

@@ -102,12 +102,16 @@ def _search_view():
 def test_reconnect_cell_preview_disconnects_previous_first():
     view = _search_view()
     view._cell_preview_connection = object()  # a prior connection exists
-    handler = object()
+    handler = MagicMock()
 
     view.connect_cell_preview(handler)
 
     view.dlg.metadataTable.disconnect.assert_called_once()
-    view.dlg.metadataTable.cellClicked.connect.assert_called_once_with(handler)
+    view.dlg.metadataTable.cellClicked.connect.assert_called_once()
+    # The connected callable is `guarded_connect`'s wrapper, not the handler itself, so check where
+    # it leads rather than its identity: firing the cell click must reach the handler.
+    view.dlg.metadataTable.cellClicked.connect.call_args.args[0](0, 0)
+    handler.assert_called_once()
 
 
 def test_reconnect_cell_preview_first_time_no_disconnect_error():
