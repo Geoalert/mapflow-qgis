@@ -199,9 +199,11 @@ def test_monitor_skips_current_search_metadata_layer():
 
     # The footprint (search-metadata) layer is skipped; a real AOI layer is still wired.
     footprint_layer.selectionChanged.connect.assert_not_called()
-    aoi_layer.selectionChanged.connect.assert_called_once_with(
-        plugin.area_calculator_service.calculate_aoi_area_selection
-    )
+    aoi_layer.selectionChanged.connect.assert_called_once()
+    # The connected callable is `guarded_connect`'s wrapper, not the slot itself, so check where it
+    # leads rather than its identity: firing it must reach the area calculation.
+    aoi_layer.selectionChanged.connect.call_args.args[0]([])
+    plugin.area_calculator_service.calculate_aoi_area_selection.assert_called_once()
 
 
 def test_template_callback_alerts_and_skips_when_no_images(tmp_path, monkeypatch):

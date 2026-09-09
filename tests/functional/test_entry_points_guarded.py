@@ -74,28 +74,6 @@ ALLOWED_UNGUARDED = {
     # `send_request` wires the finished signal to `response_dispatcher`, which IS the guard (it wraps
     # every callback in `call_guarded`). It is the one `.connect` that need not go through the helper.
     ('mapflow/http.py', 'send_request', 'finished'),
-    ('mapflow/mapflow.py', '__init__', 'cellClicked'),
-    ('mapflow/mapflow.py', '__init__', 'cellDoubleClicked'),
-    ('mapflow/mapflow.py', '__init__', 'clicked'),
-    ('mapflow/mapflow.py', '__init__', 'finished'),
-    ('mapflow/mapflow.py', '__init__', 'itemSelectionChanged'),
-    ('mapflow/mapflow.py', '__init__', 'layerChanged'),
-    ('mapflow/mapflow.py', '__init__', 'layersAdded'),
-    ('mapflow/mapflow.py', '__init__', 'metadataTableFilled'),
-    ('mapflow/mapflow.py', '__init__', 'rasterSourceChanged'),
-    ('mapflow/mapflow.py', '__init__', 'sectionClicked'),
-    ('mapflow/mapflow.py', '__init__', 'stateChanged'),
-    ('mapflow/mapflow.py', '__init__', 'triggered'),
-    ('mapflow/mapflow.py', 'initGui', 'readProject'),
-    ('mapflow/mapflow.py', 'initGui', 'triggered'),
-    ('mapflow/mapflow.py', 'monitor_polygon_layer_feature_selection', 'featureAdded'),
-    ('mapflow/mapflow.py', 'monitor_polygon_layer_feature_selection', 'featuresDeleted'),
-    ('mapflow/mapflow.py', 'monitor_polygon_layer_feature_selection', 'geometryChanged'),
-    ('mapflow/mapflow.py', 'monitor_polygon_layer_feature_selection', 'selectionChanged'),
-    ('mapflow/mapflow.py', 'set_up_login_dialog', 'clicked'),
-    ('mapflow/mapflow.py', 'set_up_login_dialog', 'toggled'),
-    ('mapflow/mapflow.py', 'setup_add_layer_menu', 'triggered'),
-    ('mapflow/mapflow.py', 'setup_options_menu_connections', 'triggered'),
 }
 
 
