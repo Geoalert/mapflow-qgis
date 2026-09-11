@@ -15,7 +15,7 @@ Projects: CRUD, pagination, sharing.
 Processings: submit, list, update.
 
 ### 002_C_myimagery_api.md
-Data Catalog (My Imagery): mosaics, images, upload, download, storage limits. Includes `GET /rasters/image/{image_id}/download` for presigned S3 download URLs.
+Data Catalog (My Imagery): mosaics, images, upload, download, storage limits. Includes `GET /rasters/image/{image_id}/download` for presigned S3 download URLs, and how the plugin streams the image to disk.
 
 ### 002_D_search_api.md
 Imagery Search: Mapflow catalog search.

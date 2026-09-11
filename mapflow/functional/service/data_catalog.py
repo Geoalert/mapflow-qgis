@@ -3,7 +3,7 @@ from pathlib import Path
 from uuid import UUID
 import json
 
-from PyQt5.QtCore import QObject, QUrl, pyqtSignal, Qt
+from PyQt5.QtCore import QObject, QUrl, pyqtSignal, Qt, QFileDevice, QIODevice, QSaveFile
 from PyQt5.QtGui import QImage
 from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest
 from PyQt5.QtWidgets import QMessageBox, QApplication, QFileDialog, QAbstractItemView
@@ -58,6 +58,8 @@ class DataCatalogService(QObject):
         self.image_max_size_bytes = Config.MAX_FILE_SIZE_BYTES
         self.free_storage = None
         self.preview_idx = 0
+        # In-flight image downloads: reply -> the QSaveFile it streams into
+        self._downloads = {}
 
 
     # Mosaics CRUD
@@ -529,24 +531,51 @@ class DataCatalogService(QObject):
         self._download_file_from_url(download_url, save_path)
 
     def _download_file_from_url(self, url: str, save_path: str):
-        request = QNetworkRequest(QUrl(url))
-        nam = self.api.http.nam
-        reply = nam.get(request)
-        reply.finished.connect(lambda: self._save_downloaded_file(reply, save_path))
-
-    def _save_downloaded_file(self, reply: QNetworkReply, save_path: str):
-        if reply.error() != QNetworkReply.NoError:
-            self.view.alert(self.tr("Failed to download image: {}").format(reply.errorString()))
-            reply.deleteLater()
+        # Stream to disk: an image can be several GB, more than Qt5 can hold in one QByteArray.
+        # QSaveFile writes to a temporary file and replaces save_path only on commit().
+        target = QSaveFile(save_path)
+        if not target.open(QIODevice.WriteOnly):
+            self.view.alert(self.tr("Failed to save file: {}").format(target.errorString()))
             return
-        data = reply.readAll().data()
-        try:
-            with open(save_path, 'wb') as f:
-                f.write(data)
-            self.iface.messageBar().pushMessage("Mapflow", self.tr("Image saved to {}").format(save_path))
-        except OSError as e:
-            self.view.alert(self.tr("Failed to save file: {}").format(str(e)))
+        reply = self.api.http.nam.get(QNetworkRequest(QUrl(url)))
+        # The slots are methods that find their reply via sender(). A lambda capturing `reply` would
+        # form a reply <-> slot cycle that the garbage collector can tear down mid-download, losing
+        # the slot or crashing QGIS on `finished`. Holding the reply here keeps it alive until then.
+        self._downloads[reply] = target
+        reply.readyRead.connect(self._on_download_ready_read)
+        reply.finished.connect(self._on_download_finished)
+
+    def _on_download_ready_read(self):
+        reply = self.sender()
+        target = self._downloads.get(reply)
+        if target is None:
+            return
+        if target.write(reply.readAll()) == -1:
+            # Disk full or similar: stop downloading, _on_download_finished reports the file error
+            reply.abort()
+
+    def _on_download_finished(self):
+        reply = self.sender()
+        target = self._downloads.pop(reply, None)
+        if target is None:
+            return
         reply.deleteLater()
+        if reply.error() == QNetworkReply.NoError:
+            # Normally empty (readyRead has taken everything); guards against Qt finishing without one
+            target.write(reply.readAll())
+        failure = None
+        if target.error() != QFileDevice.NoError:
+            failure = self.tr("Failed to save file: {}").format(target.errorString())
+        elif reply.error() != QNetworkReply.NoError:
+            failure = self.tr("Failed to download image: {}").format(reply.errorString())
+            target.cancelWriting()
+        # commit() moves the temporary file over the target, or deletes it after a failure
+        if not target.commit() and failure is None:
+            failure = self.tr("Failed to save file: {}").format(target.errorString())
+        if failure:
+            self.view.alert(failure)
+        else:
+            self.iface.messageBar().pushMessage("Mapflow", self.tr("Image saved to {}").format(target.fileName()))
 
     # Functions that depend on mosaic or image selection
     def add_mosaic_or_image(self):

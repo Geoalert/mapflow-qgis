@@ -110,6 +110,22 @@ Notes:
 - URL expiry is configurable via `DOWNLOAD_URL_EXPIRY` (default 3600 seconds).
 - The download restriction to `load_data` images prevents misuse of the service as a general file exchange.
 
+#### Client-side download (plugin behavior)
+After receiving the response, the plugin asks the user where to save the image (the dialog suggests
+`filename`) and fetches `download_url` directly, without Mapflow credentials.
+
+- **Streamed to disk:** the response body is written to disk as it arrives. The plugin never holds the
+  whole image in memory: images can be several GB, beyond what Qt5 can hold in one buffer (2 GiB).
+- **Atomic replace:** data goes to a temporary file next to the target, which replaces the target only
+  once the download has completed successfully. On any failure the target path is left untouched — no
+  partial file is created, and a file already at that path is kept.
+- **Completes however long it takes:** an in-flight download stays alive until it finishes; its
+  completion is never lost, whatever the download's duration.
+- **Target not writable:** if the target file cannot be opened for writing, the user is told why and no
+  download request is sent.
+- **Outcome shown to the user:** on success, a message-bar notice "Image saved to {path}". On a network,
+  HTTP or disk error, a plain error message with the reason.
+
 ## Storage Endpoints
 
 ### `GET /rasters/memory`

@@ -1,3 +1,7 @@
+## 3.6.3
+    - Fix: downloading an image from My imagery could crash QGIS, or finish without saving anything — mostly for large images, whose download lasts long enough for Python's garbage collector to discard the code waiting for it to finish. The plugin now holds each download until it completes
+    - Downloaded images are streamed to disk as they arrive instead of being held in memory, so multi-GB images (beyond Qt's 2 GiB buffer limit) can be saved. The file replaces the chosen path only once the download has succeeded: a failed download leaves no partial file and keeps any file already there
+
 ## 3.6.2
     - Fix: after logging in with OAuth2 the plugin did not know your email, so every shared project opened as read-only ("readonly, owner: ...") even for its owner. Your rights are now resolved correctly whichever way you log in
 
