@@ -3,6 +3,7 @@
 Spec reference: spec/002_C_myimagery_api.md
 """
 import gc
+import os
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -204,7 +205,20 @@ def _finished(svc):
 
 
 def _bytes_on_disk(directory):
-    return sum(path.stat().st_size for path in directory.iterdir() if path.is_file())
+    """Bytes in the files under `directory` that this process holds open, named or not.
+
+    Listing the directory is not enough: where the filesystem supports O_TMPFILE (e.g. CI's
+    ubuntu-24.04 host), QSaveFile's temporary file has no directory entry until commit().
+    """
+    total = 0
+    for fd in os.listdir("/proc/self/fd"):
+        link = f"/proc/self/fd/{fd}"
+        try:
+            if os.readlink(link).startswith(str(directory)):
+                total += os.stat(link).st_size
+        except OSError:  # the descriptor closed meanwhile (e.g. the one listdir itself used)
+            continue
+    return total
 
 
 class TestImageDownloadToDisk:
