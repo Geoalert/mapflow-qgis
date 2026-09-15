@@ -73,14 +73,11 @@ DIALOG_PARAMS = {"dlg", "dialog", "maindialog", "main_dialog"}
 ALLOWED = set()
 
 #: Cycles that exist today, as the set of modules involved so the entry survives a change of
-#: traversal order. All three are the same shape: a package `__init__` imports its submodules
-#: and a submodule imports the package back. Phase C and D dissolve both packages.
+#: traversal order. Both are the same shape: a package `__init__` imports its submodules and a
+#: submodule imports the package back. Phase C and D dissolve both packages.
 ALLOWED_CYCLES = {
     frozenset({"mapflow.dialogs", "mapflow.dialogs.main_dialog"}),
     frozenset({"mapflow.functional.service", "mapflow.functional.service.provider_service"}),
-    frozenset({"mapflow.functional.service",
-               "mapflow.functional.service.provider_service",
-               "mapflow.functional.service.processing_service"}),
 }
 
 

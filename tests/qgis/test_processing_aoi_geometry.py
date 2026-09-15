@@ -7,11 +7,9 @@ silently sent the test down the fallback branch.
 """
 import json
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
 
 from qgis.core import QgsGeometry
 
-from mapflow.functional.service import processing_service as processing_service_module
 from mapflow.functional.service.processing_service import ProcessingService
 
 WHOLE_WKT = "POLYGON((0 0, 0 1, 1 1, 1 0, 0 0))"
@@ -33,14 +31,15 @@ def _service(processing_aoi):
         aoi=QgsGeometry.fromWkt(WHOLE_WKT),
         processing_aoi=processing_aoi,
     )
+    # Provider params are ProviderService's to build; only the geometry is under test here.
+    service.provider_service = SimpleNamespace(
+        get_provider_params=lambda provider, zoom: ({"sourceParams": {}}, {}))
     return service
 
 
 def _build_geometry(service):
     ui_start_params = SimpleNamespace(name="Run 1", zoom="18", wd_name="Buildings")
-    with patch.object(processing_service_module, "get_provider_params",
-                      return_value=({"sourceParams": {}}, {})):
-        params = service.get_processing_schema(ui_start_params, provider=object())
+    params = service.get_processing_schema(ui_start_params, provider=object())
     return params.geometry
 
 

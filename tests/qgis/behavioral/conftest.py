@@ -93,31 +93,21 @@ def network():
 
 
 @pytest.fixture
-def fresh_singletons():
-    """Forget process-global plugin state before building a plugin.
+def fresh_settings_group():
+    """Close the settings group a previous plugin left open, before building a plugin.
 
-    Every item here compensates for plugin state that outlives the plugin object, not for a
-    test-only quirk — the same leaks happen when QGIS reloads the plugin (see WAL). When
-    Phase C makes the plugin own its state, this fixture becomes a no-op and should be
-    deleted.
+    This compensates for plugin state that outlives the plugin object, not for a test-only
+    quirk — the same leak happens when QGIS reloads the plugin (see WAL, "Close the settings
+    group the plugin opens"). Delete this fixture when `Mapflow` closes the group it opens.
 
-    * `ProviderService` and `AlertService` cache their instance on the class, so the second
-      plugin built in one process keeps the *first* plugin's dialog, and the provider combo
-      is written into a window that is no longer on screen.
-    * `AppContext.settings` is one shared `QgsSettings` for the whole process, and
-      `Mapflow.__init__` opens a settings group on it that is never closed. Each construction
-      therefore nests a level deeper — mapflow/, mapflow/mapflow/, … — so without resetting
-      it, journeys read and write different places and leak into each other.
+    `AppContext.settings` is one shared `QgsSettings` for the whole process, and
+    `Mapflow.__init__` opens a settings group on it that is never closed. Each construction
+    therefore nests a level deeper — mapflow/, mapflow/mapflow/, … — so without resetting it,
+    journeys read and write different places and leak into each other.
     """
     from qgis.core import QgsSettings
 
     from mapflow.functional.app_context import AppContext
-    from mapflow.infra.alert_service import AlertService
-    from mapflow.functional.service.provider_service import ProviderService
-
-    for service in (AlertService, ProviderService):
-        service._instance = None
-        service._initialized = False
 
     while AppContext.settings.group():
         AppContext.settings.endGroup()
@@ -126,7 +116,7 @@ def fresh_singletons():
 
 
 @pytest.fixture
-def plugin(plugin_iface, network, fresh_singletons, tmp_path):
+def plugin(plugin_iface, network, fresh_settings_group, tmp_path):
     """The real plugin object, built the way QGIS builds it.
 
     Depends on `network` so the manager is already faked when the plugin builds its Http.

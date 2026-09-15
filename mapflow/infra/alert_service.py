@@ -34,11 +34,13 @@ class AlertService(QObject):
         return cls._instance
     
     def __init__(self, plugin_name: str = None):
-        if AlertService._initialized:
-            return
-        super().__init__()
+        # Shared on purpose — the module-level `alert()` helpers resolve this instance — but the
+        # QObject base may be initialised only once, while the name must follow the latest
+        # construction. Returning early would keep the first plugin's name through a reload.
+        if not AlertService._initialized:
+            super().__init__()
+            AlertService._initialized = True
         self._plugin_name = plugin_name or "Mapflow"
-        AlertService._initialized = True
     
     @classmethod
     def instance(cls) -> 'AlertService':
