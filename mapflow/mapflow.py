@@ -254,10 +254,10 @@ class Mapflow(QObject):
         # `ProjectProcessingController` drives it.
         self.project_view = ProjectView(self.dlg)
         
-        self.provider_service = ProviderService.get_instance(providers=ProvidersList([]),
-                                                            app_context=self.app_context,
-                                                            config=self.config,
-                                                            data_catalog_service=self.data_catalog_service)
+        self.provider_service = ProviderService(providers=ProvidersList([]),
+                                                app_context=self.app_context,
+                                                config=self.config,
+                                                data_catalog_service=self.data_catalog_service)
         # The provider/source combos are ProviderView's; the service announces the list, this
         # renders it. Wired here, before the first `update_providers()` below fires them.
         self.provider_view = ProviderView(dlg=self.dlg)
@@ -268,6 +268,7 @@ class Mapflow(QObject):
                                                     iface=self.iface,
                                                     result_loader=self.result_loader,
                                                     app_context=self.app_context,
+                                                    provider_service=self.provider_service,
                                                     timer_interval=self.config.PROCESSING_TABLE_REFRESH_INTERVAL * 1000)
         # The start panel's view. Built here, not by the service — a service holds no view
         # (spec/007 § Services) — and handed to the controllers that render through it.

@@ -261,19 +261,10 @@ appear lost.
 Not the cause of the test contamination above (that was the QgsProject subscriptions), but
 found alongside it and fixed the same way in the harness.
 
-[ ] Stop the services being process-global singletons
-`ProviderService` and `AlertService` cache their instance on the class (`_instance`,
-`_initialized`), so `get_instance` returns the first one ever built and ignores the arguments
-of every later call. The instance keeps `self.dlg` pointing at the dialog it was born with.
-Consequence beyond tests: after QGIS reloads the plugin — Plugin Reloader, or an in-place
-upgrade without restarting QGIS — the surviving `ProviderService` writes the imagery-source
-list into the destroyed dialog, and the new one comes up with an empty provider combo. The
-user sees a plugin that cannot start a processing until QGIS is restarted.
-Found because the behavioral suite builds a plugin per test and every journey after the first
-saw an empty combo; `tests/qgis/behavioral/conftest.py` resets both classes to compensate, and
-that fixture should be deleted as part of this step.
-Belongs to Phase C: the fix is for the plugin to construct and own its services, which is what
-the extraction does anyway.
+[ready-for-review] Stop the services being process-global singletons
+    `ProviderService` is built by the composition root and injected into `ProcessingService`, which
+    had reached it through module-level helpers. `AlertService` stays shared — its helpers are the
+    message tier's access point — but re-binds on construction.
 
 [ ] Check the startup ordering between the project fetch and the account poll
 `setup_providers` filters the imagery sources by `modelCombo.currentText()`, and the model

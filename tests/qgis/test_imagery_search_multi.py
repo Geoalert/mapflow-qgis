@@ -32,9 +32,6 @@ def _make_service(rows, provider_names, product_types, zooms=None,
 
     config = Config()
 
-    ProviderService._instance = None
-    ProviderService._initialized = False
-
     footprints = {}
     zooms = zooms or [None] * len(provider_names)
     # `min_areas=None` means the field is absent — feature.attribute("minAreaSqkm")
@@ -260,9 +257,6 @@ class TestDuplicateImagerySearchMultiRow:
         from mapflow.config import ConfigColumns
 
         from PyQt5.QtCore import QObject
-
-        ProviderService._instance = None
-        ProviderService._initialized = False
 
         config = Config()
         service = ProviderService.__new__(ProviderService)

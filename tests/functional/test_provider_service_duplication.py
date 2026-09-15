@@ -37,9 +37,6 @@ def _service():
 
     ProviderService = provider_service_module.ProviderService
 
-    ProviderService._instance = None
-    ProviderService._initialized = False
-
     service = ProviderService.__new__(ProviderService)
     QObject.__init__(service)  # startEnabled is a signal
     service.app_context = SimpleNamespace(

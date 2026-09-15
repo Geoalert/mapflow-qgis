@@ -18,8 +18,6 @@ from mapflow.schema.processing import (DataProviderParams, DataProviderSchema,
 
 
 def _service(workflow_defs=None, providers=None):
-    ProviderService._instance = None
-    ProviderService._initialized = False
     service = ProviderService.__new__(ProviderService)
     QObject.__init__(service)
     service.tr = lambda message: message

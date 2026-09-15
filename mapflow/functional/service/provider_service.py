@@ -1,6 +1,5 @@
 # provider_service.py
 import logging
-from typing import Optional
 
 from PyQt5.QtCore import QObject, pyqtSignal
 from qgis.core import QgsVectorLayer, QgsFeature
@@ -52,9 +51,6 @@ class ProviderService(QObject):
     it wants drawn it *announces* (the signals below), for `ProviderController` (and, for the
     search table, `SearchController`) to render. See `spec/007_architecture.md` § Services.
     """
-    _instance: Optional['ProviderService'] = None
-    _initialized: bool = False
-
     # ---------- what the provider panel and the start button must show (announced, never drawn) ----------
     #: A start is blocked, with this reason (the search-selection error path).
     startDisabled = pyqtSignal(str)
@@ -88,10 +84,7 @@ class ProviderService(QObject):
     #: search is pushed to `app_context.aoi_layer`.
 
     def __init__(self, providers: ProvidersList, app_context: AppContext, config: Config, data_catalog_service: DataCatalogService):
-        if ProviderService._initialized:
-            return
         super().__init__()
-        ProviderService._initialized = True
         self.providers = providers
         self.app_context = app_context
         self.config = config
@@ -102,18 +95,6 @@ class ProviderService(QObject):
         self.default_providers = ProvidersList([])
         self.config_search_columns = ConfigColumns().METADATA_TABLE_ATTRIBUTES
         self.selection_sync_callback = None
-
-    @classmethod
-    def instance(cls) -> 'ProviderService':
-        if cls._instance is None:
-            raise RuntimeError("ProviderService not initialized.")
-        return cls._instance
-
-    @classmethod
-    def get_instance(cls, providers: ProvidersList, app_context: AppContext, config: Config, data_catalog_service: DataCatalogService) -> 'ProviderService':
-        if cls._instance is None:
-            cls._instance = cls(providers, app_context, config, data_catalog_service)
-        return cls._instance
 
     # ---------- the search selection, read off app_context (pushed, never a table) ----------
 
@@ -566,22 +547,3 @@ class ProviderService(QObject):
             if isinstance(provider, ImagerySearchProvider):
                 return index
         return -1
-
-
-def update_providers_list(new_providers):
-    ProviderService.instance().update_providers_list(new_providers)
-
-def get_provider_params(provider, zoom):
-    return ProviderService.instance().get_provider_params(provider, zoom)
-
-def setup_provider_info(provider):
-    return ProviderService.instance().setup_provider_info(provider)
-
-def validate_provider_params(provider):
-    return ProviderService.instance().validate_provider_params(provider)
-
-def duplicate_provider_and_model(processing):
-    ProviderService.instance().duplicate_provider_and_model(processing)
-
-def duplicate_aoi_based_on_provider(provider):
-    ProviderService.instance().duplicate_aoi(provider)

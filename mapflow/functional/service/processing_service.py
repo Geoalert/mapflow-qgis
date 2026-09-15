@@ -5,12 +5,6 @@ from uuid import UUID
 from typing import Dict, Optional, List, Tuple
 from PyQt5.QtCore import QObject, QTimer, pyqtSignal
 from PyQt5.QtNetwork import QNetworkReply
-from .provider_service import (get_provider_params,
-                               setup_provider_info, 
-                               validate_provider_params, 
-                               duplicate_aoi_based_on_provider,
-                               duplicate_provider_and_model)
-                               
 from .. import helpers
 from ...errors import (BadProcessingInput,
                        ErrorMessage,
@@ -160,12 +154,16 @@ class ProcessingService(QObject):
                  iface,
                  result_loader: ResultsLoader,
                  app_context: AppContext,
+                 provider_service,
                  timer_interval):
         super().__init__()
         self.http = http
         self.iface = iface
         self.result_loader = result_loader
         self.app_context = app_context
+        # Injected rather than imported, and so left unannotated: importing ProviderService here
+        # would close an import cycle through the `service` package.
+        self.provider_service = provider_service
         self.api = ProcessingApi(http=http,
                                  iface=iface,
                                  result_loader=self.result_loader)
@@ -557,7 +555,7 @@ class ProcessingService(QObject):
         return {
             "price": self.tr("{cost} credits").format(cost=self.processing_cost)
                      if self.app_context.billing_type == BillingType.credits else None,
-            "provider": setup_provider_info(self.app_context.data_provider),
+            "provider": self.provider_service.setup_provider_info(self.app_context.data_provider),
             "area": str(round(self.app_context.aoi_size, 2)) + self.tr(" sq.km"),
         }
 
@@ -574,8 +572,8 @@ class ProcessingService(QObject):
         else:
             blocks = wd.get_enabled_blocks(list(self._enabled_blocks))
 
-        provider_params, processing_meta = get_provider_params(provider=provider,
-                                                               zoom=ui_start_params.zoom)
+        provider_params, processing_meta = self.provider_service.get_provider_params(
+            provider=provider, zoom=ui_start_params.zoom)
 
         # Prefer the AOI cropped by selected image footprints (Imagery Search)
         # so provider minimum-area checks compare against the actually-processable area.
@@ -1237,13 +1235,13 @@ class ProcessingService(QObject):
         self.startDisabled.emit("", False)
         self.app_context.allow_enable_processing['aoi_loaded'] = False
         self.processingNameSet.emit(processing.name)
-        duplicate_provider_and_model(processing)
+        self.provider_service.duplicate_provider_and_model(processing)
         self.result_loader.download_aoi_file(pid=processing.id, callback=self.duplicate_aoi_callback)
 
     def duplicate_aoi_callback(self, response: QNetworkReply, path: str) -> None:
         self.result_loader.download_aoi_file_callback(response, path)
         provider = self.selected_processing().params.sourceParams
-        duplicate_aoi_based_on_provider(provider)
+        self.provider_service.duplicate_aoi(provider)
 
     def validate_all_processing_params(self, 
                                        allow_empty_name: bool = False) -> tuple[Optional[PostProcessingSchemaV2], 
@@ -1269,7 +1267,7 @@ class ProcessingService(QObject):
                 return None, None
         
         # Provider validation
-        provider_error = validate_provider_params(provider)
+        provider_error = self.provider_service.validate_provider_params(provider)
         if provider_error:
             return None, provider_error
         
