@@ -88,7 +88,9 @@ class Mapflow(QObject):
         # Save refs to key variables used throughout the plugin
         self.iface = iface
         self.main_window = self.iface.mainWindow()
-        self.project_connection = None
+        #: `(signal, connection)` for every subscription to a QGIS object that outlives the plugin —
+        #: the project and the layers in it — so `unload` can drop exactly these (`_connect_external`).
+        self._external_connections = []
         super().__init__(self.main_window)
         self.message_bar = self.iface.messageBar()
         self.plugin_dir = os.path.dirname(__file__)
@@ -522,11 +524,11 @@ class Mapflow(QObject):
         self.monitor_polygon_layer_feature_selection([
             self.app_context.project.mapLayer(layer_id) for layer_id in self.app_context.project.mapLayers(validOnly=True)
         ])
-        guarded_connect(self.app_context.project.layersAdded, self.setup_layers_context_menu,
-                        "setting up the layer context menu", self.app_context)
-        guarded_connect(self.app_context.project.layersAdded,
-                        self.monitor_polygon_layer_feature_selection,
-                        "monitoring an added polygon layer", self.app_context)
+        self._connect_external(self.app_context.project.layersAdded, self.setup_layers_context_menu,
+                               "setting up the layer context menu")
+        self._connect_external(self.app_context.project.layersAdded,
+                               self.monitor_polygon_layer_feature_selection,
+                               "monitoring an added polygon layer")
         # Processings
         guarded_connect(self.dlg.processingsTable.cellDoubleClicked,
                         self.project_processing_controller.load_results,
@@ -853,18 +855,19 @@ class Mapflow(QObject):
             # processing cost a second time on every image click — skip it.
             if self.search_service.is_search_metadata_layer(layer):
                 continue
-            guarded_connect(layer.selectionChanged,
-                            self.area_calculator_service.calculate_aoi_area_selection,
-                            "calculating the selected AOI area", self.app_context)
-            guarded_connect(layer.geometryChanged,
-                            self.area_calculator_service.calculate_aoi_area_layer_edited,
-                            "recalculating the AOI area after an edit", self.app_context)
-            guarded_connect(layer.featureAdded,
-                            self.area_calculator_service.calculate_aoi_area_layer_edited,
-                            "recalculating the AOI area after an edit", self.app_context)
-            guarded_connect(layer.featuresDeleted,
-                            self.area_calculator_service.calculate_aoi_area_layer_edited,
-                            "recalculating the AOI area after an edit", self.app_context)
+            # A user's layer outlives the plugin across a reload, just as the project does.
+            self._connect_external(layer.selectionChanged,
+                                   self.area_calculator_service.calculate_aoi_area_selection,
+                                   "calculating the selected AOI area")
+            self._connect_external(layer.geometryChanged,
+                                   self.area_calculator_service.calculate_aoi_area_layer_edited,
+                                   "recalculating the AOI area after an edit")
+            self._connect_external(layer.featureAdded,
+                                   self.area_calculator_service.calculate_aoi_area_layer_edited,
+                                   "recalculating the AOI area after an edit")
+            self._connect_external(layer.featuresDeleted,
+                                   self.area_calculator_service.calculate_aoi_area_layer_edited,
+                                   "recalculating the AOI area after an edit")
 
     def toggle_imagery_search(self,
                               provider):
@@ -1083,8 +1086,8 @@ class Mapflow(QObject):
         guarded_connect(plugin_button.triggered, self.main,
                         "opening the plugin", self.app_context)
         self.toolbar.addAction(plugin_button)
-        guarded_connect(self.app_context.project.readProject, self.set_layer_group,
-                        "restoring the layer group for the opened project", self.app_context)
+        self._connect_external(self.app_context.project.readProject, self.set_layer_group,
+                               "restoring the layer group for the opened project")
         self.dlg.processingsTable.sortByColumn(self.config.PROCESSING_TABLE_SORT_COLUMN_INDEX, Qt.DescendingOrder)
 
     def set_layer_group(self) -> None:
@@ -1097,7 +1100,8 @@ class Mapflow(QObject):
             self.layer_group.nameChanged.connect(lambda _, name: self.app_context.settings.setValue('layerGroup', name))
 
     def unload(self) -> None:
-        """Remove the plugin icon & toolbar from QGIS GUI."""
+        """Undo what `__init__` and `initGui` did: the toolbar, the dialogs, the timers, the settings
+        group, and every subscription to QGIS objects that outlive the plugin."""
         # Persist the metadata filter the user set BEFORE any teardown. unload is reached from QGIS
         # at plugin removal, and the teardown below can raise (a service stop, a dialog close); with
         # these writes left at the tail a raise would strand them and lose the filter on the next
@@ -1111,14 +1115,45 @@ class Mapflow(QObject):
             self.app_context.settings.setValue('metadataMaxOffNadir', off_nadir_max)
             self.app_context.settings.setValue('metadataFrom', self.dlg.metadataFrom.date())
             self.app_context.settings.setValue('metadataTo', self.dlg.metadataTo.date())
-        self.processing_service.stop()
-        self.account_service.stop_refreshing()
-        self.iface.removeCustomActionForLayerType(self.add_layer_action)
-        self.iface.removeCustomActionForLayerType(self.remove_layer_action)
-        for dlg in self.dlg, self.dlg_login, self.dlg_provider:
-            if dlg:
-                dlg.close()
-        del self.toolbar
+        try:
+            self.processing_service.stop()
+            self.account_service.stop_refreshing()
+            self.iface.removeCustomActionForLayerType(self.add_layer_action)
+            self.iface.removeCustomActionForLayerType(self.remove_layer_action)
+            for dlg in self.dlg, self.dlg_login, self.dlg_provider:
+                if dlg:
+                    dlg.close()
+            del self.toolbar
+        finally:
+            # Detach even when the teardown above raises. `QgsProject` and the user's layers outlive
+            # this instance, and QGIS rebuilds the plugin on an in-place upgrade: a subscription left
+            # behind keeps running this dead instance's handlers against the next one's state.
+            self._disconnect_external_subscriptions()
+            # Last, because the metadata writes above belong inside the group. Left open on the
+            # shared `AppContext.settings`, the next construction nests beneath it (mapflow/mapflow/…)
+            # and every key the user had appears to vanish.
+            self.app_context.settings.endGroup()
+
+    def _connect_external(self, signal, slot, context: str) -> None:
+        """`guarded_connect`, remembered so that `unload` can undo it.
+
+        For senders that outlive the plugin — `QgsProject` and the layers in it. PyQt drops a
+        connection when its sender dies or its bound-method receiver is collected, but
+        `guarded_connect` connects a closure, and neither the project nor a user's layer goes away
+        when QGIS reloads the plugin, so nothing else would ever disconnect these.
+        """
+        token = guarded_connect(signal, slot, context, self.app_context)
+        self._external_connections.append((signal, token))
+
+    def _disconnect_external_subscriptions(self) -> None:
+        """Drop exactly the connections this plugin made, by token. A bare `signal.disconnect()`
+        would also sever QGIS's own slots on the project and every other plugin's on the layers."""
+        connections, self._external_connections = self._external_connections, []
+        for signal, token in connections:
+            try:
+                signal.disconnect(token)
+            except (RuntimeError, TypeError):
+                pass  # the sender was deleted (a removed layer), which took the connection with it
 
     def default_error_handler(self,
                               response: QNetworkReply,

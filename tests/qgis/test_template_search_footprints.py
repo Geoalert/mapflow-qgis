@@ -175,6 +175,7 @@ def test_the_dtos_are_stored_before_the_page_is_rendered(tmp_path):
 
 def test_monitor_skips_current_search_metadata_layer():
     plugin = Mapflow.__new__(Mapflow)
+    plugin._external_connections = []  # what __init__ records, so unload can drop layer connections
     plugin.area_calculator_service = MagicMock()
     metadata_layer = MagicMock()
     metadata_layer.id.return_value = "meta-1"
