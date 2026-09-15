@@ -93,30 +93,21 @@ def network():
 
 
 @pytest.fixture
-def fresh_settings_group():
-    """Close the settings group a previous plugin left open, before building a plugin.
+def fresh_profile():
+    """Start every journey from a profile with no Mapflow settings in it.
 
-    This compensates for plugin state that outlives the plugin object, not for a test-only
-    quirk — the same leak happens when QGIS reloads the plugin (see WAL, "Close the settings
-    group the plugin opens"). Delete this fixture when `Mapflow` closes the group it opens.
-
-    `AppContext.settings` is one shared `QgsSettings` for the whole process, and
-    `Mapflow.__init__` opens a settings group on it that is never closed. Each construction
-    therefore nests a level deeper — mapflow/, mapflow/mapflow/, … — so without resetting it,
-    journeys read and write different places and leak into each other.
+    QGIS persists the plugin's settings between sessions, so one journey's saved token, provider
+    list or working directory would otherwise be the next journey's starting state, and a test
+    would pass or fail depending on what ran before it.
     """
     from qgis.core import QgsSettings
 
-    from mapflow.functional.app_context import AppContext
-
-    while AppContext.settings.group():
-        AppContext.settings.endGroup()
     QgsSettings().remove("mapflow")
     yield
 
 
 @pytest.fixture
-def plugin(plugin_iface, network, fresh_settings_group, tmp_path):
+def plugin(plugin_iface, network, fresh_profile, tmp_path):
     """The real plugin object, built the way QGIS builds it.
 
     Depends on `network` so the manager is already faked when the plugin builds its Http.
@@ -136,24 +127,13 @@ def plugin(plugin_iface, network, fresh_settings_group, tmp_path):
     # that simply never appears.
     instance.app_context.temp_dir = tmp_path
     yield instance
-    # Timers created in __init__ keep firing into a dead object otherwise, and a stray tick
-    # during a later test surfaces as an unrelated failure.
+    # unload() stops the timers and detaches the plugin from QgsProject, its layers and the
+    # settings group. Skipping it would leave a stray tick or a leaked subscription to surface as
+    # a failure in a later, unrelated test — the hardest kind to read.
     instance.unload()
-    # unload() closes the dialogs but leaves the plugin subscribed to QgsProject, which is
-    # process-wide. A stale instance then keeps reacting to layer changes made by the *next*
-    # journey, running its handlers against a dialog that is closed — and since its state is
-    # whatever the previous journey left, it can take a branch the new journey never would.
-    # Disconnected here rather than tolerated: a leaked subscription turns a failure in one
-    # test into a failure in an unrelated one, which is the hardest kind to read.
-    project = QgsProject.instance()
-    for signal in (project.layersAdded, project.layersRemoved, project.readProject):
-        try:
-            signal.disconnect()
-        except TypeError:
-            pass  # nothing was connected
     # An AOI layer left behind would be offered to the next journey's layer combo and
     # quietly change what it is testing.
-    project.removeAllMapLayers()
+    QgsProject.instance().removeAllMapLayers()
 
 
 def choose_imagery_source(plugin, network, name):

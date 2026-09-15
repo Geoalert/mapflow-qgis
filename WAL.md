@@ -234,37 +234,10 @@ resolves but serves nothing.
 No evidence of a plugin defect here — the vector-tile assertions (source and extent) pass, and
 the only stall came from a deliberately unroutable host.
 
-[ ] Detach the plugin from QgsProject on unload
-`unload()` closes the dialogs but never disconnects the `QgsProject` subscriptions
-(`layersAdded` ×2, `readProject`). After a QGIS plugin reload the previous instance is still
-subscribed, so adding a layer runs its handlers against a closed dialog — and against whatever
-state that instance was left in, which can take a branch the live instance never would.
-The entry-point rollout makes this **more certain, not less**: `guarded_connect` connects a
-closure rather than a bound method, so PyQt's auto-disconnect-when-the-receiver-dies no longer
-applies. `QgsProject` outlives the plugin, so these subscriptions now survive until something
-disconnects them explicitly — which is exactly what this step must add.
-Found because the behavioral suite builds a plugin per test: opening a mosaic in one journey
-made a *later, unrelated* journey fail, with the traceback running through the previous
-plugin's dialog. `tests/qgis/behavioral/conftest.py` disconnects those signals at teardown to
-compensate; that should go when unload() does it properly.
-Same family as the singleton entry below — state that outlives the object that owns it.
-
-[ ] Close the settings group the plugin opens
-`Mapflow.__init__` calls `self.app_context.settings.beginGroup(plugin_name.lower())` and
-nothing ever calls `endGroup` — it is the only occurrence of either in the codebase. Worse,
-`AppContext.settings` is a plain class attribute, so one `QgsSettings` object is shared by
-every instance in the process.
-So a second construction in one QGIS session nests: keys move to `mapflow/mapflow/…`, a third
-to `mapflow/mapflow/mapflow/…`. After a plugin reload the user's token, providers, working
-directory and last project are written where nothing will read them on the next start, and
-appear lost.
-Not the cause of the test contamination above (that was the QgsProject subscriptions), but
-found alongside it and fixed the same way in the harness.
-
-[ready-for-review] Stop the services being process-global singletons
-    `ProviderService` is built by the composition root and injected into `ProcessingService`, which
-    had reached it through module-level helpers. `AlertService` stays shared — its helpers are the
-    message tier's access point — but re-binds on construction.
+[ready-for-review] `unload` detaches the plugin from everything that outlives it
+    The `QgsProject` subscriptions and every monitored layer's connections are disconnected by
+    token, and the settings group opened in `__init__` is closed — even when the rest of teardown
+    raises.
 
 [ ] Check the startup ordering between the project fetch and the account poll
 `setup_providers` filters the imagery sources by `modelCombo.currentText()`, and the model
