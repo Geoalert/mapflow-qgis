@@ -20,6 +20,7 @@ from mapflow.functional.controller.project_processing_controller import ProjectP
 from mapflow.functional.service import processing_service as processing_service_module
 from mapflow.functional.service.processing_service import ProcessingService
 from mapflow.functional.service.template_service import TemplateService
+from mapflow.http import RequestMode
 
 
 def _service():
@@ -72,7 +73,7 @@ def test_opening_the_table_asks_for_a_loading_placeholder():
     loading = []
     service.tableLoading.connect(lambda: loading.append(True))
 
-    service.setup_processings_table()
+    service.setup_processings_table(mode=RequestMode.INTERACTIVE)
 
     assert loading == [True]
     assert service.processings_page_offset == 0
@@ -84,11 +85,23 @@ def test_a_request_carries_the_pushed_sort_and_filter():
     service.set_sort("NAME", "ASC")
     service.set_filter("roads")
 
-    service.get_processings()
+    service.get_processings(mode=RequestMode.INTERACTIVE)
 
     request = service.api.get_processings.call_args.kwargs["request_body"]
     assert (request.sortBy, request.sortOrder) == ("NAME", "ASC")
     assert request.terms == "roads"
+
+
+def test_a_request_goes_out_with_its_triggers_mode_and_hands_it_to_the_callback():
+    """The callback sends the templates list that completes the page, which must be polled when
+    the page was — so the mode has to survive the round trip."""
+    service = _service()
+
+    service.get_processings(mode=RequestMode.POLL)
+
+    kwargs = service.api.get_processings.call_args.kwargs
+    assert kwargs["mode"] is RequestMode.POLL
+    assert kwargs["callback_kwargs"] == {"mode": RequestMode.POLL}
 
 
 def test_an_empty_filter_is_sent_as_no_filter():
@@ -96,7 +109,7 @@ def test_an_empty_filter_is_sent_as_no_filter():
     service = _service()
     service.set_filter("")
 
-    service.get_processings()
+    service.get_processings(mode=RequestMode.INTERACTIVE)
 
     assert service.api.get_processings.call_args.kwargs["request_body"].terms is None
 
@@ -107,7 +120,7 @@ def test_a_request_in_flight_disables_the_pager():
     enabled = []
     service.pagerEnabled.connect(enabled.append)
 
-    service.get_processings()
+    service.get_processings(mode=RequestMode.INTERACTIVE)
 
     assert enabled == [False]
 
@@ -118,7 +131,8 @@ def test_the_pager_is_announced_when_the_results_span_pages():
     pager = []
     service.pagerChanged.connect(lambda *a: pager.append(a))
 
-    service.get_processings_callback(_response({"results": [], "total": 95, "count": 0}))
+    service.get_processings_callback(_response({"results": [], "total": 95, "count": 0}),
+                                     mode=RequestMode.INTERACTIVE)
 
     assert pager == [(True, 3, 10)]
 
@@ -128,7 +142,8 @@ def test_the_pager_is_hidden_for_a_single_page():
     pager = []
     service.pagerChanged.connect(lambda *a: pager.append(a))
 
-    service.get_processings_callback(_response({"results": [], "total": 4, "count": 0}))
+    service.get_processings_callback(_response({"results": [], "total": 4, "count": 0}),
+                                     mode=RequestMode.INTERACTIVE)
 
     assert pager == [(False, 1, 1)]
 
@@ -139,7 +154,8 @@ def test_the_rows_are_announced_once_the_templates_resolve():
     rendered = []
     service.rowsChanged.connect(rendered.append)
 
-    service.get_processings_callback(_response({"results": [], "total": 0, "count": 0}))
+    service.get_processings_callback(_response({"results": [], "total": 0, "count": 0}),
+                                     mode=RequestMode.INTERACTIVE)
 
     assert rendered == [[]]
 
@@ -273,7 +289,7 @@ def test_a_fetch_hands_over_the_sort_and_filter_first():
     controller.processing_view.sort_processings.return_value = ("STATUS", "ASC")
     controller.processing_view.processings_filter = "roads"
 
-    controller.refresh_table()
+    controller.refresh_table(RequestMode.INTERACTIVE)
 
     controller.processing_service.set_sort.assert_called_once_with("STATUS", "ASC")
     controller.processing_service.set_filter.assert_called_once_with("roads")
@@ -304,7 +320,7 @@ def test_a_column_sort_re_renders_without_a_request():
 
 class _TemplateStub(QObject):
     """`TemplateService`, reduced to the signals the controller subscribes to."""
-    refreshRequested = pyqtSignal()
+    refreshRequested = pyqtSignal(object)
     templateRowsChanged = pyqtSignal(object)
     pollIntervalChanged = pyqtSignal(int)
     templateOpened = pyqtSignal(object)
@@ -344,7 +360,7 @@ def test_opening_the_table_hands_over_the_query_before_the_first_page():
     controller = _controller()
     controller.processing_view.sort_processings.return_value = ("NAME", "ASC")
 
-    controller.open_processings_table()
+    controller.open_processings_table(mode=RequestMode.INTERACTIVE)
 
     called = [call[0] for call in controller.processing_service.mock_calls]
     assert called.index("set_sort") < called.index("setup_processings_table")

@@ -9,19 +9,23 @@ mutually dependent (`spec/007_architecture.md` § Services, § Controllers).
 Services therefore *ask* for a refresh and the controller performs it. These tests pin the choice,
 and that one request produces exactly one fetch — the failure mode of routing every caller through
 a signal is that the table quietly refetches twice per action.
+
+Each ask also says what triggered it, as a request mode (`spec/005` § Request modes), and the fetch
+must go out with that mode: the refresh timer, a page change and a refresh after a reply all end
+here, and they tolerate a failure differently.
 """
-from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
 from PyQt5.QtCore import QObject, pyqtSignal
 
 from mapflow.functional.controller.project_processing_controller import ProjectProcessingController
+from mapflow.http import RequestMode
 
 
 class _Asker(QObject):
     """Stands in for a service that asks for the table to be refreshed."""
-    refreshRequested = pyqtSignal()
+    refreshRequested = pyqtSignal(object)
     rerenderRequested = pyqtSignal()
     templateRehydrateRequested = pyqtSignal()
 
@@ -40,19 +44,37 @@ def controller():
 
 
 def test_outside_a_template_the_project_list_is_fetched(controller):
-    controller.refresh_table()
+    controller.refresh_table(RequestMode.INTERACTIVE)
 
-    controller.processing_service.get_processings.assert_called_once()
+    controller.processing_service.get_processings.assert_called_once_with(mode=RequestMode.INTERACTIVE)
     controller.template_service.refresh_template_view.assert_not_called()
 
 
 def test_inside_a_template_the_template_view_is_refreshed(controller):
     controller.template_service.in_template_mode = True
 
-    controller.refresh_table()
+    controller.refresh_table(RequestMode.BACKGROUND)
 
-    controller.template_service.refresh_template_view.assert_called_once()
+    controller.template_service.refresh_template_view.assert_called_once_with(mode=RequestMode.BACKGROUND)
     controller.processing_service.get_processings.assert_not_called()
+
+
+@pytest.mark.parametrize("in_template_mode", [False, True])
+def test_the_timer_tick_refreshes_as_a_poll(controller, in_template_mode):
+    """The tick is the one trigger a single failure should not be reported for."""
+    controller.template_service.in_template_mode = in_template_mode
+
+    controller.poll_table()
+
+    fetch = controller.template_service.refresh_template_view if in_template_mode \
+        else controller.processing_service.get_processings
+    fetch.assert_called_once_with(mode=RequestMode.POLL)
+
+
+def test_the_sort_combo_refreshes_interactively(controller):
+    controller.on_combo_sort_changed()
+
+    controller.processing_service.get_processings.assert_called_once_with(mode=RequestMode.INTERACTIVE)
 
 
 def test_a_sort_re_renders_the_rows_of_whichever_view_is_up(controller):
@@ -74,14 +96,14 @@ def test_a_rehydrate_request_rebinds_the_template(controller):
     controller.template_service.refresh_active_template.assert_called_once()
 
 
-def test_one_request_produces_exactly_one_fetch(controller):
+def test_one_request_produces_exactly_one_fetch_with_the_askers_mode(controller):
     """The point of routing everything through a signal is a single owner, not a second fetch."""
     asker = _Asker()
     asker.refreshRequested.connect(controller.refresh_table)
 
-    asker.refreshRequested.emit()
+    asker.refreshRequested.emit(RequestMode.BACKGROUND)
 
-    controller.processing_service.get_processings.assert_called_once()
+    controller.processing_service.get_processings.assert_called_once_with(mode=RequestMode.BACKGROUND)
 
 
 def test_both_services_asking_are_served_by_the_same_owner(controller):
@@ -91,7 +113,7 @@ def test_both_services_asking_are_served_by_the_same_owner(controller):
     from_processings.refreshRequested.connect(controller.refresh_table)
     from_templates.refreshRequested.connect(controller.refresh_table)
 
-    from_processings.refreshRequested.emit()
-    from_templates.refreshRequested.emit()
+    from_processings.refreshRequested.emit(RequestMode.INTERACTIVE)
+    from_templates.refreshRequested.emit(RequestMode.BACKGROUND)
 
     assert controller.processing_service.get_processings.call_count == 2

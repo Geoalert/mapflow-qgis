@@ -95,7 +95,9 @@ class TestDownloadApiUrl:
         error_handler = MagicMock()
         image_id = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
 
-        api.download_image(image_id=image_id, callback=callback, error_handler=error_handler)
+        from mapflow.http import RequestMode
+        api.download_image(image_id=image_id, callback=callback, error_handler=error_handler,
+                           mode=RequestMode.INTERACTIVE)
 
         http_mock.get.assert_called_once()
         call_kwargs = http_mock.get.call_args

@@ -11,7 +11,7 @@ from ...errors import (BadProcessingInput,
                        PluginError,
                        ImageIdRequired,
                        AoiNotIntersectsImage)
-from ...http import Http, api_message_parser
+from ...http import Http, RequestMode, api_message_parser
 from ..api.processing_api import ProcessingApi
 from ...schema import ProcessingDTO, UpdateProcessingSchema, ProcessingStatus, BillingType, PostProcessingSchemaV2
 from ...model.processing_history import ProcessingHistory
@@ -51,7 +51,9 @@ class ProcessingService(QObject):
     #: the project's processings and an open template's AOIs+processings — and which one is
     #: showing is navigation state, so the choice is `ProjectProcessingController`'s, not this
     #: service's. Everything that used to call `get_processings()` to mean "refresh" emits this.
-    refreshRequested = pyqtSignal()
+    #: Carries the `RequestMode` of what asked: a page change is INTERACTIVE, a refresh after a reply
+    #: BACKGROUND (spec/005 § Request modes).
+    refreshRequested = pyqtSignal(object)
     #: Same, but after starting a processing inside a template: the template must be re-hydrated,
     #: not merely re-fetched, or the new processing lands under "No AOI" (feedback 8.2).
     templateRehydrateRequested = pyqtSignal()
@@ -433,8 +435,6 @@ class ProcessingService(QObject):
         return self.tr("Select one or more images in search results to start planned processing")
 
     def start_processing(self):
-        self.processing_fetch_timer.stop()
-
         processing_params, error = self.validate_all_processing_params(allow_empty_name=False)
         if error:
             # Keep the AOI area on screen even when the processing is blocked (e.g. area too
@@ -493,7 +493,14 @@ class ProcessingService(QObject):
             self.submit_processing(processing_params)
 
     def submit_processing(self, processing_params: PostProcessingSchemaV2):
-        """Send the run. Reached directly, or from the controller after the user confirmed."""
+        """Send the run. Reached directly, or from the controller after the user confirmed.
+
+        The table refresh is paused while the run is in flight, and every way the run can end
+        resumes it — the success callback, the error handler, and a send that raised. Pausing any
+        earlier, at the Start click, would leave the table frozen whenever validation blocks the
+        start or the user declines the confirmation.
+        """
+        self.processing_fetch_timer.stop()
         try:
             self.submissionInFlight.emit(True)
             template = self.template_to_run()
@@ -523,6 +530,7 @@ class ProcessingService(QObject):
             # on success the request is genuinely in flight and the flag must stay set until the
             # async callback returns and clears it.
             self.submissionInFlight.emit(False)
+            self.processing_fetch_timer.start()
             alert(self.tr("Could not launch processing! Error: {}.").format(str(e)))
 
     def _build_run_template_processing_schema(
@@ -603,7 +611,6 @@ class ProcessingService(QObject):
                 self.tr("Success! We'll notify you when the processing has finished.")
             )
             response_data = json.loads(response.readAll().data())
-            self.processing_fetch_timer.start()  # start monitoring
             if self._open_template is not None:
                 # In a template the new processing is shown grouped UNDER its AOI. That binding
                 # lives in the template's aoiDetails, which the run response does not carry, so a
@@ -629,49 +636,57 @@ class ProcessingService(QObject):
                 self.processingAdded.emit(new_processing)
             # Always refresh full list because template-started processings can affect
             # both processings and template status/counts in table.
-            self.refreshRequested.emit()
+            self.refreshRequested.emit(RequestMode.BACKGROUND)
         finally:
-            # Clearing the in-flight flag is this callback's own state transition, so it goes in
-            # `finally`: the response is guard-wrapped (http.call_guarded), so a parse error on a
-            # drifted payload is swallowed and a tail emit would never run — leaving Start disabled
-            # for the rest of the session (spec/006 § a guarded callback is interrupted).
+            # Clearing the in-flight flag and resuming the refresh are this callback's own state
+            # transitions, so they go in `finally`: the response is guard-wrapped
+            # (http.call_guarded), so a parse error on a drifted payload is swallowed and a tail
+            # emit would never run — leaving Start disabled and the table frozen for the rest of
+            # the session (spec/006 § a guarded callback is interrupted).
             self.submissionInFlight.emit(False)
+            self.processing_fetch_timer.start()
 
     def start_processing_error_handler(self, response: QNetworkReply) -> None:        
         """Error handler for processing creation requests.
 
         :param response: The HTTP response.
         """
-        error = response.error()
-        response_body = response.readAll().data().decode()
-        if error == QNetworkReply.ContentAccessDenied \
-                and "data provider" in response_body.lower():
-            alert_info(self.tr('The selected data provider is unavailable on your plan. \n '
-                               'Upgrade your subscription to get access to the data. \n'
-                               'See pricing at <a href=\"https://mapflow.ai/pricing\">mapflow.ai</a>'))
-            # provider ID is the last "word" in the message.
-            # In this case, when "data provider" is in the message, there can't be index error
-        else:
-            # The report tier builds and shows the dialog; the body was already read above, so it
-            # is handed over rather than re-read (`readAll` has drained the reply).
-            report_http_error(response=response,
-                              response_body=response_body,
-                              plugin_version=self.app_context.plugin_version,
-                              title=self.tr('Processing creation failed'),
-                              error_message_parser=api_message_parser)
-        if False not in self.app_context.allow_enable_processing.values():
-            self.submissionInFlight.emit(False)
+        try:
+            error = response.error()
+            response_body = response.readAll().data().decode()
+            if error == QNetworkReply.ContentAccessDenied \
+                    and "data provider" in response_body.lower():
+                alert_info(self.tr('The selected data provider is unavailable on your plan. \n '
+                                   'Upgrade your subscription to get access to the data. \n'
+                                   'See pricing at <a href=\"https://mapflow.ai/pricing\">mapflow.ai</a>'))
+                # provider ID is the last "word" in the message.
+                # In this case, when "data provider" is in the message, there can't be index error
+            else:
+                # The report tier builds and shows the dialog; the body was already read above, so it
+                # is handed over rather than re-read (`readAll` has drained the reply).
+                report_http_error(response=response,
+                                  response_body=response_body,
+                                  plugin_version=self.app_context.plugin_version,
+                                  title=self.tr('Processing creation failed'),
+                                  error_message_parser=api_message_parser)
+        finally:
+            # This handler owns ending the run, as the success callback does, and runs behind the
+            # guard: a body that will not decode would otherwise leave Start disabled and the table
+            # refresh paused (spec/006 § a guarded callback is interrupted).
+            self.processing_fetch_timer.start()
+            if False not in self.app_context.allow_enable_processing.values():
+                self.submissionInFlight.emit(False)
 
     # =============  REQUEST ================= #
-    def setup_processings_table(self):
+    def setup_processings_table(self, *, mode: RequestMode):
         if not self.app_context.current_project:
             return
         self.processings_page_offset = 0
         self.tableLoading.emit()
-        self.get_processings()
+        self.get_processings(mode=mode)
         self.processing_fetch_timer.start()
 
-    def get_processings(self):
+    def get_processings(self, *, mode: RequestMode):
         """Fetch the *project's* processings. Not the entry point for "refresh the table" — that
         is `refreshRequested`, because inside a template the same table shows something else and
         choosing between the two is the controller's call."""
@@ -694,13 +709,17 @@ class ProcessingService(QObject):
             project_id=self.app_context.current_project.id,
             request_body=request_body,
             callback=self.get_processings_callback,
+            callback_kwargs={"mode": mode},
+            mode=mode,
         )
         self.pagerEnabled.emit(False)
 
-    def get_processings_callback(self, response: QNetworkReply):
+    def get_processings_callback(self, response: QNetworkReply, mode: RequestMode):
         """Update the processing table and user limit.
 
         :param response: The HTTP response.
+        :param mode: the page request's mode, which the templates list completing it inherits — on a
+            poll tick that list is polled too.
         """
         response_data = json.loads(response.readAll().data())
         self.processings_data = ProcessingsResult.from_dict(response_data)
@@ -724,6 +743,7 @@ class ProcessingService(QObject):
             self.api.get_templates_by_project(
                 project_id=current_project_id,
                 callback=self.get_templates_callback,
+                mode=mode,
             )
         else:
             self.templates = {}
@@ -835,18 +855,18 @@ class ProcessingService(QObject):
 
     def show_processings_next_page(self):
         self.processings_page_offset += self.processings_page_limit
-        self.refreshRequested.emit()
+        self.refreshRequested.emit(RequestMode.INTERACTIVE)
 
     def show_processings_previous_page(self):
         self.processings_page_offset -= self.processings_page_limit
         if self.processings_page_offset < 0:
             self.processings_page_offset = 0
-        self.refreshRequested.emit()
+        self.refreshRequested.emit(RequestMode.INTERACTIVE)
 
     def get_filtered_processings(self):
         """Reset to first page when filter text changes."""
         self.processings_page_offset = 0
-        self.refreshRequested.emit()
+        self.refreshRequested.emit(RequestMode.INTERACTIVE)
 
     def update_local_processings(self, processings: List[ProcessingDTO]):
         """
@@ -934,8 +954,11 @@ class ProcessingService(QObject):
         if not processing:
             return
         self.ratingLoaded.emit(str(processing.name or ""), 0, "")
+        # INTERACTIVE also when it reloads after a submitted rating: the user who just pressed Submit
+        # is looking at this panel.
         self.api.get_processing(processing_id=processing.id,
-                                callback=self.load_current_rating_callback)
+                                callback=self.load_current_rating_callback,
+                                mode=RequestMode.INTERACTIVE)
 
     def load_current_rating_callback(self, response: QNetworkReply) -> None:
         try:
@@ -1012,7 +1035,7 @@ class ProcessingService(QObject):
     def review_processing_callback(self, response: QNetworkReply) -> None:
         self.reviewSubmitted.emit()
         self.processing_fetch_timer.start()
-        self.refreshRequested.emit()
+        self.refreshRequested.emit(RequestMode.BACKGROUND)
 
     # Processing cost
     def update_processing_cost(self):
@@ -1047,9 +1070,12 @@ class ProcessingService(QObject):
         if self.app_context.billing_type != BillingType.credits:
             return
 
+        # INTERACTIVE whatever set it off — a click or a combo set by code: the price is shown next
+        # to the Start button the user is about to press.
         self.api.get_cost(data=processing_params,
                           callback=self.calculate_processing_cost_callback,
-                          error_handler=self.disable_processing_start)
+                          error_handler=self.disable_processing_start,
+                          mode=RequestMode.INTERACTIVE)
 
     def calculate_processing_cost_callback(self, response: QNetworkReply):
         self.processing_cost = int(response.readAll().data().decode())
@@ -1088,13 +1114,15 @@ class ProcessingService(QObject):
         Asks for confirmation in a pop-up dialog. Multiple items can be selected.
         Is called by clicking the deleteProcessings ('Delete') button.
         """
-        # Pause refreshing processings table to avoid conflicts
-        self.processing_fetch_timer.stop()
         selected_ids = self.selected_ids()
         # Filter to only items that exist (templates or processings)
         valid_ids = [pid for pid in selected_ids if pid in self.processings or pid in self.templates]
         # Ask for confirmation if there are selected rows
         if valid_ids and alert_confirm(self.tr('Delete selected items?')):
+            # Pause refreshing the table while the deletes run, so a refresh cannot re-add a row
+            # mid-way; the last delete's reply resumes it. Paused only once the user has agreed, or a
+            # cancelled delete would leave the table frozen.
+            self.processing_fetch_timer.stop()
             self.delete_processings(response=None, items=valid_ids, deleted=[], failed=[])
             
     def delete_processings(self, 
