@@ -89,7 +89,8 @@ class Mapflow(QObject):
         self.iface = iface
         self.main_window = self.iface.mainWindow()
         #: `(signal, connection)` for every subscription to a QGIS object that outlives the plugin —
-        #: the project and the layers in it — so `unload` can drop exactly these (`_connect_external`).
+        #: the project and the layers in it — so `unload` can drop exactly these (`_connect_external`,
+        #: spec/007 § The composition root).
         self._external_connections = []
         super().__init__(self.main_window)
         self.message_bar = self.iface.messageBar()

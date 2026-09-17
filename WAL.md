@@ -213,13 +213,7 @@ every Qt entry point reaches plugin code through `guarded_connect`, leaving `ALL
 with only the `response_dispatcher` row, which IS the guard. The WHY of each step is in its commit
 message; the durable rules are in `spec/006` and `spec/007`.
 
-Two follow-ups it left behind:
-
-[ready-for-review] Close the entry-point enforcement gap, and give reports a plugin version.
-    The classifier now fails closed on a `.connect` whose receiver it cannot name, instead of
-    skipping it; that immediately found an injected plugin signal nobody had noticed. And
-    `error_guard` records the version once at startup, so reports raised from dialogs and views no
-    longer say "unknown".
+Follow-ups it left behind:
 
 [ ] Check whether the behavioral tier reaches the real backend
 The fake network replaces `QgsNetworkAccessManager` for everything the plugin requests through
@@ -238,6 +232,16 @@ the only stall came from a deliberately unroutable host.
     The `QgsProject` subscriptions and every monitored layer's connections are disconnected by
     token, and the settings group opened in `__init__` is closed — even when the rest of teardown
     raises.
+
+[ ] Bring the remaining outliving subscriptions under `unload` (`spec/007` § The composition root)
+    The rule landed with three known violations, all made outside the root:
+    - the search footprint layer's `selectionChanged` — `SearchController.on_metadata_layer_ready`
+      and `ProviderService` on the duplicate path. Only the current footprint layer carries it (a
+      new search removes the previous one), and its token is `app_context.meta_layer_table_connection`.
+    - the layer-tree group's `destroyed` / `nameChanged` lambdas — `Mapflow.set_layer_group` and
+      `ResultsLoader`. Both are also **raw, unguarded** connects the entry-point test does not see:
+      its classifier only knows the signal names it lists, so an unlisted Qt signal fails open.
+    Decide with it whether the rule gets an enforcement test, as the guard rule has.
 
 [ ] Check the startup ordering between the project fetch and the account poll
 `setup_providers` filters the imagery sources by `modelCombo.currentText()`, and the model
