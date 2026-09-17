@@ -228,10 +228,21 @@ resolves but serves nothing.
 No evidence of a plugin defect here — the vector-tile assertions (source and extent) pass, and
 the only stall came from a deliberately unroutable host.
 
-[ready-for-review] `unload` detaches the plugin from everything that outlives it
-    The `QgsProject` subscriptions and every monitored layer's connections are disconnected by
-    token, and the settings group opened in `__init__` is closed — even when the rest of teardown
-    raises.
+[ ] Tolerate a failure on background requests; alert on the first one only for user actions
+    Today every request alerts on its first timeout or 5xx: `Http` never retries, and
+    `default_error_handler` raises the message-tier alert straight away. That is right for a button
+    the user just pressed — they can press it again, and a hidden retry would only add seconds of
+    silence — and wrong for requests nobody is waiting on: the processings poll (6 s, with a 5 s
+    timeout), the template view (15 s), `/user/status` (30 s), a table refresh on tab switch. There
+    one dropped response is noise, and the next attempt usually succeeds.
+    Direction (user's): at least two modes, **declared on each request**:
+    - interactive — no retry, alert on the first failure (today's behaviour for everything);
+    - background — at least one retry before alerting (for a poll, the next tick can be the retry).
+    Needs a spec delta first: `spec/005` § Mapflow Backend API says "no automatic retry", and
+    `spec/006` must say how the tolerance composes with the throttle. Open points: which errors count
+    as transient (timeout, 5xx, refused/closed; not 401/403/4xx); background only for idempotent
+    requests, since a retried create that did land creates twice; whether `use_default_error_handler`
+    folds into the mode. ~63 request sites, each needing a declared mode.
 
 [ ] Bring the remaining outliving subscriptions under `unload` (`spec/007` § The composition root)
     The rule landed with three known violations, all made outside the root:
