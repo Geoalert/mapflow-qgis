@@ -177,7 +177,7 @@ adding a second listener never means editing the first controller.
 ### The composition root
 
 `mapflow.py` is the composition root: it builds the services, views and controllers, wires their
-signals, and sequences startup. Two things follow from that.
+signals, sequences startup, and undoes all of it on `unload`. Three things follow from that.
 
 **It names widgets, and only there.** Constructing a controller means handing it the widgets it
 owns, and restoring saved settings into widgets at startup is nobody else's job. So "no widget
@@ -194,8 +194,38 @@ The test is whether the code **decides between** regions or **acts within** one.
 to the root; acting belongs to a controller. Moving such a fork into a controller reintroduces
 exactly the coupling the rule above forbids, so it is left where it is on purpose.
 
+**It owns teardown as well as construction.** QGIS does not restart to replace a plugin: an in-place
+upgrade from the plugin manager, or Plugin Reloader, calls the old instance's `unload` and builds a
+new one in the same process. Anything the old instance attached itself to and did not let go of
+keeps running it, against a closed dialog and stale state. So **every subscription to something
+that outlives the plugin is undone by `unload`**, whichever layer made it. The root sequences that
+teardown; a service or controller that makes such a subscription must leave `unload` a way to
+reach it.
+
+What outlives the plugin:
+
+* `QgsProject` and its layer tree, including the groups the plugin created in it;
+* every layer in the project — the user's, and equally the ones the plugin added (search
+  footprints, results, previews), which stay in the project across a reload;
+* the QGIS interface and its map canvas;
+* the process-wide `QgsSettings` object `AppContext.settings` shares. A group opened on it and never
+  closed nests the next instance's keys one level deeper (`mapflow/mapflow/…`), where no later start
+  reads them.
+
+Three constraints on how:
+
+1. **Disconnect by token, never all.** `guarded_connect` returns the connection token; keep it where
+   `unload` can reach it. A bare `signal.disconnect()` also removes QGIS's own slots on the project
+   and other plugins' slots on the user's layers.
+2. **PyQt's automatic clean-up does not apply.** PyQt drops a connection to a bound method when its
+   receiver is deleted, but `guarded_connect` connects a closure, which holds the receiver alive and
+   is never dropped. A subscription `unload` cannot reach is a leak, not a missed optimisation.
+3. **Teardown survives a failing step.** Disconnecting and closing the settings group run in a
+   `finally`, so a service stop that raises cannot leave the old instance subscribed. A sender
+   already deleted took its connections with it, and must not stop the rest from being undone.
+
 This is not a licence to leave arbitrary logic in the root. A method here must be a fork, a
-construction step, or a startup sequence; anything else has an owner.
+construction step, a startup sequence, or teardown; anything else has an owner.
 
 ### Dialogs and .ui files
 
