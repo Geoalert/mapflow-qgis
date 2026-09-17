@@ -8,7 +8,7 @@ from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest, QHttpMultiPart, QHtt
 from qgis.core import QgsMapLayer
 
 from ...schema.data_catalog import PreviewSize, MosaicCreateSchema, ImageReturnSchema, MosaicUpdateSchema
-from ...http import Http, data_catalog_message_parser
+from ...http import Http, RequestMode, data_catalog_message_parser
 from ...infra.report_body import get_error_report_body
 from ...functional import layer_utils
 from ...infra.alert_service import show_error_report
@@ -17,8 +17,11 @@ logger = logging.getLogger(__name__)
 
 
 class DataCatalogApi(QObject):
-    """
+    """My Imagery requests.
 
+    A read takes the request `mode` from its caller, which knows what triggered it; a request that
+    changes server state is always `INTERACTIVE`, because it must never be sent twice
+    (spec/005 § Request modes).
     """
     mosaicsUpdated = pyqtSignal()
 
@@ -50,10 +53,11 @@ class DataCatalogApi(QObject):
                        headers={},
                        callback=callback,
                        use_default_error_handler=True,
-                       timeout=5
+                       timeout=5,
+                       mode=RequestMode.INTERACTIVE
                       )
-    
-    def create_mosaic_from_images(self, 
+
+    def create_mosaic_from_images(self,
                                   mosaic: MosaicCreateSchema, 
                                   callback: Callable = lambda *args: None, 
                                   callback_kwargs: Optional[dict] = None,
@@ -73,25 +77,28 @@ class DataCatalogApi(QObject):
                                   use_default_error_handler=error_handler is None,
                                   error_handler=error_handler,
                                   error_handler_kwargs=error_handler_kwargs or {},
-                                  timeout=3600
+                                  timeout=3600,
+                                  mode=RequestMode.INTERACTIVE
                                  )
         body.setParent(response)
         # Show progress for the first image; the view-layer reporter owns the widget.
         if self.progress_reporter:
             self.progress_reporter.track(response, f"Uploading image 1/{len(image_paths)}:")
 
-    def get_mosaics(self, callback: Callable):
+    def get_mosaics(self, callback: Callable, *, mode: RequestMode):
         self.http.get(url=f"{self.server}/rasters/mosaic",
                       callback=callback,
-                      use_default_error_handler=True
+                      use_default_error_handler=True,
+                      mode=mode
                      )
 
-    def get_mosaic(self, mosaic_id: UUID, callback: Callable):
+    def get_mosaic(self, mosaic_id: UUID, callback: Callable, *, mode: RequestMode):
         self.http.get(url=f"{self.server}/rasters/mosaic/{mosaic_id}",
                       callback=callback,
-                      use_default_error_handler=True
+                      use_default_error_handler=True,
+                      mode=mode
                      )
-    
+
     def update_mosaic(self, mosaic_id, mosaic: MosaicUpdateSchema, callback: Callable, callback_kwargs: Optional[dict] = None):
         self.http.put(url=f"{self.server}/rasters/mosaic/{mosaic_id}",
                        body=mosaic.as_json().encode(),
@@ -99,7 +106,8 @@ class DataCatalogApi(QObject):
                        callback=callback,
                        callback_kwargs=callback_kwargs,
                        use_default_error_handler=True,
-                       timeout=5
+                       timeout=5,
+                       mode=RequestMode.INTERACTIVE
                       )
 
     def delete_mosaic(self,
@@ -113,7 +121,8 @@ class DataCatalogApi(QObject):
                          callback_kwargs=callback_kwargs or {},
                          use_default_error_handler=error_handler is None,
                          error_handler=error_handler,
-                         error_handler_kwargs=error_handler_kwargs or {}
+                         error_handler_kwargs=error_handler_kwargs or {},
+                         mode=RequestMode.INTERACTIVE
                         )
 
     def delete_mosaic_error_handler(self, mosaics: list):
@@ -129,7 +138,9 @@ class DataCatalogApi(QObject):
                               tilejson_uri: str,
                               layer: QgsMapLayer,
                               errors: bool = False,
-                              mosaic_id: Optional[str] = None):
+                              mosaic_id: Optional[str] = None,
+                              *,
+                              mode: RequestMode):
         self.http.get(url=tilejson_uri,
                       callback=self.add_mosaic_with_extent,
                       callback_kwargs={"layer": layer,
@@ -140,6 +151,7 @@ class DataCatalogApi(QObject):
                                             "mosaic_id": mosaic_id,
                                             "errors": errors},
                       use_default_error_handler=False,
+                      mode=mode,
                      )
     
     def add_mosaic_with_extent(self,
@@ -191,7 +203,8 @@ class DataCatalogApi(QObject):
                                   use_default_error_handler=error_handler is None,
                                   error_handler=error_handler,
                                   error_handler_kwargs=error_handler_kwargs or {},
-                                  timeout=3600
+                                  timeout=3600,
+                                  mode=RequestMode.INTERACTIVE
                                  )
         body.setParent(response)
         if self.progress_reporter:
@@ -222,17 +235,20 @@ class DataCatalogApi(QObject):
             message = self.tr("Could not upload following images:\n{images}").format(images= ', \n'.join(image_paths))
         show_error_report(text=error_summary, title=message, email_body=email_body)
 
-    def get_mosaic_images(self, mosaic_id: UUID, callback: Callable):
+    def get_mosaic_images(self, mosaic_id: UUID, callback: Callable, *, mode: RequestMode):
         self.http.get(url=f"{self.server}/rasters/mosaic/{mosaic_id}/image",
                       callback=callback,
-                      use_default_error_handler=True
+                      use_default_error_handler=True,
+                      mode=mode
                      )
 
-    def get_image(self, image_id: UUID, callback: Callable, error_handler: Callable):
+    def get_image(self, image_id: UUID, callback: Callable, error_handler: Callable, *,
+                  mode: RequestMode):
         self.http.get(url=f"{self.server}/rasters/image/{image_id}",
                       callback=callback,
                       use_default_error_handler=False,
-                      error_handler=error_handler
+                      error_handler=error_handler,
+                      mode=mode
                      )
         
     def delete_image(self,
@@ -246,7 +262,8 @@ class DataCatalogApi(QObject):
                          callback_kwargs=callback_kwargs,
                          use_default_error_handler=error_handler is None,
                          error_handler=error_handler,
-                         error_handler_kwargs=error_handler_kwargs or {}
+                         error_handler_kwargs=error_handler_kwargs or {},
+                         mode=RequestMode.INTERACTIVE
                         )
 
     def delete_image_error_handler(self, image_paths: list):
@@ -261,12 +278,15 @@ class DataCatalogApi(QObject):
     def get_image_preview(self,
                           image: ImageReturnSchema,
                           size: PreviewSize,
-                          callback: Callable):
+                          callback: Callable,
+                          *,
+                          mode: RequestMode):
         url = image.preview_url_l if size == PreviewSize.large else image.preview_url_s
         self.http.get(url=url,
                       callback=callback,
                       use_default_error_handler=False,
-                      error_handler=self.preview_s_error_handler
+                      error_handler=self.preview_s_error_handler,
+                      mode=mode
                      )
 
     def preview_s_error_handler(self, response: QNetworkReply):
@@ -276,13 +296,16 @@ class DataCatalogApi(QObject):
                             image: ImageReturnSchema,
                             footprint,
                             callback: Callable,
-                            image_name: str = ""):
+                            image_name: str = "",
+                            *,
+                            mode: RequestMode):
         self.http.get(url=image.preview_url_l,
                       callback=callback,
                       use_default_error_handler=False,
                       error_handler=self.image_preview_l_error_handler,
                       callback_kwargs={"footprint": footprint,
-                                       "image_name": image_name}
+                                       "image_name": image_name},
+                      mode=mode
                      )
 
     def image_preview_l_error_handler(self, response: QNetworkReply):
@@ -293,41 +316,32 @@ class DataCatalogApi(QObject):
                           title="Error. Could not display preview",
                           email_body=email_body)
 
-    # Legacy:
-    def upload_to_new_mosaic(self,
-                             image_path: Union[Path, str],
-                             callback: Callable,
-                             callback_kwargs: Optional[dict] = None):
-        url = f"{self.server}/rasters"
-        body = self.create_upload_image_body(image_path=image_path)
-        self.http.post(url=url,
-                       callback=callback,
-                       callback_kwargs=callback_kwargs,
-                       body=body,
-                       timeout=3600  # one hour
-                      )
-
     # Status
-    def get_user_limit(self, callback):
+    def get_user_limit(self, callback, *, mode: RequestMode):
         self.http.get(url=f"{self.server}/rasters/memory",
                       callback=callback,
-                      use_default_error_handler=True)
+                      use_default_error_handler=True,
+                      mode=mode)
 
     def update_image_name(self, image_id: UUID, name: str, callback: Callable):
         self.http.put(url=f"{self.server}/rasters/image/{image_id}?name={name}",
                       callback=callback,
-                      use_default_error_handler=True)
+                      use_default_error_handler=True,
+                      mode=RequestMode.INTERACTIVE)
 
     def download_image(self,
                        image_id: UUID,
                        callback: Callable,
                        error_handler: Optional[Callable] = None,
-                       error_handler_kwargs: Optional[dict] = None):
+                       error_handler_kwargs: Optional[dict] = None,
+                       *,
+                       mode: RequestMode):
         self.http.get(url=f"{self.server}/rasters/image/{image_id}/download",
                       callback=callback,
                       use_default_error_handler=error_handler is None,
                       error_handler=error_handler,
-                      error_handler_kwargs=error_handler_kwargs or {}
+                      error_handler_kwargs=error_handler_kwargs or {},
+                      mode=mode
                      )
 
     def download_image_error_handler(self, response: QNetworkReply):

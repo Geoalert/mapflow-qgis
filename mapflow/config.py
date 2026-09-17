@@ -18,6 +18,14 @@ CATALOG_OPTION_NAME = "🖼️ My imagery"
 
 DEFAULT_HTTP_TIMEOUT_SECONDS = 10
 
+#: How a request tolerates a transient failure before anyone is told (spec/005 § Request modes).
+#: Like the report throttle's numbers, these are a first guess for live use to move.
+#: A `BACKGROUND` request is sent once more after this many seconds before its failure is handled.
+BACKGROUND_RETRY_DELAY_SECONDS = 3
+#: A `POLL` request's failure is handled once this many consecutive attempts at the same endpoint
+#: have failed — 2 means the next tick is the retry.
+POLL_FAILURES_BEFORE_ALERT = 2
+
 @dataclass
 class ConfigColumns():
     def __init__(self):

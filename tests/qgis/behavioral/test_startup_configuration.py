@@ -1,9 +1,9 @@
 """What a fresh install shows after logging in.
 
 Fresh means no saved project, which is the state a first-time user is in and the state the
-test profile is in. The plugin issues one /user/status on login and a second from a 500 ms
-timer; only the second carries the flag that configures the UI, so this journey needs real
-time to pass rather than replies to be delivered.
+test profile is in. The plugin asks for /user/status from a 500 ms startup timer, and that
+response is what configures the UI, so this journey needs real time to pass rather than replies
+to be delivered.
 
 The model and provider combos are deliberately not asserted here. Both are populated from a
 *project's* workflowDefs, so on a fresh profile they are legitimately empty until a project
@@ -33,7 +33,7 @@ def test_the_main_window_replaces_the_login_dialog(logged_in):
 
 
 def test_startup_configuration_runs_to_completion(logged_in, network):
-    """The whole point of the second /user/status.
+    """The whole point of the startup /user/status.
 
     Asserted through the projects table because that is the last thing the configuration
     does, so it is only populated if nothing threw on the way. An exception midway is

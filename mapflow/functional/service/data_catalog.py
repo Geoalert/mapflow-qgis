@@ -13,7 +13,7 @@ from ...schema import MyImageryParams
 from ..api.data_catalog_api import DataCatalogApi
 from ...infra.alert_service import alert
 from ...error_guard import guarded_connect
-from ...http import Http
+from ...http import Http, RequestMode
 from ...functional import helpers
 from ...functional.app_context import AppContext
 from ...config import Config
@@ -129,7 +129,7 @@ class DataCatalogService(QObject):
                                            image_paths=image_paths)
 
     def create_mosaic_callback(self, response: QNetworkReply):
-        self.get_mosaics()  # mosaicsChanged clears the selection
+        self.get_mosaics(mode=RequestMode.BACKGROUND)  # mosaicsChanged clears the selection
         self.previewNavChanged.emit(0, 0)
 
     def create_mosaic_from_images_callback(self, response: QNetworkReply, image_paths: List, mosaic_name: str):
@@ -147,8 +147,8 @@ class DataCatalogService(QObject):
                                                                      image=Path(image_paths[0]).name))
         self.mosaicSelectionCleared.emit()
 
-    def get_mosaics(self):
-        self.api.get_mosaics(callback=self.get_mosaics_callback)
+    def get_mosaics(self, *, mode: RequestMode):
+        self.api.get_mosaics(callback=self.get_mosaics_callback, mode=mode)
 
     def get_mosaics_callback(self, response: QNetworkReply):
         data = json.loads(response.readAll().data())
@@ -161,8 +161,10 @@ class DataCatalogService(QObject):
         self.app_context.mosaics = self.mosaics
 
     def get_mosaic(self, mosaic_id: UUID):
+        """Refresh one mosaic after a change to it has already been answered."""
         self.api.get_mosaic(mosaic_id=mosaic_id,
-                            callback=self.get_mosaic_callback)
+                            callback=self.get_mosaic_callback,
+                            mode=RequestMode.BACKGROUND)
 
     def get_mosaic_callback(self, response: QNetworkReply):
         mosaic = MosaicReturnSchema.from_dict(json.loads(response.readAll().data()))
@@ -192,7 +194,7 @@ class DataCatalogService(QObject):
         if len(mosaics) == 0:
             if failed:
                 self.api.delete_mosaic_error_handler(mosaics=failed)
-            self.get_mosaics()  # mosaicsChanged clears the selection
+            self.get_mosaics(mode=RequestMode.BACKGROUND)  # mosaicsChanged clears the selection
             self.previewNavChanged.emit(0, 0)
         else:
             mosaic_to_delete = mosaics[0]
@@ -245,7 +247,7 @@ class DataCatalogService(QObject):
             if failed and response.error() in (201, 203, 204):
                 failed += [image_to_upload] + non_uploaded
                 self.api.upload_image_error_handler(response=response, mosaic_name=mosaic_name, image_paths=failed)
-                self.get_mosaics()
+                self.get_mosaics(mode=RequestMode.BACKGROUND)
                 return
             # Check if raster to be uploaded meets restrictions
             layer = QgsRasterLayer(image_to_upload, "rasterLayerCheck", 'gdal')
@@ -288,7 +290,10 @@ class DataCatalogService(QObject):
                                  )
 
     def get_mosaic_images(self, mosaic_id):
-        self.api.get_mosaic_images(mosaic_id=mosaic_id, callback=self.get_mosaic_images_callback)
+        # INTERACTIVE even when a reselect after a change triggers it: the selection signal cannot
+        # tell that from a click, and the images table is what the user is looking at.
+        self.api.get_mosaic_images(mosaic_id=mosaic_id, callback=self.get_mosaic_images_callback,
+                                   mode=RequestMode.INTERACTIVE)
 
     def get_mosaic_images_callback(self, response: QNetworkReply):
         self.images = [ImageReturnSchema.from_dict(data) for data in json.loads(response.readAll().data())]
@@ -319,7 +324,8 @@ class DataCatalogService(QObject):
             pass
 
     def get_image(self, image_id: UUID):
-        self.api.get_image(image_id=image_id, callback=self.get_image_callback, error_handler=self.get_image_error_handler)
+        self.api.get_image(image_id=image_id, callback=self.get_image_callback,
+                           error_handler=self.get_image_error_handler, mode=RequestMode.INTERACTIVE)
 
     def delete_images(self, 
                       response: QNetworkReply, 
@@ -358,7 +364,8 @@ class DataCatalogService(QObject):
                             image: ImageReturnSchema):
         self.api.get_image_preview(image=image,
                                    size=PreviewSize.small,
-                                   callback=self.get_image_preview_s_callback)
+                                   callback=self.get_image_preview_s_callback,
+                                   mode=RequestMode.INTERACTIVE)
 
     def get_image_preview_s_callback(self, response: QNetworkReply):
         image = QImage.fromData(response.readAll().data())
@@ -390,7 +397,8 @@ class DataCatalogService(QObject):
             return
         self.api.download_image(image_id=image.id,
                                 callback=self.download_image_callback,
-                                error_handler=self.api.download_image_error_handler)
+                                error_handler=self.api.download_image_error_handler,
+                                mode=RequestMode.INTERACTIVE)
 
     def download_image_callback(self, response: QNetworkReply):
         data = json.loads(response.readAll().data())
@@ -430,14 +438,16 @@ class DataCatalogService(QObject):
 
     def refresh_catalog(self):
         if self._mosaic_table_visible:
-            self.get_mosaics()  # mosaicsChanged clears the selection
+            self.get_mosaics(mode=RequestMode.INTERACTIVE)  # mosaicsChanged clears the selection
         else:
             if self.selected_mosaic():
                 self.get_mosaic_images(self.selected_mosaic().id)
 
     # Status
     def get_user_limit(self):
-        self.api.get_user_limit(callback=self.get_user_limit_callback)
+        """The storage quota, fetched after login and after the mosaic list changes — never on a
+        user's request, so a transient failure is tried once more first."""
+        self.api.get_user_limit(callback=self.get_user_limit_callback, mode=RequestMode.BACKGROUND)
 
     def get_user_limit_callback(self, response: QNetworkReply):
         data_limit = UserLimitSchema.from_dict(json.loads(response.readAll().data()))

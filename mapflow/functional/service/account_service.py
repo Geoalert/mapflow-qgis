@@ -19,7 +19,7 @@ from PyQt5.QtNetwork import QNetworkReply
 
 from ..app_context import AppContext
 from ...error_guard import guarded_connect
-from ...http import Http
+from ...http import Http, RequestMode
 from ...schema import BillingType
 
 logger = logging.getLogger(__name__)
@@ -55,7 +55,7 @@ class AccountService(QObject):
         #: The steady-state refresh while the plugin is open.
         self.refresh_timer = QTimer(self)
         self.refresh_timer.setInterval(config.USER_STATUS_UPDATE_INTERVAL * 1000)
-        guarded_connect(self.refresh_timer.timeout, self.refresh_status,
+        guarded_connect(self.refresh_timer.timeout, self.poll_status,
                         "refreshing the account status", app_context)
         #: The post-login retry, on a much shorter interval, until the first response arrives.
         self.startup_timer = QTimer(self)
@@ -74,17 +74,22 @@ class AccountService(QObject):
     def stop_refreshing(self) -> None:
         self.refresh_timer.stop()
 
-    def refresh_status(self) -> None:
+    def refresh_status(self, *, mode: RequestMode) -> None:
         self.http.get(
             url=f'{self.server}/user/status',
             callback=self.apply_status,
-            use_default_error_handler=True,  # the report throttle bounds the timer's repeats now
+            use_default_error_handler=True,
+            mode=mode,
         )
 
+    def poll_status(self) -> None:
+        """The refresh timer's tick. The next tick is the retry, so one failure is not reported."""
+        self.refresh_status(mode=RequestMode.POLL)
+
     def request_status(self) -> None:
-        """A one-off refresh, for the moments the timer's cadence is too slow to wait for —
-        right after login, and after an action that spends limit."""
-        self.refresh_status()
+        """A one-off refresh, for when the timer's cadence is too slow to wait for — reopening the
+        plugin. Nobody is waiting on it, so a transient failure is tried once more first."""
+        self.refresh_status(mode=RequestMode.BACKGROUND)
 
     # ---------- the post-login retry ----------
 
@@ -120,7 +125,11 @@ class AccountService(QObject):
                 url=f'{self.server}/user/status',
                 callback=self.startup_status_callback,
                 error_handler=self.startup_status_error_handler,
-                use_default_error_handler=False
+                use_default_error_handler=False,
+                # Timer-driven, yet not POLL: this loop counts its own attempts and its error handler
+                # clears the in-flight flag, so it needs every failure as it happens. Its attempt
+                # budget is the tolerance.
+                mode=RequestMode.INTERACTIVE,
             )
         except Exception:
             # The request never left, so neither callback will clear the in-flight flag — and this

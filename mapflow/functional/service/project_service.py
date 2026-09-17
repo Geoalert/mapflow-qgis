@@ -5,7 +5,8 @@ must show leaves as signals; what the panel says arrives as arguments. `ProjectP
 connects the two — it already owns the projects/processings table and the navigation between them.
 """
 import json
-from typing import Optional, Callable
+import logging
+from typing import Optional
 
 from PyQt5.QtCore import QObject, pyqtSignal
 from PyQt5.QtNetwork import QNetworkReply
@@ -13,10 +14,13 @@ from PyQt5.QtNetwork import QNetworkReply
 from .. import helpers
 from ..app_context import AppContext
 from ...config import Config
+from ...http import RequestMode
 from ...schema.project import (CreateProjectSchema, UpdateProjectSchema, MapflowProject,
                                ProjectsRequest, ProjectsResult, ProjectSortBy, ProjectSortOrder,
                                UserRole)
 from ..api.project_api import ProjectApi
+
+logger = logging.getLogger(__name__)
 
 
 class ProjectService(QObject):
@@ -41,6 +45,9 @@ class ProjectService(QObject):
 
     projectsUpdated = pyqtSignal()
     projectsFiltered = pyqtSignal()
+    #: The project remembered from the last session has been looked up — found or not, the lookup
+    #: is over. Startup waits for this before choosing between the processings and projects tables.
+    savedProjectResolved = pyqtSignal()
 
     def __init__(self, http, app_context: AppContext, config: Config):
         super().__init__()
@@ -81,7 +88,7 @@ class ProjectService(QObject):
     def create_project_callback(self, response: QNetworkReply):
         project = MapflowProject.from_dict(json.loads(response.readAll().data()))
         self.set_current_project(project)
-        self.get_projects()
+        self.get_projects(mode=RequestMode.BACKGROUND)
 
     def delete_project(self, project_id):
         # The list renumbers when this returns, so nothing may be selected until it does.
@@ -90,7 +97,7 @@ class ProjectService(QObject):
 
     def delete_project_callback(self, response: QNetworkReply):
         self.projects_data.total += -1
-        self.get_projects()
+        self.get_projects(mode=RequestMode.BACKGROUND)
 
     def update_project(self, project_id, project: UpdateProjectSchema):
         self.api.update_project(project_id, project, self.update_project_callback)
@@ -98,26 +105,38 @@ class ProjectService(QObject):
     def update_project_callback(self, response: QNetworkReply):
         project = MapflowProject.from_dict(json.loads(response.readAll().data()))
         self.set_current_project(project)
-        self.get_projects()
+        self.get_projects(mode=RequestMode.BACKGROUND)
 
-    def get_project(self, project_id, callback: Callable, error_handler: Callable, error_handler_kwargs: dict):
-        self.api.get_project(project_id, callback, error_handler, error_handler_kwargs)
+    def open_saved_project(self, project_id) -> None:
+        """Look up the project remembered from the last session. Whatever the outcome,
+        `savedProjectResolved` follows: startup is waiting on it."""
+        self.api.get_project(project_id, self.get_project_callback, self.get_project_error_handler, {},
+                             mode=RequestMode.BACKGROUND)
 
     def get_project_callback(self, response: QNetworkReply):
-        self.app_context.current_project = MapflowProject.from_dict(json.loads(response.readAll().data()))
-        self.apply_project_aoi_area_limit(self.app_context.current_project)
-        if self.app_context.current_project:
-            self.app_context.project_id = self.app_context.current_project.id
-            self.currentProjectChanged.emit(self.app_context.current_project)
-        self.get_project_sharing()
-        self.setup_project_change_rights()
-        self.app_context.settings.setValue("project_id", self.app_context.project_id)
-        # Manually toggle function to avoid race condition
-        # TODO: Can we avoid this? Calling the function from here is ugly
-        self.area_calculator_service.calculate_aoi_area_use_image_extent()
+        try:
+            self.app_context.current_project = MapflowProject.from_dict(json.loads(response.readAll().data()))
+            self.apply_project_aoi_area_limit(self.app_context.current_project)
+            if self.app_context.current_project:
+                self.app_context.project_id = self.app_context.current_project.id
+                self.currentProjectChanged.emit(self.app_context.current_project)
+            self.get_project_sharing()
+            self.setup_project_change_rights()
+            self.app_context.settings.setValue("project_id", self.app_context.project_id)
+            # Manually toggle function to avoid race condition
+            # TODO: Can we avoid this? Calling the function from here is ugly
+            self.area_calculator_service.calculate_aoi_area_use_image_extent()
+        finally:
+            # Startup is waiting on this whether or not applying the project succeeded; the response
+            # is guard-wrapped, so an emit after a raise would never run and startup would stall
+            # (spec/006 § a guarded callback is interrupted).
+            self.savedProjectResolved.emit()
 
-    def get_project_error_handler(self, response: QNetworkReply, **kwargs):
-        pass
+    def get_project_error_handler(self, response: QNetworkReply):
+        """The saved project is gone, no longer shared with this user, or unreachable. Startup opens
+        the projects list instead, which is where the user would go to pick another one."""
+        logger.warning("Could not open the saved project: Qt error %s", response.error())
+        self.savedProjectResolved.emit()
 
     @staticmethod
     def sort_combo_index(sort_by, sort_order) -> int:
@@ -151,7 +170,9 @@ class ProjectService(QObject):
                      sort_by=ProjectSortBy.updated,
                      sort_order=ProjectSortOrder.descending,
                      projects_filter: str = "",
-                     offset: Optional[int] = None):
+                     offset: Optional[int] = None,
+                     *,
+                     mode: RequestMode):
         """Request a page of projects. Sorting and filtering come from the panel, so the caller
         reads them and passes them in; `offset` is for restoring a remembered page."""
         if offset is not None:
@@ -166,12 +187,14 @@ class ProjectService(QObject):
                                        self.projects_page_offset,
                                        projects_filter,
                                        sort_by, sort_order)
-        self.api.get_projects(request_body, self.get_projects_callback)
+        self.api.get_projects(request_body, self.get_projects_callback, mode=mode,
+                              callback_kwargs={"mode": mode})
         # Forbid clicking on pages controls before getting a response
         self.pagerChanged.emit(False, 1, 1)
         self.selectionLocked.emit(True)
 
-    def get_projects_callback(self, response: QNetworkReply):
+    def get_projects_callback(self, response: QNetworkReply, mode: RequestMode):
+        """:param mode: the request's mode, which a re-request for the same page inherits."""
         self.projects_data = ProjectsResult.from_dict(json.loads(response.readAll().data()))
         self.projects = {project.id: project for project in self.projects_data.results}
         self.projectsLoaded.emit(self.projects_data.results)
@@ -184,7 +207,7 @@ class ProjectService(QObject):
         elif not self.projects_data.total and len(self._last_filter) <= 1:
             # No projects and no filter to explain it — every account has at least 'Default', so
             # this is a stale page rather than an empty account. Ask for the first page unfiltered.
-            self.get_projects()
+            self.get_projects(mode=mode)
             return
         else:  # total is just less than the limit
             self.pagerChanged.emit(False, 1, 1)

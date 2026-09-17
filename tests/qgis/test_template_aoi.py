@@ -8,6 +8,7 @@ from mapflow.functional.service import processing_service as ps_mod
 from mapflow.functional.service import template_service as ts_mod
 from mapflow.functional.service.processing_service import ProcessingService
 from mapflow.functional.service.template_service import TemplateService
+from mapflow.http import RequestMode
 from mapflow.schema.processing import ProcessingParams
 from mapflow.schema.template import (
     AOI_NAME_MAX_LENGTH,
@@ -44,10 +45,11 @@ def test_refresh_template_view_polls_only_processings():
     """The poll tick must be a single /processings request, not get_template + processings."""
     service = _template_service(active_template=SimpleNamespace(id="t-1"))
 
-    service.refresh_template_view()
+    service.refresh_template_view(mode=RequestMode.POLL)
 
     api = service.processing_service.api
     api.get_template_processings.assert_called_once()
+    assert api.get_template_processings.call_args.kwargs["mode"] is RequestMode.POLL
     api.get_template.assert_not_called()
 
 

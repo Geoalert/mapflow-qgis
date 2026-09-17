@@ -51,14 +51,14 @@ def test_a_successful_login_swaps_the_login_dialog_for_the_main_window(logged_in
     assert not logged_in.dlg_login.isVisible(), "the login dialog must close on success"
 
 
-def test_no_request_is_repeated_needlessly_during_login(plugin, network):
-    """A duplicated status call at startup is the shape of bug this suite must notice."""
-    log_in(plugin)
-    network.deliver()
-    network.deliver()
+def test_no_request_is_repeated_needlessly_during_login(logged_in, network):
+    """A duplicated status call at startup is the shape of bug this suite must notice.
 
+    Exactly one: the startup poll's, which is the response that configures the plugin. Waiting for
+    `logged_in` lets the 500 ms poll fire, so a second request from anywhere else would show here.
+    """
     status_calls = network.sent_to("user/status")
-    assert len(status_calls) <= 2, (
+    assert len(status_calls) == 1, (
         f"/user/status called {len(status_calls)} times during a single login")
 
 

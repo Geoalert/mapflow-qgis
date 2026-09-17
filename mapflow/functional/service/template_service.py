@@ -43,7 +43,7 @@ from ...infra.alert_service import (alert, alert_confirm, alert_info, alert_warn
                             ask_text)
 from ...infra.reporter import report_http_error
 from ...errors import ErrorMessage
-from ...http import api_message_parser
+from ...http import RequestMode, api_message_parser
 from ...schema import ImageCatalogResponseSchema
 from ...schema.template import (AOI_NAME_MAX_LENGTH,
                                 CreateProcessingTemplateSchema,
@@ -83,7 +83,8 @@ class TemplateService(QObject):
     #: "Re-fetch whatever the processings table is showing", after an action that changed it.
     #: Which view that is depends on navigation state, so the controller decides — see
     #: `ProcessingService.refreshRequested`, which carries the same meaning from the other side.
-    refreshRequested = pyqtSignal()
+    #: Every emit here follows a reply to a template action, so each carries BACKGROUND.
+    refreshRequested = pyqtSignal(object)
     #: Entering / leaving the in-template view, so map side-effects (search results, AOI layers)
     #: are handled outside the service.
     templateOpened = pyqtSignal(object)
@@ -242,7 +243,7 @@ class TemplateService(QObject):
                 "The template has been created, but is inactive.\n\n"
                 "You have reached the maximum number of active planned processings. "
                 "Pause or delete another one before activating this template."))
-        self.refreshRequested.emit()
+        self.refreshRequested.emit(RequestMode.BACKGROUND)
 
     def create_search_template_error_handler(self, response: QNetworkReply):
         self.creationBusy.emit(False)
@@ -276,7 +277,7 @@ class TemplateService(QObject):
         alert_info(self.tr("Template updated."))
         # Re-hydrate so the open template / list reflects the new params.
         self.aoi_changed_callback(response)
-        self.refreshRequested.emit()
+        self.refreshRequested.emit(RequestMode.BACKGROUND)
 
     def _template_update_error_handler(self, response: QNetworkReply):
         report_http_error(response,
@@ -639,6 +640,7 @@ class TemplateService(QObject):
             callback_kwargs={'pid': pid, 'name': processing.name},
             error_handler=self._add_no_aoi_processing_aoi_error,
             error_handler_kwargs={'pid': pid},
+            mode=RequestMode.INTERACTIVE,
         )
 
     def _add_no_aoi_processing_aoi_callback(self, response: QNetworkReply, pid: str, name: str) -> None:
@@ -680,6 +682,7 @@ class TemplateService(QObject):
         self.processing_service.api.get_template_processings(
             template_id=template.id,
             callback=lambda response: self._show_template_details_callback(template, response),
+            mode=RequestMode.INTERACTIVE,
         )
 
     def _show_template_details_callback(self, template, response: QNetworkReply) -> None:
@@ -752,6 +755,7 @@ class TemplateService(QObject):
         self.processing_service.api.get_template(
             template_id=template.id,
             callback=lambda response: callback(self.parse_template_response(response) or template),
+            mode=RequestMode.INTERACTIVE,  # opening the template, or its layers, on a click
         )
 
     def enter_template_view(self, template) -> None:
@@ -774,7 +778,7 @@ class TemplateService(QObject):
         self.template_processings = {}
         self._rebuild_template_rows()
         # Fetch the full processings (with result layers) for double-click loading.
-        self._fetch_template_processings()
+        self._fetch_template_processings(mode=RequestMode.INTERACTIVE)
         # Poll the in-template view less aggressively than the project list.
         self.pollIntervalChanged.emit(self.config.TEMPLATE_TABLE_REFRESH_INTERVAL * 1000)
         # Map side-effects (search results + AOI layers) are handled by listeners.
@@ -792,7 +796,7 @@ class TemplateService(QObject):
         # Let listeners clean up the template's map layers / search table.
         self.templateClosed.emit(closed)
 
-    def refresh_template_view(self) -> None:
+    def refresh_template_view(self, *, mode: RequestMode) -> None:
         """Poll tick: refresh only the processings (status/progress + the unbound section).
 
         The AOI grouping (``aoiDetails`` from the full template) changes slowly and is
@@ -801,7 +805,7 @@ class TemplateService(QObject):
         them from the polled processings (see ``_sync_aoi_statuses_from_processings``).
         """
         if self.active_template:
-            self._fetch_template_processings()
+            self._fetch_template_processings(mode=mode)
 
     def refresh_active_template(self) -> None:
         """Re-hydrate the active template's ``aoiDetails`` and its processings, then rebuild
@@ -812,8 +816,9 @@ class TemplateService(QObject):
         self.processing_service.api.get_template(
             template_id=self.active_template.id,
             callback=self._reopen_template_callback,
+            mode=RequestMode.BACKGROUND,
         )
-        self._fetch_template_processings()
+        self._fetch_template_processings(mode=RequestMode.BACKGROUND)
 
     def _rebuild_template_rows(self) -> None:
         if not self.active_template:
@@ -834,7 +839,7 @@ class TemplateService(QObject):
                     except AttributeError:
                         pass
 
-    def _fetch_template_processings(self) -> None:
+    def _fetch_template_processings(self, *, mode: RequestMode) -> None:
         """Fetch the template's processings (v1 ``ProcessingJson``) for the full row data
         (model, progress, status, result layers) and the unbound ('No AOI') section."""
         if not self.active_template:
@@ -842,6 +847,7 @@ class TemplateService(QObject):
         self.processing_service.api.get_template_processings(
             template_id=self.active_template.id,
             callback=self.get_template_processings_callback,
+            mode=mode,
         )
 
     def get_template_processings_callback(self, response: QNetworkReply) -> None:
@@ -982,6 +988,7 @@ class TemplateService(QObject):
             self.processing_service.api.get_template(
                 template_id=self.active_template.id,
                 callback=self._reopen_template_callback,
+                mode=RequestMode.BACKGROUND,
             )
 
     def _reopen_template_callback(self, response: QNetworkReply) -> None:
@@ -1054,7 +1061,7 @@ class TemplateService(QObject):
                 self.templateRenamed.emit(str(updated_template.id), str(updated_template.name))
         except Exception:
             logger.exception("Could not apply renamed template from response")
-        self.refreshRequested.emit()
+        self.refreshRequested.emit(RequestMode.BACKGROUND)
 
     def rename_template_error_handler(self, response: QNetworkReply) -> None:
         alert(self.tr("Error renaming template: {}").format(self._error_text(response)))
@@ -1073,7 +1080,7 @@ class TemplateService(QObject):
 
     def pause_template_callback(self, response: QNetworkReply) -> None:
         alert_info(self.tr("Template paused successfully"))
-        self.refreshRequested.emit()
+        self.refreshRequested.emit(RequestMode.BACKGROUND)
 
     def pause_template_error_handler(self, response: QNetworkReply) -> None:
         alert(self.tr("Error pausing template: {}").format(self._error_text(response)))
@@ -1121,7 +1128,7 @@ class TemplateService(QObject):
     def resume_template_callback(self, response: QNetworkReply) -> None:
         self._resume_template_state = {}
         alert_info(self.tr("Template resumed successfully"))
-        self.refreshRequested.emit()
+        self.refreshRequested.emit(RequestMode.BACKGROUND)
 
     def resume_template_error_handler(self, response: QNetworkReply) -> None:
         """e.g. "maximum number of active templates"."""
@@ -1143,7 +1150,7 @@ class TemplateService(QObject):
 
     def restart_template_callback(self, response: QNetworkReply) -> None:
         alert_info(self.tr("Template restarted successfully"))
-        self.refreshRequested.emit()
+        self.refreshRequested.emit(RequestMode.BACKGROUND)
 
     def restart_template_error_handler(self, response: QNetworkReply) -> None:
         alert(self.tr("Error restarting template: {}").format(self._error_text(response)))
@@ -1193,6 +1200,7 @@ class TemplateService(QObject):
             aoi_ids=aoi_ids or None,
             sort_by=self.search_service.sort_by,
             sort_order=self.search_service.sort_order,
+            mode=RequestMode.INTERACTIVE,
         )
 
     def load_search_page(self, offset: int) -> None:

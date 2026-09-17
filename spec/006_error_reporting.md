@@ -99,6 +99,12 @@ on a 6-second poll locks QGIS exactly as thoroughly as an unthrottled crash repo
   and the report body. A traceback that fired 200 times describes a different bug from one
   that fired once, and the single traceback cannot show the difference.
 
+For an HTTP failure the throttle is the **second** filter, not the first. A failure reaches it only
+once the request's mode has let it through (`spec/005` § Request modes): a `POLL` failure when the
+same endpoint keeps failing, a `BACKGROUND` failure after its re-send. The two do different jobs and
+neither replaces the other — the mode decides whether a *single* failure is worth showing at all,
+the throttle bounds how often a *persistent* one is shown.
+
 The four numbers above are **configuration, in `config.py`, not constants in
 `report_throttle.py`.** They were derived from poll intervals rather than from watching anyone
 use the plugin, so they are a first guess that live UX testing is expected to move. Reasoning
@@ -134,4 +140,7 @@ failed above.
 - A network call that opts out of user-facing error handling
   (`use_default_error_handler=False`) must say in a comment why. Opting out to dodge repeat
   alerts is superseded by the throttle and should be reconsidered rather than copied.
+- A new request declares its mode (`spec/005` § Request modes). Tolerating a transient failure is
+  the mode's job, never a silent opt-out's: a request that should not alert on one dropped response
+  is `POLL` or `BACKGROUND`, not `use_default_error_handler=False`.
 - Suppression must never be implemented by dropping log records.

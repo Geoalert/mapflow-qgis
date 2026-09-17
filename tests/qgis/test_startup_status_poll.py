@@ -20,6 +20,7 @@ from PyQt5.QtNetwork import QNetworkReply
 
 from mapflow.config import Config
 from mapflow.functional.service.account_service import AccountService
+from mapflow.http import RequestMode
 from mapflow.mapflow import Mapflow
 
 
@@ -172,12 +173,37 @@ def test_the_storage_quota_is_requested_once_on_success_not_per_retry():
     plugin.setup_providers = MagicMock()
     plugin.setup_search_providers = MagicMock()
     plugin.on_provider_change = MagicMock()
+    plugin._saved_project_pending = False
+    plugin._deferred_startup_status = None
 
     plugin.on_account_status({}, app_startup_request=False)
     plugin.data_catalog_service.get_user_limit.assert_not_called()
 
     plugin.on_account_status({}, app_startup_request=True)
     plugin.data_catalog_service.get_user_limit.assert_called_once()
+
+
+def test_the_refresh_timer_polls_the_status(service):
+    """A tick's failure is not worth a dialog: the next tick, 30 s later, is the retry."""
+    service.poll_status()
+
+    assert service.http.get.call_args.kwargs["mode"] is RequestMode.POLL
+
+
+def test_reopening_the_plugin_refreshes_the_status_in_the_background(service):
+    service.request_status()
+
+    assert service.http.get.call_args.kwargs["mode"] is RequestMode.BACKGROUND
+
+
+def test_a_startup_attempt_hands_every_failure_to_its_own_handler(service):
+    """The retry loop counts its attempts and clears its in-flight flag in the error handler, so
+    none of its failures may be held back."""
+    service.request_startup_status()
+
+    kwargs = service.http.get.call_args.kwargs
+    assert kwargs["mode"] is RequestMode.INTERACTIVE
+    assert kwargs["error_handler"] == service.startup_status_error_handler
 
 
 def test_logout_stops_a_startup_poll_that_never_finished(service):
@@ -189,8 +215,16 @@ def test_logout_stops_a_startup_poll_that_never_finished(service):
     plugin.account_service = service
     plugin.processing_service = MagicMock()
     plugin.dlg = MagicMock()
+    plugin.http = MagicMock()
+    plugin._saved_project_pending = True
+    plugin._deferred_startup_status = {"status": "waiting for the saved project"}
 
     plugin.on_logged_out()
 
     assert not service.startup_timer.isActive()
     assert not service.refresh_timer.isActive()
+    # Nothing left over may run for the ended session: no unauthenticated retry, and no startup
+    # configuration applied when a late project lookup lands.
+    plugin.http.cancel_retries.assert_called_once()
+    assert plugin._deferred_startup_status is None
+    assert plugin._saved_project_pending is False

@@ -3,7 +3,7 @@ from typing import Callable, List, Optional, Union
 from uuid import UUID
 
 from PyQt5.QtCore import QObject
-from ...http import Http
+from ...http import Http, RequestMode
 from ...schema.processing import (
     PostProcessingSchema,
     UpdateProcessingSchema,
@@ -28,6 +28,10 @@ class ProcessingApi(QObject):
     - create new processing
     - update existing processing
     - delete processing
+
+    A read takes the request `mode` from its caller, which knows what triggered it; a request that
+    changes server state is always `INTERACTIVE`, because it must never be sent twice
+    (spec/005 § Request modes).
     """
 
     def __init__(self,
@@ -48,18 +52,20 @@ class ProcessingApi(QObject):
             use_default_error_handler=False,
             body=data.as_json().encode(),
             timeout=30,
+            mode=RequestMode.INTERACTIVE,
         )
 
-    def update_processing(self, processing_id: Union[UUID, str], 
-                          processing: UpdateProcessingSchema, 
-                          callback: Callable, 
+    def update_processing(self, processing_id: Union[UUID, str],
+                          processing: UpdateProcessingSchema,
+                          callback: Callable,
                           error_handler: Optional[Callable] = None):
         self.http.put(path=f"processings/{processing_id}/v2",
                        body=processing.as_json().encode(),
                        headers={},
                        callback=callback,
                        use_default_error_handler=True,
-                       timeout=5)
+                       timeout=5,
+                       mode=RequestMode.INTERACTIVE)
 
     def delete_processing(self, processing_id: Union[UUID, str],
                           callback: Callable,
@@ -72,20 +78,25 @@ class ProcessingApi(QObject):
                          use_default_error_handler=False,
                          error_handler = error_handler,
                          error_handler_kwargs = error_handler_kwargs,
-                         timeout=5)
+                         timeout=5,
+                         mode=RequestMode.INTERACTIVE)
 
-    def get_processing(self, processing_id: Union[UUID, str], callback: Callable) -> None:
+    def get_processing(self, processing_id: Union[UUID, str], callback: Callable, *,
+                       mode: RequestMode) -> None:
         self.http.get(path=f"processings/{processing_id}/v2",
                          callback=callback,
                          use_default_error_handler=True,
-                         timeout=5)
+                         timeout=5,
+                         mode=mode)
 
     def get_processing_aois(self,
                             processing_id: Union[UUID, str],
                             callback: Callable,
                             error_handler: Callable,
                             callback_kwargs: Optional[dict] = None,
-                            error_handler_kwargs: Optional[dict] = None) -> None:
+                            error_handler_kwargs: Optional[dict] = None,
+                            *,
+                            mode: RequestMode) -> None:
         """A processing's own AOI geometries (a JSON list of AOI objects). Used to draw a
         'No AOI' template processing lazily on click — its geometry is absent from the
         template's aoiDetails, so it is fetched per processing."""
@@ -95,7 +106,8 @@ class ProcessingApi(QObject):
                       error_handler=error_handler,
                       error_handler_kwargs=error_handler_kwargs or {},
                       use_default_error_handler=False,
-                      timeout=30)
+                      timeout=30,
+                      mode=mode)
 
     # ---- review and rating ----
     #
@@ -111,11 +123,13 @@ class ProcessingApi(QObject):
         self.http.put(path=f"processings/{processing_id}/rate",
                       body=json.dumps({"rating": rating, "feedback": feedback}).encode(),
                       callback=callback,
-                      callback_kwargs=callback_kwargs or {})
+                      callback_kwargs=callback_kwargs or {},
+                      mode=RequestMode.INTERACTIVE)
 
     def accept_processing(self, processing_id: Union[UUID, str], callback: Callable) -> None:
         """Approve a processing awaiting review."""
-        self.http.put(path=f"processings/{processing_id}/acceptation", callback=callback)
+        self.http.put(path=f"processings/{processing_id}/acceptation", callback=callback,
+                      mode=RequestMode.INTERACTIVE)
 
     def reject_processing(self,
                           processing_id: Union[UUID, str],
@@ -125,25 +139,31 @@ class ProcessingApi(QObject):
         """Send a review back with a comment and the reviewer's corrections."""
         self.http.put(path=f"processings/{processing_id}/rejection",
                       body=json.dumps({"comment": comment, "features": features}).encode(),
-                      callback=callback)
+                      callback=callback,
+                      mode=RequestMode.INTERACTIVE)
 
-    def get_processings(self, project_id: Union[UUID, str], request_body: ProcessingsRequest, callback: Callable):
+    def get_processings(self, project_id: Union[UUID, str], request_body: ProcessingsRequest,
+                        callback: Callable, *, mode: RequestMode, callback_kwargs: Optional[dict] = None):
         self.http.post(path=f"projects/{project_id}/processings/v2/page",
                        body=request_body.as_json().encode(),
                        callback=callback,
+                       callback_kwargs=callback_kwargs or {},
                        use_default_error_handler=True,
-                       timeout=5)
+                       timeout=5,
+                       mode=mode)
 
 
-    def get_cost(self, data: PostProcessingSchema, callback: Callable, error_handler: Callable):
+    def get_cost(self, data: PostProcessingSchema, callback: Callable, error_handler: Callable, *,
+                 mode: RequestMode):
         self.http.post(
             path="processing/cost/v2",
             callback=callback,
             body=data.as_json().encode(),
             use_default_error_handler=False,
-            error_handler=error_handler
+            error_handler=error_handler,
+            mode=mode,
         )
-    
+
     def restart_processing(self,
                            processing_id: UUID,
                            callback: Callable,
@@ -152,7 +172,8 @@ class ProcessingApi(QObject):
             path=f"processings/{processing_id}/restart/v2",
             callback=callback,
             error_handler=error_handler,
-            use_default_error_handler=False
+            use_default_error_handler=False,
+            mode=RequestMode.INTERACTIVE,
         )
 
     def create_template(self, data: CreateProcessingTemplateSchema, callback: Callable, error_handler: Callable):
@@ -162,22 +183,16 @@ class ProcessingApi(QObject):
             error_handler=error_handler,
             use_default_error_handler=False,
             body=data.as_json().encode(),
+            mode=RequestMode.INTERACTIVE,
         )
 
-    def get_templates(self, callback: Callable):
-        self.http.get(
-            path="processings/template",
-            callback=callback,
-            use_default_error_handler=True,
-            timeout=5,
-        )
-
-    def get_template(self, template_id: Union[UUID, str], callback: Callable):
+    def get_template(self, template_id: Union[UUID, str], callback: Callable, *, mode: RequestMode):
         self.http.get(
             path=f"processings/template/{template_id}",
             callback=callback,
             use_default_error_handler=True,
             timeout=5,
+            mode=mode,
         )
 
     def get_template_images(
@@ -189,6 +204,8 @@ class ProcessingApi(QObject):
         aoi_ids: Optional[List[str]] = None,
         sort_by: Optional[str] = None,
         sort_order: Optional[str] = None,
+        *,
+        mode: RequestMode,
     ):
         """The template's search results, paginated, optionally scoped to specific AOIs, and
         sorted server-side (``sort_by`` TemplateImagesSortBy token / ``sort_order`` ASC|DESC).
@@ -204,6 +221,7 @@ class ProcessingApi(QObject):
             callback=callback,
             use_default_error_handler=True,
             timeout=20,
+            mode=mode,
         )
 
     def update_template(self,
@@ -219,6 +237,7 @@ class ProcessingApi(QObject):
             error_handler=error_handler,
             use_default_error_handler=error_handler is None,
             timeout=5,
+            mode=RequestMode.INTERACTIVE,
         )
 
     def delete_template(self, template_id: Union[UUID, str], callback: Callable, error_handler: Callable):
@@ -228,6 +247,7 @@ class ProcessingApi(QObject):
             error_handler=error_handler,
             use_default_error_handler=False,
             timeout=5,
+            mode=RequestMode.INTERACTIVE,
         )
 
     def run_template_processing(self,
@@ -241,6 +261,7 @@ class ProcessingApi(QObject):
             error_handler=error_handler,
             use_default_error_handler=False,
             body=data.as_json().encode(),
+            mode=RequestMode.INTERACTIVE,
         )
 
     def stop_template(self, template_id: Union[UUID, str], callback: Callable, error_handler: Callable):
@@ -249,6 +270,7 @@ class ProcessingApi(QObject):
             callback=callback,
             error_handler=error_handler,
             use_default_error_handler=False,
+            mode=RequestMode.INTERACTIVE,
         )
 
     def resume_template(self, template_id: Union[UUID, str], callback: Callable, error_handler: Callable):
@@ -257,6 +279,7 @@ class ProcessingApi(QObject):
             callback=callback,
             error_handler=error_handler,
             use_default_error_handler=False,
+            mode=RequestMode.INTERACTIVE,
         )
 
     def restart_template(self, template_id: Union[UUID, str], callback: Callable, error_handler: Callable):
@@ -265,14 +288,17 @@ class ProcessingApi(QObject):
             callback=callback,
             error_handler=error_handler,
             use_default_error_handler=False,
+            mode=RequestMode.INTERACTIVE,
         )
 
-    def get_template_processings(self, template_id: Union[UUID, str], callback: Callable):
+    def get_template_processings(self, template_id: Union[UUID, str], callback: Callable, *,
+                                 mode: RequestMode):
         self.http.get(
             path=f"processings/template/{template_id}/processings",
             callback=callback,
             use_default_error_handler=True,
             timeout=5,
+            mode=mode,
         )
 
     # ---- Template AOI management ----
@@ -292,6 +318,7 @@ class ProcessingApi(QObject):
             error_handler=error_handler,
             use_default_error_handler=error_handler is None,
             timeout=5,
+            mode=RequestMode.INTERACTIVE,
         )
 
     def add_aois(self,
@@ -306,6 +333,7 @@ class ProcessingApi(QObject):
             error_handler=error_handler,
             use_default_error_handler=error_handler is None,
             timeout=5,
+            mode=RequestMode.INTERACTIVE,
         )
 
     def delete_aois(self,
@@ -320,6 +348,7 @@ class ProcessingApi(QObject):
             error_handler=error_handler,
             use_default_error_handler=error_handler is None,
             timeout=5,
+            mode=RequestMode.INTERACTIVE,
         )
 
     def mark_template_image_seen(self,
@@ -332,6 +361,7 @@ class ProcessingApi(QObject):
             callback=callback,
             error_handler=error_handler,
             use_default_error_handler=False,
+            mode=RequestMode.INTERACTIVE,
         )
 
     def mark_all_template_images_seen(self,
@@ -345,20 +375,15 @@ class ProcessingApi(QObject):
             callback=callback,
             error_handler=error_handler,
             use_default_error_handler=False,
+            mode=RequestMode.INTERACTIVE,
         )
 
-    def get_templates_by_user(self, user_id: Union[UUID, str], callback: Callable):
-        self.http.get(
-            path=f"processings/template/user/{user_id}",
-            callback=callback,
-            use_default_error_handler=True,
-            timeout=5,
-        )
-
-    def get_templates_by_project(self, project_id: Union[UUID, str], callback: Callable):
+    def get_templates_by_project(self, project_id: Union[UUID, str], callback: Callable, *,
+                                 mode: RequestMode):
         self.http.get(
             path=f"processings/template/project/{project_id}",
             callback=callback,
             use_default_error_handler=True,
             timeout=5,
+            mode=mode,
         )

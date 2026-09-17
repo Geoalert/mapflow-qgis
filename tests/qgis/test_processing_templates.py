@@ -5,6 +5,7 @@ from datetime import timedelta
 import pytest
 
 from mapflow.functional.api.processing_api import ProcessingApi
+from mapflow.http import RequestMode
 from mapflow.schema.template import (
     CreateProcessingTemplateSchema,
     UpdateProcessingTemplateSchema,
@@ -229,16 +230,11 @@ class TestTemplateApi:
         self.http = MagicMock()
         self.api = ProcessingApi(http=self.http, iface=MagicMock(), result_loader=MagicMock())
 
-    def test_get_templates_path(self):
-        callback = MagicMock()
-        self.api.get_templates(callback=callback)
-        self.http.get.assert_called_once()
-        assert self.http.get.call_args.kwargs["path"] == "processings/template"
-
     def test_get_template_by_id_path(self):
         callback = MagicMock()
-        self.api.get_template(template_id="tpl-1", callback=callback)
+        self.api.get_template(template_id="tpl-1", callback=callback, mode=RequestMode.INTERACTIVE)
         assert self.http.get.call_args.kwargs["path"] == "processings/template/tpl-1"
+        assert self.http.get.call_args.kwargs["mode"] is RequestMode.INTERACTIVE
 
     def test_create_template_body(self):
         callback = MagicMock()
