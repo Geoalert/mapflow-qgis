@@ -22,6 +22,7 @@ def _service():
     service.tr = lambda text: text
     service.app_context = SimpleNamespace(plugin_version="9.9.9",
                                           allow_enable_processing={"aoi_loaded": True})
+    service.processing_fetch_timer = MagicMock()  # a failed run resumes the table refresh
     return service
 
 

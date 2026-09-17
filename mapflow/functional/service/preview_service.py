@@ -13,6 +13,7 @@ from ..app_context import AppContext
 from ...infra.alert_service import alert, alert_info, alert_warning
 from ...infra.reporter import report_http_error
 from ...config import OSM
+from ...http import RequestMode
 from ...errors import ImageIdRequired
 from ...schema.catalog import MultiPreviewList, PreviewType
 
@@ -244,7 +245,8 @@ class PreviewService(QObject):
                       error_handler=self.preview_png_error_handler,
                       error_handler_kwargs={"image_id": image_id},
                       callback_kwargs={"footprint": footprint,
-                                       "image_id": image_id})
+                                       "image_id": image_id},
+                      mode=RequestMode.INTERACTIVE)
 
     def display_png_preview(self,
                             response: QNetworkReply,
@@ -338,7 +340,8 @@ class PreviewService(QObject):
                       callback_kwargs={"previews": previews,
                                        "footprint": image_to_preview[1],
                                        "image_id": image_id,
-                                       "georeferenced_previews_list": georeferenced_previews_list})
+                                       "georeferenced_previews_list": georeferenced_previews_list},
+                      mode=RequestMode.INTERACTIVE)
 
     def preview_png_error_handler(self, response: QNetworkReply, image_id: str = ""):
         # Clear the in-flight flag so the user can retry this image's preview after a failure.
@@ -404,7 +407,8 @@ class PreviewService(QObject):
             alert_info(self.tr('Please, select imagery collection'))
             return
         layer = layer_utils.generate_raster_layer(url, name)
-        self.data_catalog_service.api.request_mosaic_extent(url_json, layer)
+        self.data_catalog_service.api.request_mosaic_extent(url_json, layer,
+                                                            mode=RequestMode.INTERACTIVE)
 
     def preview_my_imagery_image(self):
         """Request the full-size preview of the selected image."""
@@ -416,7 +420,8 @@ class PreviewService(QObject):
         self.data_catalog_service.api.get_image_preview_l(image=image,
                                                           footprint=footprint,
                                                           callback=self.display_my_imagery_image,
-                                                          image_name=image.filename)
+                                                          image_name=image.filename,
+                                                          mode=RequestMode.INTERACTIVE)
 
     def display_my_imagery_image(self,
                                  response: QNetworkReply,

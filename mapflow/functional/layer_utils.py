@@ -28,6 +28,7 @@ from qgis.core import (QgsRectangle,
 from .app_context import AppContext
 from ..config import Config
 from ..dialogs.error_message_widget import ErrorMessageWidget
+from ..http import RequestMode
 from .geometry import clip_aoi_to_catalog_extent
 from .helpers import WGS84, to_wgs84, WGS84_ELLIPSOID
 from ..schema.catalog import AoiResponseSchema, PreviewType
@@ -524,6 +525,8 @@ class ResultsLoader(QObject):
                                             "next_tilejson_uris": next_tilejson_uris,
                                             },
                       use_default_error_handler=False,
+                      # A step of loading the results the user just opened, whichever layer it is for.
+                      mode=RequestMode.INTERACTIVE,
                       )
 
     def add_layers_with_extent(
@@ -597,7 +600,8 @@ class ResultsLoader(QObject):
             callback_kwargs={'path': path},
             use_default_error_handler=False,
             error_handler=self.download_results_file_error_handler,
-            timeout=300
+            timeout=300,
+            mode=RequestMode.INTERACTIVE,
         )
 
     def download_aoi_file(self, pid, callback: Optional[Callable] = None) -> None:
@@ -611,7 +615,8 @@ class ResultsLoader(QObject):
             callback=callback if callback else self.download_aoi_file_callback,
             callback_kwargs={'path': path},
             use_default_error_handler=True,
-            timeout=30
+            timeout=30,
+            mode=RequestMode.INTERACTIVE,
         )
 
     def download_results_file_callback(self, response: QNetworkReply, path: str) -> None:
@@ -668,7 +673,8 @@ class ResultsLoader(QObject):
             callback_kwargs={'processing': processing},
             use_default_error_handler=False,
             error_handler=self.download_results_error_handler,
-            timeout=300
+            timeout=300,
+            mode=RequestMode.INTERACTIVE,
         )
 
     def download_results_callback(self, response: QNetworkReply, processing: 'ProcessingDTO') -> None:
@@ -755,7 +761,8 @@ class ResultsLoader(QObject):
                 error_handler=self.set_raster_extent_error_handler,
                 error_handler_kwargs={
                     'vectors': results_layers,
-                }
+                },
+                mode=RequestMode.INTERACTIVE,
             )
         else:
             self.set_raster_extent_error_handler(response=None, vectors=results_layers)

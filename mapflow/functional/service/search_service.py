@@ -9,7 +9,7 @@ from qgis.core import QgsGeometry, QgsVectorLayer
 
 from ..app_context import AppContext
 from ...infra.alert_service import alert, alert_info
-from ...http import api_message_parser
+from ...http import RequestMode, api_message_parser
 from ...model.provider import ImagerySearchProvider, ProviderInterface
 from ...schema import ImageCatalogRequestSchema, ImageCatalogResponseSchema
 from ...schema.catalog import ProductType
@@ -143,7 +143,8 @@ class SearchService(QObject):
                        callback_kwargs={"aoi_layer": aoi_layer},
                        error_handler=self.search_error_handler,
                        use_default_error_handler=False,
-                       timeout=60)
+                       timeout=60,
+                       mode=RequestMode.INTERACTIVE)
 
     def search_error_handler(self, response: QNetworkReply):
         title = self.tr("We couldn't get metadata from the Mapflow Imagery Catalog")

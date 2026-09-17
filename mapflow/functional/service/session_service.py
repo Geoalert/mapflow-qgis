@@ -19,7 +19,7 @@ from ..app_context import AppContext
 from ..auth import get_auth_id
 from ...config import Config
 from ...errors import ProxyIsAlreadySet
-from ...http import Http
+from ...http import Http, RequestMode
 # The icon-carrying helpers rather than `alert(..., icon=QMessageBox.X)`: naming an icon would
 # mean importing PyQt5.QtWidgets, which a service may not do (`spec/007_architecture.md`).
 from ...infra.alert_service import alert_info, alert_warning
@@ -146,7 +146,9 @@ class SessionService(QObject):
         self.http.get(
             url=f'{self.config.SERVER}/projects/default',
             callback=self.on_authenticated,
-            use_default_error_handler=True
+            use_default_error_handler=True,
+            # Logging in, whether by the button or by opening the plugin with a saved token.
+            mode=RequestMode.INTERACTIVE,
         )
 
     # ---------- logging out ----------

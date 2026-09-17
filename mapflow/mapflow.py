@@ -52,6 +52,7 @@ from .infra.alert_service import AlertService, alert
 from .functional.service.area_calculator_service import AreaCalculatorService
 # HTTP
 from .http import (Http,
+                   RequestMode,
                    api_message_parser)
 # Schema
 from .schema import ProviderReturnSchema
@@ -92,6 +93,10 @@ class Mapflow(QObject):
         #: the project and the layers in it — so `unload` can drop exactly these (`_connect_external`,
         #: spec/007 § The composition root).
         self._external_connections = []
+        #: True from the login response until the project remembered from the last session has been
+        #: looked up. The first account status waits in `_deferred_startup_status` meanwhile.
+        self._saved_project_pending = False
+        self._deferred_startup_status = None
         super().__init__(self.main_window)
         self.message_bar = self.iface.messageBar()
         self.plugin_dir = os.path.dirname(__file__)
@@ -253,6 +258,7 @@ class Mapflow(QObject):
         self.project_service = ProjectService(http=self.http,
                                             app_context=self.app_context,
                                             config=self.config)
+        self.project_service.savedProjectResolved.connect(self.on_saved_project_resolved)
         # The projects panel. Built here rather than by the service, which may not hold a view;
         # `ProjectProcessingController` drives it.
         self.project_view = ProjectView(self.dlg)
@@ -651,6 +657,25 @@ class Mapflow(QObject):
         """
         if not app_startup_request:
             return
+        if self._saved_project_pending:
+            # Both things decided below come with the saved project: which table to open, and the
+            # model list the imagery sources are filtered by. Configuring before it arrives would
+            # make the outcome depend on which of the two responses lands first.
+            self._deferred_startup_status = response_data
+            return
+        self._configure_from_status(response_data)
+
+    def on_saved_project_resolved(self) -> None:
+        """The saved project has been looked up, found or not: run the startup configuration that
+        was waiting for it, if the account status is already in."""
+        self._saved_project_pending = False
+        response_data, self._deferred_startup_status = self._deferred_startup_status, None
+        if response_data is not None:
+            self._configure_from_status(response_data)
+
+    def _configure_from_status(self, response_data: dict) -> None:
+        """The startup configuration: everything that needs both the account status and, if there
+        is one, the project remembered from the last session."""
         # Storage quota for My Imagery: needed once at startup, and refreshed later by
         # mosaicsUpdated. Issuing it per retry would mean a second endpoint polled at the
         # retry interval, with its own error dialog on every failed tick.
@@ -664,9 +689,9 @@ class Mapflow(QObject):
         self.on_provider_change()
         # Open processings or projects table
         if self.app_context.current_project:
-            self.project_processing_controller.show_processings()
+            self.project_processing_controller.show_processings(mode=RequestMode.BACKGROUND)
         else:
-            self.project_processing_controller.show_projects()
+            self.project_processing_controller.show_projects(mode=RequestMode.BACKGROUND)
             self.project_service.setup_project_change_rights()
 
     def push_processings_selection(self):
@@ -734,11 +759,9 @@ class Mapflow(QObject):
         guarded_connect(self.dlg.download_aoi_action.triggered,
                         self.project_processing_controller.download_aoi_file,
                         "downloading the AOI", self.app_context)
-        # 'See details' and the menu's own aboutToShow are wired by ProjectProcessingController,
-        # which owns what the processings table offers for the current selection.
-        guarded_connect(self.dlg.processing_update_action.triggered,
-                        self.processing_service.update_processing,
-                        "renaming a processing", self.app_context)
+        # 'Rename', 'See details' and the menu's own aboutToShow are wired by
+        # ProjectProcessingController, which owns what the processings table offers for the current
+        # selection.
         guarded_connect(self.dlg.processing_restart_action.triggered,
                         self.processing_service.restart_processing,
                         "restarting a processing", self.app_context)
@@ -802,6 +825,11 @@ class Mapflow(QObject):
         self.processing_service.processing_fetch_timer.stop()
         self.account_service.stop_refreshing()
         self.account_service.stop_startup_polling()
+        # A retry or a startup configuration still waiting would run after the credentials are gone:
+        # unauthenticated requests, and a table refresh restarted for a session that has ended.
+        self.http.cancel_retries()
+        self._saved_project_pending = False
+        self._deferred_startup_status = None
         self.dlg.close()
 
     def on_provider_change(self) -> None:
@@ -1130,6 +1158,9 @@ class Mapflow(QObject):
             # this instance, and QGIS rebuilds the plugin on an in-place upgrade: a subscription left
             # behind keeps running this dead instance's handlers against the next one's state.
             self._disconnect_external_subscriptions()
+            # A background retry is the same kind of leftover, including one a reply still in flight
+            # would schedule after this point.
+            self.http.close()
             # Last, because the metadata writes above belong inside the group. Left open on the
             # shared `AppContext.settings`, the next construction nests beneath it (mapflow/mapflow/…)
             # and every key the user had appears to vanish.
@@ -1290,7 +1321,6 @@ class Mapflow(QObject):
         if default_project.user is not None:
             self.app_context.user_id = default_project.user.id
 
-        self.account_service.request_status()
         # We have different behavior for admin as he has access to all processings
         self.is_admin = userinfo.get("role") == "ADMIN"
 
@@ -1300,21 +1330,22 @@ class Mapflow(QObject):
         self.dlg_login.close()
 
         # Get all projects & setup processings table (see callback)
+        self._saved_project_pending = False
+        self._deferred_startup_status = None
         if self.is_admin:
             self.app_context.project_id = Config.PROJECT_ID
-            self.project_view.setup_workflow_defs(default_project.workflowDefs, 
+            self.project_view.setup_workflow_defs(default_project.workflowDefs,
                                                           self.config.DEFAULT_MODEL)
-            self.project_processing_controller.open_processings_table()
+            self.project_processing_controller.open_processings_table(mode=RequestMode.BACKGROUND)
         else:
+            # Nothing is open until the saved project's lookup answers, if there is one: a project
+            # left over from an earlier session in this QGIS run must not decide which table
+            # startup opens.
+            self.app_context.current_project = None
             if self.app_context.project_id:
-                self.app_context.current_project = self.project_service.get_project(
-                    project_id=self.app_context.project_id,
-                    callback=self.project_service.get_project_callback,
-                    error_handler=self.project_service.get_project_error_handler,
-                    error_handler_kwargs={'default_error_handler': self.default_error_handler,
-                                          'show_projects': self.project_processing_controller.show_projects}
-                )
-            self.data_catalog_service.get_mosaics()
+                self._saved_project_pending = True
+                self.project_service.open_saved_project(self.app_context.project_id)
+            self.data_catalog_service.get_mosaics(mode=RequestMode.BACKGROUND)
         self.dlg.setup_for_billing(self.app_context.billing_type)
         self.dlg.show()
         self.account_service.start_refreshing()
@@ -1408,6 +1439,7 @@ class Mapflow(QObject):
             # a non-bug the user cannot act on. This is the one path that stays opted out (spec/006
             # § Consequences: an opt-out states why).
             use_default_error_handler=False,
+            mode=RequestMode.INTERACTIVE,
         )
         if not self.version_ok:
             self.dlg.close()

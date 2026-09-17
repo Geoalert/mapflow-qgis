@@ -35,6 +35,7 @@ def _plugin_with_dialog():
     plugin.dlg = dlg
     # What `__init__` records for `unload` to undo.
     plugin._external_connections = []
+    plugin.http = MagicMock()
     return plugin
 
 
@@ -78,6 +79,8 @@ def test_unload_detaches_and_closes_the_settings_group_even_when_teardown_raises
     project_signal.disconnect.assert_called_once_with("project-token")
     layer_signal.disconnect.assert_called_once_with("layer-token")
     plugin.app_context.settings.endGroup.assert_called_once()
+    # A background retry still waiting would call into this instance after it is gone.
+    plugin.http.close.assert_called_once()
 
 
 def test_a_sender_already_gone_does_not_stop_the_rest_of_the_detach():

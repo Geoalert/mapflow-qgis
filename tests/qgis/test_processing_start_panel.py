@@ -34,6 +34,7 @@ def _service():
     service = ProcessingService.__new__(ProcessingService)
     QObject.__init__(service)  # it is the panel's signals we are testing
     service.tr = lambda text: text
+    service.processing_fetch_timer = MagicMock()  # sending a run pauses the table refresh
     return service
 
 

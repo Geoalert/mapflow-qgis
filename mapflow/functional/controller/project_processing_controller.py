@@ -3,6 +3,7 @@ from PyQt5.QtWidgets import QMessageBox, QWidget
 
 from ..app_context import AppContext
 from ...error_guard import guarded_connect
+from ...http import RequestMode
 from ...infra.alert_service import alert
 from ..service.processing_service import ProcessingService
 from ..service.project_service import ProjectService
@@ -84,8 +85,9 @@ class ProjectProcessingController(QObject):
                         "updating the Delete button", self.app_context)
         # The poll tick, and every action that wants the table refreshed, come here rather than
         # going straight to a service: the table serves two views and picking between them is
-        # navigation, which is this controller's region.
-        guarded_connect(self.processing_service.processing_fetch_timer.timeout, self.refresh_table,
+        # navigation, which is this controller's region. Each carries the request mode of what
+        # triggered it: the tick is POLL, a page change INTERACTIVE, a refresh after a reply BACKGROUND.
+        guarded_connect(self.processing_service.processing_fetch_timer.timeout, self.poll_table,
                         "the processings poll", self.app_context)
         self.processing_service.refreshRequested.connect(self.refresh_table)
         self.processing_service.rerenderRequested.connect(self.rerender_rows)
@@ -184,7 +186,7 @@ class ProjectProcessingController(QObject):
     def on_combo_sort_changed(self, *args):
         """Picking from the sort combo drops any column-click override, then re-fetches."""
         self.processing_view.clear_header_sort()
-        self.refresh_table()
+        self.refresh_table(RequestMode.INTERACTIVE)
 
     def _on_template_closed(self, _closed=None):
         """`templateClosed` carries the template that was closed, so it cannot be connected to
@@ -198,13 +200,17 @@ class ProjectProcessingController(QObject):
     # `ProcessingService` needing `TemplateService` and vice versa — so the choice lives here
     # instead, the way `SearchService` already leaves regular-vs-template search to a controller.
 
-    def refresh_table(self):
+    def poll_table(self):
+        """The refresh timer's tick. The next tick is the retry, so one failure is not reported."""
+        self.refresh_table(RequestMode.POLL)
+
+    def refresh_table(self, mode: RequestMode):
         """Re-fetch whatever the table is showing."""
         self._push_table_query()
         if self.template_service.in_template_mode:
-            self.template_service.refresh_template_view()
+            self.template_service.refresh_template_view(mode=mode)
         else:
-            self.processing_service.get_processings()
+            self.processing_service.get_processings(mode=mode)
 
     def rerender_rows(self):
         """Re-render the rows already held, for a sort that needs no request."""
@@ -287,9 +293,14 @@ class ProjectProcessingController(QObject):
     # ==== DRIVING THE PROJECT SERVICE FROM THE PANEL ==== #
 
     def refresh_projects(self, *args):
-        """Re-request the current page with whatever the sort and filter widgets now say."""
+        """Re-request the current page with whatever the sort and filter widgets now say — the
+        user just changed one of them."""
+        self._request_projects(RequestMode.INTERACTIVE)
+
+    def _request_projects(self, mode: RequestMode):
         sort_by, sort_order = self.project_view.sort_projects()
-        self.project_service.get_projects(sort_by, sort_order, self.project_view.projects_filter)
+        self.project_service.get_projects(sort_by, sort_order, self.project_view.projects_filter,
+                                          mode=mode)
 
     def show_projects_next_page(self, *args):
         self.project_service.to_next_page()
@@ -322,7 +333,7 @@ class ProjectProcessingController(QObject):
         guarded_connect(self.dlg.switchProjectsButton.clicked, self.navigate_back,
                         "navigating back", self.app_context)
         guarded_connect(self.dlg.switchProcessingsButton.clicked,
-                        lambda: self.show_processings(save_page=True),
+                        lambda: self.show_processings(save_page=True, mode=RequestMode.INTERACTIVE),
                         "showing the processings", self.app_context)
         # Right arrow (the former placeholder): enter the selected template ("one step right").
         guarded_connect(self.dlg.switchProcessingsFakeButton.clicked, self.navigate_into_template,
@@ -344,7 +355,7 @@ class ProjectProcessingController(QObject):
         """Handle double-click on project row to navigate to processings."""
         project_id = self.dlg.projectsTable.item(index.row(), 0).text()
         self.app_context.current_project = self.project_service.projects.get(project_id)
-        self.show_processings(save_page=True)
+        self.show_processings(save_page=True, mode=RequestMode.INTERACTIVE)
 
     # ==== IN-TEMPLATE NAVIGATION ==== #
     def navigate_back(self):
@@ -352,7 +363,7 @@ class ProjectProcessingController(QObject):
         if self.template_service.in_template_mode:
             self.exit_template()
         else:
-            self.show_projects(open_saved_page=True)
+            self.show_projects(open_saved_page=True, mode=RequestMode.INTERACTIVE)
 
     def navigate_into_template(self):
         """Right arrow: enter the currently selected template."""
@@ -372,7 +383,7 @@ class ProjectProcessingController(QObject):
     def exit_template(self):
         """Return from the in-template view to the project's processings list."""
         self.template_service.exit_template_view()
-        self.open_processings_table()
+        self.open_processings_table(mode=RequestMode.INTERACTIVE)
         self._set_processings_tab_text(self.tr("Processing"))
         self._update_nav_buttons()
 
@@ -406,13 +417,13 @@ class ProjectProcessingController(QObject):
         )
         self.dlg.switchProcessingsFakeButton.setEnabled(bool(can_enter))
 
-    def show_processings(self, save_page: bool = False):
+    def show_processings(self, *, mode: RequestMode, save_page: bool = False):
         """
         Navigate to processings view for current/specified project.
-        
+
         Args:
+            mode: what triggered it — a click, or startup opening the saved project
             save_page: If True, save current projects page state to settings
-            project_id: The project ID to show processings for. If None, uses current project.
         """
         if not self.app_context.project_id:
             return
@@ -433,12 +444,12 @@ class ProjectProcessingController(QObject):
         self.project_view.switch_to_processings()
 
         # Setup processings table for the project
-        self.open_processings_table()
+        self.open_processings_table(mode=mode)
 
-    def open_processings_table(self):
+    def open_processings_table(self, *, mode: RequestMode):
         """Put the project's own processings back in the table, from the first page."""
         self._push_table_query()
-        self.processing_service.setup_processings_table()
+        self.processing_service.setup_processings_table(mode=mode)
 
     # ==== WHAT THE TABLE OFFERS FOR THE CURRENT SELECTION ==== #
 
@@ -648,25 +659,26 @@ class ProjectProcessingController(QObject):
         dialog.deleteLater()
 
     # ==== PROJECTS ==== #
-    def show_projects(self, open_saved_page: bool = False):
+    def show_projects(self, *, mode: RequestMode, open_saved_page: bool = False):
         """
         Navigate to projects view.
-        
+
         Args:
+            mode: what triggered it — the back button, or startup with no project to open
             open_saved_page: If True, restore previously saved page state from settings
         """
         # Stop processing polling when leaving processings view
         self.processing_service.processing_fetch_timer.stop()
 
         if open_saved_page:
-            self.restore_saved_projects_page()
+            self.restore_saved_projects_page(mode=mode)
         else:
-            self.refresh_projects()
+            self._request_projects(mode)
 
         # Switch view
         self.project_view.switch_to_projects()
 
-    def restore_saved_projects_page(self) -> None:
+    def restore_saved_projects_page(self, *, mode: RequestMode) -> None:
         """Put the user back on the page, sort and filter they left.
 
         The widgets are set before the request rather than after it, so the panel and the results
@@ -680,7 +692,7 @@ class ProjectProcessingController(QObject):
         self.project_view.set_sort_index(
             self.project_service.sort_combo_index(sort_by, sort_order))
         self.project_service.get_projects(sort_by, sort_order, page['filter'],
-                                          offset=int(page['offset']))
+                                          offset=int(page['offset']), mode=mode)
 
         # Remove old cost
         self.processing_service.update_processing_cost()

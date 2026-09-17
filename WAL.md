@@ -228,21 +228,17 @@ resolves but serves nothing.
 No evidence of a plugin defect here — the vector-tile assertions (source and extent) pass, and
 the only stall came from a deliberately unroutable host.
 
-[ ] Tolerate a failure on background requests; alert on the first one only for user actions
-    Today every request alerts on its first timeout or 5xx: `Http` never retries, and
-    `default_error_handler` raises the message-tier alert straight away. That is right for a button
-    the user just pressed — they can press it again, and a hidden retry would only add seconds of
-    silence — and wrong for requests nobody is waiting on: the processings poll (6 s, with a 5 s
-    timeout), the template view (15 s), `/user/status` (30 s), a table refresh on tab switch. There
-    one dropped response is noise, and the next attempt usually succeeds.
-    Direction (user's): at least two modes, **declared on each request**:
-    - interactive — no retry, alert on the first failure (today's behaviour for everything);
-    - background — at least one retry before alerting (for a poll, the next tick can be the retry).
-    Needs a spec delta first: `spec/005` § Mapflow Backend API says "no automatic retry", and
-    `spec/006` must say how the tolerance composes with the throttle. Open points: which errors count
-    as transient (timeout, 5xx, refused/closed; not 401/403/4xx); background only for idempotent
-    requests, since a retried create that did land creates twice; whether `use_default_error_handler`
-    folds into the mode. ~63 request sites, each needing a declared mode.
+[ready-for-review] Every request declares a failure mode; startup waits for the saved project
+    `INTERACTIVE` / `BACKGROUND` / `POLL` per `spec/005` § Request modes. Also: the table refresh no
+    longer stays off after a blocked start or a declined delete, login asks for `/user/status` once,
+    and the rename action is wired once.
+
+[ ] Bring master's hotfixes into dev
+    `master` carries eight commits `dev` does not (`agent-git log dev..origin/master`), among them
+    the My Imagery download rework (`bdcaf51`, `a8f7943`). The download itself still bypasses `Http`
+    on `dev` (`DataCatalogService.save_downloaded`, a raw `nam.get`), so it has no request mode, no
+    timeout and no plugin-version header; left alone on purpose until the rework is in, then decide
+    its mode there.
 
 [ ] Bring the remaining outliving subscriptions under `unload` (`spec/007` § The composition root)
     The rule landed with three known violations, all made outside the root:
@@ -253,22 +249,6 @@ the only stall came from a deliberately unroutable host.
       `ResultsLoader`. Both are also **raw, unguarded** connects the entry-point test does not see:
       its classifier only knows the signal names it lists, so an unlisted Qt signal fails open.
     Decide with it whether the rule gets an enforcement test, as the guard rule has.
-
-[ ] Check the startup ordering between the project fetch and the account poll
-`setup_providers` filters the imagery sources by `modelCombo.currentText()`, and the model
-list arrives with a *project's* `workflowDefs` — not with the account response. So when the
-500 ms startup poll wins the race against `projects/{id}`, the provider combo is built from
-an empty model name.
-Found while writing the behavioral startup journey, where it surfaced as a hard failure:
-`providerIndex()` returned -1, `ProvidersList.__getitem__` handed back the `NoneProvider`
-null object, and `requires_image_id` raised `NotImplementedError` — aborting the rest of
-startup configuration, silently, because the error guard absorbed it. The null object is
-fixed; the ordering is not.
-Open question rather than a confirmed defect: on a fresh profile the user sees the projects
-table and picks a project, which populates both combos, so this may be the intended flow. What
-needs checking is the slow-network case on an account that *does* have a saved project —
-whether the provider list is left empty until something re-triggers it.
-Sequenced here because `SessionService` will own this poll after Phase C.
 
 [ ] Gate the features whose prerequisites never arrived
 Startup stops retrying `/user/status` and `/rasters/memory` instead of polling forever, which is

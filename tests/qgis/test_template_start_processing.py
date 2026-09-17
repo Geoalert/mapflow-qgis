@@ -13,6 +13,7 @@ from mapflow.functional.service import template_service as template_service_modu
 from mapflow.functional.service.processing_service import ProcessingService
 from mapflow.functional.service.template_service import TemplateService
 from mapflow.functional.view.template_view import TemplateView
+from mapflow.http import RequestMode
 from mapflow.mapflow import Mapflow
 from mapflow.schema.processing import PostProcessingSchemaV2
 from mapflow.schema.template import RunTemplateProcessingSchema
@@ -50,6 +51,7 @@ def test_handle_processing_submission_uses_template_run_when_template_selected()
     service.set_start_panel(SimpleNamespace(wd_name="Buildings"))
     service.start_processing_callback = MagicMock()
     service.start_processing_error_handler = MagicMock()
+    service.processing_fetch_timer = MagicMock()
     # A template run happens iff template_to_run() resolves (template + imagery-search source + open results).
     service.template_to_run = MagicMock(return_value=SimpleNamespace(id="template-1"))
 
@@ -75,6 +77,7 @@ def test_handle_processing_submission_uses_regular_processing_when_no_template_s
     service.api = MagicMock()
     service.start_processing_callback = MagicMock()
     service.start_processing_error_handler = MagicMock()
+    service.processing_fetch_timer = MagicMock()
     service.selected_template = MagicMock(return_value=None)
 
     payload = _processing_payload()
@@ -433,7 +436,7 @@ def test_start_processing_callback_refreshes_processings_for_regular_response():
     service.processings_history = MagicMock()
     QObject.__init__(service)  # the refresh request is a signal now
     asked, added, in_flight = [], [], []
-    service.refreshRequested.connect(lambda: asked.append(True))
+    service.refreshRequested.connect(asked.append)
     service.processingAdded.connect(added.append)
     service.submissionInFlight.connect(in_flight.append)
 
@@ -445,9 +448,10 @@ def test_start_processing_callback_refreshes_processings_for_regular_response():
             patch.object(processing_service_module.ProcessingDTO, "from_dict", return_value=mock_processing):
         service.start_processing_callback(response)
 
-    assert asked == [True]
+    assert asked == [RequestMode.BACKGROUND]  # a refresh after a reply: nobody is waiting on it
     assert added == [mock_processing]
     assert in_flight[-1] is False  # the button is re-enabled once the run has been sent
+    service.processing_fetch_timer.start.assert_called_once()  # the paused refresh resumes
 
 
 def test_start_processing_callback_refreshes_processings_for_template_response_shape():
@@ -458,7 +462,7 @@ def test_start_processing_callback_refreshes_processings_for_template_response_s
     service.processings_history = MagicMock()
     QObject.__init__(service)  # the refresh request is a signal now
     asked, added, in_flight = [], [], []
-    service.refreshRequested.connect(lambda: asked.append(True))
+    service.refreshRequested.connect(asked.append)
     service.processingAdded.connect(added.append)
     service.submissionInFlight.connect(in_flight.append)
 
@@ -468,7 +472,7 @@ def test_start_processing_callback_refreshes_processings_for_template_response_s
     with patch.object(processing_service_module, "alert_info"):
         service.start_processing_callback(response)
 
-    assert asked == [True]
+    assert asked == [RequestMode.BACKGROUND]
     assert added == []
     assert in_flight[-1] is False
 
@@ -495,6 +499,7 @@ def test_start_processing_callback_clears_in_flight_even_when_the_body_is_malfor
             service.start_processing_callback(response)
 
     assert in_flight[-1] is False  # the finally re-enabled Start despite the parse error
+    service.processing_fetch_timer.start.assert_called_once()  # and resumed the table refresh
 
 
 def test_submit_processing_reenables_start_when_request_setup_raises():
@@ -507,6 +512,7 @@ def test_submit_processing_reenables_start_when_request_setup_raises():
     service.api = MagicMock()
     service.api.create_processing.side_effect = RuntimeError("boom")
     service.template_to_run = MagicMock(return_value=None)  # take the create_processing branch
+    service.processing_fetch_timer = MagicMock()
     QObject.__init__(service)
     in_flight = []
     service.submissionInFlight.connect(in_flight.append)
@@ -516,6 +522,94 @@ def test_submit_processing_reenables_start_when_request_setup_raises():
 
     assert in_flight[0] is True     # disabled while the run is being sent
     assert in_flight[-1] is False   # re-enabled after setup failed
+    service.processing_fetch_timer.start.assert_called_once()  # the refresh is not left paused
+
+
+# ---------- the table refresh pauses only while a run is in flight ----------
+#
+# Whatever pauses the refresh must be matched by something that resumes it on every way out, or a
+# start that is blocked, declined or refused leaves the table silently frozen.
+
+def _startable_service(validation=(MagicMock(), None), within_limits=True, confirm="true"):
+    service = ProcessingService.__new__(ProcessingService)
+    QObject.__init__(service)
+    service.tr = lambda text: text
+    service.iface = MagicMock()
+    service.api = MagicMock()
+    service.processing_fetch_timer = MagicMock()
+    service.app_context = SimpleNamespace(plugin_name="Mapflow", settings=_settings(confirm=confirm),
+                                          allow_enable_processing={}, plugin_version="3.7.0")
+    service.validate_all_processing_params = MagicMock(return_value=validation)
+    service.check_processing_limits = MagicMock(return_value=within_limits)
+    service.template_to_run = MagicMock(return_value=None)
+    return service
+
+
+def test_a_start_blocked_by_validation_leaves_the_refresh_running():
+    service = _startable_service(validation=(None, "Set AOI"))
+
+    service.start_processing()
+
+    service.processing_fetch_timer.stop.assert_not_called()
+
+
+def test_a_start_over_the_limit_leaves_the_refresh_running():
+    service = _startable_service(within_limits=False)
+
+    service.start_processing()
+
+    service.processing_fetch_timer.stop.assert_not_called()
+
+
+def test_a_start_awaiting_confirmation_leaves_the_refresh_running():
+    """The confirmation dialog can be declined, and nothing would resume a refresh paused here."""
+    service = _startable_service(confirm="true")
+    asked = []
+    service.confirmationRequested.connect(asked.append)
+
+    service.start_processing()
+
+    assert len(asked) == 1
+    service.processing_fetch_timer.stop.assert_not_called()
+
+
+def test_sending_the_run_pauses_the_refresh_until_it_answers():
+    service = _startable_service(confirm="false")
+
+    service.start_processing()
+
+    service.api.create_processing.assert_called_once()
+    service.processing_fetch_timer.stop.assert_called_once()
+    service.processing_fetch_timer.start.assert_not_called()
+
+
+def test_a_refused_run_resumes_the_refresh():
+    service = _startable_service()
+    response = MagicMock()
+    response.error.return_value = processing_service_module.QNetworkReply.ContentAccessDenied
+    response.readAll.return_value.data.return_value = b'{"message": "data provider unavailable"}'
+
+    with patch.object(processing_service_module, "alert_info"):
+        service.start_processing_error_handler(response)
+
+    service.processing_fetch_timer.start.assert_called_once()
+
+
+def test_a_refused_run_resumes_the_refresh_even_when_its_body_will_not_decode():
+    """A proxy's error page in another encoding makes the handler raise part-way. It runs behind the
+    guard, which swallows that — so ending the run cannot sit after the decode."""
+    service = _startable_service()
+    in_flight = []
+    service.submissionInFlight.connect(in_flight.append)
+    response = MagicMock()
+    response.error.return_value = processing_service_module.QNetworkReply.InternalServerError
+    response.readAll.return_value.data.return_value = "Ошибка шлюза".encode("cp1251")
+
+    with pytest.raises(UnicodeDecodeError):
+        service.start_processing_error_handler(response)
+
+    service.processing_fetch_timer.start.assert_called_once()
+    assert in_flight == [False]
 
 
 def test_disable_processing_start_uses_fallback_when_api_message_is_none():
@@ -805,6 +899,23 @@ def test_confirm_delete_processings_deletes_templates():
     assert service.processing_fetch_timer.stop.called
 
 
+def test_a_declined_delete_leaves_the_refresh_running():
+    """Nothing resumes a refresh paused before the confirmation, so it is paused only after it."""
+    service = ProcessingService.__new__(ProcessingService)
+    service.tr = lambda text: text
+    service.processing_fetch_timer = MagicMock()
+    service.templates = {"tpl-1": SimpleNamespace(id="tpl-1", name="Template 1")}
+    service.processings = {}
+    service.api = MagicMock()
+    service.set_selected_ids(["tpl-1"])
+
+    with patch.object(processing_service_module, "alert_confirm", return_value=False):
+        service.confirm_delete_processings()
+
+    service.processing_fetch_timer.stop.assert_not_called()
+    service.api.delete_template.assert_not_called()
+
+
 def test_delete_processings_routes_templates_to_delete_template_api():
     """Test that templates are routed to delete_template API method."""
     service = ProcessingService.__new__(ProcessingService)
@@ -896,13 +1007,14 @@ def test_get_processings_callback_requests_templates_for_current_project_only():
     response.readAll.return_value.data.return_value = b'{"results": [], "total": 0}'
 
     with patch.object(processing_service_module.ProcessingsResult, "from_dict", return_value=SimpleNamespace(results=[], total=0)):
-        service.get_processings_callback(response)
+        service.get_processings_callback(response, mode=RequestMode.POLL)
 
+    # The templates list completes the page, so a polled page polls it too.
     service.api.get_templates_by_project.assert_called_once_with(
         project_id="project-1",
         callback=service.get_templates_callback,
+        mode=RequestMode.POLL,
     )
-    service.api.get_templates.assert_not_called()
     # The table render is deferred to the combined render after templates resolve,
     # so the poll never flashes through a processings-only state.
     assert rendered == []
@@ -962,7 +1074,7 @@ def test_get_templates_callback_builds_templates_without_hydration_request():
     service.get_templates_callback(response)
 
     # No second request, and the template is still built and rendered once.
-    service.api.get_templates.assert_not_called()
+    assert not service.api.method_calls
     assert len(service.templates) == 1
     assert len(rendered) == 1
 

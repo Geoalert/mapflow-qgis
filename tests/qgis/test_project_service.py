@@ -15,6 +15,7 @@ from PyQt5.QtCore import QObject
 
 from mapflow.functional.controller.project_processing_controller import ProjectProcessingController
 from mapflow.functional.service.project_service import ProjectService
+from mapflow.http import RequestMode
 from mapflow.schema.project import ProjectSortBy, ProjectSortOrder
 
 
@@ -63,7 +64,8 @@ def test_the_request_carries_the_sort_and_filter_it_was_given():
     """The panel's widgets are read by the caller; nothing here reaches for them."""
     service = _service()
 
-    service.get_projects(ProjectSortBy.name, ProjectSortOrder.ascending, "roads")
+    service.get_projects(ProjectSortBy.name, ProjectSortOrder.ascending, "roads",
+                         mode=RequestMode.INTERACTIVE)
 
     request = service.api.get_projects.call_args.args[0]
     assert request.filter == "roads"
@@ -78,7 +80,7 @@ def test_a_request_disables_the_pager_and_locks_the_selection():
     service.pagerChanged.connect(lambda *a: pager.append(a))
     service.selectionLocked.connect(locks.append)
 
-    service.get_projects()
+    service.get_projects(mode=RequestMode.INTERACTIVE)
 
     assert pager == [(False, 1, 1)]
     assert locks == [True]
@@ -88,7 +90,7 @@ def test_an_offset_past_the_end_falls_back_to_the_first_page():
     service = _service(total=3)
     service.projects_page_offset = 99
 
-    service.get_projects()
+    service.get_projects(mode=RequestMode.INTERACTIVE)
 
     assert service.projects_page_offset == 0
 
@@ -122,7 +124,7 @@ def test_the_results_are_announced_for_the_table():
     shown = []
     service.projectsLoaded.connect(shown.append)
 
-    service.get_projects_callback(_response(_projects_payload(2)))
+    service.get_projects_callback(_response(_projects_payload(2)), mode=RequestMode.INTERACTIVE)
 
     assert len(shown[0]) == 2
     assert set(service.projects) == {"p-0", "p-1"}
@@ -134,7 +136,8 @@ def test_the_pager_reports_the_page_count():
     service.pagerChanged.connect(lambda *a: pages.append(a))
     service.projects_page_offset = 5
 
-    service.get_projects_callback(_response(_projects_payload(5, total=12)))
+    service.get_projects_callback(_response(_projects_payload(5, total=12)),
+                                  mode=RequestMode.INTERACTIVE)
 
     # 12 over 5 per page = 3 pages; offset 5 is the second.
     assert pages[-1] == (True, 2, 3)
@@ -145,7 +148,8 @@ def test_a_short_page_hides_the_pager():
     pages = []
     service.pagerChanged.connect(lambda *a: pages.append(a))
 
-    service.get_projects_callback(_response(_projects_payload(2, total=2)))
+    service.get_projects_callback(_response(_projects_payload(2, total=2)),
+                                  mode=RequestMode.INTERACTIVE)
 
     assert pages[-1] == (False, 1, 1)
 
@@ -156,9 +160,11 @@ def test_an_empty_unfiltered_result_asks_again_without_parameters():
     service = _service()
     service._last_filter = ""
 
-    service.get_projects_callback(_response(_projects_payload(0, total=0)))
+    service.get_projects_callback(_response(_projects_payload(0, total=0)), mode=RequestMode.INTERACTIVE)
 
     assert service.api.get_projects.call_count == 1
+    # Asking again completes the same request, so it keeps that request's mode.
+    assert service.api.get_projects.call_args.kwargs["mode"] is RequestMode.INTERACTIVE
 
 
 def test_an_empty_filtered_result_is_left_alone():
@@ -166,7 +172,7 @@ def test_an_empty_filtered_result_is_left_alone():
     service = _service()
     service._last_filter = "no-such-project"
 
-    service.get_projects_callback(_response(_projects_payload(0, total=0)))
+    service.get_projects_callback(_response(_projects_payload(0, total=0)), mode=RequestMode.INTERACTIVE)
 
     service.api.get_projects.assert_not_called()
 
@@ -176,7 +182,7 @@ def test_the_selection_unlocks_once_the_list_has_arrived():
     locks = []
     service.selectionLocked.connect(locks.append)
 
-    service.get_projects_callback(_response(_projects_payload(1, total=1)))
+    service.get_projects_callback(_response(_projects_payload(1, total=1)), mode=RequestMode.INTERACTIVE)
 
     assert locks[-1] is False
 
@@ -327,7 +333,9 @@ def test_refreshing_reads_the_sort_and_filter_off_the_panel():
 
     controller.refresh_projects()
 
-    controller.project_service.get_projects.assert_called_once_with("NAME", "ASC", "roads")
+    # The panel changed because the user changed it, so a failure is reported at once.
+    controller.project_service.get_projects.assert_called_once_with(
+        "NAME", "ASC", "roads", mode=RequestMode.INTERACTIVE)
 
 
 def test_paging_moves_the_cursor_then_re_requests():
@@ -350,7 +358,7 @@ def test_leaving_a_project_sends_a_real_sort_not_a_flag():
     controller.project_view.sort_projects.return_value = ("UPDATED", "DESC")
     controller.project_view.projects_filter = ""
 
-    controller.show_projects(open_saved_page=False)
+    controller.show_projects(open_saved_page=False, mode=RequestMode.INTERACTIVE)
 
     sort_by = controller.project_service.get_projects.call_args.args[0]
     assert not isinstance(sort_by, bool)
@@ -365,7 +373,7 @@ def test_returning_to_projects_restores_the_page_the_user_left():
         'sort_order': ProjectSortOrder.ascending, 'filter': "roads"}
     controller.project_service.sort_combo_index.return_value = 0
 
-    controller.show_projects(open_saved_page=True)
+    controller.show_projects(open_saved_page=True, mode=RequestMode.INTERACTIVE)
 
     # The widgets are set to match the query the request will carry...
     controller.project_view.set_projects_filter.assert_called_once_with("roads")
@@ -373,6 +381,7 @@ def test_returning_to_projects_restores_the_page_the_user_left():
     # ...and the request asks for the remembered page, not the first one.
     kwargs = controller.project_service.get_projects.call_args.kwargs
     assert kwargs["offset"] == 20
+    assert kwargs["mode"] is RequestMode.INTERACTIVE
 
 
 def test_a_restored_page_with_no_filter_leaves_the_filter_box_alone():
@@ -383,7 +392,7 @@ def test_a_restored_page_with_no_filter_leaves_the_filter_box_alone():
         'sort_order': ProjectSortOrder.descending, 'filter': ""}
     controller.project_service.sort_combo_index.return_value = 4
 
-    controller.show_projects(open_saved_page=True)
+    controller.show_projects(open_saved_page=True, mode=RequestMode.INTERACTIVE)
 
     controller.project_view.set_projects_filter.assert_not_called()
 
@@ -392,7 +401,8 @@ def test_an_explicit_offset_overrides_the_current_page():
     service = _service(total=50)
     service.projects_page_offset = 5
 
-    service.get_projects(ProjectSortBy.name, ProjectSortOrder.ascending, "", offset=20)
+    service.get_projects(ProjectSortBy.name, ProjectSortOrder.ascending, "", offset=20,
+                         mode=RequestMode.INTERACTIVE)
 
     assert service.api.get_projects.call_args.args[0].offset == 20
 
@@ -402,7 +412,8 @@ def test_a_saved_page_past_the_end_falls_back_to_the_first():
     saved offset pointing past the end, and asking for it returns nothing at all."""
     service = _service(total=3)
 
-    service.get_projects(ProjectSortBy.name, ProjectSortOrder.ascending, "", offset=20)
+    service.get_projects(ProjectSortBy.name, ProjectSortOrder.ascending, "", offset=20,
+                         mode=RequestMode.BACKGROUND)
 
     assert service.api.get_projects.call_args.args[0].offset == 0
 
