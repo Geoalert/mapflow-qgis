@@ -228,10 +228,14 @@ resolves but serves nothing.
 No evidence of a plugin defect here — the vector-tile assertions (source and extent) pass, and
 the only stall came from a deliberately unroutable host.
 
-[ready-for-review] Every request declares a failure mode; startup waits for the saved project
-    `INTERACTIVE` / `BACKGROUND` / `POLL` per `spec/005` § Request modes. Also: the table refresh no
-    longer stays off after a blocked start or a declined delete, login asks for `/user/status` once,
-    and the rename action is wired once.
+[ ] Check whether a slot on a plugin signal is really covered by the guard
+    `spec/007` § Entry points says a slot connected to a plugin `pyqtSignal` needs no guard of its
+    own, because the signal emits synchronously inside an already-guarded stack. If PyQt5 instead
+    hands an exception raised in such a slot to `sys.excepthook`, QGIS's raw dialog gets it and the
+    report tier is skipped — and the startup configuration is reached exactly that way
+    (`statusApplied`, `savedProjectResolved`). A few lines settle it: emit a plugin signal from
+    inside `call_guarded` with a slot that raises, and see which tier answers. Then either the spec
+    stands or those connections need the guard (and the entry-point test needs to see them).
 
 [ ] Bring master's hotfixes into dev
     `master` carries eight commits `dev` does not (`agent-git log dev..origin/master`), among them
@@ -239,6 +243,10 @@ the only stall came from a deliberately unroutable host.
     on `dev` (`DataCatalogService.save_downloaded`, a raw `nam.get`), so it has no request mode, no
     timeout and no plugin-version header; left alone on purpose until the rework is in, then decide
     its mode there.
+    Expect conflicts rather than a clean merge: master touches `data_catalog.py`, `layer_utils.py`,
+    `mapflow.py`, `config.py`, `main_dialog.py`, `provider_service.py` and `schema/project.py`, and
+    the refactoring rewrote all of them. It only gets worse with every further step, and none of
+    those eight fixes can ship in 3.7.0 until this lands.
 
 [ ] Bring the remaining outliving subscriptions under `unload` (`spec/007` § The composition root)
     The rule landed with three known violations, all made outside the root:
