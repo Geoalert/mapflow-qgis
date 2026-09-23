@@ -8,6 +8,7 @@ without a dialog.
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+import pytest
 from PyQt5.QtCore import QObject
 
 from mapflow.functional.controller.processing_controller import ProcessingController
@@ -55,7 +56,8 @@ def _controller(wd=None, billing=BillingType.credits, user_role=None):
 
 def test_the_options_a_model_was_last_run_with_are_remembered_per_block():
     settings = MagicMock()
-    settings.value.side_effect = lambda key, default: key == "wd/wd-1/opt_1"
+    # The read asks for the value as a bool; see test_model_options_persistence for why.
+    settings.value.side_effect = lambda key, default, **kwargs: key == "wd/wd-1/opt_1"
     service = _service(settings)
 
     assert service.saved_model_options(_wd(optional_prices=(5, 7))) == [
@@ -121,35 +123,21 @@ def test_choosing_a_model_shows_its_options_and_its_price():
     assert kwargs["display_price"] is True
 
 
-def test_a_model_declaring_no_blocks_asks_for_its_cost_straight_away():
-    """Nothing will fire `on_options_change` for it, so this is its only chance to be quoted."""
-    controller = _controller(wd=_wd_without_blocks())
+@pytest.mark.parametrize("wd", [
+    pytest.param(_wd_without_blocks(), id="no blocks at all"),
+    pytest.param(_wd(), id="only obligatory blocks"),
+    pytest.param(_wd(optional_prices=(5,)), id="an optional block"),
+])
+def test_choosing_a_model_asks_for_its_cost(wd):
+    """Rebuilding the checkboxes is silent — each is created with its saved state before `toggled`
+    is connected — so picking a model is the only thing that can quote it, whatever blocks it
+    declares."""
+    controller = _controller(wd=wd)
+    controller.processing_view.enabled_blocks.return_value = [False] * len(wd.optional_blocks)
 
     controller.on_model_change()
 
     controller.processing_service.update_processing_cost.assert_called_once()
-
-
-def test_a_model_with_options_waits_for_them_before_asking_the_cost():
-    """Adding the checkboxes fires `modelOptionsChanged`, and `on_options_change` quotes it."""
-    controller = _controller(wd=_wd(optional_prices=(5,)))
-    controller.processing_view.enabled_blocks.return_value = [False]
-
-    controller.on_model_change()
-
-    controller.processing_service.update_processing_cost.assert_not_called()
-
-
-def test_a_model_whose_blocks_are_all_obligatory_is_not_quoted_on_selection():
-    """Current behaviour, pinned because it is a gap rather than a decision: the guard asks
-    whether the model declares *any* blocks, so one with only obligatory blocks skips the
-    immediate quote — and grows no checkboxes to trigger the deferred one either. Left as it
-    was found; changing it is a behaviour change, not part of this move."""
-    controller = _controller(wd=_wd())
-
-    controller.on_model_change()
-
-    controller.processing_service.update_processing_cost.assert_not_called()
 
 
 def test_an_area_account_is_never_quoted_a_cost():

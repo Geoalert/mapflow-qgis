@@ -113,8 +113,9 @@ class ProcessingView:
         )
 
     def has_option_widgets(self) -> bool:
-        """Whether the model-option checkboxes have been built. A model that declares blocks is
-        quoted only once these exist, so this is not the same as 'no options ticked'."""
+        """Whether the model-option checkboxes have been built. Not the same as 'no options ticked':
+        a reading taken before they exist describes nothing, and the workflow definition rejects it
+        for not matching its optional blocks."""
         return len(self.dlg.modelOptions) > 0
 
     def aoi_layer_chosen(self) -> bool:

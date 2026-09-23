@@ -10,7 +10,10 @@ class BlockConfig(SkipDataClass):
     displayName: str
     price: int
     optional: bool
-    # defaultEnable: bool
+    #: Whether the backend wants this block on when the user has expressed no preference. Defaults
+    #: to off for a payload that omits it: an optional block costs credits, so the safe assumption
+    #: is that it was not asked for.
+    defaultEnabled: bool = False
 
 
 @dataclass

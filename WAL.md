@@ -72,40 +72,26 @@ here was fixed incidentally, so the list is real work rather than inherited pape
 
 Grouped by whether the intended behaviour is obvious.
 
-**C3.1 and C3.2 are one MR — they mask each other.** Fixing C3.1 alone stops the cost being quoted
-for every model that has options; see the note under C3.2.
-
-[ ] C3.1 `enable_model_options` discards the user's saved model options
-    Two defects in one line pair (`main_dialog.py`):
-    (a) `if not can_start_processing: can_start_processing = True` makes the role argument a no-op,
-        so option checkboxes are never disabled for a role that may not start a processing.
-        **Decided: enforce it** — starting is already forbidden for those roles, so leaving the
-        options interactive offers a choice that cannot be acted on.
-    (b) `widget.setChecked(can_start_processing)` **force-ticks every option on every model change**,
-        overwriting the state `saved_model_options` just restored. Worse, `add_model_option`
-        connects `toggled` *after* setting the initial state, so this forced tick emits
-        `modelOptionsChanged` -> `on_options_change` -> `save_option_settings`, writing the
-        clobbered all-enabled state back to settings. The `wd/{workflow_id}/{block_name}` key in
-        `spec/003_local_storage.md` is therefore written but never effectively read back.
-        User-visible: unticked options return ticked, and options feed `get_price(enable_blocks=…)`,
-        so the user is quoted for blocks they turned off.
-    Fix: drop the override, and drop `setChecked` entirely — enabling is not ticking.
-    Migration is clean: settings currently hold all-enabled, so the first render is unchanged and
-    behaviour only diverges once someone unticks something, which then sticks.
-
-[ ] C3.2 A model whose blocks are all obligatory is never quoted
-    `on_model_change` quotes immediately only when `len(wd.blocks) == 0` — *all* blocks, while the
-    checkboxes come from `optional_blocks`. So: no blocks -> quoted; some optional -> quoted, but
-    **only because C3.1(b)'s forced tick emits**; all obligatory -> no checkbox ever fires and the
-    cost stays blank.
-    Fix: test `not wd.optional_blocks` — quote now precisely when no checkbox will ever fire.
-    Also correct the comment above that condition: it credits the emit to "adding its option
-    checkboxes", but creation cannot emit (the `toggled` connect comes after the initial
-    `setChecked`). The emit is C3.1(b)'s forced tick, which is why removing it breaks the quote.
-    Pinned by `test_a_model_whose_blocks_are_all_obligatory_is_not_quoted_on_selection`, which
-    changes with the fix.
+[ready-for-review] C3.1 + C3.2 The model options are the user's choice, and every model is quoted
+    The forced tick is gone (so a role that may not start cannot touch the options either), an
+    option nobody has chosen follows the block's `defaultEnabled`, and picking a model asks for its
+    cost whatever blocks it declares.
 
 **Unambiguous — the current behaviour is not intended by anyone:**
+
+[ ] Leaving a read-only shared project leaves the start panel's controls disabled
+    `get_project_sharing` emits `sharedRoleApplied` only for a *shared* project, so opening one of
+    your own afterwards never re-enables what `enable_shared_project` disabled — `modelCombo`,
+    `polygonCombo`, `startProcessing`. The model-option checkboxes are fine (they are re-rendered
+    per model, and the role is now resolved before that happens), which leaves these three as the
+    remaining half of the same symptom. Pre-existing; found while fixing C3.1.
+
+[ ] Duplicating a processing overwrites the model options saved for that model
+    `set_checked_options` ticks the boxes from the duplicated processing, each tick emits
+    `modelOptionsChanged`, and `on_options_change` persists it — so duplicating an old run silently
+    makes its options the default for every later run of that model
+    (`spec/003_local_storage.md` § Workflow Options records this as current behaviour). Decide
+    whether a duplication should set the panel without writing it back.
 
 [ ] C3.3 `modelCombo.activated` is emitted but connected to nothing
     Emitted in `mapflow.py` and `project_view.py:195`; only `currentIndexChanged` is connected. The

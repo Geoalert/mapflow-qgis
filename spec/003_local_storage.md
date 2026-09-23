@@ -53,6 +53,17 @@ All plugin settings are scoped under the `"mapflow"` group via `settings.beginGr
 |-------------|------|---------|
 | `wd/{workflow_id}/{block_name}` | bool | Optional block enabled status per workflow |
 
+Written whenever the option checkboxes change: the user ticking one, and a duplication setting them
+from the processing being copied (`ProviderService.duplicate_model_options`). A block with no key
+yet follows the `defaultEnabled` the backend declares for it, which is the only opinion available
+before anyone has expressed one; a stored value always wins over it. Rebuilding the panel is not a
+change — enabling the checkboxes for a role, or showing another model's, must never tick them,
+because what is stored decides both the quoted price and the blocks the processing runs.
+
+Read back with the type asked for (`value(key, default, type=bool)`). These are an INI file, where
+a bool is written as the bare word `false` and parsed back as a *string* in the next session — and
+a non-empty string is truthy, so a converted read turns every option the user switched off back on.
+
 #### Providers
 | Key | Type | Purpose |
 |-----|------|---------|

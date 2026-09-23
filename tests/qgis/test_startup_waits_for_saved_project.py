@@ -225,3 +225,19 @@ def test_a_project_that_cannot_be_opened_is_announced(projects):
     service.get_project_error_handler(MagicMock())
 
     assert resolved == [True]
+
+
+def test_the_saved_projects_role_is_resolved_before_it_is_announced(projects):
+    """The start panel is rebuilt by whoever listens, and it asks `user_role` what this user may
+    touch — so on a saved read-only project the role has to be in place before the announcement,
+    or the panel is built with whatever the previous session left behind."""
+    service, _resolved = projects
+    order = []
+    service.get_project_sharing.side_effect = lambda: order.append("role resolved")
+    service.currentProjectChanged.connect(lambda _project: order.append("project announced"))
+
+    with patch.object(project_service_module.MapflowProject, "from_dict",
+                      return_value=SimpleNamespace(id="saved-1")):
+        service.get_project_callback(_project_response())
+
+    assert order == ["role resolved", "project announced"]

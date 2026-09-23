@@ -144,8 +144,9 @@ class ProcessingService(QObject):
     _start_params = None
     _start_enabled = True
     _enabled_blocks = ()
-    #: Whether the option checkboxes have been built yet. A model that declares blocks is quoted
-    #: only once they exist, so "no widgets" is not the same as "no blocks ticked".
+    #: Whether the option checkboxes have been built yet. "No widgets" is not the same as "no blocks
+    #: ticked": a reading taken before they exist is not a set of ticks, and handing it to
+    #: `get_enabled_blocks` fails the length check against the model's optional blocks.
     _has_option_widgets = False
     #: Whether the AOI combo has a layer at all. It only picks between two error messages: a
     #: chosen layer that yielded no AOI is corrupt, no layer is simply not chosen yet.
@@ -264,9 +265,21 @@ class ProcessingService(QObject):
 
     def saved_model_options(self, wd) -> List[Tuple[str, bool]]:
         """This model's optional blocks as (label, remembered state) pairs, in the order the
-        workflow definition declares them — the order is what maps a checkbox back to a block."""
+        workflow definition declares them — the order is what maps a checkbox back to a block.
+
+        What the block declares is the fallback for a user who has never chosen: the backend says
+        with `defaultEnabled` whether a block belongs in a default run, and that is the only opinion
+        available on a fresh profile.
+
+        `type=bool` is load-bearing, not defensive. Settings are an INI file, where a bool is
+        written as the bare word `false`; within one session the value comes back as the bool that
+        was written, but after a restart it is parsed from the file and comes back as the *string*
+        "false" — which is truthy. Without the type, every option the user turned off would be on
+        again the next time QGIS starts.
+        """
         return [(block.displayName,
-                 bool(self.app_context.settings.value(f"wd/{wd.id}/{block.name}", False)))
+                 self.app_context.settings.value(f"wd/{wd.id}/{block.name}",
+                                                 block.defaultEnabled, type=bool))
                 for block in wd.optional_blocks]
 
     def save_option_settings(self, wd, enabled_blocks: List[bool]) -> None:
