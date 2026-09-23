@@ -3,7 +3,7 @@ from pathlib import Path
 from uuid import UUID
 import json
 
-from PyQt5.QtCore import QObject, QUrl, pyqtSignal
+from PyQt5.QtCore import QObject, QUrl, pyqtSignal, QFileDevice, QIODevice, QSaveFile
 from PyQt5.QtGui import QImage
 from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest
 from qgis.core import QgsRasterLayer
@@ -95,6 +95,8 @@ class DataCatalogService(QObject):
         self.image_max_size_bytes = Config.MAX_FILE_SIZE_BYTES
         self.free_storage = None
         self.preview_idx = 0
+        # In-flight image downloads: reply -> the QSaveFile it streams into
+        self._downloads = {}
 
     # ---------- pushed state (the controller tells the service, the service never reads a widget) ----------
 
@@ -411,30 +413,56 @@ class DataCatalogService(QObject):
         self.downloadUrlReady.emit(download_url, suggested_filename)
 
     def save_downloaded(self, url: str, save_path: str):
-        """Fetch `url` and write it to `save_path` (the path came from the controller's dialog)."""
-        request = QNetworkRequest(QUrl(url))
-        nam = self.api.http.nam
-        reply = nam.get(request)
-        # Route the reply through the guard: `finished` is a Qt-owned signal and an unexpected
-        # raise in the slot would otherwise reach the event loop unguarded (spec/007 invariant 7).
-        guarded_connect(reply.finished,
-                        lambda: self._save_downloaded_file(reply, save_path),
-                        "saving a downloaded image",
-                        self.app_context)
+        """Stream `url` into `save_path` (the path came from the controller's dialog).
 
-    def _save_downloaded_file(self, reply: QNetworkReply, save_path: str):
-        if reply.error() != QNetworkReply.NoError:
-            alert(self.tr("Failed to download image: {}").format(reply.errorString()))
-            reply.deleteLater()
+        Streamed rather than read in one piece: an image can be several GB, more than Qt5 holds in a
+        single QByteArray. `QSaveFile` writes to a temporary file and moves it over `save_path` only
+        on commit, so a download that fails cannot leave a half-written image where the user's is.
+        """
+        target = QSaveFile(save_path)
+        if not target.open(QIODevice.WriteOnly):
+            alert(self.tr("Failed to save file: {}").format(target.errorString()))
             return
-        data = reply.readAll().data()
-        try:
-            with open(save_path, 'wb') as f:
-                f.write(data)
-            self.iface.messageBar().pushMessage("Mapflow", self.tr("Image saved to {}").format(save_path))
-        except OSError as e:
-            alert(self.tr("Failed to save file: {}").format(str(e)))
+        reply = self.api.http.nam.get(QNetworkRequest(QUrl(url)))
+        # Nothing else owns the reply, and a collected one takes its connections down mid-download;
+        # this dict is what keeps it (and the file it streams into) alive until `finished`.
+        self._downloads[reply] = target
+        # `readyRead` and `finished` are Qt-owned, so both slots go through the guard
+        # (spec/007 § Entry points). Capturing the reply is safe precisely because of the dict above.
+        guarded_connect(reply.readyRead, lambda: self._write_downloaded_chunk(reply),
+                        "writing a downloaded image to disk", self.app_context)
+        guarded_connect(reply.finished, lambda: self._finish_downloaded_file(reply),
+                        "saving a downloaded image", self.app_context)
+
+    def _write_downloaded_chunk(self, reply: QNetworkReply):
+        target = self._downloads.get(reply)
+        if target is None:
+            return
+        if target.write(reply.readAll()) == -1:
+            # Disk full or similar: stop downloading, the finish handler reports the file error
+            reply.abort()
+
+    def _finish_downloaded_file(self, reply: QNetworkReply):
+        target = self._downloads.pop(reply, None)
+        if target is None:
+            return
         reply.deleteLater()
+        if reply.error() == QNetworkReply.NoError:
+            # Normally empty (readyRead has taken everything); guards against Qt finishing without one
+            target.write(reply.readAll())
+        failure = None
+        if target.error() != QFileDevice.NoError:
+            failure = self.tr("Failed to save file: {}").format(target.errorString())
+        elif reply.error() != QNetworkReply.NoError:
+            failure = self.tr("Failed to download image: {}").format(reply.errorString())
+            target.cancelWriting()
+        # commit() moves the temporary file over the target, or deletes it after a failure
+        if not target.commit() and failure is None:
+            failure = self.tr("Failed to save file: {}").format(target.errorString())
+        if failure:
+            alert(failure)
+        else:
+            self.iface.messageBar().pushMessage("Mapflow", self.tr("Image saved to {}").format(target.fileName()))
 
     def refresh_catalog(self):
         if self._mosaic_table_visible:
