@@ -5,7 +5,7 @@ so the plugin still starts. Genuinely broken providers of a supported type are s
 import json
 from unittest.mock import MagicMock
 
-from mapflow.entity.provider.collection import ProvidersList
+from mapflow.model.provider.collection import ProvidersList
 
 
 def _settings(providers_dict):

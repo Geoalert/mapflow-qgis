@@ -1,0 +1,11 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "processings/template/00000000-0000-4000-8000-000000000284/images",
+    "body": null
+  },
+  "status": 404,
+  "body": {
+    "__raw__": "The requested resource could not be found."
+  }
+}

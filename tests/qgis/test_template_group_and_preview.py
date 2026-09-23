@@ -11,24 +11,27 @@ from unittest.mock import MagicMock
 
 from qgis.core import QgsProject
 
-from mapflow.mapflow import Mapflow
+from mapflow.functional.service.preview_service import PreviewService
+from mapflow.functional.service.template_service import TemplateService
+from mapflow.functional.view.search_view import SearchView
 
 
-def _plugin_for_group(project, add_layers_to_group=True):
-    plugin = Mapflow.__new__(Mapflow)
+def _service_for_group(project, add_layers_to_group=True):
     settings = MagicMock()
     settings.value.return_value = None  # no custom layerGroup -> falls back to plugin_name
-    plugin.app_context = SimpleNamespace(project=project, settings=settings, plugin_name="Mapflow")
-    plugin.result_loader = SimpleNamespace(add_layers_to_group=add_layers_to_group)
-    return plugin
+    app_context = SimpleNamespace(project=project, settings=settings, plugin_name="Mapflow")
+    return TemplateService(
+        app_context=app_context,
+        processing_service=MagicMock(),
+        result_loader=SimpleNamespace(add_layers_to_group=add_layers_to_group))
 
 
 def test_template_group_created_under_mapflow_group_when_absent():
     project = QgsProject()
     root = project.layerTreeRoot()
-    plugin = _plugin_for_group(project)
+    service = _service_for_group(project)
 
-    group = plugin._template_group_target("T1")
+    group = service.ensure_template_group("T1")
 
     mapflow_group = root.findGroup("Mapflow")
     assert mapflow_group is not None
@@ -40,10 +43,10 @@ def test_template_group_created_under_mapflow_group_when_absent():
 def test_open_then_preview_reuse_the_same_single_group():
     project = QgsProject()
     root = project.layerTreeRoot()
-    plugin = _plugin_for_group(project)
+    service = _service_for_group(project)
 
-    open_group = plugin._template_group_target("T1", subgroup_name="AOI: North")
-    preview_group = plugin._template_group_target("T1")  # later preview call
+    open_group = service.ensure_template_group("T1", subgroup_name="AOI: North")
+    preview_group = service.ensure_template_group("T1")  # later preview call
 
     mapflow_group = root.findGroup("Mapflow")
     # Exactly one "T1" group exists, under the Mapflow group.
@@ -56,54 +59,97 @@ def test_open_then_preview_reuse_the_same_single_group():
 def test_template_group_falls_back_to_root_when_user_deleted_mapflow_group():
     project = QgsProject()
     root = project.layerTreeRoot()
-    plugin = _plugin_for_group(project, add_layers_to_group=False)
+    service = _service_for_group(project, add_layers_to_group=False)
 
-    group = plugin._template_group_target("T1")
+    group = service.ensure_template_group("T1")
 
     assert root.findGroup("Mapflow") is None
     assert root.findGroup("T1") is group
 
 
-def _plugin_for_preview(in_template_mode):
-    plugin = Mapflow.__new__(Mapflow)
-    plugin.dlg = MagicMock()
-    plugin.preview_search_from_cell = MagicMock()
-    plugin.result_loader = MagicMock()
-    plugin.processing_service = SimpleNamespace(in_template_mode=in_template_mode)
-    return plugin
+def test_finding_a_template_group_creates_nothing():
+    """The whole point of the find/ensure split. `find_template_group` is called from paths
+    that fire on every AOI selection and every preview click; if it created the group as a
+    side effect, opening a template and clicking around would conjure groups the user never
+    asked for — which is why those callers previously had to defer it behind a lambda."""
+    project = QgsProject()
+    root = project.layerTreeRoot()
+    service = _service_for_group(project)
+
+    assert service.find_template_group("T1") is None
+    assert service.find_template_group("T1", subgroup_name="AOI: North") is None
+
+    assert root.findGroup("Mapflow") is None
+    assert not any(child.name() == "T1" for child in root.children())
+
+
+def test_finding_a_template_group_returns_the_one_ensure_made():
+    project = QgsProject()
+    service = _service_for_group(project)
+
+    created = service.ensure_template_group("T1", subgroup_name="AOI: North")
+
+    assert service.find_template_group("T1") is created.parent()
+    assert service.find_template_group("T1", subgroup_name="AOI: North") is created
+
+
+def _search_view():
+    """The Preview-cell reconnect is `SearchView.connect_cell_preview` since the search
+    extraction — the connection lifecycle it manages is the view's dlg, not the plugin's."""
+    return SearchView(dlg=MagicMock(), config=MagicMock())
 
 
 def test_reconnect_cell_preview_disconnects_previous_first():
-    plugin = _plugin_for_preview(in_template_mode=False)
-    plugin.cell_preview_connection = object()
+    view = _search_view()
+    view._cell_preview_connection = object()  # a prior connection exists
+    handler = MagicMock()
 
-    plugin._reconnect_cell_preview()
+    view.connect_cell_preview(handler)
 
-    plugin.dlg.metadataTable.disconnect.assert_called_once()
-    plugin.dlg.metadataTable.cellClicked.connect.assert_called_once_with(
-        plugin.preview_search_from_cell)
+    view.dlg.metadataTable.disconnect.assert_called_once()
+    view.dlg.metadataTable.cellClicked.connect.assert_called_once()
+    # The connected callable is `guarded_connect`'s wrapper, not the handler itself, so check where
+    # it leads rather than its identity: firing the cell click must reach the handler.
+    view.dlg.metadataTable.cellClicked.connect.call_args.args[0](0, 0)
+    handler.assert_called_once()
 
 
 def test_reconnect_cell_preview_first_time_no_disconnect_error():
-    plugin = _plugin_for_preview(in_template_mode=False)
-    # No prior cell_preview_connection: disconnect raises, must be swallowed.
+    view = _search_view()
+    # No prior connection: disconnect raises, must be swallowed.
+    view.dlg.metadataTable.disconnect.side_effect = TypeError
 
-    plugin._reconnect_cell_preview()
+    view.connect_cell_preview(object())
 
-    plugin.dlg.metadataTable.cellClicked.connect.assert_called_once()
+    view.dlg.metadataTable.cellClicked.connect.assert_called_once()
+
+
+def _preview_service(in_template_mode):
+    """T1 moved to `PreviewService` with the rest of the preview code; the reconnect above is
+    still `mapflow.py`, because it manages a search-table signal."""
+    return PreviewService(
+        iface=MagicMock(),
+        app_context=SimpleNamespace(project=MagicMock()),
+        http=MagicMock(),
+        plugin_dir="",
+        config=MagicMock(),
+        result_loader=MagicMock(),
+        processing_service=MagicMock(),
+        template_service=SimpleNamespace(in_template_mode=in_template_mode,
+                                           active_template=None))
 
 
 def test_add_aoi_to_preview_skipped_in_template_mode():
-    plugin = _plugin_for_preview(in_template_mode=True)
+    service = _preview_service(in_template_mode=True)
 
-    plugin._add_aoi_to_preview_if_needed()
+    service._add_aoi_to_preview_if_needed()
 
-    plugin.result_loader.add_aoi_to_preview.assert_not_called()
+    service.result_loader.add_aoi_to_preview.assert_not_called()
 
 
 def test_add_aoi_to_preview_runs_outside_template_mode():
-    plugin = _plugin_for_preview(in_template_mode=False)
+    service = _preview_service(in_template_mode=False)
 
-    plugin._add_aoi_to_preview_if_needed()
+    service._add_aoi_to_preview_if_needed()
 
-    plugin.result_loader.add_aoi_to_preview.assert_called_once()
+    service.result_loader.add_aoi_to_preview.assert_called_once()

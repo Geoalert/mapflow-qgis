@@ -13,6 +13,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
+from PyQt5.QtCore import QObject
 from qgis.core import QgsFeature, QgsGeometry, QgsProject, QgsVectorLayer
 
 from mapflow.functional import layer_utils
@@ -65,8 +66,7 @@ def _layer(wkts):
 def _service_for(wkts):
     """Run the real area calculation over a layer, with only the UI/provider plumbing stubbed."""
     service = AreaCalculatorService.__new__(AreaCalculatorService)
-    service.dlg = MagicMock()
-    service.dlg.metadataTable.selectedItems.return_value = []
+    QObject.__init__(service)  # the measured area leaves as a signal
     service.config = MagicMock()
     service.provider_service = MagicMock()
     service.data_catalog_service = MagicMock()
@@ -78,10 +78,14 @@ def _service_for(wkts):
         max_aois_per_processing=10,
         project=QgsProject.instance(),
         user_role=SimpleNamespace(can_start_processing=True, value="OWNER"),
+        # Both are pushed to the context by the controllers that own those widgets; the service
+        # reads them rather than the source combo and the results table.
+        data_provider=MagicMock(),
+        selected_search_indices=[],
     )
     service.tr = lambda text: text
     # Cropping to image footprints is a separate concern; keep the AOI as selected.
-    service.get_aoi = lambda provider_index, selected_aoi, local_image_indices: selected_aoi
+    service.get_aoi = lambda provider, selected_aoi, local_image_indices: selected_aoi
     service.get_aoi_area_polygon_layer(_layer(wkts))
     return service
 

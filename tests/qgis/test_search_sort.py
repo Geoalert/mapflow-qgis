@@ -9,6 +9,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 from mapflow.config import Config, ConfigColumns
+from mapflow.functional.service.search_service import SearchService
 from mapflow.mapflow import Mapflow
 from mapflow.schema.catalog import ImageCatalogRequestSchema
 
@@ -20,19 +21,47 @@ def _column(attr):
     return _ATTRS.index(attr)
 
 
+def _search_service(sort_by, sort_order):
+    """Real service: the sort state and the column->token lookup are its logic now. What stays in
+    `mapflow.py` is only the choice of which endpoint to re-request from."""
+    service = SearchService(iface=MagicMock(),
+                            app_context=MagicMock(),
+                            http=MagicMock(),
+                            plugin_dir="",
+                            config=Config,
+                            config_search_columns=ConfigColumns(),
+                            result_loader=MagicMock(),
+                            provider_service=MagicMock())
+    service.sort_by = sort_by
+    service.sort_order = sort_order
+    return service
+
+
 def _plugin(sort_by="ACQUISITION_DATE", sort_order="DESC", in_template=False, rows=5):
     plugin = Mapflow.__new__(Mapflow)
     plugin.config = Config
     plugin.config_search_columns = ConfigColumns()
-    plugin.processing_service = SimpleNamespace(in_template_mode=in_template)
+    plugin.search_service = _search_service(sort_by, sort_order)
+    plugin.template_service = SimpleNamespace(in_template_mode=in_template)
     plugin.dlg = MagicMock()
-    plugin.dlg.metadataTable.rowCount.return_value = rows
-    plugin._search_sort_by = sort_by
-    plugin._search_sort_order = sort_order
-    plugin._update_search_sort_indicator = MagicMock()
-    plugin.get_metadata = MagicMock()
-    plugin._load_template_search_page = MagicMock()
+    plugin.search_view = MagicMock()
+    # The "have we searched yet" guard reads the row count through the view, not the dialog.
+    plugin.search_view.metadata_row_count.return_value = rows
+    plugin.search_controller = MagicMock()
+    plugin.template_controller = MagicMock()
     return plugin
+
+
+def _sort_controller(sort_by="ACQUISITION_DATE", sort_order="DESC"):
+    """Restoring the arrow after a re-fill is `SearchController`'s; the column<->token mapping it
+    asks for is still the search service's."""
+    from PyQt5.QtCore import QObject
+    from mapflow.functional.controller.search_controller import SearchController
+    controller = SearchController.__new__(SearchController)
+    QObject.__init__(controller)
+    controller.search_service = _search_service(sort_by, sort_order)
+    controller.search_view = MagicMock()
+    return controller
 
 
 def test_backend_tokens_are_upper_snake_case():
@@ -48,20 +77,20 @@ def test_click_new_sortable_column_sets_field_desc_and_researches():
 
     plugin.on_metadata_header_clicked(_column("cloudCover"))
 
-    assert plugin._search_sort_by == "CLOUD_COVER"
-    assert plugin._search_sort_order == "DESC"
-    plugin.get_metadata.assert_called_once()
+    assert plugin.search_service.sort_by == "CLOUD_COVER"
+    assert plugin.search_service.sort_order == "DESC"
+    plugin.search_controller.run_search.assert_called_once()
 
 
 def test_click_same_column_toggles_order():
     plugin = _plugin(sort_by="ACQUISITION_DATE", sort_order="DESC")
 
     plugin.on_metadata_header_clicked(_column("acquisitionDate"))
-    assert plugin._search_sort_order == "ASC"
+    assert plugin.search_service.sort_order == "ASC"
     plugin.on_metadata_header_clicked(_column("acquisitionDate"))
-    assert plugin._search_sort_order == "DESC"
-    assert plugin._search_sort_by == "ACQUISITION_DATE"
-    assert plugin.get_metadata.call_count == 2
+    assert plugin.search_service.sort_order == "DESC"
+    assert plugin.search_service.sort_by == "ACQUISITION_DATE"
+    assert plugin.search_controller.run_search.call_count == 2
 
 
 def test_non_sortable_column_does_nothing():
@@ -70,8 +99,8 @@ def test_non_sortable_column_does_nothing():
     plugin.on_metadata_header_clicked(_column("productType"))  # not in SEARCH_SORT_FIELDS
     plugin.on_metadata_header_clicked(_column("preview"))
 
-    assert plugin._search_sort_by == "ACQUISITION_DATE"  # unchanged
-    plugin.get_metadata.assert_not_called()
+    assert plugin.search_service.sort_by == "ACQUISITION_DATE"  # unchanged
+    plugin.search_controller.run_search.assert_not_called()
 
 
 def test_template_mode_reloads_template_search_with_new_sort():
@@ -80,9 +109,9 @@ def test_template_mode_reloads_template_search_with_new_sort():
     plugin.on_metadata_header_clicked(_column("cloudCover"))
 
     # Template results re-fetch (first page) with the updated sort; the regular search is untouched.
-    assert plugin._search_sort_by == "CLOUD_COVER"
-    plugin._load_template_search_page.assert_called_once_with(0)
-    plugin.get_metadata.assert_not_called()
+    assert plugin.search_service.sort_by == "CLOUD_COVER"
+    plugin.template_controller.load_search_page.assert_called_once_with(0)
+    plugin.search_controller.run_search.assert_not_called()
 
 
 def test_regular_mode_does_not_reload_template():
@@ -90,8 +119,8 @@ def test_regular_mode_does_not_reload_template():
 
     plugin.on_metadata_header_clicked(_column("cloudCover"))
 
-    plugin.get_metadata.assert_called_once()
-    plugin._load_template_search_page.assert_not_called()
+    plugin.search_controller.run_search.assert_called_once()
+    plugin.template_controller.load_search_page.assert_not_called()
 
 
 def test_no_results_yet_does_not_search():
@@ -99,24 +128,32 @@ def test_no_results_yet_does_not_search():
 
     plugin.on_metadata_header_clicked(_column("cloudCover"))
 
-    plugin.get_metadata.assert_not_called()
+    plugin.search_controller.run_search.assert_not_called()
 
 
 def test_restore_sort_indicator_maps_token_to_its_column():
     # After a re-fill hides the arrow, the indicator is restored on the column matching the token.
-    plugin = _plugin(sort_by="CLOUD_COVER")
+    controller = _sort_controller(sort_by="CLOUD_COVER")
 
-    plugin._restore_search_sort_indicator()
+    controller.restore_sort_indicator()
 
-    plugin._update_search_sort_indicator.assert_called_once_with(_column("cloudCover"))
+    assert controller.search_view.show_sort_indicator.call_args.args == (_column("cloudCover"),)
+
+
+def test_restore_sort_indicator_carries_the_current_order():
+    controller = _sort_controller(sort_by="CLOUD_COVER", sort_order="ASC")
+
+    controller.restore_sort_indicator()
+
+    assert controller.search_view.show_sort_indicator.call_args.kwargs["descending"] is False
 
 
 def test_restore_sort_indicator_noop_without_active_sort():
-    plugin = _plugin(sort_by=None)
+    controller = _sort_controller(sort_by=None)
 
-    plugin._restore_search_sort_indicator()
+    controller.restore_sort_indicator()
 
-    plugin._update_search_sort_indicator.assert_not_called()
+    controller.search_view.show_sort_indicator.assert_not_called()
 
 
 def test_request_schema_serializes_sort_fields():

@@ -9,10 +9,12 @@ import json
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+from PyQt5.QtCore import QObject
 from qgis.core import QgsGeometry
 
 from mapflow.functional.app_context import AppContext
-from mapflow.mapflow import Mapflow
+from mapflow.functional.service.account_service import AccountService
+from mapflow.functional.service.template_service import TemplateService
 
 
 def _user_status_response(**overrides):
@@ -29,86 +31,74 @@ def _user_status_response(**overrides):
     return response
 
 
-def test_set_processing_limit_stores_template_area_limit_in_sq_km():
-    plugin = Mapflow.__new__(Mapflow)
-    plugin.tr = lambda text: text
-    plugin.plugin_name = "Mapflow"
-    plugin.config = SimpleNamespace(MAX_AOIS_PER_PROCESSING=1)
-    plugin.app_context = AppContext()
-    plugin.dlg = MagicMock()
-
-    plugin.set_processing_limit(_user_status_response())
-
-    assert plugin.app_context.template_area_limit == 2.0
+def _account_service():
+    service = AccountService.__new__(AccountService)
+    QObject.__init__(service)
+    service.tr = lambda text: text
+    service.plugin_name = "Mapflow"
+    service.config = SimpleNamespace(MAX_AOIS_PER_PROCESSING=1)
+    service.app_context = AppContext()
+    return service
 
 
-def test_set_processing_limit_defaults_template_area_limit_to_zero_when_absent():
-    plugin = Mapflow.__new__(Mapflow)
-    plugin.tr = lambda text: text
-    plugin.plugin_name = "Mapflow"
-    plugin.config = SimpleNamespace(MAX_AOIS_PER_PROCESSING=1)
-    plugin.app_context = AppContext()
-    plugin.dlg = MagicMock()
+def test_template_area_limit_is_stored_in_sq_km():
+    service = _account_service()
+
+    service.apply_status(_user_status_response())
+
+    assert service.app_context.template_area_limit == 2.0
+
+
+def test_template_area_limit_defaults_to_zero_when_absent():
+    service = _account_service()
 
     response = _user_status_response()
     payload = json.loads(response.readAll.return_value.data.return_value)
     payload.pop("templateAreaLimit")
     response.readAll.return_value.data.return_value = json.dumps(payload).encode()
 
-    plugin.set_processing_limit(response)
+    service.apply_status(response)
 
-    assert plugin.app_context.template_area_limit == 0.0
+    assert service.app_context.template_area_limit == 0.0
 
 
-def test_create_search_template_blocks_when_aoi_exceeds_template_area_limit():
-    plugin = Mapflow.__new__(Mapflow)
-    plugin.tr = lambda text: text
-    plugin.replace_search_provider_index = MagicMock()
-    plugin.alert = MagicMock()
-    plugin.dlg = MagicMock()
-    plugin.processing_service = MagicMock()
-    plugin.app_context = SimpleNamespace(
+def _template_service(app_context):
+    return TemplateService(app_context=app_context, processing_service=MagicMock())
+
+
+def test_create_search_template_blocks_when_aoi_exceeds_template_area_limit(monkeypatch):
+    alerts = []
+    monkeypatch.setattr("mapflow.functional.service.template_service.alert",
+                        lambda msg, *a, **k: alerts.append(msg) or True)
+    service = _template_service(SimpleNamespace(
         aoi=MagicMock(),  # truthy AOI
         aoi_size=120.0,
         template_area_limit=50.0,
         project_id="project-1",
         current_project=SimpleNamespace(id="project-1"),
-    )
+    ))
 
-    plugin.create_search_template()
+    service.create_search_template("My template", aoi_details={"features": [1]},
+                                   search_params=MagicMock())
 
-    plugin.processing_service.api.create_template.assert_not_called()
-    plugin.alert.assert_called_once()
-    message = plugin.alert.call_args.args[0]
-    assert "50" in message
-    assert "planned processing" in message.lower()
+    service.processing_service.api.create_template.assert_not_called()
+    assert len(alerts) == 1
+    assert "50" in alerts[0] and "planned processing" in alerts[0].lower()
 
 
-def test_create_search_template_proceeds_when_limit_is_unknown():
-    plugin = Mapflow.__new__(Mapflow)
-    plugin.tr = lambda text: text
-    plugin.replace_search_provider_index = MagicMock()
-    plugin.alert = MagicMock()
-    plugin.iface = MagicMock()
-    plugin.selected_search_product_types = MagicMock(return_value=["IMAGE"])
-    plugin.processing_service = MagicMock()
-    plugin.app_context = SimpleNamespace(
+def test_create_search_template_proceeds_when_limit_is_unknown(monkeypatch):
+    monkeypatch.setattr("mapflow.functional.service.template_service.alert",
+                        lambda *a, **k: True)
+    service = _template_service(SimpleNamespace(
         aoi=QgsGeometry.fromWkt("POLYGON((0 0,0 1,1 1,1 0,0 0))"),
         aoi_size=10.0,
         template_area_limit=0.0,  # unknown -> client-side check disabled
         project_id="project-1",
         current_project=SimpleNamespace(id="project-1"),
         plugin_name="Mapflow",
-    )
+    ))
 
-    plugin.dlg = MagicMock()
-    plugin.dlg.processingName.text.return_value = "My template"
-    plugin.dlg.searchProvidersCombo.checkedItemsData.return_value = ["arcgis_world_imagery"]
-    plugin.dlg.maxCloudCover.value.return_value = 50
-    plugin.dlg.minIntersection.value.return_value = 20
-    plugin.dlg.hideUnavailableResults.isChecked.return_value = True
+    service.create_search_template("My template", aoi_details={"features": [1]},
+                                   search_params=MagicMock())
 
-    plugin.create_search_template()
-
-    plugin.alert.assert_not_called()
-    plugin.processing_service.api.create_template.assert_called_once()
+    service.processing_service.api.create_template.assert_called_once()

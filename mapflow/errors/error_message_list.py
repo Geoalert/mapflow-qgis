@@ -10,6 +10,11 @@ class ErrorMessageList(QObject):
         self.message_descriptions = {}
 
     def update(self, other):
+        # Overwrites on key collision. The registries merged in errors.py are
+        # statically defined, so "no collisions" is a property of the source and
+        # is enforced by tests/functional/test_error_message_list.py rather than
+        # by a runtime assert — asserts are stripped under `python -O`, which is
+        # precisely where a silent shadowed error message would be hardest to spot.
         self.error_descriptions.update(other.error_descriptions)
         self.message_descriptions.update(other.message_descriptions)
 

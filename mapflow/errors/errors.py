@@ -46,8 +46,11 @@ class ErrorMessage(QObject):
             return None
         try:
             message = message.format(**self.parameters)
-        except Exception:
-            # problem during formatting. Probably wrong parameters
+        except (KeyError, IndexError, ValueError, TypeError, AttributeError):
+            # The server sent parameters that do not match the placeholders this code knows:
+            # a missing key raises KeyError, a positional placeholder IndexError, a malformed
+            # spec ValueError. TypeError/AttributeError cover `parameters` arriving as
+            # something other than a mapping.
             message = None
         return message
 

@@ -9,7 +9,7 @@ from .base import SkipDataClass, Serializable, parse_api_datetime_utc
 from .status import ProcessingStatus, ProcessingReviewStatus
 from .layer import RasterLayer, VectorLayer
 from .workflow_def import WorkflowDef
-from ..entity.provider.provider import SourceType
+from .provider_types import SourceType
 from ..errors import ErrorMessage
 
 

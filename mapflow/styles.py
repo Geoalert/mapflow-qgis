@@ -21,7 +21,12 @@ def generate_local_style_path(name: str) -> str:
 def generate_tile_style_path(name: str) -> str:
     return str(Path(__file__).parent / 'static' / 'styles' / 'tiles' / (name + '.qml'))
 
-def get_style_name(wd: str, layer: QgsVectorLayer, style_name: Optional[str] = None) -> str:
+def get_style_name(wd, layer: QgsVectorLayer, style_name: Optional[str] = None) -> str:
+    """Path of the .qml to apply for `wd`'s results on `layer`.
+
+    `wd` is a workflow def (anything with a `.name`), not the name itself — the previous
+    annotation said `str` and the body has always read `wd.name`.
+    """
     wd_name = wd.name
     if isinstance(layer, QgsVectorTileLayer):
         style_name = get_tile_style_name(wd_name, style_name)

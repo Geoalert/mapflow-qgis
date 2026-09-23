@@ -1,29 +1,37 @@
+import logging
 from typing import Union, Callable, Optional
 from pathlib import Path
 from uuid import UUID
 
 from PyQt5.QtCore import QObject, pyqtSignal, QFile, QIODevice
 from PyQt5.QtNetwork import QNetworkReply, QNetworkRequest, QHttpMultiPart, QHttpPart
-from PyQt5.QtWidgets import QApplication, QProgressBar
 from qgis.core import QgsMapLayer
 
 from ...schema.data_catalog import PreviewSize, MosaicCreateSchema, ImageReturnSchema, MosaicUpdateSchema
-from ...http import Http, get_error_report_body, data_catalog_message_parser
+from ...http import Http, RequestMode, data_catalog_message_parser
+from ...infra.report_body import get_error_report_body
 from ...functional import layer_utils
-from ...dialogs.error_message_widget import ErrorMessageWidget
-from ...dialogs.main_dialog import MainDialog
+from ...infra.alert_service import show_error_report
+
+logger = logging.getLogger(__name__)
 
 
 class DataCatalogApi(QObject):
-    """
+    """My Imagery requests.
 
+    A read takes the request `mode` from its caller, which knows what triggered it; a request that
+    changes server state is always `INTERACTIVE`, because it must never be sent twice
+    (spec/005 § Request modes).
     """
     mosaicsUpdated = pyqtSignal()
+
+    #: A preview could not be loaded — the view should say so in the preview pane. The api holds
+    #: no widget; what it used to write to `imagePreview` it now announces.
+    previewUnavailable = pyqtSignal()
 
     def __init__(self,
                  http: Http,
                  server: str,
-                 dlg: MainDialog,
                  iface,
                  result_loader,
                  plugin_version):
@@ -31,9 +39,12 @@ class DataCatalogApi(QObject):
         self.server = server
         self.http = http
         self.iface = iface
-        self.dlg = dlg
         self.result_loader = result_loader
         self.plugin_version = plugin_version
+        #: The view-layer helper that shows upload progress in the message bar. Injected after
+        #: construction (the api is built by the service, the reporter needs iface and is wired in
+        #: `mapflow.py`). A no-op default so an upload without one still works, just unshown.
+        self.progress_reporter = None
 
     # Mosaics CRUD
     def create_mosaic(self, mosaic: MosaicCreateSchema, callback: Callable = lambda *args: None):
@@ -42,10 +53,11 @@ class DataCatalogApi(QObject):
                        headers={},
                        callback=callback,
                        use_default_error_handler=True,
-                       timeout=5
+                       timeout=5,
+                       mode=RequestMode.INTERACTIVE
                       )
-    
-    def create_mosaic_from_images(self, 
+
+    def create_mosaic_from_images(self,
                                   mosaic: MosaicCreateSchema, 
                                   callback: Callable = lambda *args: None, 
                                   callback_kwargs: Optional[dict] = None,
@@ -65,37 +77,28 @@ class DataCatalogApi(QObject):
                                   use_default_error_handler=error_handler is None,
                                   error_handler=error_handler,
                                   error_handler_kwargs=error_handler_kwargs or {},
-                                  timeout=3600
+                                  timeout=3600,
+                                  mode=RequestMode.INTERACTIVE
                                  )
         body.setParent(response)
-        # Disolay progress for first image
-        progressMessageBar = self.iface.messageBar().createMessage(f"Uploading image 1/{len(image_paths)}:")
-        progress = QProgressBar()
-        progressMessageBar.layout().addWidget(progress)
-        self.iface.messageBar().pushWidget(progressMessageBar)
-        def display_upload_progress(bytes_sent: int, bytes_total: int):
-            try:
-                progress.setValue(round(bytes_sent / bytes_total * 100))
-            except ZeroDivisionError:
-                return
-            if bytes_total > 0:
-                if bytes_sent == bytes_total:
-                    self.iface.messageBar().popWidget(progressMessageBar)
-        connection = response.uploadProgress.connect(display_upload_progress)
-        progressMessageBar.destroyed.connect(lambda: response.uploadProgress.disconnect(connection))
+        # Show progress for the first image; the view-layer reporter owns the widget.
+        if self.progress_reporter:
+            self.progress_reporter.track(response, f"Uploading image 1/{len(image_paths)}:")
 
-    def get_mosaics(self, callback: Callable):
+    def get_mosaics(self, callback: Callable, *, mode: RequestMode):
         self.http.get(url=f"{self.server}/rasters/mosaic",
                       callback=callback,
-                      use_default_error_handler=True
+                      use_default_error_handler=True,
+                      mode=mode
                      )
 
-    def get_mosaic(self, mosaic_id: UUID, callback: Callable):
+    def get_mosaic(self, mosaic_id: UUID, callback: Callable, *, mode: RequestMode):
         self.http.get(url=f"{self.server}/rasters/mosaic/{mosaic_id}",
                       callback=callback,
-                      use_default_error_handler=False
+                      use_default_error_handler=True,
+                      mode=mode
                      )
-    
+
     def update_mosaic(self, mosaic_id, mosaic: MosaicUpdateSchema, callback: Callable, callback_kwargs: Optional[dict] = None):
         self.http.put(url=f"{self.server}/rasters/mosaic/{mosaic_id}",
                        body=mosaic.as_json().encode(),
@@ -103,7 +106,8 @@ class DataCatalogApi(QObject):
                        callback=callback,
                        callback_kwargs=callback_kwargs,
                        use_default_error_handler=True,
-                       timeout=5
+                       timeout=5,
+                       mode=RequestMode.INTERACTIVE
                       )
 
     def delete_mosaic(self,
@@ -117,7 +121,8 @@ class DataCatalogApi(QObject):
                          callback_kwargs=callback_kwargs or {},
                          use_default_error_handler=error_handler is None,
                          error_handler=error_handler,
-                         error_handler_kwargs=error_handler_kwargs or {}
+                         error_handler_kwargs=error_handler_kwargs or {},
+                         mode=RequestMode.INTERACTIVE
                         )
 
     def delete_mosaic_error_handler(self, mosaics: list):
@@ -127,16 +132,15 @@ class DataCatalogApi(QObject):
         else:
             title = self.tr("Error. Could not delete following imagery collections:")
             message = ', \n'.join(mosaics)
-        ErrorMessageWidget(parent=QApplication.activeWindow(),
-                           text=message,
-                           title=title,
-                           email_body='').show()
+        show_error_report(text=message, title=title)
         
     def request_mosaic_extent(self,
                               tilejson_uri: str,
                               layer: QgsMapLayer,
                               errors: bool = False,
-                              mosaic_id: Optional[str] = None):
+                              mosaic_id: Optional[str] = None,
+                              *,
+                              mode: RequestMode):
         self.http.get(url=tilejson_uri,
                       callback=self.add_mosaic_with_extent,
                       callback_kwargs={"layer": layer,
@@ -147,6 +151,7 @@ class DataCatalogApi(QObject):
                                             "mosaic_id": mosaic_id,
                                             "errors": errors},
                       use_default_error_handler=False,
+                      mode=mode,
                      )
     
     def add_mosaic_with_extent(self,
@@ -160,6 +165,11 @@ class DataCatalogApi(QObject):
             try:
                 bounding_box = layer_utils.get_bounding_box_from_tile_json(response=response)
             except Exception:
+                # Stays broad: get_bounding_box_from_tile_json parses JSON, indexes `bounds`
+                # and reprojects through pyproj, so its failure set spans ValueError,
+                # TypeError, AttributeError, IndexError and pyproj's own errors. Logged so a
+                # tile server that changes shape is visible rather than just "errors".
+                logger.exception("Could not read the mosaic extent from the tile JSON")
                 errors = True
             else:
                 layer.setExtent(rect=bounding_box)
@@ -172,10 +182,7 @@ class DataCatalogApi(QObject):
             title = self.tr("Error")
             email_body = "Error while loading an imagery collection." \
                         f"Collection id: {mosaic_id}"
-            ErrorMessageWidget(parent=QApplication.activeWindow(),
-                               text=error_summary,
-                               title=title,
-                               email_body=email_body).show()
+            show_error_report(text=error_summary, title=title, email_body=email_body)
 
     # Images CRUD
     def upload_image(self,
@@ -196,26 +203,12 @@ class DataCatalogApi(QObject):
                                   use_default_error_handler=error_handler is None,
                                   error_handler=error_handler,
                                   error_handler_kwargs=error_handler_kwargs or {},
-                                  timeout=3600
+                                  timeout=3600,
+                                  mode=RequestMode.INTERACTIVE
                                  )
         body.setParent(response)
-
-        progressMessageBar = self.iface.messageBar().createMessage(f"Uploading image {image_number}/{image_count}:")
-        progress = QProgressBar()
-        progressMessageBar.layout().addWidget(progress)
-        self.iface.messageBar().pushWidget(progressMessageBar)
-
-        def display_upload_progress(bytes_sent: int, bytes_total: int):
-            try:
-                progress.setValue(round(bytes_sent / bytes_total * 100))
-            except ZeroDivisionError:
-                return
-            if bytes_total > 0:
-                if bytes_sent == bytes_total:
-                    self.iface.messageBar().popWidget(progressMessageBar)
-
-        connection = response.uploadProgress.connect(display_upload_progress)
-        progressMessageBar.destroyed.connect(lambda: response.uploadProgress.disconnect(connection))
+        if self.progress_reporter:
+            self.progress_reporter.track(response, f"Uploading image {image_number}/{image_count}:")
 
     def upload_image_error_handler(self, response: QNetworkReply, mosaic_name: str, image_paths: list):
         response_body = response.readAll().data().decode()
@@ -240,22 +233,22 @@ class DataCatalogApi(QObject):
             message = self.tr("Could not upload '{image}' to imagery collection").format(image=image_paths[0])
         else:
             message = self.tr("Could not upload following images:\n{images}").format(images= ', \n'.join(image_paths))
-        ErrorMessageWidget(parent=QApplication.activeWindow(),
-                           text=error_summary,
-                           title=message,
-                           email_body=email_body).show()
+        show_error_report(text=error_summary, title=message, email_body=email_body)
 
-    def get_mosaic_images(self, mosaic_id: UUID, callback: Callable):
+    def get_mosaic_images(self, mosaic_id: UUID, callback: Callable, *, mode: RequestMode):
         self.http.get(url=f"{self.server}/rasters/mosaic/{mosaic_id}/image",
                       callback=callback,
-                      use_default_error_handler=False
+                      use_default_error_handler=True,
+                      mode=mode
                      )
 
-    def get_image(self, image_id: UUID, callback: Callable, error_handler: Callable):
+    def get_image(self, image_id: UUID, callback: Callable, error_handler: Callable, *,
+                  mode: RequestMode):
         self.http.get(url=f"{self.server}/rasters/image/{image_id}",
                       callback=callback,
                       use_default_error_handler=False,
-                      error_handler=error_handler
+                      error_handler=error_handler,
+                      mode=mode
                      )
         
     def delete_image(self,
@@ -269,7 +262,8 @@ class DataCatalogApi(QObject):
                          callback_kwargs=callback_kwargs,
                          use_default_error_handler=error_handler is None,
                          error_handler=error_handler,
-                         error_handler_kwargs=error_handler_kwargs or {}
+                         error_handler_kwargs=error_handler_kwargs or {},
+                         mode=RequestMode.INTERACTIVE
                         )
 
     def delete_image_error_handler(self, image_paths: list):
@@ -279,82 +273,75 @@ class DataCatalogApi(QObject):
         else:
             title = self.tr("Error. Could not delete following images:")
             message = ', \n'.join(image_paths)
-        ErrorMessageWidget(parent=QApplication.activeWindow(),
-                           text=message,
-                           title=title,
-                           email_body='').show()
+        show_error_report(text=message, title=title)
 
     def get_image_preview(self,
                           image: ImageReturnSchema,
                           size: PreviewSize,
-                          callback: Callable):
+                          callback: Callable,
+                          *,
+                          mode: RequestMode):
         url = image.preview_url_l if size == PreviewSize.large else image.preview_url_s
         self.http.get(url=url,
                       callback=callback,
                       use_default_error_handler=False,
-                      error_handler=self.preview_s_error_handler
+                      error_handler=self.preview_s_error_handler,
+                      mode=mode
                      )
 
     def preview_s_error_handler(self, response: QNetworkReply):
-        self.dlg.imagePreview.setText("Preview is unavailable")
+        self.previewUnavailable.emit()
     
     def get_image_preview_l(self,
                             image: ImageReturnSchema,
                             footprint,
                             callback: Callable,
-                            image_name: str = ""):
+                            image_name: str = "",
+                            *,
+                            mode: RequestMode):
         self.http.get(url=image.preview_url_l,
                       callback=callback,
                       use_default_error_handler=False,
                       error_handler=self.image_preview_l_error_handler,
                       callback_kwargs={"footprint": footprint,
-                                       "image_name": image_name}
+                                       "image_name": image_name},
+                      mode=mode
                      )
 
     def image_preview_l_error_handler(self, response: QNetworkReply):
         error_summary, email_body = get_error_report_body(response=response,
                                                           response_body=response.readAll().data().decode(),
                                                           plugin_version=self.plugin_version)
-        ErrorMessageWidget(parent=QApplication.activeWindow(),
-                           text=error_summary,
-                           title="Error. Could not display preview",
-                           email_body=email_body).show()
-
-    # Legacy:
-    def upload_to_new_mosaic(self,
-                             image_path: Union[Path, str],
-                             callback: Callable,
-                             callback_kwargs: Optional[dict] = None):
-        url = f"{self.server}/rasters"
-        body = self.create_upload_image_body(image_path=image_path)
-        self.http.post(url=url,
-                       callback=callback,
-                       callback_kwargs=callback_kwargs,
-                       body=body,
-                       timeout=3600  # one hour
-                      )
+        show_error_report(text=error_summary,
+                          title="Error. Could not display preview",
+                          email_body=email_body)
 
     # Status
-    def get_user_limit(self, callback):
+    def get_user_limit(self, callback, *, mode: RequestMode):
         self.http.get(url=f"{self.server}/rasters/memory",
                       callback=callback,
-                      use_default_error_handler=True)
+                      use_default_error_handler=True,
+                      mode=mode)
 
     def update_image_name(self, image_id: UUID, name: str, callback: Callable):
         self.http.put(url=f"{self.server}/rasters/image/{image_id}?name={name}",
                       callback=callback,
-                      use_default_error_handler=True)
+                      use_default_error_handler=True,
+                      mode=RequestMode.INTERACTIVE)
 
     def download_image(self,
                        image_id: UUID,
                        callback: Callable,
                        error_handler: Optional[Callable] = None,
-                       error_handler_kwargs: Optional[dict] = None):
+                       error_handler_kwargs: Optional[dict] = None,
+                       *,
+                       mode: RequestMode):
         self.http.get(url=f"{self.server}/rasters/image/{image_id}/download",
                       callback=callback,
                       use_default_error_handler=error_handler is None,
                       error_handler=error_handler,
-                      error_handler_kwargs=error_handler_kwargs or {}
+                      error_handler_kwargs=error_handler_kwargs or {},
+                      mode=mode
                      )
 
     def download_image_error_handler(self, response: QNetworkReply):
@@ -371,10 +358,7 @@ class DataCatalogApi(QObject):
                                                      response_body=response_body,
                                                      plugin_version=self.plugin_version,
                                                      error_message_parser=data_catalog_message_parser)
-        ErrorMessageWidget(parent=QApplication.activeWindow(),
-                           text=error_summary,
-                           title=self.tr("Download error"),
-                           email_body='').show()
+        show_error_report(text=error_summary, title=self.tr("Download error"))
 
     @staticmethod
     def create_upload_image_body(image_path):

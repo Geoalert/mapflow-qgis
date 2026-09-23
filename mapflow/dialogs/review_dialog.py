@@ -5,6 +5,7 @@ from PyQt5.QtWidgets import QWidget, QDialogButtonBox
 from qgis.core import QgsMapLayerProxyModel
 
 from .icons import plugin_icon
+from ..error_guard import guarded_connect
 
 ui_path = Path(__file__).parent/'static'/'ui'
 
@@ -27,8 +28,12 @@ class ReviewDialog(*uic.loadUiType(ui_path/'review_dialog.ui')):
         ok = self.buttonBox.button(QDialogButtonBox.Ok)
         ok.setEnabled(self.review_submit_allowed())
         # Enabled only if the text is entered
-        self.reviewComment.textChanged.connect(lambda: ok.setEnabled(self.review_submit_allowed()))
-        self.reviewLayerCombo.layerChanged.connect(lambda: ok.setEnabled(self.review_submit_allowed()))
+        guarded_connect(self.reviewComment.textChanged,
+                        lambda: ok.setEnabled(self.review_submit_allowed()),
+                        "validating the review form", self)
+        guarded_connect(self.reviewLayerCombo.layerChanged,
+                        lambda: ok.setEnabled(self.review_submit_allowed()),
+                        "validating the review form", self)
 
     def review_submit_allowed(self):
         text_ok = self.reviewComment.toPlainText() != ""

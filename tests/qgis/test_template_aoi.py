@@ -3,9 +3,12 @@ the in-template table rows, AOI rename, and AOI-filtered search (spec 002_F)."""
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+from mapflow.functional.controller.template_controller import TemplateController
 from mapflow.functional.service import processing_service as ps_mod
+from mapflow.functional.service import template_service as ts_mod
 from mapflow.functional.service.processing_service import ProcessingService
-from mapflow.mapflow import Mapflow
+from mapflow.functional.service.template_service import TemplateService
+from mapflow.http import RequestMode
 from mapflow.schema.processing import ProcessingParams
 from mapflow.schema.template import (
     AOI_NAME_MAX_LENGTH,
@@ -16,40 +19,49 @@ from mapflow.schema.template import (
 )
 
 
+def _template_service(**attrs):
+    """A TemplateService with the in-template state the test needs. The api and the project's
+    template dict are still reached through ProcessingService, so that stays a mock."""
+    service = TemplateService(app_context=MagicMock(), processing_service=MagicMock())
+    for name, value in attrs.items():
+        setattr(service, name, value)
+    return service
+
+
 def test_template_single_data_provider_backfill_source():
     """providerName backfill source: the template's sole search data provider, else None."""
-    plugin = Mapflow.__new__(Mapflow)
+    service = TemplateService(app_context=MagicMock(), processing_service=MagicMock())
     single = SimpleNamespace(searchParams=SearchParams(dataProviders=["arcgis_world_imagery"]))
-    assert plugin._template_single_data_provider(single) == "arcgis_world_imagery"
+    assert service._single_data_provider(single) == "arcgis_world_imagery"
     several = SimpleNamespace(searchParams=SearchParams(dataProviders=["a", "b"]))
-    assert plugin._template_single_data_provider(several) is None
+    assert service._single_data_provider(several) is None
     none = SimpleNamespace(searchParams=SearchParams(dataProviders=None))
-    assert plugin._template_single_data_provider(none) is None
+    assert service._single_data_provider(none) is None
     as_dict = SimpleNamespace(searchParams={"dataProviders": ["mapbox"]})
-    assert plugin._template_single_data_provider(as_dict) == "mapbox"
+    assert service._single_data_provider(as_dict) == "mapbox"
 
 
 def test_refresh_template_view_polls_only_processings():
     """The poll tick must be a single /processings request, not get_template + processings."""
-    service = ProcessingService.__new__(ProcessingService)
-    service.active_template = SimpleNamespace(id="t-1")
-    service.api = MagicMock()
+    service = _template_service(active_template=SimpleNamespace(id="t-1"))
 
-    service.refresh_template_view()
+    service.refresh_template_view(mode=RequestMode.POLL)
 
-    service.api.get_template_processings.assert_called_once()
-    service.api.get_template.assert_not_called()
+    api = service.processing_service.api
+    api.get_template_processings.assert_called_once()
+    assert api.get_template_processings.call_args.kwargs["mode"] is RequestMode.POLL
+    api.get_template.assert_not_called()
 
 
 def test_sync_aoi_statuses_from_processings_refreshes_aoi_status():
     """AOI status stays current from the polled processings without re-fetching the template."""
     from mapflow.schema.status import ProcessingStatus
-    service = ProcessingService.__new__(ProcessingService)
     aoi = TemplateAoiDTO.from_feature(
         _aoi_feature(processings=[{"processingId": "p1", "processingStatus": "OK"}])
     )
-    service.template_aois = {aoi.table_id: aoi}
-    service.template_processings = {"p1": SimpleNamespace(status=ProcessingStatus("FAILED"))}
+    service = _template_service(
+        template_aois={aoi.table_id: aoi},
+        template_processings={"p1": SimpleNamespace(status=ProcessingStatus("FAILED"))})
 
     service._sync_aoi_statuses_from_processings()
 
@@ -151,7 +163,6 @@ def test_template_dto_aoi_dtos():
 
 def test_combined_template_rows_groups_processings_under_their_aoi():
     """Grouped layout: AOI row, then its processings, then the next AOI."""
-    service = ProcessingService.__new__(ProcessingService)
     aoi1 = TemplateAoiDTO.from_feature(_aoi_feature(
         "a1", "Alpha",
         processings=[
@@ -160,8 +171,9 @@ def test_combined_template_rows_groups_processings_under_their_aoi():
         ],
     ))
     aoi2 = TemplateAoiDTO.from_feature(_aoi_feature("a2", "Beta", processings=[]))
-    service.template_aois = {aoi1.table_id: aoi1, aoi2.table_id: aoi2}
-    service.template_processings = {}  # full processings not loaded -> link fallback
+    service = _template_service(
+        template_aois={aoi1.table_id: aoi1, aoi2.table_id: aoi2},
+        template_processings={})  # full processings not loaded -> link fallback
 
     rows = service.combined_template_rows()
 
@@ -176,10 +188,10 @@ def test_combined_template_rows_groups_processings_under_their_aoi():
 def test_get_template_processings_callback_keeps_full_processings(monkeypatch):
     """The v1 /processings list is parsed into TemplateProcessingSchema, keyed by id,
     for double-click loading (grouped display itself comes from aoiDetails)."""
-    service = ProcessingService.__new__(ProcessingService)
+    service = _template_service()
 
     sentinel = SimpleNamespace(id="p-1")
-    monkeypatch.setattr(ps_mod.TemplateProcessingSchema, "from_dict", staticmethod(lambda d: sentinel))
+    monkeypatch.setattr(ts_mod.TemplateProcessingSchema, "from_dict", staticmethod(lambda d: sentinel))
 
     response = MagicMock()
     response.readAll.return_value.data.return_value = b'[{"id":"p-1"}]'
@@ -190,20 +202,17 @@ def test_get_template_processings_callback_keeps_full_processings(monkeypatch):
 
 
 def test_rename_aoi_calls_update_aoi_endpoint(monkeypatch):
-    service = ProcessingService.__new__(ProcessingService)
-    service.tr = lambda text: text
-    service.dlg = MagicMock()
-    service.api = MagicMock()
     aoi = TemplateAoiDTO.from_feature(_aoi_feature("aoi-1", "Old"))
+    service = _template_service(active_template=SimpleNamespace(id="t-1"))
     service.selected_aoi = MagicMock(return_value=aoi)
-    service.active_template = SimpleNamespace(id="t-1")
 
-    monkeypatch.setattr(ps_mod.QInputDialog, "getText", lambda *args, **kwargs: ("New name", True))
+    monkeypatch.setattr(ts_mod, "ask_text", lambda *args, **kwargs: ("New name", True))
 
     service.rename_aoi()
 
-    service.api.update_aoi.assert_called_once()
-    kwargs = service.api.update_aoi.call_args.kwargs
+    api = service.processing_service.api
+    api.update_aoi.assert_called_once()
+    kwargs = api.update_aoi.call_args.kwargs
     assert kwargs["template_id"] == "t-1"
     assert kwargs["aoi_id"] == "aoi-1"
     assert isinstance(kwargs["data"], UpdateAoiSchema)
@@ -211,72 +220,61 @@ def test_rename_aoi_calls_update_aoi_endpoint(monkeypatch):
 
 
 def test_rename_aoi_rejects_overlong_name(monkeypatch):
-    service = ProcessingService.__new__(ProcessingService)
-    service.tr = lambda text: text
-    service.dlg = MagicMock()
-    service.api = MagicMock()
     aoi = TemplateAoiDTO.from_feature(_aoi_feature("aoi-1", "Old"))
+    service = _template_service(active_template=SimpleNamespace(id="t-1"))
     service.selected_aoi = MagicMock(return_value=aoi)
-    service.active_template = SimpleNamespace(id="t-1")
     alerts = []
-    monkeypatch.setattr(ps_mod, "alert", lambda *a, **k: alerts.append(a))
+    monkeypatch.setattr(ts_mod, "alert_warning", lambda *a, **k: alerts.append(a))
     monkeypatch.setattr(
-        ps_mod.QInputDialog, "getText",
+        ts_mod, "ask_text",
         lambda *args, **kwargs: ("x" * (AOI_NAME_MAX_LENGTH + 1), True),
     )
 
     service.rename_aoi()
 
-    service.api.update_aoi.assert_not_called()
+    service.processing_service.api.update_aoi.assert_not_called()
     assert alerts  # user was warned
 
 
+def _filter_service(selected_aois, aoi_filter=None, template=SimpleNamespace(id="t-1")):
+    service = TemplateService(app_context=MagicMock(), processing_service=MagicMock())
+    service.in_template_mode = True
+    service.active_template = template
+    service.selected_aois = lambda: selected_aois
+    service.search_aoi_filter = aoi_filter
+    service.load_search = MagicMock()
+    return service
+
+
 def test_filter_search_by_selected_aoi_passes_selected_aoi_ids():
-    plugin = Mapflow.__new__(Mapflow)
-    plugin.processing_service = MagicMock()
-    plugin.processing_service.in_template_mode = True
-    plugin._template_search_aoi_filter = None
     template = SimpleNamespace(id="t-1")
-    plugin.processing_service.active_template = template
-    plugin.processing_service.selected_aois.return_value = [SimpleNamespace(id="aoi-1")]
-    plugin._load_template_search = MagicMock()
+    service = _filter_service([SimpleNamespace(id="aoi-1")], template=template)
 
-    plugin.filter_search_by_selected_aoi()
+    service.filter_search_by_selected_aois()
 
-    plugin._load_template_search.assert_called_once_with(template, aoi_ids=["aoi-1"])
-    assert plugin._template_search_aoi_filter == frozenset({"aoi-1"})
+    service.load_search.assert_called_once_with(template, aoi_ids=["aoi-1"])
+    assert service.search_aoi_filter == frozenset({"aoi-1"})
 
 
 def test_filter_search_resets_to_all_when_aoi_deselected():
     """De-selecting all AOIs (or selecting a processing) restores the full template results."""
-    plugin = Mapflow.__new__(Mapflow)
-    plugin.processing_service = MagicMock()
-    plugin.processing_service.in_template_mode = True
     template = SimpleNamespace(id="t-1")
-    plugin.processing_service.active_template = template
-    plugin.processing_service.selected_aois.return_value = []
-    plugin._template_search_aoi_filter = frozenset({"aoi-1"})  # previously filtered by an AOI
-    plugin._load_template_search = MagicMock()
+    # Previously filtered by an AOI.
+    service = _filter_service([], aoi_filter=frozenset({"aoi-1"}), template=template)
 
-    plugin.filter_search_by_selected_aoi()
+    service.filter_search_by_selected_aois()
 
-    plugin._load_template_search.assert_called_once_with(template, aoi_ids=None)
-    assert plugin._template_search_aoi_filter is None
+    service.load_search.assert_called_once_with(template, aoi_ids=None)
+    assert service.search_aoi_filter is None
 
 
 def test_filter_search_noop_when_filter_unchanged():
     """Selection churn that doesn't change the effective AOI filter must not reload."""
-    plugin = Mapflow.__new__(Mapflow)
-    plugin.processing_service = MagicMock()
-    plugin.processing_service.in_template_mode = True
-    plugin.processing_service.active_template = SimpleNamespace(id="t-1")
-    plugin.processing_service.selected_aois.return_value = []
-    plugin._template_search_aoi_filter = None  # already showing all results
-    plugin._load_template_search = MagicMock()
+    service = _filter_service([], aoi_filter=None)  # already showing all results
 
-    plugin.filter_search_by_selected_aoi()
+    service.filter_search_by_selected_aois()
 
-    plugin._load_template_search.assert_not_called()
+    service.load_search.assert_not_called()
 
 
 def test_aoi_status_aggregates_processing_statuses():
@@ -299,15 +297,14 @@ def test_aoi_status_aggregates_processing_statuses():
 
 def test_combined_template_rows_appends_unbound_under_no_aoi_separator():
     from mapflow.schema.template import NoAoiProcessingsRow
-    service = ProcessingService.__new__(ProcessingService)
     aoi = TemplateAoiDTO.from_feature(_aoi_feature(
         "a1", "Alpha",
         processings=[{"processingId": "p1", "processingName": "P1", "processingStatus": "OK"}],
     ))
-    service.template_aois = {aoi.table_id: aoi}
     bound = SimpleNamespace(id="p1", is_final_state=True)
     unbound = SimpleNamespace(id="p9", is_final_state=True)
-    service.template_processings = {"p1": bound, "p9": unbound}
+    service = _template_service(template_aois={aoi.table_id: aoi},
+                                template_processings={"p1": bound, "p9": unbound})
 
     rows = service.combined_template_rows()
 
@@ -332,11 +329,10 @@ def test_processing_params_v2_shape_still_parses():
 def test_template_to_run_uses_active_template_in_template_mode():
     """Inside a template there is no selected template row, so the planned-start gate must
     use the active template — otherwise 'Start planned processing' never triggers."""
-    from mapflow.entity.provider import ImagerySearchProvider
+    from mapflow.model.provider import ImagerySearchProvider
     service = ProcessingService.__new__(ProcessingService)
-    service.in_template_mode = True
     template = SimpleNamespace(id="t-1")
-    service.active_template = template
+    service.set_open_template(template)
     service.app_context = SimpleNamespace(
         data_provider=ImagerySearchProvider(proxy="https://example"),
         open_template_results_id="t-1",
@@ -346,10 +342,9 @@ def test_template_to_run_uses_active_template_in_template_mode():
 
 
 def test_template_to_run_none_when_open_results_belong_to_other_template():
-    from mapflow.entity.provider import ImagerySearchProvider
+    from mapflow.model.provider import ImagerySearchProvider
     service = ProcessingService.__new__(ProcessingService)
-    service.in_template_mode = True
-    service.active_template = SimpleNamespace(id="t-1")
+    service.set_open_template(SimpleNamespace(id="t-1"))
     service.app_context = SimpleNamespace(
         data_provider=ImagerySearchProvider(proxy="https://example"),
         open_template_results_id="other",
@@ -359,11 +354,12 @@ def test_template_to_run_none_when_open_results_belong_to_other_template():
 
 
 def test_filter_search_by_selected_aoi_noop_outside_template_mode():
-    plugin = Mapflow.__new__(Mapflow)
-    plugin.processing_service = MagicMock()
-    plugin.processing_service.in_template_mode = False
-    plugin._load_template_search = MagicMock()
+    """The in-template check stays with the caller: the service has no view of navigation."""
+    controller = TemplateController.__new__(TemplateController)
+    controller.template_service = MagicMock()
+    controller.template_service.in_template_mode = False
+    controller.processing_service = SimpleNamespace(in_template_mode=False)
 
-    plugin.filter_search_by_selected_aoi()
+    controller.filter_search_by_selected_aoi()
 
-    plugin._load_template_search.assert_not_called()
+    controller.template_service.filter_search_by_selected_aois.assert_not_called()

@@ -5,7 +5,7 @@ search, and that template's results are open in the search table.
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from mapflow.entity.provider.default import ImagerySearchProvider
+from mapflow.model.provider.default import ImagerySearchProvider
 from mapflow.functional.service.processing_service import ProcessingService
 from mapflow.mapflow import Mapflow
 
@@ -53,29 +53,42 @@ def test_template_to_run_none_when_results_not_open():
     assert _service(template, data_provider=isp, open_id="other-template").template_to_run() is None
 
 
+def _start_button_controller():
+    from PyQt5.QtCore import QObject
+    from mapflow.functional.controller.processing_controller import ProcessingController
+    controller = ProcessingController.__new__(ProcessingController)
+    QObject.__init__(controller)
+    controller.tr = lambda text: text
+    controller.processing_service = MagicMock()
+    controller.processing_view = MagicMock()
+    return controller
+
+
 def test_start_button_text_follows_template_to_run():
-    plugin = Mapflow.__new__(Mapflow)
-    plugin.tr = lambda text: text
-    plugin.dlg = MagicMock()
-    plugin.processing_service = MagicMock()
+    controller = _start_button_controller()
 
-    plugin.processing_service.template_to_run.return_value = SimpleNamespace(id="t1")
-    plugin.update_start_processing_button_text()
-    plugin.dlg.startProcessing.setText.assert_called_with("Start planned processing")
+    controller.processing_service.template_to_run.return_value = SimpleNamespace(id="t1")
+    controller.update_start_processing_button_text()
+    controller.processing_view.set_start_button_text.assert_called_with("Start planned processing")
 
-    plugin.processing_service.template_to_run.return_value = None
-    plugin.update_start_processing_button_text()
-    plugin.dlg.startProcessing.setText.assert_called_with("Start processing")
+    controller.processing_service.template_to_run.return_value = None
+    controller.update_start_processing_button_text()
+    controller.processing_view.set_start_button_text.assert_called_with("Start processing")
 
 
-def _create_template_plugin():
-    plugin = Mapflow.__new__(Mapflow)
-    plugin.tr = lambda text: text
-    plugin.dlg = MagicMock()
-    plugin.processing_service = MagicMock()
-    # Use the real template-response parser (the schema path), not a mock.
-    plugin.processing_service._parse_template_response = ProcessingService._parse_template_response
-    return plugin
+def _create_template_service():
+    from mapflow.functional.service.template_service import TemplateService
+    service = TemplateService.__new__(TemplateService)
+    TemplateService.__init__(service, app_context=SimpleNamespace(plugin_version="1.0"),
+                             processing_service=MagicMock())
+    return service
+
+
+def _refresh_requests(service):
+    """The service asks for the table to be refreshed; the controller decides which view."""
+    asked = []
+    service.refreshRequested.connect(lambda: asked.append(True))
+    return asked
 
 
 def _response(body: bytes):
@@ -96,38 +109,41 @@ def _template_body(is_active):
 
 def test_create_template_callback_warns_when_inactive(monkeypatch):
     alerts = []
-    monkeypatch.setattr("mapflow.mapflow.alert", lambda msg, icon=None: alerts.append(msg))
-    plugin = _create_template_plugin()
+    monkeypatch.setattr("mapflow.functional.service.template_service.alert_warning", lambda msg, icon=None: alerts.append(msg))
+    plugin = _create_template_service()
+    asked = _refresh_requests(plugin)
 
     plugin.create_search_template_callback(_response(_template_body(is_active=False)))
 
     assert "inactive" in alerts[0].lower()
     assert "maximum number of active planned processings" in alerts[0].lower()
-    plugin.processing_service.get_processings.assert_called_once()
+    assert asked == [True]
 
 
 def test_create_template_callback_no_warning_when_active(monkeypatch):
     # An active template creates no inactive warning; the list refresh is the feedback.
     alerts = []
-    monkeypatch.setattr("mapflow.mapflow.alert", lambda msg, icon=None: alerts.append(msg))
-    plugin = _create_template_plugin()
+    monkeypatch.setattr("mapflow.functional.service.template_service.alert_warning", lambda msg, icon=None: alerts.append(msg))
+    plugin = _create_template_service()
+    asked = _refresh_requests(plugin)
 
     plugin.create_search_template_callback(_response(_template_body(is_active=True)))
 
     assert alerts == []
-    plugin.processing_service.get_processings.assert_called_once()
+    assert asked == [True]
 
 
 def test_create_template_callback_no_warning_when_response_unparseable(monkeypatch):
     # A response that can't be parsed into a template must not raise a false "inactive" warning.
     alerts = []
-    monkeypatch.setattr("mapflow.mapflow.alert", lambda msg, icon=None: alerts.append(msg))
-    plugin = _create_template_plugin()
+    monkeypatch.setattr("mapflow.functional.service.template_service.alert_warning", lambda msg, icon=None: alerts.append(msg))
+    plugin = _create_template_service()
+    asked = _refresh_requests(plugin)
 
     plugin.create_search_template_callback(_response(b'{}'))
 
     assert alerts == []
-    plugin.processing_service.get_processings.assert_called_once()
+    assert asked == [True]
 
 
 def test_provider_change_refreshes_start_button_text():
@@ -137,15 +153,19 @@ def test_provider_change_refreshes_start_button_text():
     provider = MagicMock()  # not an ImagerySearchProvider/MyImageryProvider -> the generic branch
     provider.requires_image_id = False
     plugin.dlg = MagicMock()
-    plugin.dlg.providerIndex.return_value = 0
+    plugin.provider_view = MagicMock()
+    plugin.provider_view.provider_index.return_value = 0
+    plugin.aoi_view = MagicMock()
     plugin.provider_service = MagicMock()
     plugin.provider_service.providers = [provider]
     plugin.app_context = SimpleNamespace(data_provider=None)
     plugin.toggle_imagery_search = MagicMock()
     plugin.area_calculator_service = MagicMock()
-    plugin.update_start_processing_button_text = MagicMock()
+    plugin.processing_controller = MagicMock()
 
     plugin.on_provider_change()
 
     assert plugin.app_context.data_provider is provider
-    plugin.update_start_processing_button_text.assert_called_once()
+    plugin.processing_controller.update_start_processing_button_text.assert_called_once()
+    # A tiled source keeps its zoom selectable; only imagery-search and My Imagery lock it.
+    plugin.provider_view.enable_zoom.assert_called_once_with(True)

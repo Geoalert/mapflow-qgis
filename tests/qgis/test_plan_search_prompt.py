@@ -4,10 +4,13 @@ search offers to create a Planned Search (a template auto-named "Searching <date
 the selected project. The existing templateAreaLimit block still applies to that creation."""
 import json
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
+
+from PyQt5.QtCore import QObject
 
 from mapflow.functional.app_context import AppContext
-from mapflow import mapflow as mapflow_module
+from mapflow.functional.service.account_service import AccountService
+from mapflow.functional.service.template_service import TemplateService
 from mapflow.mapflow import Mapflow
 
 
@@ -26,124 +29,134 @@ def _user_status_response(**overrides):
     return response
 
 
-def test_set_processing_limit_stores_search_area_limit_in_sq_km():
-    plugin = Mapflow.__new__(Mapflow)
-    plugin.tr = lambda text: text
-    plugin.plugin_name = "Mapflow"
-    plugin.config = SimpleNamespace(MAX_AOIS_PER_PROCESSING=1)
-    plugin.app_context = AppContext()
-    plugin.dlg = MagicMock()
-
-    plugin.set_processing_limit(_user_status_response())
-
-    assert plugin.app_context.search_area_limit == 1.0
+def _account_service():
+    service = AccountService.__new__(AccountService)
+    QObject.__init__(service)
+    service.tr = lambda text: text
+    service.plugin_name = "Mapflow"
+    service.config = SimpleNamespace(MAX_AOIS_PER_PROCESSING=1)
+    service.app_context = AppContext()
+    return service
 
 
-def test_set_processing_limit_defaults_search_area_limit_to_zero_when_absent():
-    plugin = Mapflow.__new__(Mapflow)
-    plugin.tr = lambda text: text
-    plugin.plugin_name = "Mapflow"
-    plugin.config = SimpleNamespace(MAX_AOIS_PER_PROCESSING=1)
-    plugin.app_context = AppContext()
-    plugin.dlg = MagicMock()
+def test_search_area_limit_is_stored_in_sq_km():
+    service = _account_service()
+
+    service.apply_status(_user_status_response())
+
+    assert service.app_context.search_area_limit == 1.0
+
+
+def test_search_area_limit_defaults_to_zero_when_absent():
+    service = _account_service()
 
     response = _user_status_response()
     payload = json.loads(response.readAll.return_value.data.return_value)
     payload.pop("searchAreaLimit")
     response.readAll.return_value.data.return_value = json.dumps(payload).encode()
 
-    plugin.set_processing_limit(response)
+    service.apply_status(response)
 
-    assert plugin.app_context.search_area_limit == 0.0
+    assert service.app_context.search_area_limit == 0.0
 
 
-def _plugin(search_area_limit, aoi_size, mode="search"):
-    plugin = Mapflow.__new__(Mapflow)
-    plugin.tr = lambda text: text
-    plugin.metadata_search_mode = mode
-    plugin.app_context = SimpleNamespace(search_area_limit=search_area_limit, aoi_size=aoi_size)
-    plugin.get_metadata = MagicMock()
-    plugin.create_search_template = MagicMock()
-    plugin._prompt_plan_search = MagicMock()
-    return plugin
+# ---------- the plan-search gating moved to TemplateService / TemplateController ----------
+
+def _service(search_area_limit, aoi_size):
+    return TemplateService(
+        app_context=SimpleNamespace(search_area_limit=search_area_limit, aoi_size=aoi_size),
+        processing_service=MagicMock())
 
 
 def test_search_area_exceeds_limit_true_when_over():
-    plugin = _plugin(search_area_limit=1.0, aoi_size=2.0)
-    assert plugin._search_area_exceeds_limit() is True
+    assert _service(search_area_limit=1.0, aoi_size=2.0).search_area_exceeds_limit() is True
 
 
 def test_search_area_exceeds_limit_false_when_under_or_unknown():
-    assert _plugin(search_area_limit=1.0, aoi_size=0.5)._search_area_exceeds_limit() is False
-    assert _plugin(search_area_limit=0.0, aoi_size=99.0)._search_area_exceeds_limit() is False
+    assert _service(search_area_limit=1.0, aoi_size=0.5).search_area_exceeds_limit() is False
+    assert _service(search_area_limit=0.0, aoi_size=99.0).search_area_exceeds_limit() is False
 
 
-def test_button_click_offers_plan_search_when_area_too_large():
-    plugin = _plugin(search_area_limit=1.0, aoi_size=5.0)
-
-    plugin.handle_metadata_button_click()
-
-    plugin._prompt_plan_search.assert_called_once()
-    plugin.get_metadata.assert_not_called()
+def test_search_area_at_exactly_the_limit_does_not_exceed():
+    """The boundary: an AOI exactly at the limit is allowed an immediate search — `>`, not `>=`.
+    Without this case a `>=` off-by-one passes every other test."""
+    assert _service(search_area_limit=1.0, aoi_size=1.0).search_area_exceeds_limit() is False
 
 
-def test_button_click_runs_search_when_within_limit():
-    plugin = _plugin(search_area_limit=1.0, aoi_size=0.5)
-
-    plugin.handle_metadata_button_click()
-
-    plugin.get_metadata.assert_called_once()
-    plugin._prompt_plan_search.assert_not_called()
-
-
-def test_button_click_in_plan_mode_creates_template_directly():
-    plugin = _plugin(search_area_limit=1.0, aoi_size=5.0, mode="plan")
-
-    plugin.handle_metadata_button_click()
-
-    plugin.create_search_template.assert_called_once()
-    plugin._prompt_plan_search.assert_not_called()
-    plugin.get_metadata.assert_not_called()
-
-
-def test_planned_search_default_name_has_prefix():
+def _dispatch_plugin(exceeds, mode="search"):
+    """`handle_metadata_button_click` stays in mapflow.py — it dispatches to the template
+    controller (plan / too-large) or to SearchController.run_search."""
     plugin = Mapflow.__new__(Mapflow)
-    plugin.tr = lambda text, **_: text.format(**_) if _ else text
-    name = plugin._planned_search_default_name()
-    assert name.startswith("Searching ")
-
-
-def _prompt_plugin():
-    plugin = Mapflow.__new__(Mapflow)
-    plugin.tr = lambda text, **kw: text.format(**kw) if kw else text
-    plugin.plugin_name = "Mapflow"
-    plugin.main_window = None
-    plugin.create_search_template = MagicMock()
-    plugin._planned_search_default_name = MagicMock(return_value="Searching 2026-07-14 10:00")
+    plugin.search_view = MagicMock()
+    plugin.search_view.search_mode = mode
+    plugin.search_controller = MagicMock()
+    plugin.template_service = MagicMock()
+    plugin.template_service.in_template_mode = False
+    plugin.template_service.search_area_exceeds_limit.return_value = exceeds
+    plugin.template_controller = MagicMock()
     return plugin
 
 
+def test_button_click_offers_plan_search_when_area_too_large():
+    plugin = _dispatch_plugin(exceeds=True)
+
+    plugin.handle_metadata_button_click()
+
+    plugin.template_controller.prompt_plan_search.assert_called_once()
+    plugin.search_controller.run_search.assert_not_called()
+
+
+def test_button_click_runs_search_when_within_limit():
+    plugin = _dispatch_plugin(exceeds=False)
+
+    plugin.handle_metadata_button_click()
+
+    plugin.search_controller.run_search.assert_called_once()
+    plugin.template_controller.prompt_plan_search.assert_not_called()
+
+
+def test_button_click_in_plan_mode_creates_template_directly():
+    plugin = _dispatch_plugin(exceeds=True, mode="plan")
+
+    plugin.handle_metadata_button_click()
+
+    plugin.template_controller.create_search_template.assert_called_once()
+    plugin.template_controller.prompt_plan_search.assert_not_called()
+    plugin.search_controller.run_search.assert_not_called()
+
+
+def test_planned_search_default_name_has_prefix():
+    name = _service(0, 0).planned_search_default_name()
+    assert name.startswith("Searching ")
+
+
+# ---------- the prompt dialog itself moved to TemplateView; the controller drives it ----------
+
+def _controller(plan_confirmed):
+    from mapflow.functional.controller.template_controller import TemplateController
+    controller = TemplateController.__new__(TemplateController)
+    controller.template_service = MagicMock()
+    controller.template_service.in_template_mode = False
+    controller.template_service.planned_search_default_name.return_value = "Searching 2026-07-14 10:00"
+    controller.template_view = MagicMock()
+    controller.template_view.prompt_plan_search.return_value = plan_confirmed
+    controller.app_context = SimpleNamespace(plugin_name="Mapflow")
+    controller.create_search_template = MagicMock()
+    return controller
+
+
 def test_prompt_plan_search_creates_template_on_confirm():
-    plugin = _prompt_plugin()
-    box = MagicMock()
-    plan_button = object()
-    box.addButton.side_effect = [MagicMock(), plan_button]  # Cancel, then Plan Search
-    box.clickedButton.return_value = plan_button
+    controller = _controller(plan_confirmed=True)
 
-    with patch.object(mapflow_module, "QMessageBox", return_value=box):
-        plugin._prompt_plan_search()
+    controller.prompt_plan_search()
 
-    plugin.create_search_template.assert_called_once_with(name_override="Searching 2026-07-14 10:00")
+    controller.create_search_template.assert_called_once_with(
+        name_override="Searching 2026-07-14 10:00")
 
 
 def test_prompt_plan_search_cancel_does_nothing():
-    plugin = _prompt_plugin()
-    box = MagicMock()
-    plan_button = object()
-    box.addButton.side_effect = [MagicMock(), plan_button]
-    box.clickedButton.return_value = object()  # some other button (Cancel)
+    controller = _controller(plan_confirmed=False)
 
-    with patch.object(mapflow_module, "QMessageBox", return_value=box):
-        plugin._prompt_plan_search()
+    controller.prompt_plan_search()
 
-    plugin.create_search_template.assert_not_called()
+    controller.create_search_template.assert_not_called()

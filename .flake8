@@ -1,0 +1,78 @@
+[flake8]
+# Mirrors the qgis.org submission scan, which runs flake8 at
+# --max-line-length=120 with its default rule set. The Makefile passes the
+# same flag on the CLI (which wins); it is repeated here so a bare
+# editor-invoked `flake8` agrees with `make lint`.
+max-line-length = 120
+
+exclude = .git,__pycache__,venv,.venv,build,dist,.pytest_cache,.ruff_cache
+
+# Intentional re-exports: __init__.py imports symbols to form the package's
+# public API, so they read as unused locally. Restores the ignore ruff carried
+# in pyproject.toml before the flake8 migration.
+per-file-ignores =
+    __init__.py:F401
+
+# --------------------------------------------------------------------------
+# DEBT LEDGER — rule classes still outstanding from the 3.6.0 scan.
+#
+# THIS LIST ONLY SHRINKS. Do not add a code here to make an MR pass; fix the
+# finding or escalate. Every entry names the WAL step that removes it.
+#
+# qgis.org does not read this file (its scan runs against the packaged
+# mapflow/ directory), so everything listed here is debt still owed at
+# submission time.
+#
+# extend-ignore, never ignore: `ignore` REPLACES flake8's default ignore set
+# and silently re-enables rules qgis.org itself does not report.
+# --------------------------------------------------------------------------
+extend-ignore =
+# Dead imports outside __init__.py. Deferred rather than fixed: this tree has
+# circular imports that survive only via partial-module caching (documented in
+# tests/functional/conftest.py), so an import flake8 calls unused may be
+# load-bearing. Revisit during the refactor, when the import graph is being
+# redrawn anyway.
+    F401,
+# WAL 3.7.0 §1 — whitespace and formatting normalisation, deferred until
+# immediately before the refactor branch cut. These classes concentrate in
+# mapflow.py and the service layer, which "Implement the refactoring" rewrites,
+# so normalising now means doing the work twice. Deferral also keeps the
+# in-flight feature/track-uploaded-image-status rebase (WAL §3) tractable.
+#
+# trailing / blank-line whitespace
+    W291,
+    W292,
+    W293,
+    W391,
+    E301,
+    E302,
+    E303,
+    E306,
+# line length
+    E501,
+# continuation-line indentation
+    E122,
+    E124,
+    E127,
+    E128,
+    E131,
+# whitespace around punctuation and operators
+    E201,
+    E202,
+    E203,
+    E211,
+    E222,
+    E225,
+    E231,
+    E251,
+    E271,
+    E275,
+# comment formatting
+    E261,
+    E262,
+    E265,
+# indentation
+    E111,
+    E117,
+# redundant backslash inside brackets
+    E502

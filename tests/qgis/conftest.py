@@ -4,8 +4,6 @@ Tests in this directory need a real PyQGIS runtime — they import plugin
 modules that touch qgis.core / qgis.gui at module load time. Run inside
 the qgis/qgis:release-3_28 Docker image (see Dockerfile.tests + Makefile).
 """
-import importlib
-
 import pytest
 from unittest.mock import MagicMock
 
@@ -20,16 +18,60 @@ def pytest_configure(config):
     from qgis.testing import start_app
     start_app()
 
-    # Pre-warm the mapflow module tree to survive the circular import on first load.
-    # The chain mapflow.schema.processing -> entity.provider -> functional.layer_utils
-    # -> dialogs -> mapflow.schema creates a circular dependency that fails on the
-    # first attempt but succeeds on retry because partial modules are cached.
-    for _ in range(2):
-        try:
-            importlib.import_module("mapflow.schema.processing")
-            break
-        except ImportError:
-            pass
+    # start_app() gives QgsApplication but not the Processing framework, so `qgis.processing`
+    # resolves to a namespace package with no `run`. Any plugin code that clips or repairs
+    # geometry then raises AttributeError instead of doing the work — the AOI/footprint
+    # intersection behind My Imagery is the clearest case, and it turns into an error in
+    # whichever test happens to trigger it rather than a visible gap.
+    # Guarded: if the Processing plugin is not present the tier still runs, just without
+    # those code paths, which is what happened before this was added.
+    try:
+        from processing.core.Processing import Processing
+        Processing.initialize()
+    except Exception as error:  # pragma: no cover - environment capability probe
+        print(f"QGIS Processing unavailable, geometry operations will not run: {error}")
+
+    # Initialise the message-tier singleton once. Service code calls `alert_info`/`alert_warning`/
+    # `alert_confirm` (module functions that go through `AlertService.instance()`), which raises if
+    # the singleton was never created. A unit test that triggers one without building the plugin
+    # would hit that RuntimeError; `_no_blocking_dialogs` already stops the dialog from opening, and
+    # this stops the lookup from failing — the same "make forgetting harmless" intent.
+    from mapflow.infra.alert_service import AlertService
+    AlertService("Mapflow")
+
+
+@pytest.fixture(autouse=True)
+def _no_blocking_dialogs(monkeypatch):
+    """Never let a modal dialog open in the test container.
+
+    `alert()` defaults to `blocking=True`, which is `QMessageBox.exec()` — an event loop with
+    nobody to close it here. An unstubbed call does not fail the run, it **hangs** it: pytest
+    prints nothing further and the tier sits until it is killed, with no indication of which test
+    is stuck. Fourteen test modules stub `alert` themselves precisely to avoid this, which means
+    the protection holds only for as long as everyone remembers it.
+
+    Patching the dialog primitives instead makes forgetting harmless: `exec` returns `Ok`
+    immediately, so a missed stub produces a normal pass or a normal assertion failure. Modules
+    that stub `alert` are unaffected — their patch shadows this one.
+    """
+    from PyQt5.QtWidgets import QInputDialog, QMessageBox
+    monkeypatch.setattr(QMessageBox, "exec", lambda self: QMessageBox.Ok, raising=False)
+    monkeypatch.setattr(QMessageBox, "exec_", lambda self: QMessageBox.Ok, raising=False)
+    monkeypatch.setattr(QMessageBox, "open", lambda self: None, raising=False)
+    # ask_text() is the other blocking prompt reachable from service code.
+    monkeypatch.setattr(QInputDialog, "getText", staticmethod(lambda *a, **k: ("", False)),
+                        raising=False)
+
+
+@pytest.fixture(autouse=True)
+def _fresh_alert_throttle(monkeypatch):
+    """A private message-tier budget per test. `alert_service._throttle` is process-wide, so without
+    this a message shown in one test would suppress the same message in a later one (the 60 s window
+    outlasts a whole test run), failing an unrelated test. Mirrors test_reporter.py's fresh_throttle.
+    """
+    from mapflow.infra import alert_service
+    from mapflow.report_throttle import ReportThrottle
+    monkeypatch.setattr(alert_service, "_throttle", ReportThrottle())
 
 
 @pytest.fixture()

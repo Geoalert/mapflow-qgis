@@ -7,6 +7,25 @@ from qgis.core import QgsSettings
 
 SEARCH_CAPTURE_TIMEZONE = 'UTC'
 
+#: QgsSettings key holding the user's own providers.
+PROVIDERS_KEY = 'mapflow_data_providers'
+
+OSM = 'type=xyz&url=https://tile.openstreetmap.org/{z}/{x}/{y}.png&zmax=19&zmin=0'
+
+#: Names of the two built-in imagery sources, as shown in the source combo.
+SEARCH_OPTION_NAME = "🔎 Imagery Search"
+CATALOG_OPTION_NAME = "🖼️ My imagery"
+
+DEFAULT_HTTP_TIMEOUT_SECONDS = 10
+
+#: How a request tolerates a transient failure before anyone is told (spec/005 § Request modes).
+#: Like the report throttle's numbers, these are a first guess for live use to move.
+#: A `BACKGROUND` request is sent once more after this many seconds before its failure is handled.
+BACKGROUND_RETRY_DELAY_SECONDS = 3
+#: A `POLL` request's failure is handled once this many consecutive attempts at the same endpoint
+#: have failed — 2 means the next tick is the retry.
+POLL_FAILURES_BEFORE_ALERT = 2
+
 @dataclass
 class ConfigColumns():
     def __init__(self):
@@ -118,11 +137,28 @@ class Config:
 
     # MISC
     SHOW_RAW_ERROR = (QgsSettings().value("variables/mapflow_raw_error", "false").lower() == "true")
-    INVALID_TOKEN_WARNING_OBJECT_NAME = 'invalidToken'  # nosec - Qt object name, not a secret
+    INVALID_TOKEN_WARNING_OBJECT_NAME = 'invalidToken'  # nosec B105  # Qt object name, not a secret
     METADATA_MORE_BUTTON_OBJECT_NAME = 'getMoreMetadata'
     MAX_ZOOM = 21
     DEFAULT_ZOOM = MAX_FREE_ZOOM
     USER_STATUS_UPDATE_INTERVAL = 30  # seconds
+    STARTUP_STATUS_RETRY_INTERVAL = 500  # milliseconds
+    #: How many times startup may re-ask for /user/status before giving up. The plugin cannot
+    #: configure itself without that response, so it retries rather than failing on one
+    #: hiccup — but an unreachable server must not leave it retrying for the whole session.
+    STARTUP_STATUS_MAX_ATTEMPTS = 20
+
+    # ERROR REPORTING — the suppression budget (spec/006 § Volume limit). Tunable here without a
+    # code change; the values match report_throttle.py's Qt-free fallback defaults. Mapflow.__init__
+    # pushes them into both budgets (report tier and message tier) at startup, because
+    # report_throttle cannot import config directly — config is QGIS-bound (it reads QgsSettings in
+    # its class body) and the throttle is Qt-free by contract. Kept as a small startup push on
+    # purpose: making config itself Qt-free would mean splitting this pervasively-shared object,
+    # which fragments it for far less benefit than the shim costs.
+    REPORT_THROTTLE_FIRST_WINDOW_SECONDS = 60.0
+    REPORT_THROTTLE_MAX_WINDOW_SECONDS = 30 * 60.0
+    REPORT_THROTTLE_GLOBAL_FLOOR_SECONDS = 10.0
+    REPORT_THROTTLE_BACKOFF_FACTOR = 2.0
 
     MAX_FILE_SIZE_PIXELS = 30_000
     MAX_FILE_SIZE_BYTES = 2*(1024**3)

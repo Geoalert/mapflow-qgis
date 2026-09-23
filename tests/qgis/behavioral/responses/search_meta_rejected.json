@@ -1,0 +1,20 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "catalog/meta",
+    "body": {
+      "aoi": {
+        "type": "Polygon",
+        "coordinates": []
+      },
+      "limit": 20,
+      "offset": 0
+    }
+  },
+  "status": 400,
+  "body": {
+    "code": "BAD_REQUEST",
+    "message": "Invalid value for: body",
+    "params": null
+  }
+}

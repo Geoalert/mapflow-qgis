@@ -1,6 +1,7 @@
 from PyQt5 import uic
 from PyQt5.QtWidgets import QWidget, QDialogButtonBox
 
+from ..error_guard import guarded_connect
 from ..schema.data_catalog import MosaicUpdateSchema, MosaicReturnSchema
 from .processing_dialog import ui_path
 
@@ -11,7 +12,8 @@ class MosaicDialog(*uic.loadUiType(ui_path/'mosaic_dialog.ui')):
         self.setupUi(self)
         self.ok = self.buttonBox.button(QDialogButtonBox.Ok)
 
-        self.mosaicName.textChanged.connect(self.on_name_change)
+        guarded_connect(self.mosaicName.textChanged, self.on_name_change,
+                        "editing the mosaic name", self)
 
     def on_name_change(self):
         if not self.mosaicName.text():

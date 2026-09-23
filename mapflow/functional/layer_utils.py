@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 from osgeo import gdal
 from pathlib import Path
@@ -27,11 +28,14 @@ from qgis.core import (QgsRectangle,
 from .app_context import AppContext
 from ..config import Config
 from ..dialogs.error_message_widget import ErrorMessageWidget
+from ..http import RequestMode
 from .geometry import clip_aoi_to_catalog_extent
 from .helpers import WGS84, to_wgs84, WGS84_ELLIPSOID
 from ..schema.catalog import AoiResponseSchema, PreviewType
 from ..schema.processing import ProcessingDTO
 from ..styles import get_style_name  
+
+logger = logging.getLogger(__name__)
 
 
 def get_layer_extent(layer: QgsMapLayer) -> QgsGeometry:
@@ -49,7 +53,7 @@ def get_layer_extent(layer: QgsMapLayer) -> QgsGeometry:
     return extent_geometry
 
 
-def generate_xyz_layer_definition(url: str,  # nosec - empty username/password defaults, not secrets
+def generate_xyz_layer_definition(url: str,  # nosec B107  # empty username/password defaults, not secrets
                                   source_type: PreviewType,
                                   max_zoom: Optional[int] = Config.MAX_ZOOM,
                                   username: Optional[str] = "",
@@ -101,6 +105,24 @@ def get_catalog_aoi(catalog_aoi: QgsGeometry,
         geom = feature.geometry()
         clipped_aoi = clipped_aoi.combine(geom)
     return clipped_aoi
+
+
+def find_template_group(project,
+                        mapflow_group_name: str,
+                        template_group_name: str,
+                        subgroup_name: Optional[str] = None):
+    """The ``<mapflow group> > <template> [> <subgroup>]`` layer-tree group, or None.
+
+    Creates nothing — that is `TemplateService.ensure_template_group`. Lives here because several
+    services that place an already-built layer need the lookup, and a service may not reach into
+    another service for it.
+    """
+    root = project.layerTreeRoot()
+    parent_group = root.findGroup(mapflow_group_name) or root
+    template_group = parent_group.findGroup(template_group_name)
+    if template_group is None or not subgroup_name:
+        return template_group
+    return template_group.findGroup(subgroup_name)
 
 
 def is_polygon_layer(layer: QgsMapLayer) -> bool:
@@ -553,6 +575,8 @@ class ResultsLoader(QObject):
                                             "next_tilejson_uris": next_tilejson_uris,
                                             },
                       use_default_error_handler=False,
+                      # A step of loading the results the user just opened, whichever layer it is for.
+                      mode=RequestMode.INTERACTIVE,
                       )
 
     def add_layers_with_extent(
@@ -570,6 +594,9 @@ class ResultsLoader(QObject):
             try:
                 bounding_box = get_bounding_box_from_tile_json(response=response)
             except Exception:
+                # Broad on purpose — see the note in `set_raster_extent`. Logged so the cause
+                # survives the collapse into the `errors` flag.
+                logger.exception("Could not read a result layer extent from the tile JSON")
                 errors = True
             else:
                 layer.setExtent(rect=bounding_box)
@@ -623,7 +650,8 @@ class ResultsLoader(QObject):
             callback_kwargs={'path': path},
             use_default_error_handler=False,
             error_handler=self.download_results_file_error_handler,
-            timeout=300
+            timeout=300,
+            mode=RequestMode.INTERACTIVE,
         )
 
     def download_aoi_file(self, pid, callback: Optional[Callable] = None) -> None:
@@ -637,7 +665,8 @@ class ResultsLoader(QObject):
             callback=callback if callback else self.download_aoi_file_callback,
             callback_kwargs={'path': path},
             use_default_error_handler=True,
-            timeout=30
+            timeout=30,
+            mode=RequestMode.INTERACTIVE,
         )
 
     def download_results_file_callback(self, response: QNetworkReply, path: str) -> None:
@@ -694,7 +723,8 @@ class ResultsLoader(QObject):
             callback_kwargs={'processing': processing},
             use_default_error_handler=False,
             error_handler=self.download_results_error_handler,
-            timeout=300
+            timeout=300,
+            mode=RequestMode.INTERACTIVE,
         )
 
     def download_results_callback(self, response: QNetworkReply, processing: 'ProcessingDTO') -> None:
@@ -708,7 +738,14 @@ class ResultsLoader(QObject):
         try:
             response_data = response.readAll().data()
             data = json.loads(response_data)
-        except:
+        except (ValueError, AttributeError):
+            # ValueError (JSONDecodeError) for a non-JSON body — the case this message
+            # describes; AttributeError if the reply object is not readable.
+            self.message_bar.pushWarning(self.tr("Mapflow error"),
+                                         self.tr("Invalid response from the server"))
+            return
+        except Exception:
+            logger.exception("Unexpected error reading a processing response")
             self.message_bar.pushWarning(self.tr("Mapflow error"),
                                          self.tr("Invalid response from the server"))
             return
@@ -774,7 +811,8 @@ class ResultsLoader(QObject):
                 error_handler=self.set_raster_extent_error_handler,
                 error_handler_kwargs={
                     'vectors': results_layers,
-                }
+                },
+                mode=RequestMode.INTERACTIVE,
             )
         else:
             self.set_raster_extent_error_handler(response=None, vectors=results_layers)
@@ -803,8 +841,12 @@ class ResultsLoader(QObject):
         try:
             bounding_box = get_bounding_box_from_tile_json(response=response)
         except Exception:
+            # Broad on purpose: get_bounding_box_from_tile_json parses JSON, indexes `bounds`
+            # and reprojects through pyproj, so its failure set spans ValueError, TypeError,
+            # AttributeError, IndexError and pyproj's own errors.
             # we assume that the raster extent must be present,
             # otherwise there is some error in raster tile server, and we should not add the layer
+            logger.exception("Could not read the raster extent from the tile JSON")
             self.message_bar.pushWarning(self.tr("Results loaded"),
                                          self.tr("Extent failed to load, zoom to the layers manually"))
             self.set_raster_extent_error_handler(response, vectors)
@@ -870,8 +912,11 @@ class ResultsLoader(QObject):
             for feature in features:
                 try:
                     feature['properties'][field] = str(feature['properties'][field])
-                except:
-                    break # leave json fields and later try save file to GeoJSON instead
+                except (KeyError, TypeError):
+                    # The feature lacks 'properties' or this field, or properties is not a
+                    # mapping. Leave the json fields alone and let the caller fall back to
+                    # GeoJSON instead of GeoPackage.
+                    break
         return data
     
     def save_layers(self,

@@ -43,19 +43,33 @@ Test layout, fixtures, and the policy for adding a test live in
 
 ### Linting
 
-Static analysis runs on the **host** (not in Docker) via the project `venv`:
+Static analysis runs in the **same Docker image as the tests** — no host
+`pip install`, no project `venv`:
 
 ```bash
-pip install ruff pyright   # once, into the venv
-make lint                  # ruff check + pyright
+make lint   # flake8 + bandit + detect-secrets
 ```
 
-`ruff` (config in [`pyproject.toml`](pyproject.toml)) catches unused code and
-real-bug patterns; `pyright` (config in [`pyrightconfig.json`](pyrightconfig.json))
-adds flow analysis ruff can't do, such as use-before-assignment and undefined
-names. Pyright's type-completeness checks are muted until the codebase is
-annotated. The rule set starts intentionally narrow — broaden it once the
-baseline is clean.
+These are the three checks [plugins.qgis.org](https://plugins.qgis.org/docs/security-scanning)
+runs when a plugin is submitted, invoked the same way, so a green run here
+predicts a clean scan there:
+
+| tool | scope | qgis.org status |
+|---|---|---|
+| **flake8** at `--max-line-length=120` | `mapflow/` + `tests/` | advisory |
+| **bandit** at `-ll` (medium+ severity) | `mapflow/` only | **blocking** |
+| **detect-secrets** against `.secrets.baseline` | `mapflow/` + `tests/` | **blocking** |
+
+bandit covers only `mapflow/` because that is the code that ships, and `B101`
+(assert_used) would otherwise fire on every pytest assertion. Tool versions are
+pinned in [`Dockerfile.tests`](Dockerfile.tests): an unpinned linter silently
+changes its verdict when upstream adds a rule, turning an unrelated MR red.
+
+[`.flake8`](.flake8) carries a **debt ledger** — the rule classes still
+outstanding from the 3.6.0 scan, each tied to the WAL step that removes it. It
+is a shrinking list, not a permanent exemption: the qgis.org scan runs against
+the packaged `mapflow/` directory and never reads `.flake8`, so everything
+listed there is debt still owed at submission time.
 
 > **Coverage scope.** CI is pinned to **Linux + QGIS 3.28 LTR**. The
 > `qgis/qgis` Docker image is Linux-only and we do not run a CI matrix

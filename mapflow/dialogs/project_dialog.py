@@ -3,6 +3,7 @@ from PyQt5.QtCore import QCoreApplication
 from PyQt5.QtWidgets import QWidget, QDialogButtonBox
 
 from .processing_dialog import ui_path
+from ..error_guard import guarded_connect
 from ..schema.project import MapflowProject, CreateProjectSchema, UpdateProjectSchema
 
 
@@ -17,7 +18,8 @@ class ProjectDialog(*uic.loadUiType(ui_path/'project_dialog.ui')):
         self.current_project = None
         self.result = None
 
-        self.projectName.textChanged.connect(self.on_name_change)
+        guarded_connect(self.projectName.textChanged, self.on_name_change,
+                        "editing the project name", self)
 
     def on_name_change(self):
         if not self.projectName.text():

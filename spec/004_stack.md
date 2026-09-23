@@ -20,7 +20,7 @@ GIS libraries:
 
 Build/deploy: `qgis-plugin-ci` for packaging and release. Plugin published to QGIS Plugin Repository.
 
-Test tools: pytest, pytest-qt. Automated tests run in three tiers (functional / qgis / ui) — see **Test runtime** below.
+Test tools: pytest, pytest-qt. Automated tests run in three tiers (functional / qgis / ui) — see **Test runtime** below. Static-analysis tools: flake8, bandit, detect-secrets — see **Static analysis** below.
 
 CI/CD: GitHub Actions (implied by `.github/` structure).
 
@@ -38,11 +38,40 @@ Pinned image: **`qgis/qgis:release-3_28`** (LTR through 2026, satisfies the QGIS
 
 Coverage scope: automated tests cover **Linux + QGIS 3.28 LTR only**. macOS, Windows, and other QGIS versions are exercised by manual smoke testing — there is no CI matrix for them. This is a deliberate trade-off: the official QGIS Docker image is Linux-only, and a cross-OS conda-forge matrix is deferred until the Linux pipeline is stable.
 
-Entry points: `make test-functional` / `make test-qgis` / `make test-ui` / `make test`. CI runs the same targets.
+Entry points: `make test-functional` / `make test-qgis` / `make test-ui` / `make test` / `make lint`. CI runs the same targets.
+
+## Static analysis
+
+Three checks, chosen to mirror what plugins.qgis.org runs on plugin submission, so that a
+green local run predicts a clean scan there:
+
+- **flake8** — style and lint at `--max-line-length=120`, over `mapflow/` and `tests/`
+  (style debt in tests is still debt).
+- **bandit** — security scan at medium-or-higher severity (`-ll`), over `mapflow/` only:
+  it is the code that ships, and B101 (assert_used) would otherwise fire on every pytest
+  assertion.
+- **detect-secrets** — credential scan against the committed `.secrets.baseline`.
+
+At qgis.org, bandit and detect-secrets are **blocking** validators; flake8 is advisory.
+Locally all three block, because a check that cannot fail the build does not hold a line.
+
+All three run **inside the same `qgis/qgis:release-3_28` image as the tests**, at versions
+pinned in `Dockerfile.tests`. Pinning is deliberate: an unpinned linter silently changes its
+verdict when upstream adds a rule, turning an unrelated MR red. Running them in the image
+rather than a host venv means every developer and CI get identical results instead of
+whatever each machine happened to pip-install.
+
+Suppressions are explicit and temporary. `.flake8` enumerates the rule classes still
+outstanding from the 3.6.0 scan, each tied to the WAL step that removes it; the list only
+shrinks. It is not a permanent exemption — the qgis.org scan does not read `.flake8`
+(it runs against the packaged `mapflow/` directory, see `.qgis-plugin-ci`), so anything
+listed there is debt still owed at submission time.
 
 ## Dependency policy
 
-**Only libraries bundled with the QGIS Python environment are allowed.** Adding third-party packages that are not part of the standard QGIS/PyQt5/GDAL distribution is strictly forbidden — the plugin must install and run without `pip install` on any QGIS 3.20+ installation.
+**Only libraries bundled with the QGIS Python environment are allowed *in the shipped plugin*.** Adding third-party packages that are not part of the standard QGIS/PyQt5/GDAL distribution is strictly forbidden — the plugin must install and run without `pip install` on any QGIS 3.20+ installation.
+
+This governs **runtime plugin dependencies only**. Development and test tooling (pytest, pytest-qt, flake8, bandit, detect-secrets) is installed in `Dockerfile.tests`, runs only in the test container, and never ships: `.qgis-plugin-ci` packages the `mapflow/` directory alone. It is therefore exempt from this policy.
 
 Prefer native QGIS/Qt tools over external alternatives:
 - Networking: use `QgsNetworkAccessManager`, not requests/httpx/aiohttp

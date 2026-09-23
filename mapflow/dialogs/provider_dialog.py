@@ -4,7 +4,8 @@ from PyQt5 import uic
 from PyQt5.QtWidgets import QWidget, QDialogButtonBox
 
 from .processing_dialog import ui_path
-from ..entity.provider import (CRS,
+from ..error_guard import guarded_connect
+from ..model.provider import (CRS,
                                BasicAuth,
                                UsersProvider,
                                XYZProvider,
@@ -21,13 +22,17 @@ class ProviderDialog(*uic.loadUiType(ui_path/'provider_dialog.ui')):
         ok = self.buttonBox.button(QDialogButtonBox.Ok)
         ok.setEnabled(False)
 
-        self.type.currentTextChanged.connect(self.on_type_change)
-        self.name.textChanged.connect(lambda: ok.setEnabled(self.validate_and_create_provider()))
-        self.url.textChanged.connect(lambda: ok.setEnabled(self.validate_and_create_provider()))
-        self.login.textChanged.connect(lambda: ok.setEnabled(self.validate_and_create_provider()))
-        self.password.textChanged.connect(lambda: ok.setEnabled(self.validate_and_create_provider()))
-        self.crs.currentTextChanged.connect(lambda: ok.setEnabled(self.validate_and_create_provider()))
-        self.save_credentials.toggled.connect(lambda: ok.setEnabled(self.validate_and_create_provider()))
+        guarded_connect(self.type.currentTextChanged, self.on_type_change,
+                        "changing the provider type", self)
+        # Every other field revalidates the whole form, so they share one handler.
+        for signal in (self.name.textChanged,
+                       self.url.textChanged,
+                       self.login.textChanged,
+                       self.password.textChanged,
+                       self.crs.currentTextChanged,
+                       self.save_credentials.toggled):
+            guarded_connect(signal, lambda: ok.setEnabled(self.validate_and_create_provider()),
+                            "validating the provider form", self)
 
         # we store here the provider that we are editing right now
         self.current_provider = None
@@ -53,7 +58,7 @@ class ProviderDialog(*uic.loadUiType(ui_path/'provider_dialog.ui')):
             crs = CRS.web_mercator
             title = title
             login = ""
-            password = ""  # nosec - empty init, not a secret
+            password = ""  # nosec B105  # empty init, not a secret
             save_credentials = False
 
         # Fill out the edit dialog with the current data

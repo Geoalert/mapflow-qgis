@@ -1,7 +1,8 @@
-from typing import List, Union
+from typing import List, Tuple, Union
 from PyQt5.QtCore import Qt, QCoreApplication
 from PyQt5.QtWidgets import QAbstractItemView, QTableWidgetItem, QMessageBox, QCheckBox
 from ...dialogs.main_dialog import MainDialog
+from ...dialogs.confirm_processing_start_dialog import ConfirmProcessingStartDialog
 from ...dialogs import icons
 from ...dialogs import colors
 from ...schema.processing import (ProcessingDTO,
@@ -10,7 +11,8 @@ from ...schema.template import (ProcessingTemplateDTO, TemplateAoiDTO,
                                 AoiProcessingLink, TemplateProcessingSchema,
                                 NoAoiProcessingsRow)
 from ...config import config
-from ..service.alert_service import alert
+from ...error_guard import guarded_connect
+from ...infra.alert_service import alert
 
 class ProcessingView:
     """
@@ -58,9 +60,13 @@ class ProcessingView:
 
     def connect_header_sort(self, on_sort_changed):
         """Connect column header clicks to a templates-first re-sort."""
-        self.dlg.processingsTable.horizontalHeader().sectionClicked.connect(
-            lambda col: self._on_header_clicked(col, on_sort_changed)
-        )
+        guarded_connect(self.dlg.processingsTable.horizontalHeader().sectionClicked,
+                        lambda col: self._on_header_clicked(col, on_sort_changed),
+                        "sorting the processings by a column header", self)
+
+    def clear_header_sort(self) -> None:
+        """Drop the column-click override so `sort_processings` reads the combo again."""
+        self._header_sort_by = None
 
     def _on_header_clicked(self, column: int, on_sort_changed):
         sort_by = self._COLUMN_SORT_MAP.get(column)
@@ -79,6 +85,10 @@ class ProcessingView:
     def tr(self, message: str) -> str:
         """Translate message using QCoreApplication."""
         return QCoreApplication.translate('ProcessingView', message)
+
+    @property
+    def processings_filter(self) -> str:
+        return self.dlg.filterProcessings.text()
 
     @property
     def processing_name(self):
@@ -102,14 +112,85 @@ class ProcessingView:
                              self.dlg.modelOptionsLayout.itemAt(i).widget().isChecked()]
         )
 
+    def has_option_widgets(self) -> bool:
+        """Whether the model-option checkboxes have been built. A model that declares blocks is
+        quoted only once these exist, so this is not the same as 'no options ticked'."""
+        return len(self.dlg.modelOptions) > 0
+
+    def aoi_layer_chosen(self) -> bool:
+        """Whether the AOI combo names a layer at all — the choice between the two
+        no-AOI error messages."""
+        return self.dlg.polygonCombo.currentLayer() is not None
+
     def clear_processing_name(self, name):
         # If the name is expected, we clear it after the processsing is launched;
         # Otherwise it means that the user has altered the text already and it should be preserved
         if self.dlg.processingName.text() == name:
             self.dlg.processingName.clear()
 
+    def set_processing_name(self, name: str) -> None:
+        self.dlg.processingName.setText(name)
+
+    def set_aoi_area(self, area_sqkm: float) -> None:
+        """Show the processing AOI area. `AreaCalculatorService` computes it and announces it."""
+        self.dlg.labelAoiArea.setText(self.tr('Area: {:.2f} sq.km').format(area_sqkm))
+
+    def set_start_enabled(self, enabled: bool) -> None:
+        self.dlg.startProcessing.setEnabled(enabled)
+
+    def start_enabled(self) -> bool:
+        """Whether Start is currently enabled. Read by `validate_context_params` to tell 'no check
+        has claimed the problems label yet' from 'another concern already disabled the button and
+        set a reason' — which is why it must not blank that reason with its own."""
+        return self.dlg.startProcessing.isEnabled()
+
+    def clear_problem_and_enable_start(self) -> None:
+        """AREA/NONE billing: nothing blocks a start, so drop any leftover reason and enable it."""
+        self.dlg.startProcessing.setEnabled(True)
+        self.dlg.processingProblemsLabel.clear()
+
+    def confirm_processing_start(self, name: str, details: dict, on_accept) -> None:
+        """Raise the start-confirmation dialog. The domain values (price, provider, area) come
+        from the service in `details`; the panel-derived ones (zoom, model, options) are read
+        here, because a service may not touch a widget and this is where they live."""
+        dialog = ConfirmProcessingStartDialog(self.dlg)
+
+        def sync_dont_ask_again():
+            # "Don't ask again" is the inverse of the Settings-tab checkbox. Setting that box
+            # persists the choice through its own toggled handler, so nothing writes settings here.
+            dont_ask = dialog.checkBox.isChecked()
+            if self.dlg.cornfirmProcessingStart.isChecked() != (not dont_ask):
+                self.dlg.cornfirmProcessingStart.setChecked(not dont_ask)
+
+        guarded_connect(dialog.checkBox.toggled, sync_dont_ask_again,
+                        "toggling 'don't ask again'", self)
+        guarded_connect(dialog.accepted, on_accept, "confirming the processing start", self)
+        ui_start_params = self.read_processing_start_params()
+        dialog.setup(
+            name=name,
+            price=details.get("price"),
+            provider=details.get("provider"),
+            zoom=str(ui_start_params.zoom),
+            area=details.get("area"),
+            model=self.dlg.modelCombo.currentText(),
+            blocks=[self.dlg.modelOptionsLayout.itemAt(i).widget()
+                    for i in range(self.dlg.modelOptionsLayout.count())],
+        )
+        dialog.deleteLater()
+
     def disable_processing_start(self, reason: str, clear_area: bool):
         self.dlg.disable_processing_start(reason=reason, clear_area=clear_area)
+
+    def enable_processing_start(self, clear_reason: str = "") -> None:
+        """Re-enable Start, and clear the problems label only if it is still showing
+        `clear_reason`. Anything else in there was put by another check that has not been
+        re-run, and blanking it would hide a live reason the processing cannot start."""
+        self.dlg.startProcessing.setEnabled(True)
+        if clear_reason and self.dlg.processingProblemsLabel.text() == clear_reason:
+            self.dlg.processingProblemsLabel.clear()
+
+    def set_start_button_text(self, text: str) -> None:
+        self.dlg.startProcessing.setText(text)
 
     def create_table_items(self, processing: Union[ProcessingDTO, ProcessingTemplateDTO]):
         table_items = []
@@ -305,6 +386,84 @@ class ProcessingView:
         for row in rows:
             self.dlg.processingsTable.removeRow(row)
 
+    # ---------- the model and its options ----------
+
+    def selected_model_name(self) -> str:
+        return self.dlg.modelCombo.currentText()
+
+    def enabled_blocks(self) -> List[bool]:
+        """Which optional blocks are ticked, in layout order. Translating the order into block
+        names is the workflow definition's job, not this view's."""
+        return self.dlg.enabled_blocks()
+
+    def show_wd_price(self, wd_price: float, wd_description: str, display_price: bool) -> None:
+        self.dlg.show_wd_price(wd_price=wd_price,
+                               wd_description=wd_description,
+                               display_price=display_price)
+
+    def show_model_options(self, options: List[Tuple[str, bool]], enabled: bool) -> None:
+        """Replace the option checkboxes with this model's, then set their enabled state.
+
+        The two halves are one call because ordering matters: the checkboxes do not exist until
+        the loop above has run, so an `enable_model_options` issued with the rest of the panel
+        would reach nothing."""
+        self.dlg.clear_model_options()
+        for name, checked in options:
+            self.dlg.add_model_option(name, checked=checked)
+        self.dlg.enable_model_options(enabled)
+
+    def show_user_provider_info(self, source_params) -> str:
+        return self.dlg.show_user_provider_info(source_params)
+
+    def select_model(self, name: str) -> None:
+        """Duplicating a processing: pick its model. Its availability was checked before this is
+        emitted, so setting the text here always lands on a real entry."""
+        self.dlg.modelCombo.setCurrentText(name)
+
+    def set_checked_options(self, enabled_labels) -> None:
+        """Duplicating a processing: tick the option checkboxes whose label is in `enabled_labels`,
+        untick the rest."""
+        for checkbox in self.dlg.modelOptions:
+            checkbox.setChecked(checkbox.text() in enabled_labels)
+
+    # ---------- the review / rating panel ----------
+
+    def set_rating_labels(self, processing_name: str, rating: int = 0, feedback: str = "") -> None:
+        """Show a processing's stored rating. ``rating`` 0 means none was submitted."""
+        self.dlg.set_processing_rating_labels(processing_name=processing_name,
+                                              current_rating=rating or None,
+                                              current_feedback=feedback or None)
+
+    def selected_rating(self) -> int:
+        """The star count the combo is on. The list is descending (None-5-4-3-2-1), so the index
+        is inverted; anything outside 1..5 means nothing was picked."""
+        return 6 - self.dlg.ratingComboBox.currentIndex()
+
+    def rating_is_selected(self) -> bool:
+        return 5 >= self.dlg.ratingComboBox.currentIndex() > 0
+
+    def rating_feedback(self) -> str:
+        return self.dlg.processingRatingFeedbackText.toPlainText()
+
+    def enable_rating(self, can_interact: bool, can_send: bool, reason: str) -> None:
+        self.dlg.enable_rating(can_interact=can_interact, can_send=can_send, reason=reason)
+
+    def enable_review(self, enabled: bool, reason: str = "") -> None:
+        self.dlg.enable_review(enabled, reason)
+
+    def enable_restart_action(self, enabled: bool) -> None:
+        self.dlg.enable_restart_action(enabled)
+
+    # ---------- how results should be loaded ----------
+
+    def results_as_tiles(self) -> bool:
+        """Stream the result from the server as vector tiles, without downloading it."""
+        return self.dlg.viewAsTiles.isChecked()
+
+    def results_as_local_file(self) -> bool:
+        """Download the result to the working directory and add it from disk."""
+        return self.dlg.viewAsLocal.isChecked()
+
     def set_processing_cost(self, cost: int):
         self.dlg.processingProblemsLabel.setPalette(self.dlg.default_palette)
         self.dlg.processingProblemsLabel.setText(self.tr("Processing cost: {cost} credits").format(cost=cost))
@@ -365,8 +524,10 @@ class ProcessingView:
                        blocking=False)
 
     def selected_processing_ids(self, limit=None):
-        # add unique selected rows
-        selected_rows = list(set(index.row() for index in self.dlg.processingsTable.selectionModel().selectedIndexes()))
+        # Unique selected rows, in table order: `limit` slices this list, so an unordered set
+        # would make `limit=1` pick an arbitrary row of a multi-selection.
+        selected_rows = sorted({index.row()
+                                for index in self.dlg.processingsTable.selectionModel().selectedIndexes()})
         if not selected_rows:
             return []
         pids = [self.dlg.processingsTable.item(row,

@@ -197,3 +197,60 @@ class ProjectView(QObject):
     @property
     def projects_filter(self):
         return self.dlg.filterProjects.text()
+
+    def set_projects_filter(self, text: str) -> None:
+        self.dlg.filterProjects.setText(text)
+
+    def set_sort_index(self, index: int) -> None:
+        self.dlg.sortProjectsCombo.setCurrentIndex(index)
+
+    def selected_project_id(self):
+        return self.dlg.selected_project_id()
+
+    # ---------- the table's selection, while a request is in flight ----------
+
+    def lock_projects_selection(self) -> None:
+        """Forbid selecting a project until the pending request answers.
+
+        Deleting a project renumbers the table under the user; letting them click during that
+        window selects whichever project happens to land on the row they aimed at.
+        """
+        self.dlg.projectsTable.setSelectionMode(QAbstractItemView.NoSelection)
+        self.dlg.projectsTable.clearSelection()
+
+    def unlock_projects_selection(self) -> None:
+        self.dlg.projectsTable.clearSelection()
+        self.dlg.projectsTable.setSelectionMode(QAbstractItemView.SingleSelection)
+
+    def clear_projects_selection(self) -> None:
+        self.dlg.projectsTable.clearSelection()
+
+    def freeze_projects_sorting(self) -> None:
+        """Header-click sorting is re-enabled by `setup_projects_table`; turning it off first stops
+        the rows re-ordering while they are being written."""
+        self.dlg.projectsTable.setSortingEnabled(False)
+
+    # ---------- which project is open ----------
+
+    def show_current_project(self, name: str) -> None:
+        """Name the open project in the header label, elided to the width it actually has.
+
+        `fontMetrics().elidedText` needs the live widget width, so this cannot be precomputed by a
+        caller — which is why the elision lives here rather than being passed in ready-made.
+        """
+        label = self.dlg.currentProjectLabel
+        elided = label.fontMetrics().elidedText(name, Qt.ElideRight, label.width() - 50)
+        label.setText(self.tr("Project: <b>{}").format(elided))
+        label.adjustSize()
+
+    def set_window_title(self, title: str) -> None:
+        self.dlg.setWindowTitle(title)
+
+    def enable_switch_to_processings(self, enabled: bool) -> None:
+        self.dlg.switchProcessingsButton.setEnabled(enabled)
+
+    def enable_project_change(self, reason: str, enabled: bool) -> None:
+        self.dlg.enable_project_change(reason, enabled)
+
+    def enable_shared_project(self, user_role) -> None:
+        self.dlg.enable_shared_project(user_role)

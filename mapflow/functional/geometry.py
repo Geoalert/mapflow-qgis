@@ -1,12 +1,22 @@
 import json
-from typing import List
+import logging
+from typing import List, Optional
 
 from osgeo import ogr
 from qgis import processing as qgis_processing  # to avoid collisions
 from qgis.core import (
     QgsCoordinateReferenceSystem, QgsDistanceArea,
-    QgsFeature, QgsFeatureIterator, QgsGeometry, QgsProject, QgsVectorLayer,
+    QgsFeature, QgsFeatureIterator, QgsGeometry, QgsProcessingException,
+    QgsProject, QgsVectorLayer,
 )
+
+# What a failing qgis_processing.run() raises: QgsProcessingException when the algorithm
+# itself rejects the input (the invalid-geometry case these fallbacks exist for), KeyError
+# if it returns without the 'OUTPUT' key. Anything else is unexpected and gets logged
+# rather than silently treated as "geometry needs repair".
+PROCESSING_FAILURES = (QgsProcessingException, KeyError)
+
+logger = logging.getLogger(__name__)
 
 
 def make_distance_calculator() -> QgsDistanceArea:
@@ -16,6 +26,27 @@ def make_distance_calculator() -> QgsDistanceArea:
     calculator.setEllipsoid("WGS84")
     calculator.setSourceCrs(wgs84, QgsProject.instance().transformContext())
     return calculator
+
+
+def geometry_from_geojson(geom_dict) -> Optional[QgsGeometry]:
+    """Build a QgsGeometry from a GeoJSON geometry mapping (as carried in ``aoiDetails``).
+
+    Lives here rather than on `AoiService` because template code converts AOI geometries too,
+    and a pure GeoJSON→geometry conversion is not a reason for the template view to depend on
+    the AOI service.
+    """
+    if not geom_dict:
+        return None
+    try:
+        ogr_geom = ogr.CreateGeometryFromJson(json.dumps(geom_dict))
+    except (TypeError, ValueError, RuntimeError):
+        # json.dumps rejects a non-serializable mapping (TypeError/ValueError); ogr raises
+        # RuntimeError on malformed GeoJSON when GDAL exceptions are enabled.
+        return None
+    if not ogr_geom:
+        return None
+    geom = QgsGeometry.fromWkt(ogr_geom.ExportToWkt())
+    return geom if not geom.isEmpty() else None
 
 
 def geojson_feature_area_sqkm(feature: dict, calculator: QgsDistanceArea) -> float:
@@ -50,7 +81,13 @@ def clip_aoi_to_image_extent(aoi_geometry: QgsGeometry,
     try:
         # Find the intersection
         intersection = intersect_geoms(aoi_layer, image_extent_layer)
-    except:
+    except PROCESSING_FAILURES:
+        intersection = None
+    except Exception:
+        logger.exception("Unexpected error intersecting AOI with image extents; "
+                         "retrying with repaired geometries")
+        intersection = None
+    if intersection is None:
         # If intersection function fails, fix mosaic geometries beforehand
         fixed_image_layer = fix_geoms(image_extent_layer)
         fixed_aoi_layer = fix_geoms(aoi_layer)
@@ -75,7 +112,13 @@ def clip_aoi_to_catalog_extent(catalog_aoi: QgsGeometry,
     try:
         # Find the intersection
         intersection = intersect_geoms(aoi_layer, catalog_layer)
-    except:
+    except PROCESSING_FAILURES:
+        intersection = None
+    except Exception:
+        logger.exception("Unexpected error intersecting AOI with the catalog extent; "
+                         "retrying with repaired geometries")
+        intersection = None
+    if intersection is None:
         # If intersection function fails, fix geometries beforehand
         fixed_aoi_layer = fix_geoms(aoi_layer)
         fixed_catalog_layer = fix_geoms(catalog_layer)
@@ -84,21 +127,25 @@ def clip_aoi_to_catalog_extent(catalog_aoi: QgsGeometry,
     return intersection.getFeatures()
 
 def fix_geoms(layer: QgsVectorLayer) -> QgsVectorLayer:
-    try:
-        fixed_layer = qgis_processing.run(
-            'native:fixgeometries', 
-            {'INPUT':layer, 'METHOD':1, 'OUTPUT':'memory:'}
-        )['OUTPUT']
-        return fixed_layer
-    except: # if structure repair (union) fails, try linework repair (keeps areas that don't overlap)
+    """Repair a layer's geometries, falling back through progressively weaker methods.
+
+    METHOD 1 is structure repair (union); METHOD 0 is linework repair, which keeps areas
+    that don't overlap. Try the stronger repair first, fall back to the weaker one, and
+    hand back the original if neither works — a caller holding the unrepaired layer is no
+    worse off than before it asked.
+    """
+    for method, description in ((1, "structure repair"), (0, "linework repair")):
         try:
-            fixed_layer = qgis_processing.run(
-            'native:fixgeometries', 
-            {'INPUT':layer, 'METHOD':0, 'OUTPUT':'memory:'}
+            return qgis_processing.run(
+                'native:fixgeometries',
+                {'INPUT': layer, 'METHOD': method, 'OUTPUT': 'memory:'}
             )['OUTPUT']
-            return fixed_layer
-        except: # if that also fails, just return original
-            return layer
+        except PROCESSING_FAILURES:
+            continue
+        except Exception:
+            logger.exception("Unexpected error during %s of geometries", description)
+            continue
+    return layer
 
 def intersect_geoms(input_layer: QgsVectorLayer, 
                     overlay_layer: QgsVectorLayer) -> QgsVectorLayer:

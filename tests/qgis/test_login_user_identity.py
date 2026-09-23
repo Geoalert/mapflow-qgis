@@ -60,10 +60,12 @@ def _plugin():
     plugin.app_context.project_id = None
     plugin.config = SimpleNamespace(DEFAULT_MODEL="Buildings")
     for attribute in ("dlg", "dlg_login", "project_service", "processing_service",
-                      "data_catalog_service", "project_processing_controller",
-                      "user_status_update_timer", "app_startup_user_update_timer",
-                      "update_processing_limit"):
+                      "data_catalog_service", "project_processing_controller", "project_view",
+                      "account_service"):
         setattr(plugin, attribute, MagicMock())
+    # What `__init__` sets for the startup configuration to wait on (spec/005 § Request modes).
+    plugin._saved_project_pending = False
+    plugin._deferred_startup_status = None
     return plugin
 
 

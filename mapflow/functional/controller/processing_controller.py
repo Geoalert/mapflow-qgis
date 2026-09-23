@@ -1,230 +1,330 @@
 from PyQt5.QtCore import QObject
-from PyQt5.QtWidgets import QMessageBox, QWidget
+from qgis.core import QgsMapLayer
 
-from ..app_context import AppContext
-from ..service.alert_service import alert
-from ..service.processing_service import ProcessingService
-from ..service.project_service import ProjectService
-from ...dialogs import CreateProjectDialog, UpdateProjectDialog, MainDialog, UpdateProcessingDialog
+from .. import layer_utils
+from ..service.aoi_service import AoiService
+from ..view.aoi_view import AoiView
+from ...error_guard import guarded_connect
+from ...schema import BillingType
 
 
-class ProjectProcessingController(QObject):
+class ProcessingController(QObject):
+    """The start-processing panel: the model and its options, which AOI a processing will cover,
+    the Start button's text and state, and the review/rating panel beside it.
+
+    Owns the wiring only. It is the one place allowed to see both a service and a view, which is
+    why the round trips below exist — the service cannot read a checkbox and the view cannot call
+    a service (`spec/007_architecture.md` § Layer rules).
+
+    Provider selection and cost join it as the later Phase C steps extract them.
     """
-    Controller that coordinates navigation and interactions between 
-    Projects and Processings views.
-    
-    Responsibilities:
-    - Wire UI events to service methods
-    - Handle navigation between projects and processings views
-    - Connect signals between services
-    """
-    
-    def __init__(self, dlg: MainDialog,
-                 processing_service: ProcessingService,
-                 project_service: ProjectService,
-                 app_context: AppContext):
+
+    def __init__(self,
+                 iface,
+                 aoi_service: AoiService,
+                 aoi_view: AoiView,
+                 add_layer_action,
+                 remove_layer_action,
+                 processing_service=None,
+                 processing_view=None,
+                 app_context=None,
+                 review_dialog=None,
+                 rating_submit_button=None,
+                 rating_combo=None,
+                 accept_button=None,
+                 review_button=None,
+                 processings_table=None,
+                 provider_service=None,
+                 model_combo=None,
+                 model_options_changed=None,
+                 metadata_table=None,
+                 start_button=None):
         super().__init__()
-        self.dlg = dlg
+        self.iface = iface
+        self.aoi_service = aoi_service
+        self.aoi_view = aoi_view
+        # Owned by mapflow.py, which registers them with QGIS's layer context menu.
+        self.add_layer_action = add_layer_action
+        self.remove_layer_action = remove_layer_action
         self.processing_service = processing_service
-        self.project_service = project_service
+        self.processing_view = processing_view
         self.app_context = app_context
-        
-        self._setup_processing_bindings()
-        self._setup_project_bindings()
-        self._setup_navigation()
+        self.review_dialog = review_dialog
+        self.provider_service = provider_service
 
-        self.project_connection = None
-    
-    def _setup_processing_bindings(self):
-        """Processing-specific UI connections."""
-        self.dlg.startProcessing.clicked.connect(self.processing_service.start_processing)
-        self.dlg.processing_update_action.triggered.connect(self.update_processing)
-        self.processing_service.processing_fetch_timer.timeout.connect(
-            self.processing_service.get_processings
-        )
-    
-    def _setup_project_bindings(self):
-        """Project-specific UI connections."""
-        # Project service already sets up its own pagination/filter bindings in __init__
-        # Projects
-        self.dlg.createProject.clicked.connect(self.create_project)
-        self.dlg.deleteProject.clicked.connect(self.delete_project)
-        self.dlg.updateProject.clicked.connect(self.update_project)
-        self.project_service.projectsUpdated.connect(self.project_service.update_projects)
-        self.project_service.projectsFiltered.connect(self.connect_projects)
+        self.aoi_service.aoiLayerRegistered.connect(self._on_aoi_layer_registered)
+        self.aoi_service.aoiLayersChanged.connect(self.refresh_excepted_layers)
+        self.aoi_service.currentAoiLayerChanged.connect(self.aoi_view.set_current_layer)
 
-    def _setup_navigation(self):
-        """Navigation between projects, processings and in-template views."""
-        # Left arrow: back one level (template -> processings -> projects).
-        self.dlg.switchProjectsButton.clicked.connect(self.navigate_back)
-        self.dlg.switchProcessingsButton.clicked.connect(lambda: self.show_processings(save_page=True))
-        # Right arrow (the former placeholder): enter the selected template ("one step right").
-        self.dlg.switchProcessingsFakeButton.clicked.connect(self.navigate_into_template)
-        self.dlg.projectsTable.doubleClicked.connect(self._on_project_double_clicked)
-        # Keep the "enter template" arrow enabled only when a single template is selected.
-        self.dlg.processingsTable.itemSelectionChanged.connect(self._update_nav_buttons)
-        # Entering a template is async when its aoiDetails must be fetched (the project poll
-        # omits them), so `in_template_mode` flips only in the hydrate callback. Refresh the nav
-        # buttons on the actual open/close signals — otherwise the "enter template" arrow stays
-        # enabled until the next selection change.
-        self.processing_service.templateOpened.connect(self._update_nav_buttons)
-        self.processing_service.templateClosed.connect(self._update_nav_buttons)
-        self._update_nav_buttons()
+        if model_combo is not None:
+            guarded_connect(model_combo.currentIndexChanged, self.on_model_change,
+                            "changing the model", app_context)
+        if model_options_changed is not None:
+            model_options_changed.connect(self.on_options_change)
+        if processing_service is not None:
+            processing_service.ratingLoaded.connect(self.processing_view.set_rating_labels)
+            processing_service.reviewSubmitted.connect(self._on_review_submitted)
+            # The start panel: the service says what it must show, this renders it. The service
+            # holds no view and reads no widget but the one enabled-state it still needs (C2.2c).
+            processing_service.startPanelNeeded.connect(self._provide_start_panel)
+            processing_service.startDisabled.connect(self.processing_view.disable_processing_start)
+            processing_service.startUnblocked.connect(
+                self.processing_view.clear_problem_and_enable_start)
+            processing_service.submissionInFlight.connect(self._on_submission_in_flight)
+            processing_service.costQuoted.connect(self.processing_view.set_processing_cost)
+            processing_service.processingNameCleared.connect(
+                self.processing_view.clear_processing_name)
+            processing_service.processingNameSet.connect(self.processing_view.set_processing_name)
+            processing_service.confirmationRequested.connect(self._confirm_processing_start)
+        if start_button is not None:
+            guarded_connect(start_button.clicked, self.start_processing,
+                            "starting a processing", app_context)
+        if rating_submit_button is not None:
+            guarded_connect(rating_submit_button.clicked, self.submit_rating,
+                            "submitting a rating", app_context)
+        if rating_combo is not None:
+            guarded_connect(rating_combo.activated, self.refresh_feedback_controls,
+                            "choosing a rating", app_context)
+        if accept_button is not None:
+            guarded_connect(accept_button.clicked, self.accept_processing,
+                            "accepting a processing", app_context)
+        if review_button is not None:
+            guarded_connect(review_button.clicked, self.show_review_dialog,
+                            "opening the review dialog", app_context)
+        if review_dialog is not None:
+            guarded_connect(review_dialog.accepted, self.submit_review,
+                            "submitting a review", app_context)
+        if processings_table is not None:
+            guarded_connect(processings_table.itemSelectionChanged, self.refresh_feedback_controls,
+                            "refreshing the feedback controls", app_context)
+            guarded_connect(processings_table.cellClicked, self.load_current_rating,
+                            "loading the processing rating", app_context)
+            # Which template a Start would run depends on the processings-table selection, so
+            # the button follows it. `ProjectProcessingController` subscribes to the same signal
+            # for the Delete button — two regions reading one widget signal is how they stay
+            # independent (`spec/007_architecture.md`: controllers must not call each other).
+            guarded_connect(processings_table.itemSelectionChanged,
+                            self.update_start_processing_button_state,
+                            "updating the Start button", app_context)
+        if metadata_table is not None:
+            # The planned-processing gate counts selected search images.
+            guarded_connect(metadata_table.itemSelectionChanged,
+                            self.update_start_processing_button_state,
+                            "updating the Start button", app_context)
 
-    def _on_project_double_clicked(self, index):
-        """Handle double-click on project row to navigate to processings."""
-        project_id = self.dlg.projectsTable.item(index.row(), 0).text()
-        self.app_context.current_project = self.project_service.projects.get(project_id)
-        self.show_processings(save_page=True)
+    # ---------- the model and its options ----------
 
-    # ==== IN-TEMPLATE NAVIGATION ==== #
-    def navigate_back(self):
-        """Left arrow: leave a template (back to processings) or go back to projects."""
-        if self.processing_service.in_template_mode:
-            self.exit_template()
-        else:
-            self.show_projects(open_saved_page=True)
-
-    def navigate_into_template(self):
-        """Right arrow: enter the currently selected template."""
-        if self.processing_service.in_template_mode:
+    def on_model_change(self, *args) -> None:
+        """A different model was picked: its options, its price, and which imagery sources it
+        accepts all change together."""
+        wd_name = self.processing_view.selected_model_name()
+        wd = self.app_context.get_workflow_def(wd_name)
+        # Unconditional, and before the early return: a model with no definition still narrows
+        # the provider list, and leaving the previous model's sources offered is worse than
+        # offering none.
+        self.provider_service.set_available_imagery_sources(wd_name)
+        if not wd:
             return
-        template = self.processing_service.selected_template()
-        if not template or not self.processing_service.is_only_templates_selected():
+        self.show_wd_options(wd)
+        self._show_price(wd)
+        # The test is `blocks`, not `optional_blocks`: a model that declares any block waits,
+        # because adding its option checkboxes fires `modelOptionsChanged` and `on_options_change`
+        # quotes the cost then. Which leaves obligatory-only models quoted by neither path —
+        # pinned in `test_a_model_whose_blocks_are_all_obligatory_is_not_quoted_on_selection`.
+        if not wd.blocks:
+            self._update_cost()
+
+    def on_options_change(self, *args) -> None:
+        wd = self.app_context.get_workflow_def(self.processing_view.selected_model_name())
+        if not wd:
             return
-        self.enter_template(template)
+        self._show_price(wd)
+        self.processing_service.save_option_settings(wd, self.processing_view.enabled_blocks())
+        self._update_cost()
 
-    def enter_template(self, template):
-        """Enter the in-template view for the given template."""
-        self.processing_service.enter_template_view(template)
-        self._set_processings_tab_text(str(template.name))
-        self._update_nav_buttons()
+    def show_wd_options(self, wd) -> None:
+        """Rebuild the option checkboxes for `wd`, ticked as this user last left them."""
+        can_start_processing = True
+        if self.app_context.user_role:
+            can_start_processing = self.app_context.user_role.can_start_processing
+        self.processing_view.show_model_options(self.processing_service.saved_model_options(wd),
+                                                enabled=can_start_processing)
 
-    def exit_template(self):
-        """Return from the in-template view to the project's processings list."""
-        self.processing_service.exit_template_view()
-        self.processing_service.setup_processings_table()
-        self._set_processings_tab_text(self.tr("Processing"))
-        self._update_nav_buttons()
+    def _show_price(self, wd) -> None:
+        self.processing_view.show_wd_price(
+            wd_price=wd.get_price(enable_blocks=self.processing_view.enabled_blocks()),
+            wd_description=wd.description,
+            display_price=self.app_context.billing_type == BillingType.credits)
 
-    MAX_TAB_TEXT_LENGTH = 15
+    def _update_cost(self) -> None:
+        """A cost is quoted in credits, so only a credits account has one to ask for."""
+        if self.app_context.billing_type == BillingType.credits:
+            self.processing_service.update_processing_cost()
 
-    def _set_processings_tab_text(self, text: str):
-        """Set the processings tab label (a breadcrumb for the template name). Long template names
-        are truncated with an ellipsis so the tab stays a sane width; the full name is kept as the
-        tab's tooltip."""
-        processings_tab = self.dlg.tabWidget.findChild(QWidget, "processingsTab")
-        if processings_tab is None:
-            return
-        tab_index = self.dlg.tabWidget.indexOf(processings_tab)
-        if tab_index < 0:
-            return
-        label = text if len(text) <= self.MAX_TAB_TEXT_LENGTH \
-            else text[:self.MAX_TAB_TEXT_LENGTH - 1] + "…"
-        self.dlg.tabWidget.setTabText(tab_index, label)
-        self.dlg.tabWidget.setTabToolTip(tab_index, text)
+    # ---------- the start panel: what the service asks for, and starting ----------
 
-    def _update_nav_buttons(self, *args):
-        """Enable the 'enter template' arrow only for a single-template selection.
+    def _provide_start_panel(self) -> None:
+        """Answer `startPanelNeeded`: hand the service the panel it is about to read. Synchronous,
+        so the service has it by the time its `emit()` returns."""
+        self.processing_service.set_start_panel(
+            params=self.processing_view.read_processing_start_params(),
+            enabled_blocks=self.processing_view.enabled_blocks(),
+            has_option_widgets=self.processing_view.has_option_widgets(),
+            aoi_layer_chosen=self.processing_view.aoi_layer_chosen(),
+            start_enabled=self.processing_view.start_enabled())
 
-        Accepts optional signal arguments (``templateOpened``/``templateClosed`` emit the
-        template object) so it can be wired directly to those signals."""
-        in_template = self.processing_service.in_template_mode
-        can_enter = (
-            not in_template
-            and self.processing_service.is_only_templates_selected()
-            and self.processing_service.selected_template() is not None
-        )
-        self.dlg.switchProcessingsFakeButton.setEnabled(bool(can_enter))
+    def start_processing(self, *args) -> None:
+        """The Start button. The button is the start panel's, so its click is this controller's."""
+        self.processing_service.start_processing()
 
-    def show_processings(self, save_page: bool = False):
+    def _on_submission_in_flight(self, in_flight: bool) -> None:
+        """Disable Start while a run request is out; re-enable when it returns."""
+        self.processing_view.set_start_enabled(not in_flight)
+
+    def _confirm_processing_start(self, processing_params) -> None:
+        """The user asked to confirm each start: raise the dialog, and submit on OK. The dialog is
+        the view's — a service may not build one — and the values it shows are half domain
+        (from the service) and half panel (read by the view)."""
+        self.processing_view.confirm_processing_start(
+            name=processing_params.name,
+            details=self.processing_service.confirmation_details(),
+            on_accept=lambda: self.processing_service.submit_processing(processing_params))
+
+    def update_start_processing_button_state(self, *args) -> None:
+        """Update the start button text, and block a planned start with no images selected.
+
+        Connected to the processings- and metadata-table selection. This method owns exactly one
+        input to the Start button: the planned-processing image gate. When a template would run but
+        no search images are selected, Start is disabled here with that reason.
+
+        It does NOT enable the button. Whether Start may be pressed depends on the AOI, the model,
+        the provider and billing — validated as one by `update_processing_cost`, which runs on every
+        change that affects them (a new AOI, a provider or model switch, an image selection). Forcing
+        Start on here would override that: selecting a finished processing to load its results would
+        turn Start on with no AOI set, and a refused price would be undone by the next selection. So
+        the enable is left to the validation, which is the single source of truth for it.
         """
-        Navigate to processings view for current/specified project.
-        
-        Args:
-            save_page: If True, save current projects page state to settings
-            project_id: The project ID to show processings for. If None, uses current project.
-        """
-        if not self.app_context.project_id:
+        self.update_start_processing_button_text()
+        error = self.processing_service.planned_processing_selection_error()
+        if error:
+            self.processing_view.disable_processing_start(reason=error, clear_area=False)
+
+    def update_start_processing_button_text(self, *args) -> None:
+        # Mirror what the start action actually does: "Start planned processing" only when a
+        # template run would happen (template selected + imagery-search source + its results open).
+        self.processing_view.set_start_button_text(
+            self.tr("Start planned processing") if self.processing_service.template_to_run()
+            else self.tr("Start processing"))
+
+    # ---------- review and rating ----------
+
+    def load_current_rating(self, *args) -> None:
+        self.processing_service.load_current_rating()
+
+    def submit_rating(self, *args) -> None:
+        """Which star and what feedback are widget reads, so they are gathered here and handed
+        over rather than looked up by the service."""
+        self.processing_service.submit_rating(self.processing_view.selected_rating(),
+                                              self.processing_view.rating_feedback())
+
+    def accept_processing(self, *args) -> None:
+        self.processing_service.accept_processing()
+
+    def show_review_dialog(self, *args) -> None:
+        """Open the review dialog, but only for a processing a review decision applies to. The
+        service answers that (and says why when it does not), so the check is not repeated here."""
+        processing = self.processing_service._reviewable_processing()
+        if processing is None:
             return
+        self.review_dialog.setup(processing)
+        self.review_dialog.show()
 
-        # Save current projects page state before switching
-        if save_page:
-            sort_by, sort_order = self.project_service.view.sort_projects()
-            projects_page = {
-                'offset': self.project_service.projects_page_offset,
-                'sort_by': sort_by,
-                'sort_order': sort_order,
-                'filter': self.project_service.view.projects_filter
-            }
-            self.app_context.settings.setValue('projectsPage', projects_page)
-        # Load processing history
-        self.processing_service.load_processing_history()
-        # Switch view
-        self.project_service.view.switch_to_processings()
+    def submit_review(self, *args) -> None:
+        """The comment and the reviewer's corrections live in the dialog, which a service may not
+        touch — so they are read here and passed as plain values."""
+        self.processing_service.reject_processing(
+            processing_id=self.review_dialog.processing.id,
+            comment=self.review_dialog.reviewComment.toPlainText(),
+            features=layer_utils.export_as_geojson(self.review_dialog.reviewLayerCombo.currentLayer()))
 
-        # Setup processings table for the project
-        self.processing_service.setup_processings_table()
+    def _on_review_submitted(self) -> None:
+        self.review_dialog.reviewComment.setText("")
 
-    def update_processing(self):
+    def refresh_feedback_controls(self, *args) -> None:
+        """Enable the rating or the review controls for the current selection — whichever this
+        account uses. 'Feedback' covers both: a 1-5 star rating for regular users, a review for
+        accounts with the review workflow enabled."""
         processing = self.processing_service.selected_processing()
-        if not processing:
+        if processing is None:
+            self._set_feedback_enabled(status_ok=False, in_review=False)
             return
-        dialog = UpdateProcessingDialog(self.dlg)
-        dialog.accepted.connect(lambda: self.processing_service.update_processing(processing_id=processing.id,
-                                                                                  processing=dialog.processing()))
-        dialog.setup(processing)
-        dialog.deleteLater()
+        self._set_feedback_enabled(status_ok=processing.status.is_ok,
+                                   in_review=processing.reviewStatus.is_in_review)
+        self.processing_view.enable_restart_action(
+            self.app_context.user_role.can_start_processing
+            and (processing.status.is_failed or processing.status.is_cancelled))
 
-    # ==== PROJECTS ==== #
-    def show_projects(self, open_saved_page: bool = False):
-        """
-        Navigate to projects view.
-        
-        Args:
-            open_saved_page: If True, restore previously saved page state from settings
-        """
-        # Stop processing polling when leaving processings view
-        self.processing_service.processing_fetch_timer.stop()
-        
-        # Fetch projects (handles saved page restoration internally)
-        self.project_service.get_projects(open_saved_page)
+    def _set_feedback_enabled(self, status_ok: bool, in_review: bool) -> None:
+        if self.app_context.review_workflow_enabled:
+            self.processing_view.enable_review(
+                status_ok and in_review,
+                self.tr("Only correctly finished processings with 'Review required' status "
+                        "can be reviewed"))
+            return
+        self.processing_view.enable_rating(
+            can_interact=status_ok and self.app_context.user_role.can_delete_rename_review_processing,
+            can_send=self.processing_view.rating_is_selected(),
+            reason=self._rating_blocked_reason(status_ok))
 
-        # Switch view
-        self.project_service.view.switch_to_projects()
+    def _rating_blocked_reason(self, status_ok: bool) -> str:
+        role = self.app_context.user_role
+        if not role.can_delete_rename_review_processing:
+            return self.tr('Not enough rights to rate processing in a shared project ({})').format(
+                role.value)
+        if not status_ok:
+            if not self.processing_service.selected_processing():
+                return self.tr('Please select processing')
+            return self.tr("Only correctly finished processings (status OK) can be rated")
+        if not self.processing_view.rating_is_selected():
+            return self.tr("Please select rating to submit")
+        return ""
 
-        # Remove old cost
-        self.processing_service.update_processing_cost()
+    # ---------- registry ----------
 
-    def create_project(self):
-        dialog = CreateProjectDialog(self.dlg)
-        dialog.accepted.connect(lambda: self.project_service.create_project(dialog.project()))
-        dialog.setup()
-        dialog.deleteLater()
+    def refresh_excepted_layers(self) -> None:
+        """Recompute what the AOI combo must not offer. The flag lives in a checkbox, so it
+        travels controller -> service rather than being read by the service."""
+        self.aoi_view.set_excepted_layers(
+            self.aoi_service.excepted_layers(self.aoi_view.use_all_vector_layers))
 
-    def update_project(self):
-        dialog = UpdateProjectDialog(self.dlg)
-        dialog.accepted.connect(lambda: self.project_service.update_project(self.app_context.current_project.id,
-                                                                            dialog.project()))
-        dialog.setup(self.app_context.current_project)
-        dialog.deleteLater()
+    def _on_aoi_layer_registered(self, layer: QgsMapLayer) -> None:
+        self.iface.addCustomActionForLayer(self.remove_layer_action, layer)
 
-    def delete_project(self):
-        if alert(self.tr('Do you really want to remove project {}? '
-                         'This action cannot be undone, all processings will be lost!').format(
-            self.app_context.current_project.name),
-                      icon=QMessageBox.Question):
-            # Unload current project as we are deleting it
-            to_delete = self.app_context.project_id
-            self.app_context.project_id = None
-            self.app_context.current_project = None
-            self.project_service.delete_project(to_delete)
+    def use_current_layer_as_aoi(self) -> None:
+        """'Use as AOI in Mapflow' on a layer's context menu. Which layer that is comes from the
+        layer tree — a widget, so the controller resolves it."""
+        self.aoi_service.register_layer(self.iface.layerTreeView().currentLayer())
 
-    def connect_projects(self):
-        """
-        Reset connection between project table selection and project change
-        """
-        if self.project_connection is not None:
-            self.dlg.projectsTable.itemSelectionChanged.disconnect(self.project_connection)
-            self.project_connection = None
-        self.project_connection = self.dlg.projectsTable.itemSelectionChanged.connect(self.project_service.on_project_change)
+    def stop_using_current_layer_as_aoi(self) -> None:
+        self.aoi_service.unregister_layer(self.iface.layerTreeView().currentLayer())
+
+    # ---------- creating AOI layers ----------
+
+    def create_aoi_from_map_extent(self, *args) -> None:
+        layer = self.aoi_service.create_layer_from_rect(
+            self.iface.mapCanvas().extent(), self.aoi_service.app_context.project.crs())
+        self.iface.setActiveLayer(layer)
+
+    def create_aoi_from_imagery(self, *args) -> None:
+        layer = self.aoi_service.create_layer_from_imagery()
+        if layer is None:
+            self.aoi_view.report_no_imagery_selected(
+                self.tr('Choose imagery collection or image to start processing'))
+            return
+        self.iface.setActiveLayer(layer)
+
+    def draw_aoi(self, *args) -> None:
+        """New empty AOI layer, active and in edit mode with the add-feature tool armed."""
+        layer = self.aoi_service.create_editable_layer()
+        self.iface.setActiveLayer(layer)
+        self.iface.actionAddFeature().trigger()

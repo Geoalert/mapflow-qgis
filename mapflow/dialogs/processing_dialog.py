@@ -7,6 +7,7 @@ from PyQt5.QtWidgets import QWidget, QDialogButtonBox
 # `from .processing_dialog import plugin_icon`. The redundant alias marks it as an
 # intentional re-export so ruff won't strip it as unused.
 from .icons import plugin_icon as plugin_icon
+from ..error_guard import guarded_connect
 from ..schema.processing import UpdateProcessingSchema, ProcessingDTO
 
 ui_path = Path(__file__).parent/'static'/'ui'
@@ -18,7 +19,8 @@ class UpdateProcessingDialog(*uic.loadUiType(ui_path/'processing_dialog.ui')):
         self.setupUi(self)
         self.ok = self.buttonBox.button(QDialogButtonBox.Ok)
 
-        self.processingName.textChanged.connect(self.on_name_change)
+        guarded_connect(self.processingName.textChanged, self.on_name_change,
+                        "editing the processing name", self)
 
     def on_name_change(self):
         if not self.processingName.text():

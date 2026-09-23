@@ -1,4 +1,5 @@
 from typing import Optional
+import logging
 import sys
 
 from PyQt5.QtCore import QObject, Qt
@@ -12,7 +13,9 @@ from ...functional.app_context import AppContext
 from ...functional.helpers import get_readable_size
 from ...schema import MyImageryParams
 from ...schema.data_catalog import MosaicReturnSchema, ImageReturnSchema
-from ..service.alert_service import log
+
+logger = logging.getLogger(__name__)
+
 
 class DataCatalogView(QObject):
     def __init__(self, dlg: MainDialog, app_context: AppContext):
@@ -309,7 +312,7 @@ class DataCatalogView(QObject):
         try: # disconnect signal for selecting image in a table on toSourceButton click
             self.dlg.imageTableFilled.disconnect(self.show_source_image_connection)
         except Exception as e: # if there was no connection
-            log(f"No imageTableFilled connection to disconnect: {e}", "info")
+            logger.info("No imageTableFilled connection to disconnect: %s", e)
 
     def rename_image_in_table(self, image: ImageReturnSchema):
         if self.mosaic_table_visible:
@@ -329,6 +332,9 @@ class DataCatalogView(QObject):
         self.dlg.imagePreview.setPixmap(QPixmap.fromImage(preview_image))
         self.dlg.imagePreview.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
 
+    def set_preview_unavailable(self):
+        self.dlg.imagePreview.setText(self.tr("Preview is unavailable"))
+
     def selected_mosaic_ids(self, limit=None):
         # Add unique selected rows
         selected_rows = list(set(index.row() for index in self.dlg.mosaicTable.selectionModel().selectedIndexes()))
@@ -338,6 +344,36 @@ class DataCatalogView(QObject):
                 for row in selected_rows[:limit]]
         return pids
     
+    def display_mosaics_and_reselect(self, mosaics: list, mosaic_id):
+        """Redraw the mosaic list and reselect one cell. Selection is forbidden across the redraw
+        to dodge a Qt selection-model bug that the plain display path can trigger."""
+        self.dlg.mosaicTable.setSelectionMode(QAbstractItemView.NoSelection)
+        self.display_mosaics(mosaics)
+        self.dlg.mosaicTable.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        self.select_mosaic_cell(mosaic_id)
+
+    def clear_mosaic_selection(self):
+        self.dlg.mosaicTable.clearSelection()
+
+    def clear_image_selection(self):
+        self.dlg.imageTable.clearSelection()
+
+    def clear_image_table(self):
+        """Selecting a mosaic wipes the image table before its images are fetched."""
+        self.dlg.imageTable.clearSelection()
+        self.dlg.imageTable.setRowCount(0)
+
+    def reset_to_mosaics_table(self):
+        self.dlg.stackedLayout.setCurrentIndex(0)
+
+    def raise_dialog(self):
+        self.dlg.raise_()
+
+    def bind_source_image(self, image_id):
+        """After the image table refills, select the source image's row (a one-shot connection)."""
+        self.show_source_image_connection = self.dlg.imageTableFilled.connect(
+            lambda: self.select_image_cell(image_id))
+
     def select_mosaic_cell(self, mosaic_id):
         try:
             self.show_mosaics_table(None)
@@ -594,7 +630,7 @@ class DataCatalogView(QObject):
                 self.dlg.stackedLayout.setCurrentIndex(1)
                 self.dlg.tabWidget.setCurrentWidget(my_imagery_tab)
             except Exception as e:
-                log(f"Could not focus the My Imagery image selection: {e}", "info")
+                logger.info("Could not focus the My Imagery image selection: %s", e)
 
     def alert(self, message: str, icon: QMessageBox.Icon = QMessageBox.Critical, blocking=True) -> None:
         """A duplicate of alert function from mapflow.py to avoid circular import.

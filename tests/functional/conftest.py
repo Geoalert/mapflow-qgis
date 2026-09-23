@@ -13,20 +13,8 @@ Convention for adding tests here:
 * anything that opens a widget / starts an event loop belongs in
   `tests/ui/`.
 """
-import importlib
-
 from qgis.testing import start_app
 
 
 def pytest_configure(config):
     start_app()
-    # Pre-warm the mapflow module tree to survive the circular import on first
-    # load. The chain mapflow.schema.processing -> entity.provider ->
-    # functional.layer_utils -> dialogs -> mapflow.schema fails on the first
-    # attempt but succeeds on retry because partial modules are cached.
-    for _ in range(2):
-        try:
-            importlib.import_module("mapflow.schema.processing")
-            break
-        except ImportError:
-            pass

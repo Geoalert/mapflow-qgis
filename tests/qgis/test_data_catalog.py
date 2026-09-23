@@ -94,11 +94,9 @@ class TestDownloadApiUrl:
         """API client constructs correct download URL."""
         from mapflow.functional.api.data_catalog_api import DataCatalogApi
 
-        dlg_mock = MagicMock()
         api = DataCatalogApi(
             http=http_mock,
             server="https://whitemaps.mapflow.ai/rest",
-            dlg=dlg_mock,
             iface=MagicMock(),
             result_loader=MagicMock(),
             plugin_version="1.0.0",
@@ -107,7 +105,9 @@ class TestDownloadApiUrl:
         error_handler = MagicMock()
         image_id = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
 
-        api.download_image(image_id=image_id, callback=callback, error_handler=error_handler)
+        from mapflow.http import RequestMode
+        api.download_image(image_id=image_id, callback=callback, error_handler=error_handler,
+                           mode=RequestMode.INTERACTIVE)
 
         http_mock.get.assert_called_once()
         call_kwargs = http_mock.get.call_args
@@ -179,11 +179,18 @@ def image_server():
 
 
 @pytest.fixture()
-def service(monkeypatch):
+def alerts(monkeypatch):
+    """What the service told the user. Patched because the real `alert` opens a modal box."""
+    recorded = MagicMock()
+    monkeypatch.setattr(data_catalog, "alert", recorded)
+    return recorded
+
+
+@pytest.fixture()
+def service(monkeypatch, alerts):
     """A DataCatalogService built by its real constructor, downloading through QGIS's network manager."""
     monkeypatch.setattr(data_catalog, "DataCatalogApi", MagicMock())
-    monkeypatch.setattr(data_catalog, "DataCatalogView", MagicMock())  # the real alert() blocks on a modal box
-    svc = data_catalog.DataCatalogService(http=MagicMock(), server="https://example.com", dlg=MagicMock(),
+    svc = data_catalog.DataCatalogService(http=MagicMock(), server="https://example.com",
                                           iface=MagicMock(), result_loader=MagicMock(), plugin_version="test",
                                           app_context=AppContext())
     svc.api.http.nam = QgsNetworkAccessManager.instance()
@@ -200,8 +207,8 @@ def _wait_until(condition, timeout=10.0):
     return False
 
 
-def _finished(svc):
-    return svc.view.alert.called or svc.iface.messageBar().pushMessage.called
+def _finished(svc, alerts):
+    return alerts.called or svc.iface.messageBar().pushMessage.called
 
 
 def _bytes_on_disk(directory):
@@ -222,23 +229,23 @@ def _bytes_on_disk(directory):
 
 
 class TestImageDownloadToDisk:
-    def test_saves_the_served_bytes_and_reports_the_path(self, service, image_server, tmp_path):
+    def test_saves_the_served_bytes_and_reports_the_path(self, service, alerts, image_server, tmp_path):
         server = image_server("ok")
         target = tmp_path / "image.tif"
 
-        service._download_file_from_url(server.url, str(target))
+        service.save_downloaded(server.url, str(target))
 
-        assert _wait_until(lambda: _finished(service)), "the download never completed"
-        service.view.alert.assert_not_called()
+        assert _wait_until(lambda: _finished(service, alerts)), "the download never completed"
+        alerts.assert_not_called()
         assert target.read_bytes() == PAYLOAD
         assert str(target) in service.iface.messageBar().pushMessage.call_args.args[1]
         assert [path.name for path in tmp_path.iterdir()] == ["image.tif"]  # no temporary file left behind
 
-    def test_streams_to_disk_while_downloading(self, service, image_server, tmp_path):
+    def test_streams_to_disk_while_downloading(self, service, alerts, image_server, tmp_path):
         server = image_server("hold")  # sends FIRST_CHUNK of the body, then waits for release
         target = tmp_path / "image.tif"
 
-        service._download_file_from_url(server.url, str(target))
+        service.save_downloaded(server.url, str(target))
 
         # Mid-download, what has arrived is already on disk rather than held in memory, and the
         # target itself is not there yet: it is only replaced once the download succeeds.
@@ -247,54 +254,57 @@ class TestImageDownloadToDisk:
         assert not target.exists()
 
         server.release.set()
-        assert _wait_until(lambda: _finished(service)), "the download never completed"
+        assert _wait_until(lambda: _finished(service, alerts)), "the download never completed"
         assert target.read_bytes() == PAYLOAD
 
-    def test_completes_when_garbage_collection_runs_mid_download(self, service, image_server, tmp_path):
+    def test_completes_when_garbage_collection_runs_mid_download(self, service, alerts, image_server,
+                                                                 tmp_path):
         # Regression: the `finished` slot was a lambda capturing its own reply. PyQt lets the cyclic GC
         # see that as a reply <-> lambda cycle with nothing else holding it, so a GC pass mid-download
         # tore the slot down: the image was silently never saved, or QGIS crashed when it finished.
+        # The slots still capture the reply — what keeps it alive is the service's in-flight dict.
         server = image_server("hold")
         target = tmp_path / "image.tif"
 
-        service._download_file_from_url(server.url, str(target))
+        service.save_downloaded(server.url, str(target))
         assert _wait_until(lambda: server.requests == 1)
         gc.collect()
         server.release.set()
 
-        assert _wait_until(lambda: _finished(service)), "the download's completion was lost"
+        assert _wait_until(lambda: _finished(service, alerts)), "the download's completion was lost"
         assert target.read_bytes() == PAYLOAD
 
-    def test_http_error_keeps_the_existing_file(self, service, image_server, tmp_path):
+    def test_http_error_keeps_the_existing_file(self, service, alerts, image_server, tmp_path):
         server = image_server("forbidden")  # e.g. an expired presigned URL
         target = tmp_path / "image.tif"
         target.write_bytes(b"previous image")
 
-        service._download_file_from_url(server.url, str(target))
+        service.save_downloaded(server.url, str(target))
 
-        assert _wait_until(lambda: _finished(service))
+        assert _wait_until(lambda: _finished(service, alerts))
         service.iface.messageBar().pushMessage.assert_not_called()
-        assert "Failed to download image" in service.view.alert.call_args.args[0]
+        assert "Failed to download image" in alerts.call_args.args[0]
         assert target.read_bytes() == b"previous image"
         assert [path.name for path in tmp_path.iterdir()] == ["image.tif"]
 
-    def test_interrupted_download_leaves_no_partial_file(self, service, image_server, tmp_path):
+    def test_interrupted_download_leaves_no_partial_file(self, service, alerts, image_server, tmp_path):
         server = image_server("drop")  # closes the connection after FIRST_CHUNK of the body
         target = tmp_path / "image.tif"
 
-        service._download_file_from_url(server.url, str(target))
+        service.save_downloaded(server.url, str(target))
 
-        assert _wait_until(lambda: _finished(service))
+        assert _wait_until(lambda: _finished(service, alerts))
         service.iface.messageBar().pushMessage.assert_not_called()
-        assert "Failed to download image" in service.view.alert.call_args.args[0]
+        assert "Failed to download image" in alerts.call_args.args[0]
         assert list(tmp_path.iterdir()) == []
 
-    def test_unwritable_target_is_reported_without_downloading(self, service, image_server, tmp_path):
+    def test_unwritable_target_is_reported_without_downloading(self, service, alerts, image_server,
+                                                               tmp_path):
         server = image_server("ok")
         target = tmp_path / "no-such-dir" / "image.tif"
 
-        service._download_file_from_url(server.url, str(target))
+        service.save_downloaded(server.url, str(target))
         _wait_until(lambda: server.requests > 0, timeout=1.0)
 
         assert server.requests == 0, "a download was started for a target that cannot be written"
-        assert "Failed to save file" in service.view.alert.call_args.args[0]
+        assert "Failed to save file" in alerts.call_args.args[0]

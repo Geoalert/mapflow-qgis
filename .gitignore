@@ -147,3 +147,11 @@ cython_debug/
 .DS_Store
 
 mapflow_dev/
+# Per-branch agent handover scratchpad. Detailed step plans, push-back
+# discussions, and Final Review Summaries live here so they never leak into
+# the MR diff or remote. Distilled motivation lands in WAL.md at merge.
+.plans/
+# Claude Code local settings — secrets and personal overrides for this project.
+# Tracked baseline is .claude/settings.json; the .local.json variant carries
+# things that must never reach the remote (PATs, registry tokens, etc.).
+.claude/settings.local.json

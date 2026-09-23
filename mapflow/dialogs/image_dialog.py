@@ -1,6 +1,7 @@
 from PyQt5 import uic
 from PyQt5.QtWidgets import QWidget, QDialogButtonBox
 
+from ..error_guard import guarded_connect
 from ..schema.data_catalog import ImageReturnSchema
 from .processing_dialog import ui_path, plugin_icon
 
@@ -11,7 +12,8 @@ class RenameImageDialog(*uic.loadUiType(ui_path/'image_dialog.ui')):
         self.setupUi(self)
         self.setWindowIcon(plugin_icon)
         self.ok = self.buttonBox.button(QDialogButtonBox.Ok)
-        self.imageName.textChanged.connect(self.on_name_change)
+        guarded_connect(self.imageName.textChanged, self.on_name_change,
+                        "editing the image name", self)
 
     def setup(self, image: ImageReturnSchema):
         if not image:

@@ -1,0 +1,11 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "version",
+    "body": null
+  },
+  "status": 200,
+  "body": {
+    "__raw__": "2.5.0"
+  }
+}
