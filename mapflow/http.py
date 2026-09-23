@@ -361,6 +361,10 @@ class Http(QObject):
         def abort_request():
             if not response.isFinished():
                 response.abort()
+        # This closure is also the only thing holding `response` until the timer fires: PyQt exposes
+        # a reply that nothing else references as a collectable cycle with its own slots, and a
+        # collection mid-request takes the callbacks down with it (see `save_downloaded`, which keeps
+        # its replies in a dict for the same reason). Keep an owner if this timer ever goes.
         QTimer.singleShot(timeout * 1000, abort_request)
 
         return response

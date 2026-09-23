@@ -19,7 +19,7 @@ from ...schema import (DataProviderParams,
                        ImagerySearchParams, 
                        UserDefinedParams)
 from ...schema.processing import ProcessingDTO
-from ...config import Config, ConfigColumns
+from ...config import Config, ConfigColumns, provider_display_name
 from ...errors import PluginError
 
 

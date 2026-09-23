@@ -5,6 +5,7 @@ from PyQt5.QtGui import QBrush, QColor
 from PyQt5.QtWidgets import QAbstractItemView, QMenu, QPushButton, QTableWidgetItem, QToolButton, QWidget
 
 from ..helpers import utc_date_from_iso
+from ...config import provider_display_name
 from ...dialogs.main_dialog import MainDialog
 from ...error_guard import guarded_connect
 from ...schema.catalog import ProductType
@@ -315,6 +316,10 @@ class SearchView(QObject):
         table.setRowCount(len(rows))
         for row, columns in enumerate(rows):
             for column, value in columns.items():
+                if column == self.config.NAME_COLUMN_INDEX:
+                    # Display only: the pseudo-footprint layer behind these rows keeps the API's own
+                    # provider name, which the min-area lookup and the processing request match on.
+                    value = provider_display_name(value)
                 item = QTableWidgetItem()
                 item.setData(Qt.DisplayRole, value)
                 table.setItem(row, column, item)

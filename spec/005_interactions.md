@@ -70,6 +70,7 @@ before it — the user can press the button again. So every request declares whi
 
 ### Local Filesystem
 - Direction: outbound (write)
-- Purpose: save GeoJSON processing results, download raster previews
-- Location: user-configured output directory
+- Purpose: save GeoJSON processing results, download raster previews, save My Imagery images the user downloads
+- Location: user-configured output directory; a downloaded My Imagery image goes to the path the user picks
+  (see `002_C_myimagery_api.md` § Client-side download)
 - Failure handling: display permission/space errors to user
