@@ -127,12 +127,9 @@ class ProcessingController(QObject):
             return
         self.show_wd_options(wd)
         self._show_price(wd)
-        # The test is `blocks`, not `optional_blocks`: a model that declares any block waits,
-        # because adding its option checkboxes fires `modelOptionsChanged` and `on_options_change`
-        # quotes the cost then. Which leaves obligatory-only models quoted by neither path —
-        # pinned in `test_a_model_whose_blocks_are_all_obligatory_is_not_quoted_on_selection`.
-        if not wd.blocks:
-            self._update_cost()
+        # Unconditional: rebuilding the option checkboxes is silent (each is created with its saved
+        # state before `toggled` is connected), so nothing else quotes a model that has options.
+        self._update_cost()
 
     def on_options_change(self, *args) -> None:
         wd = self.app_context.get_workflow_def(self.processing_view.selected_model_name())

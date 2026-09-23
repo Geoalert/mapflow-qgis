@@ -119,8 +119,11 @@ class ProjectService(QObject):
             self.apply_project_aoi_area_limit(self.app_context.current_project)
             if self.app_context.current_project:
                 self.app_context.project_id = self.app_context.current_project.id
+                # Before announcing the project: the panel rebuilt by that signal decides what to
+                # offer from `user_role`, so resolving the role afterwards would dress the new
+                # project's panel in the previous project's rights.
+                self.get_project_sharing()
                 self.currentProjectChanged.emit(self.app_context.current_project)
-            self.get_project_sharing()
             self.setup_project_change_rights()
             self.app_context.settings.setValue("project_id", self.app_context.project_id)
             # Manually toggle function to avoid race condition
@@ -252,13 +255,19 @@ class ProjectService(QObject):
             self.currentProjectChanged.emit(None)
             return
         self.app_context.project_id = selected_id
-        for pid, project in self.projects.items():
-            if selected_id == pid:
-                self.app_context.current_project = project
-                self.currentProjectChanged.emit(project)
+        selected = self.projects.get(selected_id)
+        if selected is not None:
+            self.app_context.current_project = selected
         if self.app_context.current_project:
             self.apply_project_aoi_area_limit(self.app_context.current_project)
+            # Resolved before the project is announced: the signal below rebuilds the start panel,
+            # which asks `user_role` what this user may touch. Resolving it afterwards leaves the
+            # new project's options dressed in the previous project's rights — and nothing
+            # re-renders them, so a user who left a read-only project would find their own
+            # project's model options permanently disabled.
             self.get_project_sharing()
+        if selected is not None:
+            self.currentProjectChanged.emit(selected)
         self.setup_project_change_rights()
         self.app_context.settings.setValue("project_id", self.app_context.project_id)
 

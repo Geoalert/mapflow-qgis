@@ -579,13 +579,13 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         Set the whole group of checkboxes for model options disabled depending on user role property.
         Called by `ProcessingView.show_model_options`, right after the checkboxes are created —
         they do not exist any earlier, so this cannot be folded into the rest of the panel setup.
+
+        Enabling only. Each box was created with the state that belongs to it — what this user last
+        chose, or what the block declares if they never did — and ticking them here would overwrite
+        that, then be saved back as the user's choice, since a tick emits `modelOptionsChanged`.
         """
-        if not can_start_processing:
-            can_start_processing = True
-        for i in range(self.modelOptionsLayout.count()):
-            widget = self.modelOptionsLayout.itemAt(i).widget()
-            widget.setEnabled(can_start_processing)
-            widget.setChecked(can_start_processing)
+        for checkbox in self.modelOptions:
+            checkbox.setEnabled(can_start_processing)
     
     def enable_project_change(self, reason: str, can_delete_rename_project: bool = True):
         """

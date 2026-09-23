@@ -16,7 +16,7 @@ from PyQt5.QtCore import QObject
 from mapflow.functional.controller.project_processing_controller import ProjectProcessingController
 from mapflow.functional.service.project_service import ProjectService
 from mapflow.http import RequestMode
-from mapflow.schema.project import ProjectSortBy, ProjectSortOrder
+from mapflow.schema.project import ProjectSortBy, ProjectSortOrder, UserRole
 
 
 def _service(total=1, page_limit=5):
@@ -200,6 +200,25 @@ def test_selecting_a_project_announces_it():
 
     assert announced[0].name == "Roads"
     assert service.app_context.project_id == "p-1"
+
+
+def test_the_role_is_resolved_before_the_project_is_announced():
+    """Whoever listens rebuilds the start panel, and the panel asks `user_role` what this user may
+    touch. Resolving the role afterwards dresses the new project's panel in the previous project's
+    rights — and nothing renders it again, so a user leaving a read-only shared project would find
+    their own project's model options disabled for good."""
+    service = _service()
+    service.app_context.user_role = UserRole.readonly  # what the previous project left behind
+    service.projects = {"p-1": SimpleNamespace(id="p-1", name="Mine", shareProject=None,
+                                               isDefault=False, workflowDefs={}, user=None)}
+    roles_when_announced = []
+    service.currentProjectChanged.connect(
+        lambda _project: roles_when_announced.append(service.app_context.user_role))
+
+    service.on_project_change("p-1")
+
+    assert roles_when_announced == [UserRole.owner], (
+        "the panel was rebuilt while user_role still described the previous project")
 
 
 def test_clearing_the_selection_announces_no_project():
