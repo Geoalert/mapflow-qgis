@@ -110,18 +110,22 @@ Use `agent-make` for every build / test / lint invocation in this repo. Raw `mak
 - *"Sub-Makefile '<path>' is not in agent-make.files"* — STOP and ask the user to add it via `agent-repo-init --files …`.
 
 # PROJECT STRUCTURE AND ADDRESSING
-This is a **QGIS 3 plugin** (Python, Qt/PyQGIS). It ships as a zip to the QGIS plugin repository — there is no server, no database, and no deployment image.
+This is a **QGIS plugin for QGIS 3.22+ (Qt 5) and QGIS 4 (Qt 6)** (Python, Qt/PyQGIS). It ships as a zip to the QGIS plugin repository — there is no server, no database, and no deployment image. The previous 3.x plugin (`mapflow/`) is in the history up to tag `v3.6.3`.
 
-- `Dockerfile.tests`: the QGIS test image (`qgis/qgis:release-3_28`). Test-only; nothing is deployed from it.
-- `Makefile`: test tiers + lint. **No docker-compose in this repo** — targets use a plain `docker run` with the repo bind-mounted at `/app`.
-- /spec: contains specifications, ordered by hierarchy: the very foundation in 001, then go the most important architecture details (api, db, stack), all further decisions and rationale are documented in subsequent files. Enter via `/spec/index.md`.
-- /mapflow: plugin source code
-  - /mapflow/dialogs: Qt dialog classes; `.ui` files live in `/mapflow/dialogs/static/ui/`
-  - /mapflow/functional: business logic, split `api/` (Mapflow HTTP clients) / `controller/` / `service/` / `view/`
-  - /mapflow/entity: domain models (processing, provider, billing, etc.)
-  - /mapflow/schema: data schemas
-  - /mapflow/errors: error types and user-facing messages
-- /tests: pytest suites, split by **runtime tier**, not by unit/integration — `functional/` (pure logic, no QGIS), `qgis/` (needs the QGIS runtime), `ui/` (Qt widgets, runs under xvfb)
+- `Dockerfile.tests`: the QGIS test image, built twice from one file: on `qgis/qgis:release-3_28` (QGIS 3) and on `qgis/qgis:4.2` (QGIS 4). Test-only; nothing is deployed from it.
+- `Makefile`: tests on both QGIS versions + lint + packaging. **No docker-compose in this repo** — targets use a plain `docker run` with the repo bind-mounted at `/app`.
+- /spec: contains specifications, ordered by hierarchy: the very foundation in 001, then go the most important architecture details (api, db, stack), all further decisions and rationale are documented in subsequent files. Enter via `/spec/index.md`. **004 (stack), 005 (interactions) and 007 (architecture) still describe the 3.x plugin** — they need a spec session before they can gate work on `mapflow_next/`.
+- /mapflow_next: plugin source code
+  - `plugin.py` (QGIS entry), `controller.py` (connects services to pages and to QGIS), `config.py`, `settings.py`
+  - /mapflow_next/core: pure Python, no Qt — models, the run form as data (`draft.py`), scenarios, error texts, OAuth helpers
+  - /mapflow_next/api: HTTP over `QgsNetworkAccessManager`, the Mapflow endpoints, credentials, browser sign-in
+  - /mapflow_next/services: Qt objects holding state, with signals — session, processings, imagery, results
+  - /mapflow_next/qgis_bridge: map-side code — area from layers, layers and styles, draw tool; `compat.py` holds the few QGIS 3/4 differences
+  - /mapflow_next/ui: dock, pages, dialogs, theme and icons, built in code (no `.ui` files)
+  - /mapflow_next/resources: scenarios, result styles (QML), fonts, icons
+- /tests: `test_core.py` (pure Python), `test_e2e.py` → `e2e_flow.py` (the whole flow in offscreen QGIS against `mock_server.py`), `qt6_ui.py` + `qt6_shim/` (the pages on PyQt6 without QGIS 4)
+- /tools: `qt6_check.py` (Qt enum names and calls only Qt 5 accepts), `run_in_qgis.py` (runs the end-to-end tests from a QGIS Python console)
+- /docs/screens: screenshots written by the end-to-end flow (`make screens`)
 - `WAL.md` — **lean, forward-facing** plan + in-flight tracker: holds only `[ ]` planned and `[ready-for-review]` in-flight steps. It is NOT a permanent journal. The **WHY** of completed work is preserved in (1) the change's **commit message** and (2) `spec/` files for durable decisions. When a step merges, its rationale is distilled into those places and the entry is **removed** from `WAL.md`.
   - Authors: the **user** and the **planner**. Implementer, stabilizer and reviewer read it but never write it.
   - Consult it when planning the next step — it should answer "what is left", not "what did we do".
@@ -228,6 +232,7 @@ Execute it every time a session is initiated.
 # LANGUAGE PACKS (SCOPED)
 - `instructions/lang/python.md`: Python + PyQGIS conventions (PEP 8, module-function pattern, Qt/QGIS imports, containerized tests). Applies to `{mapflow,tests}/**`.
 - `instructions/lang/ui.md`: Qt dialog conventions (`uic.loadUiType`, `.ui` file placement, signal/slot style, icon handling, translatable strings). Applies to `mapflow/dialogs/**`.
+- **Both packs were written for the 3.x plugin (`mapflow/`) and don't match `mapflow_next/` yet** — it has no `.ui` files and no `functional/` layers, and its UI is built in code. Until they are rewritten, ask the user before applying them to `mapflow_next/`. What does hold for `mapflow_next/` is in the README: § QGIS 3 and QGIS 4.
 - Add packs for other languages under `instructions/lang/` as the project grows. Each pack declares its own scope via `applyTo:` frontmatter.
 - During delivery, stabilization, and review, consult the pack(s) matching the files being touched. A change under `mapflow/dialogs/**` is in scope for **both** packs. If no pack covers a language present in the diff, ask the user before inventing conventions.
 
@@ -288,24 +293,25 @@ tells the next person what they may not break.
 # COMMANDS TO RUN
 All build/test invocations go through `agent-make` (raw `make` requires manual approval per call and bypasses watched-file verification).
 
-`agent-make test` — all three test tiers (this is the DoD gate)
-`agent-make test-functional` — pure-logic tests under `tests/functional/`
-`agent-make test-qgis` — QGIS-runtime tests under `tests/qgis/`
-`agent-make test-ui` — UI tests under `tests/ui/` (xvfb)
-`agent-make lint` — static analysis on the host (see STATIC ANALYSIS)
-`agent-make docker-build` — rebuild the test image explicitly
-`agent-make clean` — remove pytest cache + bytecode
+`agent-make test` — the tests on QGIS 3 and on QGIS 4 (this is the DoD gate)
+`agent-make test-core` — pure-Python tests only (`tests/test_core.py`), fastest
+`agent-make test-qgis3` — unit + end-to-end tests in the QGIS 3 image
+`agent-make test-qgis4` — the same in the QGIS 4 (Qt 6) image, plus `tools/qt6_check.py`
+`agent-make lint` — static analysis in the QGIS 3 image (see STATIC ANALYSIS)
+`agent-make screens` — run the end-to-end flow and rewrite `docs/screens/*.png`
+`agent-make docker-build` / `agent-make docker-build-qgis4` — rebuild a test image explicitly
+`agent-make clean` — remove caches, test results and the zip
 `agent-make help` — list targets
 
 Note: `agent-make` does not accept `VAR=val` overrides. Every test target already depends on `docker-build`, so there is no separate rebuild flag — and no no-rebuild/attach path in this repo.
 
 # TEST EXECUTION MODES
-- All tests run **inside the `qgis/qgis:release-3_28` Docker image**, never from a host venv — the QGIS Python bindings are not importable on the host. The repo is bind-mounted at `/app`, so the container always sees your current working tree; the rebuild is for the image's dependencies, not your source.
-- Tiers exist because of **runtime cost and requirements**, not test scope:
-  - `test-functional` — no QGIS needed; fastest. Use this while iterating on `entity/`, `schema/`, `errors/`, and pure `functional/` logic.
-  - `test-qgis` — needs the QGIS runtime. Use when touching layers, providers, projections, or anything importing `qgis.core` / `qgis.gui`.
-  - `test-ui` — Qt widgets under `xvfb-run`. Currently an **empty harness**: the Makefile treats pytest's exit code 5 ("no tests collected") as a pass. A green `test-ui` therefore proves nothing yet — remove that guard in the Makefile once the first UI test lands.
-- Run the narrow tier while iterating, but `agent-make test` must pass before review.
+- All tests run **inside the official `qgis/qgis` Docker images** — `release-3_28` for QGIS 3 and `4.2` for QGIS 4 — never from a host venv: the QGIS Python bindings are not importable on the host. The repo is bind-mounted at `/app`, so the container always sees your current working tree; the rebuild is for the image's dependencies, not your source.
+- What runs:
+  - `tests/test_core.py` — pure Python plus source checks (Qt 5/6-safe code, handlers that Qt's `checked` argument would break). Use `test-core` while iterating on `core/`.
+  - `tests/test_e2e.py` — runs `tests/e2e_flow.py` in its own process: a real offscreen QGIS, a mock Mapflow API and sign-in server (`tests/mock_server.py`), and the whole flow from sign-in to results on the map (144 checks). Each run gets its own QGIS settings and authentication database in a temporary folder.
+  - `tools/qt6_check.py` (in `test-qgis4`) — Qt enum names and calls that only Qt 5 accepts.
+- Run the narrow target while iterating, but `agent-make test` must pass before review — a change can pass on QGIS 3 and break on QGIS 4.
 - If `agent-make` blocks with *"local files differ from origin/master"*, a watched file (`Makefile`, `Dockerfile.tests`) was edited locally — escalate to the user. Do not undo other work to satisfy the check.
 
 # STATIC ANALYSIS (LINTING)
@@ -315,15 +321,14 @@ Note: `agent-make` does not accept `VAR=val` overrides. Every test target alread
 - Unlike the previous ruff/pyright setup, lint runs **in the same Docker image as the tests**, not on
   the host. Tool versions are pinned in `Dockerfile.tests` so every developer and CI get identical
   results. There is no host `venv` step and no `pip install`.
-- Scope differs per tool on purpose: flake8 covers `mapflow/` **and** `tests/`; bandit covers `mapflow/`
-  only (it is the code that ships, and `B101` would otherwise fire on every pytest assertion);
-  detect-secrets runs against the committed `.secrets.baseline`.
+- Scope differs per tool on purpose: flake8 covers `mapflow_next/`, `tests/` **and** `tools/`; bandit
+  covers `mapflow_next/` only (it is the code that ships, and `B101` would otherwise fire on every pytest
+  assertion); detect-secrets runs against the committed `.secrets.baseline`.
 - At qgis.org, bandit and detect-secrets are **blocking** and flake8 is advisory. Locally all three
   block — a check that cannot fail the build does not hold a line.
-- `.flake8` carries a **debt ledger** under `extend-ignore`: rule classes still outstanding from the
-  3.6.0 scan, each commented with the WAL step that removes it. **The list only shrinks.** Do not add a
-  code to it to make your MR pass — fix the finding, or escalate. Note the qgis.org scan never reads
-  `.flake8`, so everything in that list is debt still owed at submission time.
+- `.flake8` has **no debt ledger**: the code passes flake8's default rules. Do not add an
+  `extend-ignore` to make your MR pass — fix the finding, or escalate. Note the qgis.org scan never
+  reads `.flake8`, so anything ignored there is still reported at submission.
 - Use `extend-ignore`, never `ignore` — the latter *replaces* flake8's default ignore set and silently
   re-enables rules qgis.org itself does not report. flake8 parses config with `RawConfigParser`, so
   inline comments on value lines are a syntax error; keep comments on their own line.
@@ -370,7 +375,7 @@ allowlisted command, and let the built-in tools do the rest.
 - Read-only commands (`agent-git status`, `agent-git diff`, `agent-git log`, `agent-git show`, etc.) are allowlisted — call them directly, don't batch.
 - Combine state-changing commands into a single `&&`-chained invocation when there is no need to inspect intermediate output. Example after a Confirmation-Gate-approved task with a clear path list:
   ```
-  agent-git add mapflow/functional/service/foo.py tests/functional/test_foo.py && \
+  agent-git add mapflow_next/services/foo.py tests/test_core.py && \
     agent-git commit -m "feat: foo handles empty input" && \
     agent-git push
   ```
@@ -406,7 +411,7 @@ agent-git log --oneline -5                         # commits on this branch
 # 4. Stage explicit paths, then commit.
 # The commit message is the PR: `agent-pr create` takes the title from the subject
 # and the body from the message body, so write it for a reader of the PR.
-agent-git add mapflow/functional/service/foo.py tests/functional/test_foo.py
+agent-git add mapflow_next/services/foo.py tests/test_core.py
 agent-git commit -m "$(cat <<'EOF'
 feat: foo handles empty input
 
@@ -426,7 +431,7 @@ agent-pr create                                    # single-commit branch: deriv
 agent-pr create --title "feat: foo handles empty input" --body-file /tmp/pr-body.md
 
 # 6. Follow-up commit (review-loop fix, stabilization, etc.) — same flow
-agent-git add mapflow/functional/service/foo.py
+agent-git add mapflow_next/services/foo.py
 agent-git commit -m "fix: address review comment from the review loop"
 agent-git push                                     # updates the branch; PR state untouched
 

@@ -155,3 +155,7 @@ mapflow_dev/
 # Tracked baseline is .claude/settings.json; the .local.json variant carries
 # things that must never reach the remote (PATs, registry tokens, etc.).
 .claude/settings.local.json
+
+# Test runs started from QGIS (tools/run_in_qgis.py) and `make zip`
+test-results/
+/mapflow_next-*.zip

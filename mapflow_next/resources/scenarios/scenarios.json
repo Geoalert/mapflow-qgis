@@ -1,0 +1,569 @@
+{
+ "categories": [
+  {
+   "id": "popular",
+   "label": "Popular"
+  },
+  {
+   "id": "all",
+   "label": "All scenarios"
+  },
+  {
+   "id": "buildings",
+   "label": "Buildings"
+  },
+  {
+   "id": "vegetation",
+   "label": "Trees and vegetation"
+  },
+  {
+   "id": "roads",
+   "label": "Roads and base maps"
+  },
+  {
+   "id": "imagery",
+   "label": "Your imagery"
+  },
+  {
+   "id": "custom",
+   "label": "Custom models"
+  }
+ ],
+ "scenarios": [
+  {
+   "id": "buildings",
+   "title": "Map every building",
+   "categories": [
+    "popular",
+    "buildings"
+   ],
+   "model": "Buildings",
+   "modelLabel": "🏠 Buildings",
+   "image": "buildings.jpg",
+   "short": "Roof outline of every building in your area, as editable polygons.",
+   "long": "Finds building roofs on high-resolution imagery and returns one polygon per building. Objects under 20 m² are dropped to keep the layer clean. Switch on building types, heights or cleaner shapes in the run form.",
+   "output": "A styled polygon layer of building roofs in the Mapflow group.",
+   "best": "Aerial or satellite imagery at 0.3 m per pixel (zoom 19).",
+   "uses": [
+    "Refresh a municipal building layer before a field survey",
+    "Count structures in a settlement for planning or emergency response",
+    "Find parcels with new or missing buildings"
+   ],
+   "priceShort": "10 cr/km² + imagery",
+   "bestShort": "zoom 19",
+   "costMain": "10 credits per km² + imagery",
+   "costNote": "Example: 10 km² on Mapbox zoom 19 ≈ 190 credits. Your own imagery costs nothing.",
+   "apply": {
+    "model": {
+     "all": [
+      "building"
+     ],
+     "not": [
+      "road",
+      "forest",
+      "dense",
+      "density",
+      "housing"
+     ]
+    },
+    "options": [],
+    "zoom": 19
+   },
+   "icon": "buildings"
+  },
+  {
+   "id": "classes",
+   "title": "Sort buildings by type",
+   "categories": [
+    "buildings"
+   ],
+   "model": "Buildings",
+   "modelLabel": "🏠 Buildings",
+   "option": "Building types",
+   "image": "classes.jpg",
+   "short": "Every building polygon carries a type, ready to filter and style.",
+   "long": "Runs the Buildings model with classification switched on, so each roof polygon gets a building class. Classification adds no extra cost.",
+   "output": "Building polygons with a class attribute.",
+   "best": "Aerial or satellite imagery at 0.3 m per pixel (zoom 19).",
+   "uses": [
+    "Compare residential and non-residential stock by district",
+    "Pull industrial and commercial sites into their own layer",
+    "Feed zoning and land-use analysis with fresh data"
+   ],
+   "priceShort": "10 cr/km² + imagery",
+   "bestShort": "zoom 19",
+   "costMain": "10 credits per km² + imagery",
+   "costNote": "Example: 10 km² on Mapbox zoom 19 ≈ 190 credits.",
+   "apply": {
+    "model": {
+     "all": [
+      "building"
+     ],
+     "not": [
+      "road",
+      "forest",
+      "dense",
+      "density",
+      "housing"
+     ]
+    },
+    "options": [
+     "class"
+    ],
+    "zoom": 19
+   },
+   "icon": "buildings"
+  },
+  {
+   "id": "heights",
+   "title": "Building heights and 3D footprints",
+   "categories": [
+    "buildings"
+   ],
+   "model": "Buildings",
+   "modelLabel": "🏠 Buildings",
+   "option": "Heights (beta)",
+   "image": "heights.jpg",
+   "short": "A height for each building, with the outline moved from roof to ground.",
+   "long": "Adds a height model that reads shadow length and visible walls. The result is a 3D footprint: the building contour projected to ground level instead of the roof outline.",
+   "output": "Footprint polygons with a height attribute, ready for the QGIS 3D map view.",
+   "best": "0.3 m imagery (zoom 19) with visible shadows. Helps most on oblique imagery, where roofs look shifted.",
+   "uses": [
+    "Extrude buildings in the QGIS 3D map view",
+    "Estimate floor area and building volume",
+    "Screen areas for shade and line-of-sight studies"
+   ],
+   "priceShort": "20 cr/km² + imagery",
+   "bestShort": "zoom 19",
+   "costMain": "20 credits per km² + imagery",
+   "costNote": "Example: 10 km² on Mapbox zoom 19 ≈ 290 credits.",
+   "apply": {
+    "model": {
+     "all": [
+      "building"
+     ],
+     "not": [
+      "road",
+      "forest",
+      "dense",
+      "density",
+      "housing"
+     ]
+    },
+    "options": [
+     "height"
+    ],
+    "zoom": 19
+   },
+   "icon": "buildings"
+  },
+  {
+   "id": "forest",
+   "title": "Map forest and tree cover",
+   "categories": [
+    "popular",
+    "vegetation"
+   ],
+   "model": "Forest and trees",
+   "modelLabel": "🌲 Forest and trees",
+   "image": "forest.jpg",
+   "short": "All tree and shrub cover, down to small groups and tree lines.",
+   "long": "Segments every area covered by trees and shrubs, including sparse forest and shrubland. It works in most environments, cities included.",
+   "output": "A polygon layer of tree and shrub cover.",
+   "best": "0.6–0.3 m imagery (zoom 18–19) taken in the growing season. Leafless or snow-covered trees are not detected.",
+   "uses": [
+    "Measure canopy cover per district or parcel",
+    "Compare two dates to find cleared forest",
+    "Build a green-space inventory for a city"
+   ],
+   "priceShort": "8 cr/km² + imagery",
+   "bestShort": "zoom 18–19",
+   "costMain": "8 credits per km² + imagery",
+   "costNote": "Example: 10 km² on Mapbox zoom 18 ≈ 110 credits.",
+   "apply": {
+    "model": {
+     "all": [
+      "forest"
+     ],
+     "not": [
+      "building",
+      "road"
+     ]
+    },
+    "options": [],
+    "zoom": 18
+   },
+   "icon": "forest"
+  },
+  {
+   "id": "veg-height",
+   "title": "Vegetation height along power lines",
+   "categories": [
+    "popular",
+    "vegetation"
+   ],
+   "model": "Forest and trees",
+   "modelLabel": "🌲 Forest and trees",
+   "option": "Height classes",
+   "image": "veg-height.jpg",
+   "short": "Vegetation split into shrubs, 4–10 m forest and forest over 10 m.",
+   "long": "Runs the forest model with height estimation. Vegetation is classed as shrubs under 4 m, forest from 4 to 10 m and forest over 10 m, which is what vegetation managers need near power lines.",
+   "output": "Vegetation polygons with a height class.",
+   "best": "0.6–0.3 m imagery (zoom 18–19) taken in the growing season.",
+   "uses": [
+    "Prioritise clearance work in power line corridors",
+    "Plan right-of-way maintenance by height class",
+    "Screen vegetation along roads and railways"
+   ],
+   "tip": "Buffer your line layer in QGIS (Vector › Geoprocessing › Buffer) and use the buffer as the area, so you pay only for the corridor.",
+   "priceShort": "18 cr/km² + imagery",
+   "bestShort": "zoom 18–19",
+   "costMain": "18 credits per km² + imagery",
+   "costNote": "Example: a 10 km² corridor on Mapbox zoom 18 ≈ 210 credits.",
+   "apply": {
+    "model": {
+     "all": [
+      "forest"
+     ],
+     "not": [
+      "building",
+      "road"
+     ]
+    },
+    "options": [
+     "height"
+    ],
+    "zoom": 18
+   },
+   "icon": "forest"
+  },
+  {
+   "id": "crowns",
+   "title": "Count individual trees",
+   "categories": [
+    "popular",
+    "vegetation"
+   ],
+   "model": "Forest and trees",
+   "modelLabel": "🌲 Forest and trees",
+   "option": "Tree crowns",
+   "image": "crowns.jpg",
+   "short": "A point for every tree crown, free-standing trees included.",
+   "long": "Extracts tree crowns from forest and from single trees, as points with a crown radius or as crown polygons.",
+   "output": "Tree crown points with a radius, or crown polygons.",
+   "best": "0.3 m imagery (zoom 19) to separate individual trees.",
+   "uses": [
+    "Street-tree and park inventories",
+    "Count trees in orchards and plantations",
+    "Track tree loss on a construction site"
+   ],
+   "priceShort": "18 cr/km² + imagery",
+   "bestShort": "zoom 19",
+   "costMain": "18 credits per km² + imagery",
+   "costNote": "Example: 10 km² on Mapbox zoom 19 ≈ 270 credits.",
+   "apply": {
+    "model": {
+     "all": [
+      "forest"
+     ],
+     "not": [
+      "building",
+      "road"
+     ]
+    },
+    "options": [
+     "crown"
+    ],
+    "zoom": 19
+   },
+   "icon": "forest"
+  },
+  {
+   "id": "roads",
+   "title": "Extract the road network",
+   "categories": [
+    "popular",
+    "roads"
+   ],
+   "model": "Roads",
+   "modelLabel": "🚗 Roads",
+   "image": "roads.jpg",
+   "short": "A connected road network with gaps merged and short stubs removed.",
+   "long": "Finds road centrelines, cleans the graph (simplifies geometry, merges gaps, removes double edges and short detached pieces) and turns it back into road polygons.",
+   "output": "Road polygons built from a cleaned centreline network.",
+   "best": "Rural and suburban areas with 0.3–0.5 m imagery. Dense city centres with wide sidewalks are harder.",
+   "uses": [
+    "Map access roads and tracks for rural planning",
+    "Add forestry and field tracks missing from OSM",
+    "Check the street network in new suburbs"
+   ],
+   "priceShort": "5 cr/km² + imagery",
+   "bestShort": "zoom 18–19",
+   "costMain": "5 credits per km² + imagery",
+   "costNote": "Example: 10 km² on Mapbox zoom 18 ≈ 80 credits.",
+   "apply": {
+    "model": {
+     "all": [
+      "road"
+     ],
+     "not": [
+      "building",
+      "forest"
+     ]
+    },
+    "options": [],
+    "zoom": 18
+   },
+   "icon": "road"
+  },
+  {
+   "id": "multi",
+   "title": "Base map in one run",
+   "categories": [
+    "popular",
+    "roads"
+   ],
+   "model": "Buildings + Roads + Forest",
+   "modelLabel": "Buildings + Roads + Forest",
+   "image": "multi.jpg",
+   "short": "Buildings, roads and forest together, with topology corrected.",
+   "long": "Runs the Buildings, Roads and Forest models as one workflow and returns a single topology-corrected result, so the layers do not overlap.",
+   "output": "Buildings, roads and forest from one run, added as separate styled layers.",
+   "best": "0.5–0.3 m imagery (zoom 18–19).",
+   "uses": [
+    "Start a base map where no vector data exists",
+    "Get a land-use overview before a site visit",
+    "Create a reference layer for disaster response"
+   ],
+   "priceShort": "23 cr/km² + imagery",
+   "bestShort": "zoom 18–19",
+   "costMain": "23 credits per km² + imagery",
+   "costNote": "Example: 10 km² on Mapbox zoom 18 ≈ 260 credits.",
+   "apply": {
+    "model": {
+     "all": [
+      "building",
+      "road",
+      "forest"
+     ]
+    },
+    "options": [],
+    "zoom": 18
+   },
+   "icon": "cityscape"
+  },
+  {
+   "id": "opendata",
+   "title": "Get OpenStreetMap and Overture data",
+   "categories": [
+    "roads"
+   ],
+   "model": "Open data",
+   "modelLabel": "Open data",
+   "image": "opendata.jpg",
+   "short": "Community map data for your area, with no AI model involved.",
+   "long": "Downloads the classes you choose from OpenStreetMap and Overture Maps for your area, so you can check coverage before running AI, or fill gaps after.",
+   "output": "Vector layers for each class you select.",
+   "best": "Any area. Quality depends on how complete open data is there, and it may not line up exactly with the imagery.",
+   "uses": [
+    "Check OSM completeness before paying for AI mapping",
+    "Combine open data with AI results",
+    "Add context layers to a project in one step"
+   ],
+   "priceShort": "Price shown before run",
+   "bestShort": "no AI model",
+   "costMain": "Shown before you run",
+   "costNote": "No AI model is used. You still pick imagery as a visual reference.",
+   "apply": {
+    "model": {
+     "all": [
+      "open",
+      "data"
+     ]
+    }
+   },
+   "icon": null
+  },
+  {
+   "id": "own",
+   "title": "Map your drone or aerial orthophoto",
+   "categories": [
+    "buildings",
+    "imagery"
+   ],
+   "model": "Any model",
+   "modelLabel": "Any model",
+   "short": "Run any model on your own GeoTIFF or a raster layer already in QGIS.",
+   "long": "Upload an image to My imagery, or pick a raster layer from your QGIS project, and run any model on it. Collections let you process many images in one go.",
+   "output": "The layers of the model you choose, clipped to the image or your area.",
+   "best": "Georeferenced RGB 8-bit GeoTIFF, up to 1 GB. Check each model’s resolution needs.",
+   "uses": [
+    "Map buildings on a fresh drone survey",
+    "Process an orthophoto from a municipal flight",
+    "Re-run older imagery to compare with today"
+   ],
+   "priceShort": "Model price only",
+   "bestShort": "your GeoTIFF",
+   "costMain": "Model price only",
+   "costNote": "Imagery you bring costs 0 credits. Example: 10 km² with Buildings = 100 credits.",
+   "apply": {
+    "imagery": "my_imagery",
+    "hint": "Pick a collection from My imagery or upload a GeoTIFF, then choose what to map."
+   },
+   "icon": "uav-house"
+  },
+  {
+   "id": "fresh",
+   "title": "Find a fresh image, then map it",
+   "categories": [
+    "imagery"
+   ],
+   "model": "Imagery search",
+   "modelLabel": "Imagery search",
+   "short": "Search satellite catalogs by date, cloud and angle, then map the image you pick.",
+   "long": "Searches mosaics and commercial scenes over your area. Mosaics run right away; scenes are ordered through Mapflow Web.",
+   "output": "The layers of the model you choose, on the image you picked.",
+   "best": "Areas that changed recently: new construction, storm or flood damage, seasonal cover.",
+   "uses": [
+    "Map buildings built in the last few months",
+    "Check an area after a storm or flood",
+    "Pick a cloud-free image for a vegetation survey"
+   ],
+   "priceShort": "Model + imagery price",
+   "bestShort": "recent changes",
+   "costMain": "Model price + imagery",
+   "costNote": "Mosaics start at 1 credit per km². Commercial scenes: 60 credits per km² at 0.5 m, 180 at 0.3 m.",
+   "apply": {
+    "imagery": "search",
+    "hint": "Search the catalog over your area and press Use on an image."
+   },
+   "icon": null
+  },
+  {
+   "id": "solar",
+   "title": "Find solar panels",
+   "categories": [
+    "custom"
+   ],
+   "model": "Solar panels",
+   "modelLabel": "☀️ Solar panels",
+   "custom": true,
+   "image": "solar.jpg",
+   "short": "Photovoltaic panels on rooftops and on the ground.",
+   "long": "A detection and segmentation model for photovoltaic panels, trained on aerial imagery. It finds panels on rooftops and in solar farms.",
+   "output": "Solar panel polygons.",
+   "best": "Aerial imagery at zoom 19–21.",
+   "uses": [
+    "Inventory rooftop solar in a municipality",
+    "Monitor solar farm build-out",
+    "Estimate installed panel area for grid planning"
+   ],
+   "priceShort": "On request",
+   "bestShort": "zoom 19–21",
+   "costMain": "Priced per project",
+   "costNote": "Request access and we connect the model to your account.",
+   "icon": null
+  },
+  {
+   "id": "construction",
+   "title": "Spot construction sites",
+   "categories": [
+    "custom"
+   ],
+   "model": "Constructions",
+   "modelLabel": "🏗️ Constructions",
+   "custom": true,
+   "image": "construction.jpg",
+   "short": "Outlines of construction sites and buildings under construction.",
+   "long": "Outlines areas that contain construction sites and buildings under construction. Available for selected countries; coverage is growing.",
+   "output": "Construction site polygons.",
+   "best": "High-resolution satellite imagery of fast-developing areas.",
+   "uses": [
+    "Track new development for permits and taxes",
+    "Monitor progress on large projects",
+    "Flag unplanned construction"
+   ],
+   "priceShort": "On request",
+   "bestShort": "high-res satellite",
+   "costMain": "Priced per project",
+   "costNote": "Request access and we connect the model to your account.",
+   "icon": "crane"
+  },
+  {
+   "id": "fields",
+   "title": "Delineate agricultural fields",
+   "categories": [
+    "custom"
+   ],
+   "model": "Agriculture fields",
+   "modelLabel": "🚜 Agriculture fields",
+   "custom": true,
+   "image": "fields.jpg",
+   "short": "Field boundaries separated by tree lines, roads or crop stage.",
+   "long": "Detects agricultural fields and separates neighbouring fields where a visible boundary exists. Tuned for larger fields in Europe with active vegetation.",
+   "output": "Field boundary polygons.",
+   "best": "1–1.2 m imagery in the growing season.",
+   "uses": [
+    "Build field boundaries for farm management",
+    "Estimate cultivated area per region",
+    "Prepare parcels for crop monitoring"
+   ],
+   "priceShort": "On request",
+   "bestShort": "1–1.2 m imagery",
+   "costMain": "Priced per project",
+   "costNote": "Request access and we connect the model to your account.",
+   "icon": "tractor"
+  },
+  {
+   "id": "dense",
+   "title": "Split dense housing into houses",
+   "categories": [
+    "custom"
+   ],
+   "model": "High-density housing",
+   "modelLabel": "🏘 High-density housing",
+   "custom": true,
+   "image": "dense.jpg",
+   "short": "Terraced and tightly packed blocks divided into individual houses.",
+   "long": "Segments dense building blocks as a whole, then divides each block into individual houses from roof markers, using a grid or Voronoi split.",
+   "output": "Individual house polygons within dense blocks.",
+   "best": "High-resolution imagery of terraced or densely built areas.",
+   "uses": [
+    "Count dwellings in dense urban areas",
+    "Support census and address mapping",
+    "Plan services in informal settlements"
+   ],
+   "priceShort": "On request",
+   "bestShort": "high-res imagery",
+   "costMain": "Priced per project",
+   "costNote": "Request access and we connect the model to your account.",
+   "icon": "cityscape"
+  },
+  {
+   "id": "sam",
+   "title": "Segment anything by zoom",
+   "categories": [
+    "custom"
+   ],
+   "model": "Segment Anything",
+   "modelLabel": "✨ Segment Anything",
+   "custom": true,
+   "image": "sam.jpg",
+   "short": "Universal segmentation. The zoom level decides what you get.",
+   "long": "Zoom 14 outlines land use, large fields and water; zoom 16 small fields and large buildings; zoom 18 farms and groups of trees; zoom 19 and up houses, trees and vehicles.",
+   "output": "Polygons of whatever stands out at the chosen zoom.",
+   "best": "Any RGB imagery. Choose the zoom in the run form.",
+   "uses": [
+    "Outline objects no standard model covers",
+    "Pre-segment imagery for manual labelling",
+    "Explore a new area before choosing a model"
+   ],
+   "priceShort": "On request",
+   "bestShort": "zoom 14–20",
+   "costMain": "Priced per project",
+   "costNote": "Request access and we connect the model to your account.",
+   "icon": "segment-anything"
+  }
+ ],
+ "version": 1
+}

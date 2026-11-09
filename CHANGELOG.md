@@ -1,3 +1,13 @@
+## 4.0.0
+    - A new plugin, Mapflow Next, replaces the 3.x code base in this repository. It is built around one flow: model, area, imagery, processing, results
+    - Runs in QGIS 3.22 and later and in QGIS 4 (Qt 6)
+    - Dock panel with Start, Processings and Imagery sources tabs; a scenario gallery with 16 ready-made setups built on Mapflow models
+    - Projects window: search, pin, see what's in each project and who it's shared with
+    - Zoom z17–z21 with the scenario's recommended zoom; pick one image from a My imagery collection, whose extent becomes the area
+    - Sign in with Mapflow in the browser and stay signed in across restarts; an API token as a fallback; both kept in the QGIS authentication database
+    - Live cost estimate before every run; results load as styled GeoPackage layers or vector tiles
+    - Not carried over yet: planned processings (templates), custom XYZ/TMS providers, translations (es, pt, ru, zh)
+
 ## 3.6.3
     - Fix: downloading an image from My imagery could crash QGIS, or finish without saving anything — mostly for large images, whose download lasts long enough for Python's garbage collector to discard the code waiting for it to finish. The plugin now holds each download until it completes
     - Downloaded images are streamed to disk as they arrive instead of being held in memory, so multi-GB images (beyond Qt's 2 GiB buffer limit) can be saved. The file replaces the chosen path only once the download has succeeded: a failed download leaves no partial file and keeps any file already there

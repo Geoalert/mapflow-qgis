@@ -1,0 +1,31 @@
+[general]
+name=Mapflow Next
+qgisMinimumVersion=3.22
+qgisMaximumVersion=4.99
+description=Map buildings, roads, forest and more from satellite and aerial imagery with Mapflow AI models.
+about=A redesigned Mapflow plugin. Pick a scenario, set your area, choose imagery and run: results arrive as styled layers in your project.
+    The main flow is model, area, imagery, processing, results, in a dock on the right of the map.
+    Requires a Mapflow account (250 free credits to start): https://app.mapflow.ai
+version=4.0.0
+experimental=True
+deprecated=False
+author=Geoalert
+email=hello@geoalert.io
+homepage=https://mapflow.ai
+tracker=https://github.com/Geoalert/mapflow-qgis/issues
+repository=https://github.com/Geoalert/mapflow-qgis
+tags=AI, machine learning, remote sensing, satellite imagery, aerial imagery, buildings, roads, forest, segmentation, mapping
+category=Raster
+icon=resources/icons/app-icon.png
+hasProcessingProvider=no
+changelog=
+    4.0.0
+    - Runs in QGIS 3.22 and later and in QGIS 4 (Qt 6)
+    - New plugin built around one flow: model, area, imagery, processing, results
+    - Dock panel with Start, Processings and Imagery sources tabs
+    - Projects window: search, pin, see what's in each project and who it's shared with
+    - Zoom z17–z21 with the scenario's recommended zoom; pick one image from a My imagery collection
+    - Scenario gallery with 16 ready-made setups built on Mapflow models
+    - Sign in with Mapflow in the browser, which then goes on to Mapflow Web; you stay signed in across restarts
+    - API token as a fallback; both kept in the QGIS authentication database
+    - Live cost estimate before every run; results load as styled GeoPackage layers
