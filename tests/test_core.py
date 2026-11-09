@@ -314,6 +314,25 @@ def test_code_runs_on_qt5_and_qt6():
     assert "qgisMaximumVersion=4.99" in metadata and "qgisMinimumVersion=3.22" in metadata
 
 
+def test_update_check_reads_the_plugin_installer_record():
+    from mapflow_next.core.updates import LATEST, NOT_LISTED, UPDATE, assess, version_key
+    assert version_key("4.0.10") > version_key("4.0.9") > version_key("4.0")
+    assert version_key("4.1.0") > version_key("4.1.0-beta") and version_key("4.0") == version_key("4.0.0")
+    # QGIS 3.34+: stable and experimental versions listed apart; experimental counts only when allowed
+    record = {"version_available_stable": "4.0.0", "version_available_experimental": "4.1.0-beta"}
+    assert assess("4.0.0", record, True, True).state == UPDATE
+    assert assess("4.0.0", record, True, True).available == "4.1.0-beta"
+    assert assess("4.0.0", record, False, True).state == LATEST
+    assert assess("4.1.0", record, True, True).state == LATEST          # newer than the repository
+    # QGIS before 3.34: one version and an experimental flag
+    old = {"version_available": "4.2.0", "experimental": True}
+    assert assess("4.0.0", old, True, True).available == "4.2.0"
+    hidden = assess("4.0.0", old, False, True)
+    assert hidden.state == NOT_LISTED and hidden.experimental_hidden
+    zip_install = assess("4.0.0", None, True, True)
+    assert zip_install.state == NOT_LISTED and not zip_install.experimental_hidden
+
+
 def test_processing_meta_like_the_current_plugin():
     from mapflow_next.core.draft import ImageryChoice, processing_meta
     assert processing_meta(ImageryChoice.from_mosaic("m", "A"), "4.0.0") == {

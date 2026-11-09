@@ -12,7 +12,7 @@ from typing import Dict, List, Optional
 
 from qgis.PyQt.QtCore import QObject, QTimer, QUrl
 from qgis.PyQt.QtGui import QDesktopServices, QPixmap
-from qgis.PyQt.QtWidgets import QFileDialog, QMessageBox, QPushButton
+from qgis.PyQt.QtWidgets import QFileDialog, QMessageBox
 from qgis.core import Qgis, QgsGeometry, QgsMessageLog, QgsProject, QgsVectorLayer
 
 from . import config
@@ -22,6 +22,7 @@ from .core.draft import Coverage, ImageryChoice, RunDraft
 from .core.models import BillingType, CatalogImage, Processing, UserStatus
 from .core.scenarios import Catalogue, recommended_zoom, resolve, scenario_for_model
 from .qgis_bridge import aoi as aoi_tools
+from .qgis_bridge import message_bar
 from .qgis_bridge.draw_tool import PolygonDrawTool
 from .qgis_bridge.layers import MapLayers, bounds_extent
 from .services.imagery import Imagery
@@ -201,15 +202,7 @@ class Controller(QObject):
 
     def notify(self, text: str, level=Qgis.MessageLevel.Info, action: Optional[tuple] = None,
                duration: int = 6) -> None:
-        bar = self.iface.messageBar()
-        if action:
-            widget = bar.createMessage("Mapflow", text)
-            button = QPushButton(action[0], widget)
-            button.clicked.connect(lambda *_: action[1]())
-            widget.layout().addWidget(button)
-            bar.pushWidget(widget, level, duration)
-        else:
-            bar.pushMessage("Mapflow", text, level, duration)
+        message_bar.push(self.iface, text, level, action, duration)
 
     # ---------- session ----------
 

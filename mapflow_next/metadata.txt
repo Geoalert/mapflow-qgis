@@ -22,7 +22,8 @@ changelog=
     4.0.0
     - Runs in QGIS 3.22 and later and in QGIS 4 (Qt 6)
     - New plugin built around one flow: model, area, imagery, processing, results
-    - Dock panel with Start, Processings and Imagery sources tabs
+    - Dock panel with Start, Processings and Imagery sources tabs, opened from its own Mapflow toolbar
+    - Check for updates in the plugin's menu
     - Projects window: search, pin, see what's in each project and who it's shared with
     - Zoom z17–z21 with the scenario's recommended zoom; pick one image from a My imagery collection
     - Scenario gallery with 16 ready-made setups built on Mapflow models

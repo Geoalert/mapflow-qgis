@@ -19,7 +19,7 @@ APP = start_qgis()
 from qgis.PyQt.QtCore import QObject, QSize, Qt, QTimer, QUrl, pyqtSlot  # noqa: E402
 from qgis.PyQt.QtGui import QDesktopServices  # noqa: E402
 from qgis.PyQt.QtTest import QTest  # noqa: E402
-from qgis.PyQt.QtWidgets import QAction, QSlider, QToolButton  # noqa: E402
+from qgis.PyQt.QtWidgets import QAction, QSlider, QToolBar, QToolButton  # noqa: E402
 from qgis.PyQt.QtGui import QColor, QPalette  # noqa: E402
 from qgis.PyQt.QtWidgets import QApplication, QComboBox, QLabel, QPushButton  # noqa: E402
 from qgis.core import (QgsFeature, QgsGeometry, QgsPointXY, QgsProject, QgsRectangle, QgsSettings,  # noqa: E402
@@ -153,7 +153,70 @@ def main():
     iface.window.show()
     plugin = classFactory(iface)
     plugin.initGui()
-    check(len(iface.toolbar_actions) == 1, "toolbar button added")
+    toolbars = iface.window.findChildren(QToolBar, "MapflowToolbar")
+    check(len(toolbars) == 1 and toolbars[0].windowTitle() == "Mapflow" and plugin.action in toolbars[0].actions()
+          and not iface.toolbar_actions,
+          "the Mapflow button sits in a toolbar of its own, not in the Plugins toolbar")
+    menu = [action.text() for action in iface.menu_actions.get("&Mapflow Next", [])]
+    check(menu == ["Mapflow", "Scenarios…", "Check for updates…"], f"the plugin's menu: {menu}")
+
+    # Check for updates, with QGIS's plugin installer standing in for the plugin repositories
+    from mapflow_next.qgis_bridge import updates
+    import types
+    calls = []
+
+    class OldInstaller:                  # QGIS 3.x: showPluginManagerWhenReady(*params)
+        def showPluginManagerWhenReady(self, *params):
+            calls.append(("old",) + params)
+
+    class NewInstaller:                  # newer QGIS: (tab_index, search_term)
+        def showPluginManagerWhenReady(self, tab_index=-1, search_term=""):
+            calls.append(("new", tab_index, search_term))
+    saved = sys.modules.get("pyplugin_installer")
+    sys.modules["pyplugin_installer"] = fake = types.ModuleType("pyplugin_installer")
+    for installer in (OldInstaller, NewInstaller):
+        fake.instance = installer
+        updates.open_upgrades()
+    if saved is None:
+        del sys.modules["pyplugin_installer"]
+    else:
+        sys.modules["pyplugin_installer"] = saved
+    check(calls == [("old", 3), ("new", 3, "Mapflow Next")],
+          f"Update… opens the Upgradeable tab, filtered to the plugin where QGIS can ({calls})")
+    upgrades_opened, record = [], {}
+    updates.fetch_record = lambda key: record.get(key)
+    updates.open_upgrades = lambda: upgrades_opened.append(True)
+    updates.allow_experimental = lambda: allow[0]
+    allow = [True]
+
+    def check_updates():
+        before = len(iface.bar.messages)
+        plugin.updates_action.trigger()
+        return iface.bar.messages[before][1] if len(iface.bar.messages) > before else ""
+
+    record["mapflow_next"] = {"version_available_stable": "4.1.0", "version_available_experimental": ""}
+    text = check_updates()
+    buttons = iface.bar.widgets[-1].findChildren(QPushButton) if iface.bar.widgets else []
+    check("4.1.0 is available" in text and "You have 4.0.0" in text and [b.text() for b in buttons] == ["Update…"],
+          f"a newer version in the repositories is announced with an Update button ({text})")
+    buttons[0].click()
+    check(upgrades_opened == [True], "Update… opens the Plugin Manager on the Upgradeable tab")
+    record["mapflow_next"] = {"version_available_stable": "4.0.0"}
+    check("is up to date (4.0.0)" in check_updates(), "the installed version is the newest: up to date")
+    record.clear()
+    allow[0] = False
+    check("experimental" in check_updates(),
+          "not listed while QGIS hides experimental plugins: says how to show them")
+    allow[0] = True
+    text = check_updates()
+    iface.bar.widgets[-1].findChildren(QPushButton)[0].click()
+    check("isn't in your plugin repositories" in text and links.opened[-1:] == [config.RELEASES_URL],
+          "not in any repository (a ZIP install): points to the releases page")
+
+    def unreachable(key):
+        raise OSError("repository unreachable")
+    updates.fetch_record = unreachable
+    check("Couldn't check for updates: repository unreachable" in check_updates(), "a failed check says why")
     plugin.toggle(True)
     content = plugin.dock.content
     session, processings, controller = plugin.services[1], plugin.services[2], plugin.controller
@@ -214,6 +277,8 @@ def main():
     plugin.unload()
     plugin = classFactory(iface)
     plugin.initGui()
+    check(wait_until(lambda: len(iface.window.findChildren(QToolBar, "MapflowToolbar")) == 1, 3),
+          "after a reload there is still one Mapflow toolbar")
     plugin.toggle(True)
     content = plugin.dock.content
     session, processings, controller = plugin.services[1], plugin.services[2], plugin.controller
@@ -715,7 +780,8 @@ def main():
     shot(dark, "12-dark-start", QSize(400, 880))
 
     plugin.unload()
-    check(not iface.toolbar_actions, "unload removes the toolbar button")
+    check(wait_until(lambda: not iface.window.findChildren(QToolBar, "MapflowToolbar"), 3)
+          and not any(iface.menu_actions.values()), "unload removes the Mapflow toolbar and the menu")
     server.shutdown()
     failed = [text for ok, text in CHECKS if not ok]
     print(f"\n{len(CHECKS) - len(failed)}/{len(CHECKS)} checks passed")

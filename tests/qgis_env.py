@@ -61,6 +61,7 @@ class RecordingBar(QgsMessageBar):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.messages = []
+        self.widgets = []
 
     def pushMessage(self, title, text=None, level=Qgis.MessageLevel.Info, duration=-1):
         self.messages.append((level, text))
@@ -68,6 +69,7 @@ class RecordingBar(QgsMessageBar):
 
     def pushWidget(self, widget, level=Qgis.MessageLevel.Info, duration=0):
         self.messages.append((level, widget.text() if hasattr(widget, "text") else ""))
+        self.widgets.append(widget)
         return super().pushWidget(widget, level, duration)
 
 
@@ -81,7 +83,8 @@ class FakeIface:
         self.window.setCentralWidget(self.canvas)
         self.bar = RecordingBar(self.canvas)
         self._active = None
-        self.toolbar_actions = []
+        self.toolbar_actions = []                 # the Plugins toolbar
+        self.menu_actions = {}
         self.options_opened = None
 
     def mainWindow(self):
@@ -106,11 +109,14 @@ class FakeIface:
     def removeToolBarIcon(self, action):
         self.toolbar_actions.remove(action)
 
+    def addToolBar(self, name):
+        return self.window.addToolBar(name)
+
     def addPluginToMenu(self, menu, action):
-        pass
+        self.menu_actions.setdefault(menu, []).append(action)
 
     def removePluginMenu(self, menu, action):
-        pass
+        self.menu_actions.get(menu, []).remove(action)
 
     def addTabifiedDockWidget(self, area, dock, tabify_with=None, raise_tab=False):
         self.window.addDockWidget(area, dock)

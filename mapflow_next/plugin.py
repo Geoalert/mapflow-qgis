@@ -1,17 +1,18 @@
-"""QGIS entry point: a toolbar button that opens the Mapflow dock on the right."""
+"""QGIS entry point: a Mapflow toolbar whose button opens the dock on the right, and the plugin's menu."""
 from __future__ import annotations
 
 from configparser import ConfigParser
 from typing import Optional
 
 from qgis.PyQt.QtCore import Qt
-from qgis.PyQt.QtWidgets import QAction
+from qgis.PyQt.QtWidgets import QAction, QToolBar
 
 from . import config
 from .api.client import MapflowApi
 from .api.http import Http
 from .controller import Controller
 from .core.scenarios import Catalogue
+from .qgis_bridge import updates
 from .qgis_bridge.layers import MapLayers
 from .services.imagery import Imagery
 from .services.processings import Processings
@@ -23,12 +24,21 @@ from .ui.icons import app_icon
 from .ui.theme import load_fonts
 
 MENU = "&Mapflow Next"
+TOOLBAR = "MapflowToolbar"           # object name: QGIS remembers the toolbar's place and visibility by it
+
+
+def _metadata() -> ConfigParser:
+    parser = ConfigParser()
+    parser.read(config.PLUGIN_DIR / "metadata.txt", encoding="utf-8")
+    return parser
 
 
 def plugin_version() -> str:
-    parser = ConfigParser()
-    parser.read(config.PLUGIN_DIR / "metadata.txt", encoding="utf-8")
-    return parser.get("general", "version", fallback="4.0.0")
+    return _metadata().get("general", "version", fallback="4.0.0")
+
+
+def is_experimental() -> bool:
+    return _metadata().getboolean("general", "experimental", fallback=False)
 
 
 class MapflowNextPlugin:
@@ -36,6 +46,8 @@ class MapflowNextPlugin:
         self.iface = iface
         self.action: Optional[QAction] = None
         self.gallery_action: Optional[QAction] = None
+        self.updates_action: Optional[QAction] = None
+        self.toolbar: Optional[QToolBar] = None
         self.dock: Optional[MapflowDock] = None
         self.controller: Optional[Controller] = None
         self.services = []
@@ -50,10 +62,16 @@ class MapflowNextPlugin:
         self.action.setToolTip("Mapflow: map buildings, roads and forest from imagery")
         self.action.triggered.connect(self.toggle)
         self.gallery_action = QAction(app_icon(), "Scenarios…", window)
-        self.gallery_action.triggered.connect(self.open_gallery)
-        self.iface.addToolBarIcon(self.action)
-        self.iface.addPluginToMenu(MENU, self.action)
-        self.iface.addPluginToMenu(MENU, self.gallery_action)
+        self.gallery_action.triggered.connect(lambda *_: self.open_gallery())
+        self.updates_action = QAction("Check for updates…", window)
+        self.updates_action.setMenuRole(QAction.MenuRole.NoRole)    # macOS would move it to the app menu
+        self.updates_action.triggered.connect(lambda *_: self.check_for_updates())
+        self.toolbar = self.iface.addToolBar(config.PLUGIN_SHORT_NAME)
+        self.toolbar.setObjectName(TOOLBAR)
+        self.toolbar.setToolTip("Mapflow")
+        self.toolbar.addAction(self.action)
+        for action in (self.action, self.gallery_action, self.updates_action):
+            self.iface.addPluginToMenu(MENU, action)
 
     def unload(self) -> None:
         if self.controller:
@@ -67,12 +85,13 @@ class MapflowNextPlugin:
         if self.dock:
             self.iface.removeDockWidget(self.dock)
             self.dock.deleteLater()
-        for action in (self.action, self.gallery_action):
+        for action in (self.action, self.gallery_action, self.updates_action):
             if action:
                 self.iface.removePluginMenu(MENU, action)
-        if self.action:
-            self.iface.removeToolBarIcon(self.action)
-        self.dock = self.controller = None
+        if self.toolbar:
+            self.iface.mainWindow().removeToolBar(self.toolbar)
+            self.toolbar.setParent(None)      # Python owns it now, and it goes when the reference does
+        self.dock = self.controller = self.toolbar = None
         self.services = []
 
     # ---------- dock ----------
@@ -105,6 +124,9 @@ class MapflowNextPlugin:
         self.dock.setUserVisible(checked)
         if checked:
             self.dock.raise_()
+
+    def check_for_updates(self) -> None:
+        updates.report(self.iface, updates.check(plugin_version(), is_experimental()))
 
     def open_gallery(self) -> None:
         if self.dock is None:

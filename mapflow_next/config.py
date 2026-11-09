@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 PLUGIN_NAME = "Mapflow Next"
+PLUGIN_SHORT_NAME = "Mapflow"      # toolbar, message bar
 PLUGIN_DIR = Path(__file__).parent
 RESOURCES = PLUGIN_DIR / "resources"
 SETTINGS_GROUP = "mapflow_next"
@@ -21,6 +22,7 @@ TEAM_URL = f"{WEB_URL}/en/team"            # to verify: the docs name the Team p
 DOCS_URL = "https://docs.mapflow.ai/api/qgis_mapflow.html"
 MODELS_DOCS_URL = "https://docs.mapflow.ai/userguides/pipelines.html"
 CUSTOM_MODELS_URL = "https://mapflow.ai/custom-models"
+RELEASES_URL = "https://github.com/Geoalert/mapflow-qgis/releases"
 
 POLL_INTERVAL_MS = 6_000          # processings list while something runs
 STATUS_INTERVAL_MS = 30_000       # balance and limits

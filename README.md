@@ -27,8 +27,11 @@ they show the plugin as it is.
   plugin with Plugin Reloader. The default path is the macOS one for QGIS 3; use `make link QGIS_MAJOR=4`
   for QGIS 4, or set `PLUGINS_DIR` on Linux or Windows.
 
-The toolbar button opens the Mapflow dock on the right. Plugins › Mapflow Next › Scenarios… opens the
-scenario gallery directly. A Mapflow account is needed: [sign up](https://app.mapflow.ai). The user guide
+The plugin adds a Mapflow toolbar, whose button opens the Mapflow dock on the right. The Plugins ›
+Mapflow Next menu has the same button, Scenarios…, which opens the scenario gallery directly, and Check
+for updates…. The update check asks your plugin repositories, through QGIS's own plugin installer, and
+an update installs from the Plugin Manager's Upgradeable tab. A plugin installed from a ZIP isn't in any
+repository, so the check points to the releases page instead. A Mapflow account is needed: [sign up](https://app.mapflow.ai). The user guide
 for the 3.x plugin is [here](https://docs.mapflow.ai/api/qgis_mapflow).
 
 ## QGIS 3 and QGIS 4
@@ -59,7 +62,7 @@ installed QGIS, `tools/run_in_qgis.py` runs the end-to-end tests with that QGIS'
 
 ```
 mapflow_next/
-  plugin.py          QGIS entry: toolbar button, dock, wiring of the parts below
+  plugin.py          QGIS entry: the Mapflow toolbar, the plugin menu, the dock, wiring of the parts below
   controller.py      the flow: connects services (state) to pages (views) and to QGIS
   config.py          environments, URLs, timings
   settings.py        QgsSettings under mapflow_next/ (never credentials)
@@ -170,7 +173,7 @@ Tests and lint run in the official `qgis/qgis` Docker images, so only Docker is 
 make test          # both of the two runs below (the gate before review)
 make test-qgis3    # unit + end-to-end tests on QGIS 3 (qgis/qgis:release-3_28)
 make test-qgis4    # the same on QGIS 4 (qgis/qgis:4.2), plus the Qt 6 code check
-make test-core     # pure-Python tests only (23)
+make test-core     # pure-Python tests only (24)
 make lint          # the plugins.qgis.org checks: flake8, bandit, detect-secrets
 make screens       # run the end-to-end flow and rewrite docs/screens/*.png
 ```
@@ -183,7 +186,7 @@ make test-qt6 QT6_PYTHON=…    # the pages, sign-in and HTTP client on PyQt6 (3
 make check-qt6 QT6_PYTHON=…   # Qt enum names and calls that only Qt 5 accepts
 ```
 
-**The end-to-end test** (`tests/e2e_flow.py`, 144 checks) runs a real offscreen QGIS against a mock
+**The end-to-end test** (`tests/e2e_flow.py`, 153 checks) runs a real offscreen QGIS against a mock
 Mapflow API and sign-in server (`tests/mock_server.py`).
 - **Request checks:** the mock rejects request bodies the real API rejects, such as `myImagery` with both
   `mosaicId` and `imageIds`.

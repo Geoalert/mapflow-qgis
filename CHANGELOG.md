@@ -1,6 +1,7 @@
 ## 4.0.0
     - A new plugin, Mapflow Next, replaces the 3.x code base in this repository. It is built around one flow: model, area, imagery, processing, results
     - Runs in QGIS 3.22 and later and in QGIS 4 (Qt 6)
+    - Its own Mapflow toolbar, and Check for updates in the plugin's menu (Plugins › Mapflow Next)
     - Dock panel with Start, Processings and Imagery sources tabs; a scenario gallery with 16 ready-made setups built on Mapflow models
     - Projects window: search, pin, see what's in each project and who it's shared with
     - Zoom z17–z21 with the scenario's recommended zoom; pick one image from a My imagery collection, whose extent becomes the area
