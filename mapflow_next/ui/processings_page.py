@@ -234,7 +234,9 @@ class ProcessingsPage(QWidget):
         self._render()
 
     def counts(self) -> Dict[str, int]:
-        return {"all": len(self.items),
+        """All: every processing in the project. The others count the loaded pages, the only ones
+        whose status is known."""
+        return {"all": self.total,
                 "running": sum(1 for p in self.items if p.is_running),
                 "done": sum(1 for p in self.items if p.is_done and not p.needs_review),
                 "attention": sum(1 for p in self.items if p.status is Status.failed or p.needs_review)}
@@ -283,16 +285,22 @@ class ProcessingsPage(QWidget):
                                   processing.id == self.expanded, self)
             card.clicked.connect(self._toggle)
             self.list.addWidget(card)
+        partial = len(self.items) < self.total
         if self.loading:
             self.empty_text.setText("Loading processings…")
+        elif not self.items:
+            self.empty_text.setText("No processings in this project yet.")
+        elif partial:
+            self.empty_text.setText(f"Nothing matches this filter among the latest {len(self.items):,} of "
+                                    f"{self.total:,} processings.")
         else:
-            self.empty_text.setText("No processings in this project yet." if not self.items
-                                    else "Nothing matches this filter.")
+            self.empty_text.setText("Nothing matches this filter.")
         self.start_button.setVisible(not self.loading and not self.items)
         self.list.addWidget(self.empty)
         self.empty.setVisible(not visible)
-        if self.items and len(self.items) < self.total:
-            # Older processings: one page at a time (filters and search apply to the loaded ones)
+        if visible and partial:
+            # Older processings, one page at a time. Filters and search apply to the loaded ones; with
+            # nothing shown, a button whose pages may show nothing either would read as broken.
             more = button("Loading…" if self.loading_more else
                           f"Show more · {len(self.items):,} of {self.total:,}", "outline")
             more.setEnabled(not self.loading_more)

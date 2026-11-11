@@ -794,8 +794,23 @@ def main():
           "the first page of 30 processings loads")
     check(content.processings.more_button is not None and "30 of 70" in content.processings.more_button.text(),
           "“Show more” says how many are left")
+    chips = content.processings.chip_buttons
+    check(chips["all"].text() == "All 70", f"All counts every processing in the project ({chips['all'].text()!r})")
+    empty = next((k for k in ("running", "attention", "done") if not content.processings.counts()[k]), None)
+    if empty:
+        chips[empty].click()
+    else:
+        content.processings.search.setText("no processing has this name")
+    check(content.processings.more_button is None and content.processings.empty.isVisibleTo(content.processings)
+          and "latest 30 of 70" in content.processings.empty_text.text(),
+          f"a filter that matches nothing offers no “Show more” and says what it looked through "
+          f"({content.processings.empty_text.text()!r})")
+    content.processings.search.setText("")
+    chips["all"].click()
+    check(content.processings.more_button is not None, "…and All brings “Show more” back")
     content.processings.more_button.click()
     check(wait_until(lambda: len(processings.items) == 60, 5), "the next page appends 30 more")
+    check(chips["all"].text() == "All 70", "loading more pages leaves the All count alone")
     content.processings.more_button.click()
     check(wait_until(lambda: len(processings.items) == 70 and content.processings.more_button is None, 5),
           "the last page loads and “Show more” goes away")

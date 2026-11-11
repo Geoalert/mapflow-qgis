@@ -309,7 +309,7 @@ Note: `agent-make` does not accept `VAR=val` overrides. Every test target alread
 - All tests run **inside the official `qgis/qgis` Docker images** — `release-3_28` for QGIS 3 and `4.2` for QGIS 4 — never from a host venv: the QGIS Python bindings are not importable on the host. The repo is bind-mounted at `/app`, so the container always sees your current working tree; the rebuild is for the image's dependencies, not your source.
 - What runs:
   - `tests/test_core.py` — pure Python plus source checks (Qt 5/6-safe code, handlers that Qt's `checked` argument would break). Use `test-core` while iterating on `core/`.
-  - `tests/test_e2e.py` — runs `tests/e2e_flow.py` in its own process: a real offscreen QGIS, a mock Mapflow API and sign-in server (`tests/mock_server.py`), and the whole flow from sign-in to results on the map (166 checks). Each run gets its own QGIS settings and authentication database in a temporary folder.
+  - `tests/test_e2e.py` — runs `tests/e2e_flow.py` in its own process: a real offscreen QGIS, a mock Mapflow API and sign-in server (`tests/mock_server.py`), and the whole flow from sign-in to results on the map (170 checks). Each run gets its own QGIS settings and authentication database in a temporary folder.
   - `tools/qt6_check.py` (in `test-qgis4`) — Qt enum names and calls that only Qt 5 accepts.
 - Run the narrow target while iterating, but `agent-make test` must pass before review — a change can pass on QGIS 3 and break on QGIS 4.
 - If `agent-make` blocks with *"local files differ from origin/master"*, a watched file (`Makefile`, `Dockerfile.tests`) was edited locally — escalate to the user. Do not undo other work to satisfy the check.
