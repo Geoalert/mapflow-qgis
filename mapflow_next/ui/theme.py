@@ -145,6 +145,7 @@ QToolButton[variant="icon"]:hover { background: $border; }
 QToolButton[variant="plain"] { background: transparent; border: 0; border-radius: 6px; min-width: 28px;
                                min-height: 28px; }
 QToolButton[variant="plain"]:hover { background: $tile; }
+QToolButton[variant="plain"][on="true"] { background: $primary_soft; }
 QToolButton[variant="avatar"] { background: $navy; color: $bg; border: 0; border-radius: 15px; min-width: 30px;
                                 min-height: 30px; max-width: 30px; max-height: 30px; font-weight: 700; }
 QToolButton[variant="credits"] { background: $primary_soft; color: $primary_ink; border: 0; border-radius: 14px;

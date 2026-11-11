@@ -17,8 +17,22 @@ def credits(value: Optional[int]) -> str:
     return "—" if value is None else f"{value:,}"
 
 
+def rate(value: float) -> str:
+    """A price per km², rounded for reading. Mapflow derives imagery prices from tile counts, so they
+    arrive as 2.1309329194574795 or 39.9999999999671: shown as 2.1 and 40."""
+    if 0 < value < 0.01:
+        return "<0.01"
+    if value >= 10:
+        text = f"{value:,.0f}"
+    elif value >= 1:
+        text = f"{value:.1f}"
+    else:
+        text = f"{value:.2f}"
+    return text.rstrip("0").rstrip(".") if "." in text else text
+
+
 def per_km2(value: float) -> str:
-    return f"{value:g} cr/km²"
+    return f"{rate(value)} cr/km²"
 
 
 def when(moment: Optional[datetime], now: Optional[datetime] = None) -> str:

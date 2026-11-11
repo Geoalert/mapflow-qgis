@@ -14,8 +14,8 @@ from ..core import formatting
 from ..core.models import CatalogImage, Mosaic
 from . import icons
 from .theme import tokens
-from .widgets import (Callout, Card, ElidedLabel, Pill, Segmented, button, clear_layout, label, link, placeholder,
-                      rounded, tool, vbox)
+from .widgets import (Callout, Card, Combo, ElidedLabel, Pill, Segmented, button, clear_layout, label, link,
+                      placeholder, rounded, tool, vbox)
 
 
 class ImageryPage(QWidget):
@@ -33,6 +33,7 @@ class ImageryPage(QWidget):
         super().__init__(parent)
         self.setObjectName("mfPage")
         self._thumbs: Dict[str, QLabel] = {}
+        self.my_data_url = config.WEB_URL + config.MY_DATA_PATH     # the controller sets the environment's
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         scroll = QScrollArea(self)
@@ -84,7 +85,7 @@ class ImageryPage(QWidget):
         area_row.addWidget(self.extent_button)
         form.add(area_row)
         # The same area as the run form: choosing a layer here sets it there too
-        self.layer_combo = QComboBox(form)
+        self.layer_combo = Combo(form)
         self.layer_combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
         self.layer_combo.setMinimumContentsLength(12)
         self.layer_combo.setToolTip("The area to search over: a polygon layer (the same area as on Start)")
@@ -292,7 +293,7 @@ class ImageryPage(QWidget):
         self.mosaic_list = QVBoxLayout()
         self.mosaic_list.setSpacing(8)
         layout.addLayout(self.mosaic_list)
-        layout.addWidget(link("Manage collections in Mapflow Web", config.WEB_URL))
+        layout.addWidget(link("Manage collections in Mapflow Web", lambda: self.my_data_url))
         layout.addStretch(1)
         return page
 

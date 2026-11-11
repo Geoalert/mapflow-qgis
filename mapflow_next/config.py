@@ -12,8 +12,14 @@ SETTINGS_GROUP = "mapflow_next"
 LAYER_GROUP_NAME = "Mapflow"
 # Custom property set on every layer the plugin adds, so a processing's layers can be found again
 PROCESSING_PROPERTY = "mapflow_next/processing_id"
+# Set on an imagery preview layer: which source it shows ("mosaic:<id>", "provider:<name>", "catalog:<id>")
+PREVIEW_PROPERTY = "mapflow_next/preview"
 
 WEB_URL = "https://app.mapflow.ai"
+# Mapflow Web of each environment (mapflow_env). One not listed here opens production's, unless the
+# `mapflow_next/web_url` setting says where it is.
+WEB_URLS = {"production": WEB_URL}
+MY_DATA_PATH = "/my-data"          # My imagery collections in Mapflow Web
 TOP_UP_URL = f"{WEB_URL}/account/balance"
 API_TOKEN_URL = f"{WEB_URL}/account/api"
 SIGN_UP_URL = WEB_URL
@@ -61,6 +67,15 @@ class Config:
     env: str
     server: str
     auth_url: str = ""            # OpenID Connect base; empty means the environment's default
+    web: str = ""                 # Mapflow Web; empty means the environment's default
+
+    @property
+    def web_url(self) -> str:
+        return (self.web or WEB_URLS.get(self.env, WEB_URL)).rstrip("/")
+
+    @property
+    def my_data_url(self) -> str:
+        return f"{self.web_url}{MY_DATA_PATH}"
 
     @property
     def oidc(self) -> str:
@@ -90,12 +105,13 @@ class Config:
 
 def load_config(settings=None) -> Config:
     """Environment from the QGIS global variable `mapflow_env` (as in the current plugin).
-    `mapflow_next/server` and `mapflow_next/auth_url` override the API and sign-in addresses for
-    testing against a local or staging server."""
+    `mapflow_next/server`, `mapflow_next/auth_url` and `mapflow_next/web_url` override the API, sign-in
+    and Mapflow Web addresses for testing against a local or staging server."""
     if settings is None:
         from qgis.core import QgsSettings
         settings = QgsSettings()
     env = (settings.value("variables/mapflow_env", "") or "production").strip().lower()
     override = settings.value(f"{SETTINGS_GROUP}/server", "") or ""
     server = override.rstrip("/") or f"https://whitemaps-{env}.mapflow.ai/rest"
-    return Config(env=env, server=server, auth_url=settings.value(f"{SETTINGS_GROUP}/auth_url", "") or "")
+    return Config(env=env, server=server, auth_url=settings.value(f"{SETTINGS_GROUP}/auth_url", "") or "",
+                  web=settings.value(f"{SETTINGS_GROUP}/web_url", "") or "")

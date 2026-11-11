@@ -16,7 +16,7 @@ sys.path.insert(1, str(ROOT))
 
 from PyQt6.QtCore import QPoint, QSize, Qt, QTimer  # noqa: E402
 from PyQt6.QtTest import QTest  # noqa: E402
-from PyQt6.QtWidgets import QApplication, QLabel, QMenu, QPushButton, QSlider, QWidget  # noqa: E402
+from PyQt6.QtWidgets import QApplication, QLabel, QMenu, QPushButton, QSlider, QToolButton, QWidget  # noqa: E402
 
 APP = QApplication.instance() or QApplication(sys.argv[:1])
 SHOTS = Path(sys.argv[1]) if len(sys.argv) > 1 else None
@@ -197,6 +197,20 @@ def _run():
     for combo in combos:
         combo.activated.emit(0)
     check(zoom or not combos, f"the zoom list chooses a zoom {zoom[-1:]}")
+    from PyQt6.QtCore import QPointF
+    from PyQt6.QtGui import QWheelEvent
+    if combos:
+        before = combos[0].currentIndex()
+        wheel = QWheelEvent(QPointF(5, 5), QPointF(5, 5), QPoint(0, 0), QPoint(0, -120), Qt.MouseButton.NoButton,
+                            Qt.KeyboardModifier.NoModifier, Qt.ScrollPhase.NoScrollPhase, False)
+        combos[0].wheelEvent(wheel)
+        check(combos[0].currentIndex() == before and not wheel.isAccepted(),
+              "the wheel over a closed zoom list is left to the form")
+    rows[1].previewing = True
+    run.set_imagery(rows, "provider:mapbox")
+    spin()
+    eyes = [b for b in run.findChildren(QToolButton) if b.toolTip() == "Hide the preview" and b.isVisible()]
+    check(len(eyes) == 1 and eyes[0].property("on") is True, "the eye shows a preview on the map as on")
     run.set_issues([Issue("area", "Choose an area")], False)
     check(not run.run_button.isEnabled(), "an issue disables Run")
 

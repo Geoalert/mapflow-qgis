@@ -9,7 +9,7 @@ from typing import Callable, List, Optional
 from urllib.parse import quote
 
 from ..config import PROCESSINGS_PAGE_SIZE, PROJECTS_PAGE_SIZE, RESULT_TIMEOUT_S, SEARCH_PAGE_SIZE
-from ..core.models import CatalogImage, Mosaic, MosaicImage, Processing, Project, UserStatus
+from ..core.models import CatalogImage, Mosaic, MosaicImage, Processing, Project, UserStatus, aois_geojson
 from .http import Http
 
 OnError = Optional[Callable]
@@ -96,11 +96,9 @@ class MapflowApi:
                            on_error=on_error, timeout=RESULT_TIMEOUT_S, on_progress=on_progress)
 
     def processing_aois(self, processing_id: str, on_done: Callable[[dict], None], on_error: OnError = None) -> None:
-        def done(data):
-            features = [{"type": "Feature", "geometry": a.get("geometry"), "properties": {"id": a.get("id")}}
-                        for a in (data or {}).get("aois") or [] if a.get("geometry")]
-            on_done({"type": "FeatureCollection", "features": features})
-        self.http.get(f"processings/{processing_id}/aois", on_success=done, on_error=on_error)
+        """The processing's area as a FeatureCollection."""
+        self.http.get(f"processings/{processing_id}/aois", on_success=lambda data: on_done(aois_geojson(data)),
+                      on_error=on_error)
 
     def tilejson(self, url: str, on_done: Callable[[dict], None], on_error: OnError = None) -> None:
         self.http.get(url, on_success=on_done, on_error=on_error, timeout=20)

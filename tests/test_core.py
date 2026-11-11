@@ -24,6 +24,46 @@ def test_model_prices_and_options():
     assert model.short_name == "Buildings"
 
 
+def test_model_price_comes_from_price_per_sq_km():
+    # As GET /projects/{id} lists 🏠 Buildings: the price in pricePerSqKm, the required blocks at 0
+    real = {"id": "48d77088", "name": "🏠 Buildings", "pricePerSqKm": 10,
+            "blocks": [{"name": "Buildings", "optional": False, "price": 0},
+                       {"name": "Segmentation", "optional": False, "price": 0},
+                       {"name": "Heights", "optional": True, "price": 10}]}
+    model = Model.from_api(real)
+    assert model.base_price == 10 and model.price({"Heights"}) == 20
+    # No pricePerSqKm: the required blocks' prices are the model's
+    assert Model.from_api({"id": "x", "name": "x", "blocks": [{"name": "a", "optional": False, "price": 4}]}
+                          ).base_price == 4
+
+
+def test_prices_per_km2_are_rounded():
+    from mapflow_next.core.formatting import per_km2, rate
+    # Real imagery prices (Mapbox z17–z21, Global mosaic 2021 z17–z18)
+    assert [rate(p) for p in (0.5327332298643699, 2.1309329194574795, 8.523731677829918, 34.09492671131967,
+                              136.3797068452787, 9.999999999991775, 39.9999999999671)] == \
+        ["0.53", "2.1", "8.5", "34", "136", "10", "40"]
+    assert rate(10) == "10" and rate(0) == "0" and rate(0.004) == "<0.01" and rate(2559.99) == "2,560"
+    assert per_km2(5) == "5 cr/km²"
+
+
+def test_my_data_address_follows_the_environment():
+    assert Config(env="production", server="s").my_data_url == "https://app.mapflow.ai/my-data"
+    assert Config(env="staging", server="s", web="https://web.example/").my_data_url == "https://web.example/my-data"
+
+
+def test_processing_aois_are_a_list():
+    from mapflow_next.core.models import aois_geojson
+    square = {"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 0]]]}
+    # What Mapflow answers: a list. "Run again" failed on it with AttributeError: 'list' object has no 'get'
+    real = aois_geojson([{"id": "a1", "status": "OK", "percentCompleted": 100, "geometry": square},
+                         {"id": "a2", "geometry": None}])
+    assert real == {"type": "FeatureCollection",
+                    "features": [{"type": "Feature", "geometry": square, "properties": {"id": "a1"}}]}
+    assert len(aois_geojson({"aois": [{"id": "a1", "geometry": square}]})["features"]) == 1
+    assert aois_geojson(None)["features"] == [] and aois_geojson([])["features"] == []
+
+
 def test_status_and_providers():
     status = UserStatus.from_api(STATUS)
     assert status.billing is BillingType.credits

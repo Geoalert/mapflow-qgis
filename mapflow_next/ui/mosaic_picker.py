@@ -29,7 +29,7 @@ class MosaicPicker(QDialog):
     chosen = pyqtSignal(str, str)               # mosaic id, image id ("" = the whole collection)
     showRequested = pyqtSignal(str)             # mosaic id: show it on the map
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, my_data_url: str = config.WEB_URL + config.MY_DATA_PATH):
         super().__init__(parent)
         self.setObjectName("mfRoot")
         self.setWindowTitle("Choose from My imagery")
@@ -49,7 +49,7 @@ class MosaicPicker(QDialog):
         head = QHBoxLayout()
         head.addWidget(label("My imagery", "h1"))
         head.addStretch(1)
-        head.addWidget(link("Manage collections in Mapflow Web", config.WEB_URL))
+        head.addWidget(link("Manage collections in Mapflow Web", my_data_url))
         outer.addLayout(head)
 
         columns = QHBoxLayout()

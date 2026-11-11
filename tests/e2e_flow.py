@@ -381,6 +381,35 @@ def main():
     eyes[0].click()
     check(wait_until(lambda: QgsProject.instance().mapLayersByName("Mapbox Satellite · preview")),
           "the eye adds the source's preview to the map")
+
+    def eye():
+        return next((b for row in run._rows for b in row.findChildren(QToolButton)
+                     if b.toolTip() in ("Preview on the map", "Hide the preview") and b.isVisible()), None)
+
+    check(wait_until(lambda: eye() is not None and eye().toolTip() == "Hide the preview"
+                     and eye().property("on") is True, 3),
+          "while the preview is on the map, the eye shows it as on")
+    eye().click()
+    check(wait_until(lambda: not QgsProject.instance().mapLayersByName("Mapbox Satellite · preview"), 3)
+          and wait_until(lambda: eye() is not None and eye().toolTip() == "Preview on the map", 3),
+          "a second click takes the preview off the map, and the eye shows it as off")
+    arcgis = next(r for r in rows if r.key == "provider:arcgis")
+    check(arcgis.price == "+8.5 cr/km²", f"imagery prices per km² are rounded (8.523731677829918 → {arcgis.price})")
+    check(run.model_price.text() == "10 cr/km²",
+          f"What to map shows the model's price, from pricePerSqKm ({run.model_price.text()!r})")
+
+    # the mouse wheel over a zoom list scrolls the form; only the opened list changes the zoom
+    from qgis.PyQt.QtCore import QPoint, QPointF
+    from qgis.PyQt.QtGui import QWheelEvent
+    index = zoom_combo.currentIndex()
+    centre = QPointF(zoom_combo.rect().center())
+    wheel = QWheelEvent(centre, QPointF(zoom_combo.mapToGlobal(centre.toPoint())), QPoint(0, 0), QPoint(0, -120),
+                        Qt.MouseButton.NoButton, Qt.KeyboardModifier.NoModifier, Qt.ScrollPhase.NoScrollPhase, False)
+    zoom_combo.wheelEvent(wheel)          # the combo's own handler: Qt then passes an ignored event to the form
+    check(zoom_combo.currentIndex() == index and not wheel.isAccepted(),
+          "the wheel over the zoom list leaves the zoom alone and goes on to the form")
+    check(all(type(c).__name__ == "Combo" for c in (run.model_combo, run.layer_combo, content.imagery.layer_combo)),
+          "the model and area lists ignore the wheel too")
     check(isinstance(run.change_button, QToolButton) and not run.change_button.text(),
           "the scenario gallery opens from an icon, not a “Change” link")
     run.change_button.click()
@@ -563,7 +592,21 @@ def main():
     ok = wait_until(lambda: len(picker.previews) == 3, 5)
     check(ok, "the picker shows each image's preview")
     shot(picker, "13-my-imagery-picker", QSize(820, 560))
+    manage = next(b for b in picker.findChildren(QPushButton) if b.text().startswith("Manage collections"))
+    manage.click()
+    check(links.opened[-1:] == ["https://app.mapflow.ai/my-data"], f"“Manage collections” opens My data in Mapflow "
+                                                                   f"Web ({links.opened[-1:]})")
     picker.chosen.emit("m-1", "m-1-i1")
+
+    def previews(name):
+        return [x for x in QgsProject.instance().mapLayersByName(f"My imagery · {name}")
+                if x.customProperty("mapflow_next/preview") == "mosaic:m-1"]
+
+    check(wait_until(lambda: len(previews("Drone survey March")) == 1, 5),
+          "choosing My imagery puts the collection on the map")
+    check(wait_until(lambda: next((b for row in content.run._rows for b in row.findChildren(QToolButton)
+                                   if b.toolTip() == "Hide the preview"), None) is not None, 3),
+          "…and the eye shows its preview as on")
     choice = controller.draft.imagery
     check(choice.kind == "my_imagery" and choice.image_ids == ["m-1-i1"]
           and controller.draft.payload("project-1")["params"]["sourceParams"]
@@ -660,6 +703,11 @@ def main():
     picker.chosen.emit("m-1", "")
     check(controller.draft.imagery.image_ids == [] and controller.draft.imagery.mosaic_id == "m-1",
           "“Use the whole collection” processes the whole collection")
+    wait_until(lambda: False, 0.3)
+    check(len(previews("Drone survey March")) == 1, "choosing the same collection again doesn't add it twice")
+    mine = next(b for b in content.imagery.findChildren(QPushButton) if b.text().startswith("Manage collections"))
+    mine.click()
+    check(links.opened[-1:] == ["https://app.mapflow.ai/my-data"], "…as does the link under My imagery")
     check(controller.aoi_layer.name() == "Extent of Drone survey March"
           and abs(controller.draft.aoi.area_km2 - 3 * extent_area) < 0.02 * 3 * extent_area,
           "the whole collection's extent (all its images) becomes the area")
@@ -691,10 +739,15 @@ def main():
                      and controller.draft.imagery.image_ids == ["m-1-i1"], 5),
           "“Run again” on one image finds its collection and picks the same image")
 
-    # duplicate → run again
+    # duplicate → run again: the area comes from Mapflow (GET /processings/{id}/aois answers a list)
     content.processings.duplicate.emit("old-1")
+    check(controller.draft.aoi is None, "until Mapflow sends the processing's area, the form has none (not the "
+                                        "previous one)")
     check(wait_until(lambda: controller.draft.aoi is not None and controller.draft.aoi.name.startswith("Area ·"), 5),
           "Run again restores the processing's area as a layer")
+    check(any(r[1] == "/processings/old-1/aois" for r in state.requests)
+          and controller.aoi_layer.featureCount() == 1 and controller.draft.aoi.area_km2 > 0,
+          "…downloaded from Mapflow, so it works when the original layer is gone")
 
     # ---------- projects window ----------
     with state.lock:

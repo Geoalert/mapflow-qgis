@@ -92,6 +92,7 @@ class Controller(QObject):
         self._mosaic_render.setSingleShot(True)
         self._mosaic_render.setInterval(150)
         self._mosaic_render.timeout.connect(self._render_mosaics)
+        self.content.imagery.my_data_url = session.config.my_data_url
         self._connect()
 
     # ---------- wiring ----------
@@ -793,22 +794,48 @@ class Controller(QObject):
         self.refresh_run()
         self.render_search_results()
 
+    def _preview_key(self, choice: Optional[ImageryChoice]) -> Optional[str]:
+        """Which preview layer shows the chosen imagery; None if it has none (a catalog image with a
+        picture preview: the eye zooms to its footprint instead)."""
+        if choice is None:
+            return None
+        if choice.kind == "provider" and choice.provider and choice.provider.preview_url:
+            return f"provider:{choice.provider.name}"
+        if choice.kind == "my_imagery" and choice.mosaic_id:
+            return f"mosaic:{choice.mosaic_id}"
+        image = self.chosen_image
+        if choice.kind == "catalog" and image and image.preview_url and image.preview_type in ("xyz", "tms"):
+            return f"catalog:{image.id}"
+        return None
+
     @guarded
     def preview_imagery(self) -> None:
+        """The eye: put the chosen imagery's preview on the map, or take it off if it is there."""
         choice = self.draft.imagery
         if choice is None:
+            return
+        shown = self.layers.previews(self._preview_key(choice))
+        if shown:
+            self.layers.remove(shown)               # the form follows through layersRemoved
             return
         if choice.kind == "provider" and choice.provider and choice.provider.preview_url:
             layer = self.layers.tile_raster(choice.provider.preview_url, f"{choice.provider.display_name} · preview",
                                             zmax=choice.provider.preview_max_zoom or 18)
             if layer:
-                self.layers.add(layer, position=len(self.layers.group().children()))
+                self.layers.add(layer, position=len(self.layers.group().children()),
+                                preview=self._preview_key(choice))
                 self.notify(f"{choice.provider.display_name} preview is on the map, "
                             "at the bottom of the Mapflow group.")
         elif choice.kind == "my_imagery":
             self.show_mosaic(choice.mosaic_id)
         elif choice.kind == "catalog" and self.chosen_image:
             self.show_image(self.chosen_image.id)
+
+    def _preview_my_imagery(self) -> None:
+        """Choosing My imagery puts it on the map, so the area can be judged against the imagery."""
+        choice = self.draft.imagery
+        if choice and choice.kind == "my_imagery" and not self.layers.previews(self._preview_key(choice)):
+            self.show_mosaic(choice.mosaic_id, zoom=False)      # the area's extent is zoomed to already
 
     def _catalog_choice(self, image: CatalogImage) -> ImageryChoice:
         when = f"{image.acquired.day} {image.acquired:%b %Y}" if image.acquired else ""
@@ -834,7 +861,7 @@ class Controller(QObject):
         credits_billing = bool(status and status.billing is BillingType.credits)
         models = project.models if project else []
         run.set_models(models, self.draft.model.id if self.draft.model else None)
-        base = f"{self.draft.model.base_price:g} cr/km²" if (self.draft.model and credits_billing) else ""
+        base = formatting.per_km2(self.draft.model.base_price) if (self.draft.model and credits_billing) else ""
         note = ""
         if scenario and not self.draft.model and scenario.apply.get("model"):
             note = f"This project has no “{plain(scenario.model_label)}” model. Pick another one."
@@ -896,7 +923,8 @@ class Controller(QObject):
                     detail = image_count_text(mosaic) or "whole collection"
                 meta = f"{mosaic.name} · {detail}"
             rows.append(ImageryRow(key="mosaic", title="My imagery", meta=meta, pick="Choose…",
-                                   price="Free" if credits_billing else "", previewable=True))
+                                   price="Free" if credits_billing else "", previewable=True,
+                                   previewing=self._previewing(choice) if mine else None))
             if mine:
                 selected = "mosaic"
         for provider in (status.data_providers if status else []):
@@ -910,9 +938,11 @@ class Controller(QObject):
             elif star:
                 meta += f" · z{star} ★ recommended"
             rows.append(ImageryRow(key=f"provider:{provider.name}", title=provider.display_name, meta=meta,
-                                   price=(f"+{price:g} cr/km²" if price else "Free") if credits_billing else "",
+                                   price=(f"+{formatting.per_km2(price)}" if price else "Free")
+                                   if credits_billing else "",
                                    zooms=provider.zooms, zoom=zoom, recommended_zoom=star,
-                                   previewable=bool(provider.preview_url)))
+                                   previewable=bool(provider.preview_url),
+                                   previewing=self._previewing(choice) if chosen else None))
             if chosen:
                 selected = rows[-1].key
         if self.chosen_image:
@@ -922,10 +952,17 @@ class Controller(QObject):
                        f"z{image.zoom} from the image resolution" if image.zoom else ""]
             rows.append(ImageryRow(key="catalog", title=self._catalog_choice(image).label,
                                    meta=" · ".join(t for t in details if t) or "From search",
-                                   price="In estimate" if credits_billing else "", removable=True, previewable=True))
+                                   price="In estimate" if credits_billing else "", removable=True, previewable=True,
+                                   previewing=self._previewing(choice) if choice and choice.kind == "catalog"
+                                   else None))
             if choice and choice.kind == "catalog":
                 selected = "catalog"
         return rows, selected
+
+    def _previewing(self, choice: Optional[ImageryChoice]) -> Optional[bool]:
+        """Whether the eye shows the chosen imagery's preview as on the map (None: no preview layer)."""
+        key = self._preview_key(choice)
+        return bool(self.layers.previews(key)) if key else None
 
     def _cost_view(self, status: Optional[UserStatus]) -> CostView:
         estimate = self.draft.estimate()
@@ -941,11 +978,11 @@ class Controller(QObject):
         if estimate is None:
             view.balance = f"Balance: {status.remaining_credits:,} credits"
             return view
-        parts = [f"{estimate.model_price:g} model"]
+        parts = [f"{formatting.rate(estimate.model_price)} model"]
         if estimate.options_price:
-            parts.append(f"{estimate.options_price:g} options")
+            parts.append(f"{formatting.rate(estimate.options_price)} options")
         if estimate.imagery_price is not None:
-            parts.append(f"{estimate.imagery_price:g} imagery")
+            parts.append(f"{formatting.rate(estimate.imagery_price)} imagery")
         elif self.draft.imagery:
             parts.append("imagery")
         view.formula = f"{formatting.km2(estimate.billed_km2)} × ({' + '.join(parts)}) cr/km², rounded up"
@@ -1144,12 +1181,22 @@ class Controller(QObject):
             self._restore_my_imagery(source.mosaic_id, source.image_ids[0] if source.image_ids else None)
         self.draft.name, self.draft.name_edited = processing.name, True
 
+        # The area comes from Mapflow, not from the map: the layer it was drawn on may be gone or changed.
+        # Until it arrives the form has no area, so the run can't start on whatever area was set before.
+        self._watch_layer(None)
+        self.draft.aoi = None
+
         def with_area(collection: dict):
             layer = aoi_tools.geojson_layer(collection, f"Area · {processing.name}")
-            if layer is not None:
+            if layer is None:
+                self.notify("Mapflow sent no area for this processing. Choose the area again.",
+                            Qgis.MessageLevel.Warning)
+            else:
                 self.layers.add(layer)
                 self.set_aoi_layer(layer)
+                self.layers.zoom_to([layer])
             self.refresh_run()
+            self.render_imagery_area()
 
         self.api.processing_aois(processing.id, with_area,
                                  lambda error: self.notify(f"The area didn't load: {error.message}",
@@ -1262,11 +1309,12 @@ class Controller(QObject):
                     self.iface.mapCanvas().zoomToSelected(layer)
             except RuntimeError:
                 pass
-        if image.preview_url and image.preview_type in ("xyz", "tms"):
+        key = f"catalog:{image.id}"
+        if image.preview_url and image.preview_type in ("xyz", "tms") and not self.layers.previews(key):
             url = image.preview_url.replace("{y}", "{-y}") if image.preview_type == "tms" else image.preview_url
             preview = self.layers.tile_raster(url, f"Preview · {_provider_name(image.provider)} {image.id[:8]}")
             if preview:
-                self.layers.add(preview, position=len(self.layers.group().children()))
+                self.layers.add(preview, position=len(self.layers.group().children()), preview=key)
 
     @guarded
     def use_image(self, image_id: str) -> None:
@@ -1318,7 +1366,7 @@ class Controller(QObject):
                         Qgis.MessageLevel.Info)
             return
         if self.mosaic_picker is None:
-            picker = MosaicPicker(self.iface.mainWindow())
+            picker = MosaicPicker(self.iface.mainWindow(), self.session.config.my_data_url)
             picker.collectionOpened.connect(lambda mid: self.imagery.load_images(mid))
             picker.chosen.connect(self._mosaic_chosen)
             picker.showRequested.connect(self.show_mosaic)
@@ -1345,20 +1393,35 @@ class Controller(QObject):
         self.content.imagery.set_mosaics(self.imagery.mosaics, mosaic.id)
         self.content.open_run()
         self.use_imagery_extent()
+        self._preview_my_imagery()
         self.refresh_run()
 
     @guarded
-    def show_mosaic(self, mosaic_id: Optional[str]) -> None:
+    def show_mosaic(self, mosaic_id: Optional[str], zoom: bool = True) -> None:
+        """A My imagery collection on the map: once, at the bottom of the Mapflow group."""
         mosaic = self.imagery.get_mosaic(mosaic_id)
         if mosaic is None:
             return
+        key = f"mosaic:{mosaic.id}"
+        shown = self.layers.previews(key)
+        if shown:                                   # already there: show it rather than add another
+            for layer in shown:
+                node = QgsProject.instance().layerTreeRoot().findLayer(layer.id())
+                if node is not None:
+                    node.setItemVisibilityChecked(True)
+            if zoom:
+                self.layers.zoom_to(shown)
+            return
 
         def add(tilejson: Optional[dict]):
+            if self.layers.previews(key):           # two requests crossed
+                return
             layer = self.layers.tile_raster(mosaic.tile_url, f"My imagery · {mosaic.name}",
                                             bounds_extent((tilejson or {}).get("bounds")) if tilejson else None)
             if layer:
-                self.layers.add(layer, position=len(self.layers.group().children()))
-                self.layers.zoom_to([layer])
+                self.layers.add(layer, position=len(self.layers.group().children()), preview=key)
+                if zoom:
+                    self.layers.zoom_to([layer])
 
         if mosaic.tilejson_url:
             self.api.tilejson(mosaic.tilejson_url, add, lambda _e: add(None))
@@ -1376,6 +1439,7 @@ class Controller(QObject):
             self.content.imagery.set_mosaics(self.imagery.mosaics, mosaic.id)
             self.content.open_run()
             self.use_imagery_extent()
+            self._preview_my_imagery()
             self.refresh_run()
 
     @guarded

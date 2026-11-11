@@ -5,9 +5,8 @@ from typing import List, Optional
 
 from qgis.PyQt.QtCore import QEvent, QPointF, QRectF, QSize, Qt, QUrl, pyqtSignal
 from qgis.PyQt.QtGui import QDesktopServices, QFont, QFontMetrics, QPainter, QPainterPath, QPen, QPixmap
-from qgis.PyQt.QtWidgets import (QAbstractButton, QAction, QApplication, QButtonGroup, QFrame, QHBoxLayout, QLabel,
-                                 QPushButton,
-                                 QSizePolicy, QToolButton, QVBoxLayout, QWidget)
+from qgis.PyQt.QtWidgets import (QAbstractButton, QAction, QApplication, QButtonGroup, QComboBox, QFrame, QHBoxLayout,
+                                 QLabel, QPushButton, QSizePolicy, QToolButton, QVBoxLayout, QWidget)
 
 from . import icons
 from .theme import color, set_prop, tokens
@@ -54,12 +53,15 @@ def button(text: str, variant: str = "outline", icon: Optional[str] = None, size
     return widget
 
 
-def link(text: str, url: Optional[str] = None, external: bool = True, parent: Optional[QWidget] = None) -> QPushButton:
+def link(text: str, url=None, external: bool = True, parent: Optional[QWidget] = None) -> QPushButton:
+    """A link button. `url` is an address, or a function that returns one when clicked (for an address
+    that depends on the environment, known only once the plugin has its configuration)."""
     widget = button(text, "link", external=external and bool(url), parent=parent)
     widget.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
     if url:
-        widget.setToolTip(url)
-        widget.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(url)))
+        if isinstance(url, str):
+            widget.setToolTip(url)
+        widget.clicked.connect(lambda *_: QDesktopServices.openUrl(QUrl(url() if callable(url) else url)))
     return widget
 
 
@@ -150,6 +152,14 @@ def vbox(*items, spacing: int = 8, margins=(0, 0, 0, 0)) -> QVBoxLayout:
         else:
             layout.addLayout(item)
     return layout
+
+
+class Combo(QComboBox):
+    """A drop-down for scrolling pages: the mouse wheel over it scrolls the page instead of changing the
+    value. Its list, once opened, takes the wheel as usual (the list gets those events, not the combo)."""
+
+    def wheelEvent(self, event) -> None:
+        event.ignore()                          # left to the parent: the scroll area scrolls
 
 
 class Card(QFrame):

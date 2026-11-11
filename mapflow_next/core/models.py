@@ -87,10 +87,12 @@ class Model:
     @classmethod
     def from_api(cls, data: dict) -> "Model":
         blocks = [Block.from_api(b) for b in data.get("blocks") or []]
-        if blocks:
-            base = sum(b.price for b in blocks if not b.optional)
-        else:
+        # Mapflow puts the model's own price in pricePerSqKm and lists its required blocks at 0, so
+        # their sum is only a fallback for a definition without pricePerSqKm.
+        if data.get("pricePerSqKm") is not None:
             base = _num(data.get("pricePerSqKm"), 0.0)
+        else:
+            base = sum(b.price for b in blocks if not b.optional)
         return cls(id=str(data.get("id", "")), name=data.get("name", ""),
                    description=data.get("description") or "", base_price=base, blocks=blocks)
 
@@ -403,6 +405,15 @@ class Processing:
     def is_final(self) -> bool:
         """Nothing will change without the user: polling can stop."""
         return self.status.is_terminal and self.review_status != "NOT_ACCEPTED"
+
+
+def aois_geojson(data: Any) -> dict:
+    """GET /processings/{id}/aois as a FeatureCollection. Mapflow answers with a list of AOIs; an
+    {"aois": [...]} object is read too."""
+    aois = data.get("aois") if isinstance(data, dict) else data
+    features = [{"type": "Feature", "geometry": a["geometry"], "properties": {"id": a.get("id")}}
+                for a in aois or [] if isinstance(a, dict) and a.get("geometry")]
+    return {"type": "FeatureCollection", "features": features}
 
 
 # ---------- imagery catalog and My imagery ----------

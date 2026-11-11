@@ -6,22 +6,26 @@ def block(name, display, price, optional):
     return {"name": name, "displayName": display, "price": price, "optional": optional, "extra": "ignored"}
 
 
-BUILDINGS = {"id": "wd-buildings", "name": "🏠 Buildings", "description": "Roofs of buildings",
-             "blocks": [block("buildings", "Buildings", 10, False), block("classification", "Classification", 0, True),
+# As Mapflow sends them: the model's price in pricePerSqKm, its required blocks at 0
+BUILDINGS = {"id": "wd-buildings", "name": "🏠 Buildings", "description": "Roofs of buildings", "pricePerSqKm": 10,
+             "blocks": [block("buildings", "Buildings", 0, False), block("classification", "Classification", 0, True),
                         block("heights", "Building heights", 10, True),
                         block("simplification", "Simplification", 0, True)]}
-FOREST = {"id": "wd-forest", "name": "🌲 Forest and trees", "description": "",
-          "blocks": [block("forest", "Forest", 8, False), block("heights", "Forest heights", 10, True),
+FOREST = {"id": "wd-forest", "name": "🌲 Forest and trees", "description": "", "pricePerSqKm": 8,
+          "blocks": [block("forest", "Forest", 0, False), block("heights", "Forest heights", 10, True),
                      block("crowns", "Tree crowns", 10, True)]}
 ROADS = {"id": "wd-roads", "name": "🚗 Roads", "pricePerSqKm": 5, "blocks": []}
-MULTI = {"id": "wd-multi", "name": "[multi] Buildings + Roads + Forest", "blocks": [block("all", "All", 23, False)]}
-OPEN_DATA = {"id": "wd-open", "name": "Download Open Data", "blocks": [block("osm", "OSM", 1, False)]}
+MULTI = {"id": "wd-multi", "name": "[multi] Buildings + Roads + Forest", "pricePerSqKm": 23,
+         "blocks": [block("all", "All", 0, False)]}
+OPEN_DATA = {"id": "wd-open", "name": "Download Open Data", "pricePerSqKm": 1,
+             "blocks": [block("osm", "OSM", 0, False)]}
 
 MAPBOX = {"id": "dp-1", "name": "mapbox", "displayName": "Mapbox Satellite",
           "price": [{"zoom": 17, "priceSqKm": 1}, {"zoom": 18, "priceSqKm": 3}, {"zoom": 19, "priceSqKm": 9}],
           "previewUrl": "https://api.mapbox.example/{z}/{x}/{y}.jpg", "previewUrlMaxZoom": 19}
+# Prices as Mapflow sends them: derived from tile counts, so not round
 ARCGIS = {"id": "dp-2", "name": "arcgis", "displayName": "ArcGIS World Imagery",
-          "price": [{"zoom": 18, "priceSqKm": 3}, {"zoom": 19, "priceSqKm": 9}]}
+          "price": [{"zoom": 18, "priceSqKm": 2.1309329194574795}, {"zoom": 19, "priceSqKm": 8.523731677829918}]}
 
 STATUS = {"billingType": "CREDITS", "remainingCredits": 1240, "remainingArea": 0, "dataProviders": [MAPBOX, ARCGIS],
           "searchDataProviders": [{"name": "maxar"}], "reviewWorkflowEnabled": False, "maxAoisPerProcessing": 10}

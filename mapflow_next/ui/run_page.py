@@ -11,12 +11,13 @@ from qgis.PyQt.QtWidgets import (QComboBox, QFrame, QGridLayout, QHBoxLayout, QL
                                  QScrollArea, QSizePolicy, QToolButton, QVBoxLayout, QWidget)
 
 from .. import config
+from ..core import formatting
 from ..core.draft import Issue
 from ..core.models import Block, Model
 from . import icons
 from .theme import set_prop, tokens
-from .widgets import (Callout, Card, ElidedLabel, OptionRow, Pill, StepHeader, Toggle, button, clear_layout, label,
-                      link, rounded, tool, vbox)
+from .widgets import (Callout, Card, Combo, ElidedLabel, OptionRow, Pill, StepHeader, Toggle, button, clear_layout,
+                      label, link, rounded, tool, vbox)
 
 
 @dataclass
@@ -32,6 +33,7 @@ class ImageryRow:
     recommended: bool = False
     removable: bool = False
     previewable: bool = False         # an eye shows it on the map (on the selected row)
+    previewing: Optional[bool] = None  # its preview is on the map; None: the eye only zooms to it
 
 
 @dataclass
@@ -134,7 +136,7 @@ class RunPage(QWidget):
         self.model_price = label("", "value")
         self.model_header.right.addWidget(self.model_price)
         self.model_card.add(self.model_header)
-        self.model_combo = QComboBox(self.model_card)
+        self.model_combo = Combo(self.model_card)
         self.model_combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
         self.model_combo.setMinimumContentsLength(12)
         self.model_combo.activated.connect(self._model_activated)
@@ -154,7 +156,7 @@ class RunPage(QWidget):
         self.area_value = label("", "value")
         self.area_header.right.addWidget(self.area_value)
         self.area_card.add(self.area_header)
-        self.layer_combo = QComboBox(self.area_card)
+        self.layer_combo = Combo(self.area_card)
         self.layer_combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
         self.layer_combo.setMinimumContentsLength(12)
         self.layer_combo.activated.connect(self._layer_activated)
@@ -323,7 +325,7 @@ class RunPage(QWidget):
     def _option_row(self, block: Block, checked: bool) -> QHBoxLayout:
         row = QHBoxLayout()
         row.setSpacing(10)
-        price = "no extra cost" if not block.price else f"+{block.price:g} cr/km²"
+        price = "no extra cost" if not block.price else f"+{formatting.per_km2(block.price)}"
         texts = vbox(label(block.display_name, "title", wrap=True), label(price, "meta"), spacing=1)
         switch = Toggle()
         switch.setChecked(checked)
@@ -398,7 +400,7 @@ class RunPage(QWidget):
             column = QVBoxLayout()
             column.setSpacing(2)
             if spec.zooms:
-                zoom = QComboBox(row)
+                zoom = Combo(row)
                 for value in spec.zooms:
                     zoom.addItem(f"z{value} ★" if value == spec.recommended_zoom else f"z{value}", value)
                 zoom.setCurrentIndex(spec.zooms.index(spec.zoom) if spec.zoom in spec.zooms else len(spec.zooms) - 1)
@@ -419,7 +421,11 @@ class RunPage(QWidget):
             if column.count():
                 row.right.addLayout(column)
             if chosen and spec.previewable:
-                eye = tool("eye", "Preview on the map", "plain", 16)
+                on = bool(spec.previewing)
+                eye = tool("eye", "Hide the preview" if on else "Preview on the map", "plain", 16)
+                if on:      # the preview is on the map: the eye shows it, and a click takes it off
+                    eye.setIcon(icons.icon("eye", tokens()["primary_ink"], 16))
+                    eye.setProperty("on", True)
                 eye.clicked.connect(lambda *_: self.previewRequested.emit())
                 row.right.addWidget(eye)
             if spec.removable:

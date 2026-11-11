@@ -12,7 +12,7 @@ from qgis.core import (QgsCoordinateReferenceSystem, QgsCoordinateTransform, Qgs
                        QgsProject, QgsRasterLayer, QgsRectangle, QgsVectorFileWriter, QgsVectorLayer,
                        QgsVectorTileLayer)
 
-from ..config import LAYER_GROUP_NAME, PROCESSING_PROPERTY, RESOURCES
+from ..config import LAYER_GROUP_NAME, PREVIEW_PROPERTY, PROCESSING_PROPERTY, RESOURCES
 from ..core.models import Mosaic, Processing
 from . import styles
 
@@ -85,9 +85,12 @@ class MapLayers:
             group = root.insertGroup(0, LAYER_GROUP_NAME)
         return group
 
-    def add(self, layer: QgsMapLayer, processing_id: Optional[str] = None, position: int = 0) -> QgsMapLayer:
+    def add(self, layer: QgsMapLayer, processing_id: Optional[str] = None, position: int = 0,
+            preview: Optional[str] = None) -> QgsMapLayer:
         if processing_id:
             layer.setCustomProperty(PROCESSING_PROPERTY, processing_id)
+        if preview:
+            layer.setCustomProperty(PREVIEW_PROPERTY, preview)
         self.project.addMapLayer(layer, False)
         self.group().insertLayer(position, layer)
         return layer
@@ -95,6 +98,16 @@ class MapLayers:
     def layers_for(self, processing_id: str) -> List[QgsMapLayer]:
         return [layer for layer in self.project.mapLayers().values()
                 if layer.customProperty(PROCESSING_PROPERTY) == processing_id]
+
+    def previews(self, key: Optional[str]) -> List[QgsMapLayer]:
+        """The preview layers showing one imagery source (see PREVIEW_PROPERTY)."""
+        if not key:
+            return []
+        return [layer for layer in self.project.mapLayers().values()
+                if layer.customProperty(PREVIEW_PROPERTY) == key]
+
+    def remove(self, layers: List[QgsMapLayer]) -> None:
+        self.project.removeMapLayers([layer.id() for layer in layers])
 
     def processing_ids_in_map(self) -> set:
         ids = set()

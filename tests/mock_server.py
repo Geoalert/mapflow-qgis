@@ -193,8 +193,8 @@ class Handler(BaseHTTPRequestHandler):
         match = re.fullmatch(r"/processings/([\w-]+)/aois", path)
         if method == "GET" and match:
             geometry = fixtures.RESULT["features"][0]["geometry"]
-            return self._send(200, {"aois": [{"id": "a1", "status": "OK", "percentCompleted": 100, "area": 1,
-                                              "messages": [], "geometry": geometry}]})
+            return self._send(200, [{"id": "a1", "status": "OK", "percentCompleted": 100, "area": 1,
+                                     "messages": [], "geometry": geometry}])     # a list, as Mapflow answers
         if method == "POST" and path == "/catalog/meta":
             bad = [t for t in body.get("productTypes") or [] if t not in ("IMAGE", "MOSAIC")]
             if bad:   # what the real API answers
