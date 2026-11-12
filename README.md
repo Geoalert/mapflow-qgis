@@ -18,6 +18,26 @@ More screens in [`docs/screens/`](docs/screens): imagery search, My imagery and 
 projects window, the scenario gallery and dark mode. The end-to-end test writes them (`make screens`), so
 they show the plugin as it is.
 
+## What it's for
+
+The plugin covers the work that belongs next to the map. Each tab has its scenarios:
+
+- **Start › Run a processing.** Pick a scenario or a model, set the area (a layer, a selection, a drawing
+  or the map view), choose imagery, check the cost and run.
+- **Start › Map your own imagery.** Upload a GeoTIFF, or choose a My imagery collection or one image in it.
+  The imagery's extent becomes the area, and its preview goes on the map.
+- **Imagery sources › Find imagery in the catalog.** Search by area, dates, cloud cover and off-nadir
+  angle, look at the footprints on the map, and use an image in the run form.
+- **Processings › Follow the work and its history.** Progress updates on its own. Filter, search, load
+  older processings, rename them, run one again with the same settings, or delete it.
+- **Processings › Get the results into QGIS.** Finished results load as styled layers: GeoPackage files,
+  or vector tiles for a quick look. Results can also be saved as GeoJSON.
+- **Projects › Work in a team project.** Switch projects, search and pin them, and see which are shared
+  and what your role allows.
+
+Managing data, projects and the team happens in [Mapflow Web](https://app.mapflow.ai), and the plugin
+links there (see [below](#in-the-plugin-and-in-mapflow-web)).
+
 ## Install
 
 - **From a zip:** Plugins › Manage and Install Plugins › Install from ZIP, with the zip from `make zip`.
@@ -138,15 +158,27 @@ the two.
   automatically, which you can turn off. "Run again" restores a processing's settings and its area.
 - **Theming:** follows the QGIS light or dark theme, with the Mapflow design tokens.
 
-## Not carried over yet
+## In the plugin and in Mapflow Web
 
-- **Planned processings** (templates) and their AOI management.
-- **Custom XYZ/TMS providers.**
-- **Review workflow actions.** A processing that needs review links to Mapflow Web.
-- **Project management:** creating, renaming and deleting projects happens in Mapflow Web.
-- **Smaller features:** georeferenced previews of catalog images, the forced-upgrade dialog, and Segment
-  Anything zoom options.
-- **Translations:** strings are English only. The 3.x translations (es, pt, ru, zh) aren't wired.
+The plugin keeps what is done while looking at the map: choosing the area and the imagery, running,
+and bringing results in. Work that is about managing things moves to Mapflow Web. Each of those
+features needs a full screen, bulk actions or the team's view, and the web app already does it for
+every Mapflow user. The plugin links to the right page wherever it leaves something out.
+
+| 3.x plugin | 4.0 | Why, and where to do it |
+|---|---|---|
+| Run processings: models, options, area, providers, catalog, My imagery | **Kept**, redesigned as one form | The core of the plugin |
+| Processings list, results on the map, rename, delete, run again | **Kept** | Results belong in QGIS |
+| Imagery search in the catalog | **Kept** | Footprints are judged on the map |
+| Upload a GeoTIFF to My imagery | **Kept**, as a new collection | Your imagery is made in QGIS and processed from there |
+| My imagery data management: create, rename and delete collections, add or delete images, download originals | **Mapflow Web** › [My data](https://app.mapflow.ai/my-data) ("Manage collections in Mapflow Web") | File management, not mapping: it needs whole collections in view and many files at once. Deleting is permanent and affects everyone in the project, so it belongs where the whole collection is shown |
+| Projects: create, rename, delete, share | **Mapflow Web** › [Projects](https://app.mapflow.ai/en/projects) (share icon in the Projects window) | Done rarely, and sharing needs the team's members and roles. The plugin switches, searches and pins projects |
+| Review: accept or send back results | **Mapflow Web** (the processing links there) | Review is a step of its own, with its own page, after the processing; the plugin shows that a processing needs it |
+| Balance and top-up, API tokens | **Mapflow Web** › [Account](https://app.mapflow.ai/account/balance) ("Top up" in the run form) | Payments and keys stay with the account |
+| Planned processings (search templates) and their areas | **Not yet** | Left out of the first release to keep it to the main flow |
+| Custom XYZ/TMS providers | **Not yet** | Left out of the first release; Mapflow's own basemaps and My imagery cover the main cases |
+| Translations (es, pt, ru, zh) | **Not yet** | Every text is new, so the 3.x translations don't apply |
+| Georeferenced catalog previews, forced-upgrade dialog, Segment Anything zooms | **Not yet** | Smaller features, after the first release |
 
 ## To verify against the real API
 

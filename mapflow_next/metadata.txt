@@ -3,8 +3,15 @@ name=Mapflow Next
 qgisMinimumVersion=3.22
 qgisMaximumVersion=4.99
 description=Map buildings, roads, forest and more from satellite and aerial imagery with Mapflow AI models.
-about=A redesigned Mapflow plugin. Pick a scenario, set your area, choose imagery and run: results arrive as styled layers in your project.
-    The main flow is model, area, imagery, processing, results, in a dock on the right of the map.
+about=A redesigned Mapflow plugin: one flow from what to map to results on the map, in a dock next to it.
+    What you can do:
+    - Start: run a processing. Pick a scenario or a model, set the area from a layer, a selection, a drawing or the map view, choose imagery, check the cost and run.
+    - Start: map your own imagery. Upload a GeoTIFF, or use a My imagery collection or one image in it.
+    - Imagery sources: search the satellite imagery catalog by area, date and cloud cover, and use an image.
+    - Processings: follow progress, filter and search the history, rename, run again with the same settings.
+    - Results load as styled layers (GeoPackage or vector tiles), or save as GeoJSON.
+    - Projects: switch, search and pin projects, including shared ones.
+    Managing My imagery collections, projects and sharing, reviews and your balance happens in Mapflow Web (https://app.mapflow.ai); the plugin links to each page.
     Requires a Mapflow account (250 free credits to start): https://app.mapflow.ai
 version=4.0.0
 experimental=True
