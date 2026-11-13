@@ -20,6 +20,7 @@ WEB_URL = "https://app.mapflow.ai"
 # `mapflow_next/web_url` setting says where it is.
 WEB_URLS = {"production": WEB_URL, "duty": "https://duty.mapflow.ai"}
 MY_DATA_PATH = "/my-data"          # My imagery collections in Mapflow Web
+MOSAICS_REFRESH_MS = 30_000        # My imagery collections, asked for again while the panel is open
 TOP_UP_URL = f"{WEB_URL}/account/balance"
 PRICING_URL = "https://mapflow.ai/pricing"
 AI_AGENT_URL = f"{WEB_URL}/#home-top"

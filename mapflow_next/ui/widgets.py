@@ -483,20 +483,22 @@ class OptionRow(QFrame):
         self._paint_dot(selected)
 
     def _paint_dot(self, selected: bool) -> None:
-        pixmap = QPixmap(32, 32)
+        scale = icons.screen_scale()                # drawn at the screen's own scale, so it is never resampled
+        pixmap = QPixmap(round(16 * scale), round(16 * scale))
         pixmap.fill(Qt.GlobalColor.transparent)
         painter = QPainter(pixmap)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.scale(scale, scale)
         if selected:
-            painter.setPen(QPen(color("primary"), 10))
+            painter.setPen(QPen(color("primary"), 5))
             painter.setBrush(color("bg"))
-            painter.drawEllipse(QRectF(5, 5, 22, 22))
+            painter.drawEllipse(QRectF(2.5, 2.5, 11, 11))
         else:
-            painter.setPen(QPen(color("disabled"), 4))
+            painter.setPen(QPen(color("disabled"), 2))
             painter.setBrush(color("bg"))
-            painter.drawEllipse(QRectF(3, 3, 26, 26))
+            painter.drawEllipse(QRectF(1.5, 1.5, 13, 13))
         painter.end()
-        pixmap.setDevicePixelRatio(2)
+        pixmap.setDevicePixelRatio(scale)
         self.dot.setPixmap(pixmap)
 
     def mouseReleaseEvent(self, event) -> None:

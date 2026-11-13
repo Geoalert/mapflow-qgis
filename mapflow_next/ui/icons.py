@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Optional
 
 from qgis.PyQt.QtCore import QByteArray, QRectF, Qt
-from qgis.PyQt.QtGui import QColor, QIcon, QPainter, QPixmap
+from qgis.PyQt.QtGui import QColor, QGuiApplication, QIcon, QPainter, QPixmap
 from qgis.PyQt.QtSvg import QSvgRenderer
 from qgis.PyQt.QtWidgets import QWidget
 
@@ -125,13 +125,23 @@ FEATHER = {
 MODEL_ICONS = ("buildings", "cityscape", "crane", "forest", "road", "tractor", "uav-house", "segment-anything")
 
 
-def _render(svg: bytes, size: int, color: Optional[str], scale: int = 2) -> QPixmap:
-    pixmap = QPixmap(size * scale, size * scale)
+def screen_scale() -> float:
+    """Device pixels per point of the main screen: 1 on a plain Windows monitor, 1.25 or 1.5 when Windows
+    scales the display, 2 on Retina. Icons are drawn at exactly this, so none is scaled after drawing."""
+    app = QGuiApplication.instance()
+    screen = app.primaryScreen() if app is not None else None
+    ratio = screen.devicePixelRatio() if screen is not None else 2.0
+    return max(1.0, round(ratio * 4) / 4)
+
+
+def _render(svg: bytes, size: int, color: Optional[str], scale: float = 2.0) -> QPixmap:
+    side = max(1, round(size * scale))
+    pixmap = QPixmap(side, side)
     pixmap.fill(Qt.GlobalColor.transparent)
     renderer = QSvgRenderer(QByteArray(svg))
     painter = QPainter(pixmap)
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-    renderer.render(painter, QRectF(0, 0, size * scale, size * scale))
+    renderer.render(painter, QRectF(0, 0, side, side))
     if color:
         painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn)
         painter.fillRect(pixmap.rect(), QColor(color))
@@ -140,20 +150,29 @@ def _render(svg: bytes, size: int, color: Optional[str], scale: int = 2) -> QPix
     return pixmap
 
 
-@lru_cache(maxsize=256)
-def pixmap(name: str, color: str = "#4a5568", size: int = 16) -> QPixmap:
+def _svg(name: str) -> Optional[bytes]:
     if name in FEATHER:
-        svg = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#000" '
-               f'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">{FEATHER[name]}</svg>').encode()
-        return _render(svg, size, color)
+        return ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#000" '
+                f'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">{FEATHER[name]}</svg>').encode()
     path = RESOURCES / "icons" / "models" / f"{name}.svg"
-    if path.exists():
-        return _render(path.read_bytes(), size, color)
-    return QPixmap()
+    return path.read_bytes() if path.exists() else None
 
 
+@lru_cache(maxsize=256)
+def pixmap(name: str, color: str = "#4a5568", size: int = 16, scale: float = 0.0) -> QPixmap:
+    """The icon drawn from its SVG at the screen's own scale (or `scale`), for labels."""
+    svg = _svg(name)
+    return _render(svg, size, color, scale or screen_scale()) if svg else QPixmap()
+
+
+@lru_cache(maxsize=256)
 def icon(name: str, color: str = "#4a5568", size: int = 16) -> QIcon:
-    return QIcon(pixmap(name, color, size))
+    """The icon drawn from its SVG at 1×, 2× and the screen's scale: Qt shows the one that matches the
+    display, so it is never a larger drawing scaled down (which blurs thin lines on Windows at 100 %)."""
+    result = QIcon()
+    for scale in sorted({1.0, 2.0, screen_scale()}):
+        result.addPixmap(pixmap(name, color, size, scale))
+    return result
 
 
 def svg_markup(name: str, color: str) -> str:
@@ -172,7 +191,8 @@ def icon_file(name: str, color: str) -> str:
     return path.as_posix()
 
 
-MARK_COLOR, MARK_COLOR_DARK = "#1A234B", "#FFFFFF"
+MARK_COLOR_DARK = "#FFFFFF"
+APP_ICON_COLOR = "#09346E"            # the single-stripe mark (toolbar, header, Plugin Manager)
 
 
 def _svg_widget(data: bytes, width: int, height: int, parent: Optional[QWidget]) -> QSvgWidget:
@@ -192,13 +212,21 @@ def logo_widget(dark: bool, height: int = 26, parent: Optional[QWidget] = None) 
 
 
 def mark_widget(dark: bool, size: int = 26, parent: Optional[QWidget] = None) -> QSvgWidget:
-    """The round Mapflow mark on its own."""
-    data = (RESOURCES / "icons" / "mark.svg").read_bytes()
+    """The round Mapflow mark on its own, with one stripe: the full mark's stripes blur together at this size."""
+    data = (RESOURCES / "icons" / "mark-simple.svg").read_bytes()
     if dark:
-        data = data.replace(MARK_COLOR.encode(), MARK_COLOR_DARK.encode())
+        data = data.replace(APP_ICON_COLOR.encode(), MARK_COLOR_DARK.encode())
     return _svg_widget(data, size, size, parent)
 
 
-def app_icon() -> QIcon:
-    """Toolbar and window icon, from the SVG mark (QIcon renders it at whatever size QGIS asks for)."""
-    return QIcon(str(RESOURCES / "icons" / "mark.svg"))
+def app_icon(dark: bool = False) -> QIcon:
+    """Toolbar, menu and window icon: the mark with one stripe (several stripes blur at 16–24 px), white on
+    a dark QGIS theme. QIcon draws the SVG at whatever size and scale QGIS asks for."""
+    path = RESOURCES / "icons" / "mark-simple.svg"
+    if not dark:
+        return QIcon(str(path))
+    folder = Path(tempfile.gettempdir()) / "mapflow_next_icons"
+    folder.mkdir(exist_ok=True)
+    inverted = folder / "mark-simple-dark.svg"
+    inverted.write_text(path.read_text(encoding="utf-8").replace(APP_ICON_COLOR, MARK_COLOR_DARK), encoding="utf-8")
+    return QIcon(str(inverted))

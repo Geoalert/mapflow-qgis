@@ -1,8 +1,10 @@
 """Imagery catalog search and the user's own imagery (My imagery)."""
 from __future__ import annotations
 
+import time
 from datetime import date
-from typing import Dict, List, Optional, Set
+from pathlib import Path
+from typing import Callable, Dict, List, Optional, Set
 
 from qgis.PyQt.QtCore import QObject, pyqtSignal
 
@@ -33,6 +35,8 @@ class Imagery(QObject):
         self.images: Dict[str, List[MosaicImage]] = {}
         self._images_loading: Set[str] = set()
         self.uploading = False
+        self._mosaics_at = 0.0                  # when the collections were last asked for (monotonic)
+        self._mosaics_loading = False
 
     def search(self, geometry: dict, date_from: date, date_to: date, max_cloud: Optional[float],
                max_off_nadir: Optional[float], product_types: Optional[List[str]] = None) -> None:
@@ -97,9 +101,20 @@ class Imagery(QObject):
         return next((i for i in self.results if i.id == image_id), None)
 
     def load_mosaics(self) -> None:
-        self.api.mosaics(self._on_mosaics, on_error=lambda e: None)
+        self._mosaics_at = time.monotonic()
+        self._mosaics_loading = True
+
+        def failed(_error):
+            self._mosaics_loading = False
+        self.api.mosaics(self._on_mosaics, on_error=failed)
+
+    def refresh_mosaics(self, max_age: float = 10.0) -> None:
+        """Collections made elsewhere (Mapflow Web) show up: ask again if the list is older than `max_age`."""
+        if not self._mosaics_loading and time.monotonic() - self._mosaics_at >= max_age:
+            self.load_mosaics()
 
     def _on_mosaics(self, mosaics: List[Mosaic]) -> None:
+        self._mosaics_loading = False
         self.mosaics = sorted(mosaics or [], key=lambda m: (m.created is not None, m.created or 0), reverse=True)
         for mosaic in self.mosaics:
             if mosaic.id in self.images:
@@ -155,3 +170,67 @@ class Imagery(QObject):
             self.uploadFailed.emit(error.message)
 
         self.api.upload_to_new_mosaic(file_path, name, done, failed, progress)
+
+    def upload_many(self, paths: List[str], name: str) -> None:
+        """Several GeoTIFFs into one new collection: the collection first, then each file in turn. A failure
+        stops there; what is uploaded stays, and the message names the file."""
+        if self.uploading or not paths:
+            return
+        self.uploading = True
+        sizes = [Path(p).stat().st_size for p in paths]
+        total = max(1, sum(sizes))
+
+        def failed(error: ApiError, file: str = ""):
+            self.uploading = False
+            self.uploadFailed.emit(f"{Path(file).name}: {error.message}" if file else error.message)
+            self.load_mosaics()
+
+        def send(mosaic_id: str, index: int) -> None:
+            if index == len(paths):
+                self.uploading = False
+                self.uploadDone.emit(name)
+                self.load_mosaics()
+                return
+            done_bytes = sum(sizes[:index])
+
+            def progress(sent: int, _total: int):
+                self.uploadProgress.emit(min(99, int((done_bytes + sent) * 100 / total)))
+            self.api.upload_to_mosaic(mosaic_id, paths[index], lambda _d: send(mosaic_id, index + 1),
+                                      lambda error: failed(error, paths[index]), progress)
+
+        def created(data):
+            mosaic_id = (data or {}).get("id")
+            if not mosaic_id:
+                failed(ApiError("server", "Mapflow didn't create the collection"))
+                return
+            send(mosaic_id, 0)
+
+        self.api.create_mosaic(name, created, failed)
+
+    def validate(self, metadata: List[dict], on_done: Callable[[List[str]], None]) -> None:
+        """Mapflow's check of each image before it is uploaded: `on_done` gets the problems it reports (none:
+        all fine). An answer that isn't a verdict (the check isn't there, or failed) doesn't block the upload,
+        which Mapflow checks again anyway."""
+        problems: List[str] = []
+
+        def ask(index: int) -> None:
+            if index == len(metadata):
+                on_done(problems)
+                return
+            meta = metadata[index]
+
+            def answered(data: dict) -> None:
+                verdict = data.get("valid", data.get("isValid"))
+                if verdict is False:
+                    reason = data.get("message") or "; ".join(str(e) for e in data.get("errors") or []) \
+                        or "Mapflow can't process it"
+                    problems.append(f"{meta.get('filename', 'image')}: {reason}")
+                ask(index + 1)
+
+            def refused(error: ApiError) -> None:
+                if error.status in (400, 422) and error.message:
+                    problems.append(f"{meta.get('filename', 'image')}: {error.message}")
+                ask(index + 1)
+            self.api.validate_image(meta, answered, refused)
+
+        ask(0)

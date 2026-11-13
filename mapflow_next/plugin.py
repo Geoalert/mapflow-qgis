@@ -21,7 +21,7 @@ from .services.session import Session
 from .settings import Settings
 from .ui.dock import MapflowDock
 from .ui.icons import app_icon
-from .ui.theme import load_fonts
+from .ui.theme import is_dark, load_fonts
 
 MENU = "&Mapflow Next"
 TOOLBAR = "MapflowToolbar"           # object name: QGIS remembers the toolbar's place and visibility by it
@@ -57,11 +57,11 @@ class MapflowNextPlugin:
     def initGui(self) -> None:
         load_fonts()
         window = self.iface.mainWindow()
-        self.action = QAction(app_icon(), "Mapflow", window)
+        self.action = QAction(app_icon(is_dark()), "Mapflow", window)
         self.action.setCheckable(True)
         self.action.setToolTip("Mapflow: map buildings, roads and forest from imagery")
         self.action.triggered.connect(self.toggle)
-        self.gallery_action = QAction(app_icon(), "Scenarios…", window)
+        self.gallery_action = QAction(app_icon(is_dark()), "Scenarios…", window)
         self.gallery_action.triggered.connect(lambda *_: self.open_gallery())
         self.updates_action = QAction("Check for updates…", window)
         self.updates_action.setMenuRole(QAction.MenuRole.NoRole)    # macOS would move it to the app menu

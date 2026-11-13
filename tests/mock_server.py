@@ -38,6 +38,7 @@ class State:
         self.extra_mosaics = []            # collections added while the test runs (an empty one)
         self.created_projects = []         # POST /projects
         self.no_mosaics = False            # an account without collections
+        self.uploads = []                  # (what, mosaic, detail) for each upload request
         self.codes = {}                 # code → (code_challenge, redirect_uri)
         self.access_tokens = set()
         self.refresh_tokens = set()
@@ -252,6 +253,28 @@ class Handler(BaseHTTPRequestHandler):
             catalog = copy.deepcopy(fixtures.CATALOG)
             catalog["images"][0]["previewUrl"] = f"{base}/catalog/preview/img-1"   # a picture preview
             return self._send(200, catalog)
+        if method == "POST" and path == "/rasters/validate-image-metadata":
+            meta = body if isinstance(body, dict) else {}
+            if meta.get("count") not in (1, 3, 4) or not meta.get("crs"):
+                return self._send(400, {"code": "INVALID_IMAGE", "message": "Mapflow can't process this image"})
+            if (meta.get("dtypes") or ["uint8"])[0] != "uint8":
+                return self._send(200, {"valid": False, "message": "the image must be 8-bit"})
+            return self._send(200, {"valid": True})
+        if method == "POST" and path == "/rasters/mosaic":
+            mosaic = {"id": f"m-new-{len(self.state.uploads) + 1}", "name": (body or {}).get("name"),
+                      "created_at": "2026-11-13T21:00:00Z", "tags": []}
+            with self.state.lock:
+                self.state.uploads.append(("create", mosaic["id"], mosaic["name"]))
+            return self._send(200, mosaic)
+        match = re.fullmatch(r"/rasters/mosaic/([\w-]+)/image", path)
+        if method == "POST" and match:
+            with self.state.lock:
+                self.state.uploads.append(("image", match.group(1), len(body or b"")))
+            return self._send(200, {"id": f"img-{len(self.state.uploads)}", "mosaic_id": match.group(1)})
+        if method == "POST" and path == "/rasters/mosaic/image":
+            with self.state.lock:
+                self.state.uploads.append(("new", self.path.split("name=")[-1].split("&")[0], len(body or b"")))
+            return self._send(200, {"id": "img-new", "mosaic_id": "m-new"})
         if method == "GET" and path == "/rasters/mosaic":
             if self.state.no_mosaics:
                 return self._send(200, [])

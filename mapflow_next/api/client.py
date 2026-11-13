@@ -152,5 +152,20 @@ class MapflowApi:
         self.http.upload(f"rasters/mosaic/image?name={quote(name)}&tags=", file_path,
                          on_success=on_done, on_error=on_error, on_progress=on_progress)
 
+    def create_mosaic(self, name: str, on_done: Callable[[dict], None], on_error: OnError = None) -> None:
+        """An empty My imagery collection (POST /rasters/mosaic {name, tags})."""
+        self.http.post("rasters/mosaic", {"name": name, "tags": []}, on_success=on_done, on_error=on_error)
+
+    def upload_to_mosaic(self, mosaic_id: str, file_path: str, on_done: Callable[[dict], None],
+                         on_error: OnError = None, on_progress: Optional[Callable] = None) -> None:
+        self.http.upload(f"rasters/mosaic/{mosaic_id}/image", file_path,
+                         on_success=on_done, on_error=on_error, on_progress=on_progress)
+
+    def validate_image(self, metadata: dict, on_done: Callable[[dict], None], on_error: OnError = None) -> None:
+        """Ask Mapflow whether an image is acceptable before uploading it (POST
+        /rasters/validate-image-metadata with the image's metadata, as GET /rasters/image/{id} lists it)."""
+        self.http.post("rasters/validate-image-metadata", metadata, on_success=lambda d: on_done(d or {}),
+                       on_error=on_error)
+
     def preview(self, url: str, on_done: Callable[[bytes], None], on_error: OnError = None) -> None:
         self.http.get(url, on_success=on_done, on_error=on_error, parse="bytes", timeout=30)

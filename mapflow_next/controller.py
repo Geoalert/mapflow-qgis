@@ -100,6 +100,11 @@ class Controller(QObject):
         self._mosaic_render.setSingleShot(True)
         self._mosaic_render.setInterval(150)
         self._mosaic_render.timeout.connect(self._render_mosaics)
+        # Collections made in Mapflow Web show up here: asked for again now and then while the panel is open
+        self._mosaic_refresh = QTimer(self)
+        self._mosaic_refresh.setInterval(config.MOSAICS_REFRESH_MS)
+        self._mosaic_refresh.timeout.connect(lambda: self._refresh_mosaics(config.MOSAICS_REFRESH_MS / 1000 - 1))
+        self._mosaic_refresh.start()
         self.content.imagery.my_data_url = session.config.my_data_url
         self._connect()
 
@@ -171,6 +176,7 @@ class Controller(QObject):
         imagery_page.useMosaic.connect(self.use_mosaic)
         imagery_page.showMosaic.connect(self.show_mosaic)
         imagery_page.uploadRequested.connect(lambda *_: self.upload())
+        imagery_page.tabs.changed.connect(lambda index: index == 1 and self._refresh_mosaics())
         imagery_page.useMapExtent.connect(lambda *_: self.on_area_action("extent"))
         imagery_page.layerChosen.connect(self.on_layer)
         imagery_page.clearRequested.connect(self.clear_search)
@@ -207,6 +213,8 @@ class Controller(QObject):
         project.layersRemoved.connect(self.on_layers_removed)
 
     def disconnect_project(self) -> None:
+        """Unload: let go of QGIS's project signals and stop the timers, which outlive the panel."""
+        self._mosaic_refresh.stop()
         project = QgsProject.instance()
         for signal, slot in ((project.layersAdded, self.on_layers_changed),
                              (project.layersRemoved, self.on_layers_removed)):
@@ -463,9 +471,15 @@ class Controller(QObject):
 
         self.api.star_project(project_id, pinned, lambda _answer: None, failed)
 
+    def _refresh_mosaics(self, max_age: float = 5.0) -> None:
+        if self.session.state == "signed_in" and self.content.isVisible():
+            self.imagery.refresh_mosaics(max_age)
+
     def on_tab(self, tab: int) -> None:
         if tab == IMAGERY:
             self.render_imagery_area()
+            if self.content.imagery.current_tab() == 1:
+                self._refresh_mosaics()
         if tab == PROCESSINGS:
             self.processings.refresh()
 
@@ -1630,6 +1644,7 @@ class Controller(QObject):
     @guarded
     def open_mosaic_picker(self, mosaic_id: Optional[str] = None) -> None:
         """Choose a My imagery collection, or one image of it."""
+        self._refresh_mosaics()
         if not self.imagery.mosaics:
             if self.uploading is None:
                 self.upload(choose=True)
@@ -1793,22 +1808,46 @@ class Controller(QObject):
         self.refresh_run()
 
     def upload(self, path: Optional[str] = None, choose: bool = False) -> None:
-        """Upload a GeoTIFF to a new My imagery collection. `choose`: started from the run form, so the new
-        collection becomes the imagery once Mapflow lists it."""
-        if not path:
-            path, _ = QFileDialog.getOpenFileName(self.content, "Upload a GeoTIFF to My imagery", "",
-                                                  "GeoTIFF (*.tif *.tiff)")
-        if not path:
+        """Upload GeoTIFFs to a new My imagery collection: one file, or several picked together. `choose`:
+        started from the run form, so the new collection becomes the imagery once Mapflow lists it."""
+        if self.uploading is not None or self.imagery.uploading:
             return
-        size_gb = Path(path).stat().st_size / 1024 ** 3
-        if size_gb > 1:
-            self.content.imagery.set_upload(None, f"This file is {size_gb:.1f} GB; the limit is 1 GB. "
-                                                  "Cut it into parts or upload it in Mapflow Web.", "error")
+        if path:
+            paths = [path]
+        else:
+            paths, _ = QFileDialog.getOpenFileNames(self.content, "Upload GeoTIFFs to My imagery", "",
+                                                    "GeoTIFF (*.tif *.tiff)")
+        paths = [p for p in paths or [] if p]
+        if not paths:
             return
-        self.content.imagery.set_upload(0, "")
+        checked = [rasters.geotiff_metadata(p) for p in paths]
+        problem = next((f"{meta['filename']}: {why}" for meta, why in checked if why), "") \
+            or (rasters.mixed([meta for meta, _why in checked]) if len(checked) > 1 else "")
+        if problem:
+            self._upload_refused(problem)
+            return
+        folder = Path(paths[0]).parent.name
+        name = Path(paths[0]).stem if len(paths) == 1 else (folder or Path(paths[0]).stem)
+        self.content.imagery.set_upload(0, "Checking…")
         self._upload_progress(0)
-        self._choose_uploaded = Path(path).stem if choose else None
-        self.imagery.upload(path, Path(path).stem)
+
+        def validated(problems: List[str]) -> None:
+            if problems:
+                self._upload_progress(None)
+                self._upload_refused("; ".join(problems[:3]))
+                return
+            self._choose_uploaded = name if choose else None
+            if len(paths) == 1:
+                self.imagery.upload(paths[0], name)
+            else:
+                self.imagery.upload_many(paths, name)
+
+        self.imagery.validate([meta for meta, _why in checked], validated)
+
+    def _upload_refused(self, problem: str) -> None:
+        text = f"Can't upload {problem}."
+        self.content.imagery.set_upload(None, text, "error")
+        self.notify(text, Qgis.MessageLevel.Warning)
 
 
 def _count(value: int, noun: str) -> str:

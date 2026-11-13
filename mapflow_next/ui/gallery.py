@@ -12,7 +12,7 @@ from .. import config
 from ..core.scenarios import Catalogue, Scenario
 from . import icons
 from .start_page import plain, scenario_pixmap
-from .theme import color, stylesheet, tokens
+from .theme import color, is_dark, stylesheet, tokens
 from .widgets import Callout, Card, button, label, link, rounded, vbox
 
 IMAGE_RATIO = 10 / 16
@@ -181,7 +181,7 @@ class GalleryDialog(QDialog):
         self.catalogue = catalogue
         self.setObjectName("mfRoot")
         self.setWindowTitle("Mapflow — Scenarios")
-        self.setWindowIcon(icons.app_icon())
+        self.setWindowIcon(icons.app_icon(is_dark()))
         self.setModal(False)
         self.resize(1120, 780)
         self.setMinimumSize(840, 560)

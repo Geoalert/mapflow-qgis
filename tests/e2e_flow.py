@@ -112,6 +112,22 @@ def close_modal_later(record, fill=None, delay=300):
     QTimer.singleShot(delay, close)
 
 
+def make_geotiff(name, bands=3, epsg=4326, data_type=None, folder=None):
+    """A tiny georeferenced GeoTIFF."""
+    from osgeo import gdal, osr
+    folder = folder or tempfile.mkdtemp()
+    path = str(Path(folder) / name)
+    raster = gdal.GetDriverByName("GTiff").Create(path, 4, 4, bands, data_type or gdal.GDT_Byte)
+    raster.SetGeoTransform((37.6, 0.0001, 0, 55.75, 0, -0.0001))
+    if epsg:
+        srs = osr.SpatialReference()
+        srs.ImportFromEPSG(epsg)
+        raster.SetProjection(srs.ExportToWkt())
+    raster.FlushCache()
+    raster = None
+    return path
+
+
 def blocks_layer():
     layer = QgsVectorLayer("Polygon?crs=EPSG:4326", "Blocks", "memory")
     features = []
@@ -669,12 +685,7 @@ def main():
     imagery_service.load_mosaics()
     check(wait_until(lambda: not imagery_service.mosaics, 5), "an account without collections")
     # raster layers in the project: a GeoTIFF file, XYZ and TMS tiles, and a WMS layer
-    from osgeo import gdal
-    tif = str(Path(tempfile.mkdtemp()) / "drone_ortho.tif")
-    raster = gdal.GetDriverByName("GTiff").Create(tif, 4, 4, 3)
-    raster.SetGeoTransform((37.6, 0.0001, 0, 55.75, 0, -0.0001))
-    raster.FlushCache()
-    raster = None
+    tif = make_geotiff("drone_ortho.tif")
     file_layer = QgsRasterLayer(tif, "Drone ortho")
     xyz = QgsRasterLayer("type=xyz&url=https://tiles.example.com/{z}/{x}/{y}.png&zmax=19&zmin=0", "City tiles", "wms")
     tms = QgsRasterLayer("type=xyz&url=https://tms.example.com/{z}/{x}/{-y}.jpg&zmax=20&zmin=0", "TMS tiles", "wms")
@@ -692,9 +703,9 @@ def main():
           and adds.get("TMS tiles", ("", False))[1] and adds.get("Some WMS", ("", True))[1] is False,
           f"…and the project's raster layers: files and tile layers can be used, a WMS can't ({sorted(adds)})")
     asked, uploads = [], []
-    saved_open = controller_module.QFileDialog.getOpenFileName
+    saved_open = controller_module.QFileDialog.getOpenFileNames
     saved_upload = imagery_service.upload
-    controller_module.QFileDialog.getOpenFileName = staticmethod(lambda *a, **k: (asked.append(a), ("", ""))[1])
+    controller_module.QFileDialog.getOpenFileNames = staticmethod(lambda *a, **k: (asked.append(a), ([], ""))[1])
     imagery_service.upload = lambda path, name: uploads.append((path, name))
     try:
         content.go(0)
@@ -710,10 +721,11 @@ def main():
         check(len(asked) == 2 and controller.draft.imagery is before,
               "choosing the empty My imagery row asks for a file too, and changes nothing else")
         content.run.addImagery.emit(adds["Drone ortho"][0])
-        check(uploads == [(tif, "drone_ortho")], "a GeoTIFF layer is uploaded to a new collection")
+        check(wait_until(lambda: uploads == [(tif, "drone_ortho")], 5),
+              "a GeoTIFF layer is uploaded to a new collection")
         controller._upload_progress(None)
     finally:
-        controller_module.QFileDialog.getOpenFileName = saved_open
+        controller_module.QFileDialog.getOpenFileNames = saved_open
         imagery_service.upload = saved_upload
     content.run.addImagery.emit(adds["City tiles"][0])
     choice = controller.draft.imagery
@@ -742,6 +754,76 @@ def main():
                      and controller.draft.imagery.mosaic_id == "m-2", 5),
           "the uploaded collection becomes the imagery when it appears")
     QgsProject.instance().removeMapLayers([file_layer.id(), xyz.id(), tms.id(), wms.id()])
+
+    # several GeoTIFFs at once, into one collection; each checked here and by Mapflow first
+    from osgeo import gdal
+    survey = Path(tempfile.mkdtemp()) / "Harbour survey"
+    survey.mkdir()
+    tiles = [make_geotiff(f"tile_{n}.tif", folder=survey) for n in (1, 2)]
+    picked = {}
+    saved_open = controller_module.QFileDialog.getOpenFileNames
+    controller_module.QFileDialog.getOpenFileNames = staticmethod(lambda *a, **k: (picked["files"], ""))
+    try:
+        state.uploads.clear()
+        picked["files"] = tiles
+        controller.upload()
+        check(wait_until(lambda: [u[0] for u in state.uploads] == ["create", "image", "image"], 5)
+              and state.uploads[0][2] == "Harbour survey"
+              and len([r for r in state.requests if r[1] == "/rasters/validate-image-metadata"]) >= 2,
+              f"several GeoTIFFs go into one new collection, named after their folder ({state.uploads})")
+        check(wait_until(lambda: controller.uploading is None and not imagery_service.uploading, 5),
+              "…and the upload finishes")
+        validated = [r[2] for r in state.requests if r[1] == "/rasters/validate-image-metadata"][-1]
+        check(validated.get("crs") == "EPSG:4326" and validated.get("count") == 3
+              and validated.get("dtypes") == ["uint8"] * 3 and validated.get("filename") == "tile_2.tif",
+              f"Mapflow is asked about each image's metadata before the upload ({validated})")
+
+        def refused(files, says):
+            state.uploads.clear()
+            iface.bar.messages.clear()
+            picked["files"] = files
+            controller.upload()
+            wait_until(lambda: any(says in (m or "") for _l, m in iface.bar.messages), 3)
+            return not state.uploads and any(says in (m or "") for _l, m in iface.bar.messages)
+
+        check(refused([make_geotiff("two_bands.tif", bands=2)], "1, 3 or 4"),
+              "a GeoTIFF with 2 bands is refused before uploading")
+        check(refused([make_geotiff("plain.tif", epsg=None)], "isn't georeferenced"),
+              "…and one without a coordinate system")
+        check(refused([tiles[0], make_geotiff("utm.tif", epsg=32637)], "another coordinate system"),
+              "images in different coordinate systems can't share a collection")
+        check(refused([make_geotiff("deep.tif", data_type=gdal.GDT_UInt16)], "must be 8-bit"),
+              "an image Mapflow's check refuses isn't uploaded, and its reason is shown")
+    finally:
+        controller_module.QFileDialog.getOpenFileNames = saved_open
+
+    # a collection made in Mapflow Web shows up without restarting
+    state.extra_mosaics = [{"id": "m-web", "name": "Made in Web", "created_at": "2026-11-13T20:00:00Z",
+                            "sizeInBytes": 10, "footprint": None, "rasterLayer": {"tileUrl": "", "tileJsonUrl": ""},
+                            "tags": []}]
+    imagery_service._mosaics_at = 0
+    content.go(2)
+    content.imagery.show_tab(1)
+    content.imagery.tabs.changed.emit(1)
+    check(wait_until(lambda: imagery_service.get_mosaic("m-web") is not None, 5),
+          "opening My imagery asks Mapflow again, so a collection made in Mapflow Web appears")
+    check(controller._mosaic_refresh.isActive() and controller._mosaic_refresh.interval() == 30_000,
+          "…and the list is asked for every 30 s while the panel is open")
+    state.extra_mosaics = []
+    imagery_service.load_mosaics()
+
+    # icons: the single-stripe mark, white on a dark theme; every icon has an exact 1× drawing
+    from mapflow_next.ui import icons as icon_module
+    from qgis.PyQt.QtCore import QSize as Size
+    light, dark = icon_module.app_icon(False), icon_module.app_icon(True)
+    check(not light.isNull() and not dark.isNull() and plugin.action.icon().cacheKey() != 0,
+          "the toolbar icon is the SVG mark with one stripe")
+    dark_file = Path(tempfile.gettempdir()) / "mapflow_next_icons" / "mark-simple-dark.svg"
+    check(dark_file.exists() and "#FFFFFF" in dark_file.read_text() and "#09346E" not in dark_file.read_text(),
+          "on a dark QGIS theme the mark is white")
+    eye_icon = icon_module.icon("eye", "#000000", 16)
+    check(Size(16, 16) in eye_icon.availableSizes() and Size(32, 32) in eye_icon.availableSizes(),
+          f"icons are drawn at 1× and 2× from their SVG ({eye_icon.availableSizes()})")
 
     # My imagery: image counts, no empty space, the collection picker
     content.go(2)

@@ -271,7 +271,9 @@ class ProcessingsPage(QWidget):
         turned = pixmap.transformed(QTransform().rotate(self._angle), Qt.TransformationMode.SmoothTransformation)
         side = pixmap.width()
         x, y = (turned.width() - side) // 2, (turned.height() - side) // 2
-        self.refresh_button.setIcon(QIcon(turned.copy(x, y, side, side)))
+        frame = turned.copy(x, y, side, side)
+        frame.setDevicePixelRatio(pixmap.devicePixelRatio())
+        self.refresh_button.setIcon(QIcon(frame))
 
     def _set_filter(self, key: str) -> None:
         self.filter = key

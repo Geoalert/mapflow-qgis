@@ -23,7 +23,7 @@ tracker=https://github.com/Geoalert/mapflow-qgis/issues
 repository=https://github.com/Geoalert/mapflow-qgis
 tags=AI, machine learning, remote sensing, satellite imagery, aerial imagery, buildings, roads, forest, segmentation, mapping
 category=Raster
-icon=resources/icons/app-icon.png
+icon=resources/icons/app-icon.svg
 hasProcessingProvider=no
 changelog=
     4.0.0

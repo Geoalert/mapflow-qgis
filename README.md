@@ -24,8 +24,9 @@ The plugin covers the work that belongs next to the map. Each tab has its scenar
 
 - **Start › Run a processing.** Pick a scenario or a model, set the area (a layer, a selection, a drawing
   or the map view), choose imagery, check the cost and run.
-- **Start › Map your own imagery.** Upload a GeoTIFF, or a GeoTIFF layer of the project, to My imagery, and
-  choose a collection or one image in it. Or process an XYZ/TMS layer of the project from its own tiles.
+- **Start › Map your own imagery.** Upload one or several GeoTIFFs (they become one collection), or a GeoTIFF
+  layer of the project, to My imagery, and choose a collection or one image in it. Files are checked before
+  upload: bands, CRS, size, and that they match each other. Or process an XYZ/TMS layer of the project from its own tiles.
   The imagery's extent becomes the area, and its preview goes on the map.
 - **Imagery sources › Find imagery in the catalog.** Search by area, dates, cloud cover and off-nadir
   angle, look at the footprints on the map, and use an image in the run form.
@@ -171,7 +172,7 @@ every Mapflow user. The plugin links to the right page wherever it leaves someth
 | Run processings: models, options, area, providers, catalog, My imagery | **Kept**, redesigned as one form | The core of the plugin |
 | Processings list, results on the map, rename, delete, run again | **Kept** | Results belong in QGIS |
 | Imagery search in the catalog | **Kept** | Footprints are judged on the map |
-| Upload a GeoTIFF to My imagery | **Kept**, as a new collection, from a file or a GeoTIFF layer of the project | Your imagery is made in QGIS and processed from there |
+| Upload a GeoTIFF to My imagery | **Kept**, as a new collection, from one or several files or a GeoTIFF layer of the project | Your imagery is made in QGIS and processed from there |
 | My imagery data management: create, rename and delete collections, add or delete images, download originals | **Mapflow Web** › [My data](https://app.mapflow.ai/my-data) ("Manage collections in Mapflow Web") | File management, not mapping: it needs whole collections in view and many files at once. Deleting is permanent and affects everyone in the project, so it belongs where the whole collection is shown |
 | Create a project | **Kept**: New project in the Projects window | Starting new work shouldn't need a trip to the browser |
 | Projects: rename, delete, share | **Mapflow Web** › the project ("Share project in Mapflow Web" and the share icon in the Projects window) | Done rarely, and sharing needs the team's members and roles. The plugin creates, switches, searches and pins projects |
@@ -223,7 +224,7 @@ make test-qt6 QT6_PYTHON=…    # the pages, sign-in and HTTP client on PyQt6 (4
 make check-qt6 QT6_PYTHON=…   # Qt enum names and calls that only Qt 5 accepts
 ```
 
-**The end-to-end test** (`tests/e2e_flow.py`, 216 checks) runs a real offscreen QGIS against a mock
+**The end-to-end test** (`tests/e2e_flow.py`, 228 checks) runs a real offscreen QGIS against a mock
 Mapflow API and sign-in server (`tests/mock_server.py`).
 - **Request checks:** the mock rejects request bodies the real API rejects, such as `myImagery` with both
   `mosaicId` and `imageIds`.
