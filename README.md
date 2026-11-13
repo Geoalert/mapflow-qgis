@@ -24,7 +24,8 @@ The plugin covers the work that belongs next to the map. Each tab has its scenar
 
 - **Start › Run a processing.** Pick a scenario or a model, set the area (a layer, a selection, a drawing
   or the map view), choose imagery, check the cost and run.
-- **Start › Map your own imagery.** Upload a GeoTIFF, or choose a My imagery collection or one image in it.
+- **Start › Map your own imagery.** Upload a GeoTIFF, or a GeoTIFF layer of the project, to My imagery, and
+  choose a collection or one image in it. Or process an XYZ/TMS layer of the project from its own tiles.
   The imagery's extent becomes the area, and its preview goes on the map.
 - **Imagery sources › Find imagery in the catalog.** Search by area, dates, cloud cover and off-nadir
   angle, look at the footprints on the map, and use an image in the run form.
@@ -170,14 +171,14 @@ every Mapflow user. The plugin links to the right page wherever it leaves someth
 | Run processings: models, options, area, providers, catalog, My imagery | **Kept**, redesigned as one form | The core of the plugin |
 | Processings list, results on the map, rename, delete, run again | **Kept** | Results belong in QGIS |
 | Imagery search in the catalog | **Kept** | Footprints are judged on the map |
-| Upload a GeoTIFF to My imagery | **Kept**, as a new collection | Your imagery is made in QGIS and processed from there |
+| Upload a GeoTIFF to My imagery | **Kept**, as a new collection, from a file or a GeoTIFF layer of the project | Your imagery is made in QGIS and processed from there |
 | My imagery data management: create, rename and delete collections, add or delete images, download originals | **Mapflow Web** › [My data](https://app.mapflow.ai/my-data) ("Manage collections in Mapflow Web") | File management, not mapping: it needs whole collections in view and many files at once. Deleting is permanent and affects everyone in the project, so it belongs where the whole collection is shown |
 | Create a project | **Kept**: New project in the Projects window | Starting new work shouldn't need a trip to the browser |
 | Projects: rename, delete, share | **Mapflow Web** › the project ("Share project in Mapflow Web" and the share icon in the Projects window) | Done rarely, and sharing needs the team's members and roles. The plugin creates, switches, searches and pins projects |
 | Review: accept or send back results | **Mapflow Web** (the processing links there) | Review is a step of its own, with its own page, after the processing; the plugin shows that a processing needs it |
 | Balance and top-up, API tokens | **Mapflow Web** › [Account](https://app.mapflow.ai/account/balance) ("Top up" in the run form) | Payments and keys stay with the account |
 | Planned processings (search templates) and their areas | **Not yet** | Left out of the first release to keep it to the main flow |
-| Custom XYZ/TMS providers | **Not yet** | Left out of the first release; Mapflow's own basemaps and My imagery cover the main cases |
+| Custom XYZ/TMS providers | **Kept**, as XYZ/TMS layers of the project (My imagery › Add…) | The layer is already in QGIS, so its URL needn't be typed again. Mapflow reads the tiles itself, so the server must be reachable from the internet |
 | Translations (es, pt, ru, zh) | **Not yet** | Every text is new, so the 3.x translations don't apply |
 | Georeferenced catalog previews, forced-upgrade dialog, Segment Anything zooms | **Not yet** | Smaller features, after the first release |
 
@@ -209,7 +210,7 @@ Tests and lint run in the official `qgis/qgis` Docker images, so only Docker is 
 make test          # both of the two runs below (the gate before review)
 make test-qgis3    # unit + end-to-end tests on QGIS 3 (qgis/qgis:release-3_28)
 make test-qgis4    # the same on QGIS 4 (qgis/qgis:4.2), plus the Qt 6 code check
-make test-core     # pure-Python tests only (30)
+make test-core     # pure-Python tests only (31)
 make lint          # the plugins.qgis.org checks: flake8, bandit, detect-secrets
 make screens       # run the end-to-end flow and rewrite docs/screens/*.png
 ```
@@ -222,7 +223,7 @@ make test-qt6 QT6_PYTHON=…    # the pages, sign-in and HTTP client on PyQt6 (4
 make check-qt6 QT6_PYTHON=…   # Qt enum names and calls that only Qt 5 accepts
 ```
 
-**The end-to-end test** (`tests/e2e_flow.py`, 207 checks) runs a real offscreen QGIS against a mock
+**The end-to-end test** (`tests/e2e_flow.py`, 216 checks) runs a real offscreen QGIS against a mock
 Mapflow API and sign-in server (`tests/mock_server.py`).
 - **Request checks:** the mock rejects request bodies the real API rejects, such as `myImagery` with both
   `mosaicId` and `imageIds`.

@@ -8,8 +8,8 @@ from typing import Dict, List, Optional, Tuple
 
 from qgis.PyQt.QtCore import QSignalBlocker, Qt, QTimer, pyqtSignal
 from qgis.PyQt.QtGui import QPixmap
-from qgis.PyQt.QtWidgets import (QComboBox, QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
-                                 QScrollArea, QSizePolicy, QToolButton, QVBoxLayout, QWidget)
+from qgis.PyQt.QtWidgets import (QComboBox, QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QMenu,
+                                 QPushButton, QScrollArea, QSizePolicy, QToolButton, QVBoxLayout, QWidget)
 
 from .. import config
 from ..core import formatting
@@ -18,7 +18,7 @@ from ..core.models import Block, Model
 from . import icons
 from .theme import set_prop, tokens
 from .widgets import (Callout, Card, Combo, ElidedLabel, OptionRow, Pill, StepHeader, Toggle, button, clear_layout,
-                      label, link, rounded, tool, vbox)
+                      label, link, menu_action, rounded, tool, vbox)
 
 
 ISSUE_LINKS = {"top_up": config.TOP_UP_URL, "pricing": config.PRICING_URL,
@@ -34,7 +34,7 @@ def issue_html(issue: Issue) -> str:
 
 @dataclass
 class ImageryRow:
-    key: str                          # provider:<name> | mosaic | catalog
+    key: str                          # provider:<name> | mosaic | catalog | tiles
     title: str
     meta: str = ""
     price: str = ""
@@ -46,6 +46,9 @@ class ImageryRow:
     removable: bool = False
     previewable: bool = False         # an eye shows it on the map (on the selected row)
     previewing: Optional[bool] = None  # its preview is on the map; None: the eye only zooms to it
+    # My imagery: ways to add your own imagery, as a menu: (key, text, enabled, tooltip)
+    adds: Tuple[Tuple[str, str, bool, str], ...] = ()
+    add_label: str = "Add…"
 
 
 @dataclass
@@ -70,6 +73,8 @@ class RunPage(QWidget):
     zoomChosen = pyqtSignal(str, int)          # row key, zoom
     mosaicPickRequested = pyqtSignal()
     catalogRemoved = pyqtSignal()
+    addImagery = pyqtSignal(str)        # "upload" or "layer:<layer id>"
+    tilesRemoved = pyqtSignal()
     previewRequested = pyqtSignal()
     searchImageryRequested = pyqtSignal()
     runRequested = pyqtSignal()
@@ -421,6 +426,18 @@ class RunPage(QWidget):
                 zoom.setMinimumContentsLength(4)
                 zoom.activated.connect(lambda i, key=spec.key, combo=zoom: self.zoomChosen.emit(key, combo.itemData(i)))
                 column.addWidget(zoom)
+            if spec.adds:
+                add = button(spec.add_label, "outline", size="sm")
+                add.setToolTip("Upload a GeoTIFF, or use a raster layer of this project")
+                menu = QMenu(add)
+                for key, text, enabled, tip in spec.adds:
+                    icon = "upload" if key == "upload" else "layers"
+                    action = menu_action(menu, icon, text, lambda key=key: self.addImagery.emit(key))
+                    action.setEnabled(enabled)
+                    action.setToolTip(tip)
+                menu.setToolTipsVisible(True)
+                add.setMenu(menu)
+                column.addWidget(add)
             if spec.pick:
                 pick = button(spec.pick, "outline", size="sm")
                 pick.setToolTip("Upload a GeoTIFF to My imagery" if spec.pick.startswith("Upload")
@@ -442,8 +459,10 @@ class RunPage(QWidget):
                 eye.clicked.connect(lambda *_: self.previewRequested.emit())
                 row.right.addWidget(eye)
             if spec.removable:
-                remove = tool("x", "Remove this image", "plain", 14)
-                remove.clicked.connect(lambda *_: self.catalogRemoved.emit())
+                tiles = spec.key == "tiles"
+                remove = tool("x", "Stop using this layer" if tiles else "Remove this image", "plain", 14)
+                signal = self.tilesRemoved if tiles else self.catalogRemoved
+                remove.clicked.connect(lambda *_, signal=signal: signal.emit())
                 row.right.addWidget(remove)
             self.rows_box.addWidget(row)
             self._rows.append(row)

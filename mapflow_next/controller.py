@@ -19,10 +19,11 @@ from . import config
 from .api.client import MapflowApi
 from .core import formatting
 from .core.draft import Coverage, ImageryChoice, Issue, RunDraft
-from .core.models import BillingType, CatalogImage, Processing, UserStatus
+from .core.models import ZOOM_MAX, ZOOM_MIN, BillingType, CatalogImage, Processing, UserStatus
 from .core.scenarios import Catalogue, recommended_zoom, resolve, scenario_for_model
 from .qgis_bridge import aoi as aoi_tools
 from .qgis_bridge import message_bar
+from .qgis_bridge import rasters
 from .qgis_bridge.draw_tool import PolygonDrawTool
 from .qgis_bridge.layers import MapLayers, bounds_extent
 from .services.imagery import Imagery
@@ -82,6 +83,9 @@ class Controller(QObject):
         self.gallery: Optional[GalleryDialog] = None
         self.projects_dialog: Optional[ProjectsDialog] = None
         self.uploading: Optional[int] = None         # upload progress in %, None when nothing uploads
+        self._choose_uploaded: Optional[str] = None  # an upload started from the run form: use it when listed
+        self.tiles_layer: Optional[rasters.RasterSource] = None   # a tile layer added as imagery
+        self.tiles_choice: Optional[ImageryChoice] = None          # …and its last zoom
         self.mosaic_picker: Optional[MosaicPicker] = None
         self._projects_request = 0
         self._area_counter = 0
@@ -137,6 +141,8 @@ class Controller(QObject):
         run.zoomChosen.connect(self.on_zoom)
         run.mosaicPickRequested.connect(lambda *_: self.open_mosaic_picker())
         run.catalogRemoved.connect(self.on_catalog_removed)
+        run.addImagery.connect(self.on_add_imagery)
+        run.tilesRemoved.connect(self.on_tiles_removed)
         run.previewRequested.connect(self.preview_imagery)
         run.searchImageryRequested.connect(self.open_search)
         run.runRequested.connect(self.run)
@@ -164,7 +170,7 @@ class Controller(QObject):
         imagery_page.showImage.connect(self.show_image)
         imagery_page.useMosaic.connect(self.use_mosaic)
         imagery_page.showMosaic.connect(self.show_mosaic)
-        imagery_page.uploadRequested.connect(self.upload)
+        imagery_page.uploadRequested.connect(lambda *_: self.upload())
         imagery_page.useMapExtent.connect(lambda *_: self.on_area_action("extent"))
         imagery_page.layerChosen.connect(self.on_layer)
         imagery_page.clearRequested.connect(self.clear_search)
@@ -750,8 +756,10 @@ class Controller(QObject):
                     provider, self.provider_zoom.get(name, self.preferred_zoom))
         elif key == "mosaic" and not self.imagery.mosaics:
             if self.uploading is None:
-                self.upload()
+                self.upload(choose=True)
             return
+        elif key == "tiles" and self.tiles_choice is not None:
+            self.draft.imagery = self.tiles_choice
         elif key == "mosaic" and self.imagery.mosaics:
             if self.draft.imagery and self.draft.imagery.kind == "my_imagery":
                 return                                  # already chosen; "Choose…" opens the picker
@@ -764,6 +772,14 @@ class Controller(QObject):
 
     @guarded
     def on_zoom(self, key: str, zoom: int) -> None:
+        if key == "tiles":
+            tiles, layer = self.tiles_choice, self.tiles_layer
+            if tiles is not None and layer is not None:
+                self.tiles_choice = ImageryChoice.from_tiles(tiles.url, tiles.source_type, int(zoom), layer.name,
+                                                             tiles.login, tiles.password)
+                self.draft.imagery = self.tiles_choice
+            self.refresh_run()
+            return
         name = key.split(":", 1)[1]
         self.provider_zoom[name] = int(zoom)
         status = self.session.status
@@ -1029,9 +1045,12 @@ class Controller(QObject):
                 else:
                     detail = image_count_text(mosaic) or "whole collection"
                 meta = f"{mosaic.name} · {detail}"
+            if self.uploading is not None:
+                meta = f"Uploading… {self.uploading}%"
             rows.append(ImageryRow(key="mosaic", title="My imagery", meta=meta, pick="Choose…",
                                    price="Free" if credits_billing else "", previewable=True,
-                                   previewing=self._previewing(choice) if mine else None))
+                                   previewing=self._previewing(choice) if mine else None,
+                                   adds=() if self.uploading is not None else self._add_options()))
             if mine:
                 selected = "mosaic"
         else:
@@ -1040,8 +1059,17 @@ class Controller(QObject):
             meta = (f"Uploading… {self.uploading}%" if uploading
                     else "No collections yet. Upload a GeoTIFF to process your own imagery")
             rows.append(ImageryRow(key="mosaic", title="My imagery", meta=meta,
-                                   pick="" if uploading else "Upload a GeoTIFF…",
-                                   price="Free" if credits_billing else ""))
+                                   price="Free" if credits_billing else "",
+                                   adds=() if uploading else self._add_options(),
+                                   add_label="Add your imagery…"))
+        if self.tiles_choice is not None and self.tiles_layer is not None:
+            layer, tiles = self.tiles_layer, self.tiles_choice
+            zooms = [z for z in range(ZOOM_MIN, ZOOM_MAX + 1) if layer.zmin <= z <= layer.zmax] or [tiles.zoom]
+            rows.append(ImageryRow(key="tiles", title="Your tile layer", meta=f"{layer.name} · {layer.source_type}",
+                                   zooms=zooms, zoom=tiles.zoom, recommended_zoom=recommended,
+                                   price="Free" if credits_billing else "", removable=True))
+            if choice and choice.kind == "tiles":
+                selected = "tiles"
         for provider in (status.data_providers if status else []):
             chosen = bool(choice and choice.kind == "provider" and choice.provider.name == provider.name)
             zoom = choice.zoom if chosen else provider.nearest_zoom(self.provider_zoom.get(provider.name, recommended))
@@ -1562,6 +1590,12 @@ class Controller(QObject):
     @guarded
     def on_mosaics(self, mosaics) -> None:
         self._render_mosaics()
+        name = self._choose_uploaded
+        if name and self.uploading is None:
+            uploaded = next((m for m in self.imagery.mosaics if m.name == name), None)
+            if uploaded is not None:
+                self._choose_uploaded = None
+                self.use_mosaic(uploaded.id)
 
     def _render_mosaics(self) -> None:
         choice = self.draft.imagery
@@ -1598,7 +1632,7 @@ class Controller(QObject):
         """Choose a My imagery collection, or one image of it."""
         if not self.imagery.mosaics:
             if self.uploading is None:
-                self.upload()
+                self.upload(choose=True)
             return
         if self.mosaic_picker is None:
             picker = MosaicPicker(self.iface.mainWindow(), self.session.config.my_data_url)
@@ -1708,9 +1742,62 @@ class Controller(QObject):
             self.content.imagery.set_upload(percent)
         self.refresh_run()
 
-    def upload(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(self.content, "Upload a GeoTIFF to My imagery", "",
-                                              "GeoTIFF (*.tif *.tiff)")
+    def _add_options(self):
+        """The My imagery menu: upload a GeoTIFF, or use a raster layer of the project. A file layer is
+        uploaded to a new collection; a tile layer is processed from its own tiles."""
+        options = [("upload", "Upload a GeoTIFF…", True, "A new My imagery collection")]
+        sources = rasters.raster_sources()
+        for source in sources:
+            if source.kind == "file":
+                options.append((f"layer:{source.layer_id}", f"{source.name}: upload to My imagery", True,
+                                source.path))
+            elif source.kind == "tiles":
+                options.append((f"layer:{source.layer_id}", f"{source.name}: process its {source.source_type} tiles",
+                                True, "Mapflow reads the tiles from the layer's URL, so it must be reachable "
+                                      "from the internet"))
+            else:
+                options.append((f"layer:{source.layer_id}", f"{source.name}: {source.problem}", False, ""))
+        if not sources:
+            options.append(("none", "No raster layers in this project", False, ""))
+        return tuple(options)
+
+    @guarded
+    def on_add_imagery(self, key: str) -> None:
+        if key == "upload":
+            self.upload(choose=True)
+            return
+        if not key.startswith("layer:"):
+            return
+        layer = QgsProject.instance().mapLayer(key.split(":", 1)[1])
+        source = rasters.describe(layer) if layer is not None else None
+        if source is None or not source.usable:
+            self.notify(f"This layer can't be used: {source.problem if source else 'it is gone'}.",
+                        Qgis.MessageLevel.Warning)
+            return
+        if source.kind == "file":
+            self.upload(source.path, choose=True)
+            return
+        recommended = self.preferred_zoom or recommended_zoom(self.catalogue.get(self.draft.scenario_id)) or 18
+        zoom = min(max(int(recommended), max(source.zmin, ZOOM_MIN)), min(source.zmax, ZOOM_MAX))
+        self.tiles_layer = source
+        self.tiles_choice = ImageryChoice.from_tiles(source.url, source.source_type, zoom, source.name,
+                                                     source.login, source.password)
+        self.draft.imagery = self.tiles_choice
+        self.refresh_run()
+
+    def on_tiles_removed(self) -> None:
+        self.tiles_layer = self.tiles_choice = None
+        if self.draft.imagery and self.draft.imagery.kind == "tiles":
+            self.draft.imagery = None
+            self._choose_default_imagery()
+        self.refresh_run()
+
+    def upload(self, path: Optional[str] = None, choose: bool = False) -> None:
+        """Upload a GeoTIFF to a new My imagery collection. `choose`: started from the run form, so the new
+        collection becomes the imagery once Mapflow lists it."""
+        if not path:
+            path, _ = QFileDialog.getOpenFileName(self.content, "Upload a GeoTIFF to My imagery", "",
+                                                  "GeoTIFF (*.tif *.tiff)")
         if not path:
             return
         size_gb = Path(path).stat().st_size / 1024 ** 3
@@ -1720,6 +1807,7 @@ class Controller(QObject):
             return
         self.content.imagery.set_upload(0, "")
         self._upload_progress(0)
+        self._choose_uploaded = Path(path).stem if choose else None
         self.imagery.upload(path, Path(path).stem)
 
 

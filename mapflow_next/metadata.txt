@@ -6,7 +6,7 @@ description=Map buildings, roads, forest and more from satellite and aerial imag
 about=A redesigned Mapflow plugin: one flow from what to map to results on the map, in a dock next to it.
     What you can do:
     - Start: run a processing. Pick a scenario or a model, set the area from a layer, a selection, a drawing or the map view, choose imagery, check the cost and run.
-    - Start: map your own imagery. Upload a GeoTIFF, or use a My imagery collection or one image in it.
+    - Start: map your own imagery. Upload a GeoTIFF or a raster layer to My imagery, use a collection or one image in it, or process an XYZ/TMS layer of your project.
     - Imagery sources: search the satellite imagery catalog by area, date and cloud cover, and use an image.
     - Processings: follow progress, filter and search the history, rename, run again with the same settings.
     - Results load as styled layers (GeoPackage or vector tiles), or save as GeoJSON.
