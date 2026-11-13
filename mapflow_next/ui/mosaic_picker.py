@@ -170,8 +170,11 @@ class MosaicPicker(QDialog):
             return
         clear_layout(self.images_box)
         self._thumbs = {}
-        if not images:
-            self.images_box.addWidget(Callout("info", "This collection has no images yet. Upload one in Mapflow Web."))
+        if not images:      # nothing to process: the collection can't be chosen
+            self.use_all.setEnabled(False)
+            self.images_box.addWidget(Callout("warn", "This collection has no images, so it can't be processed. "
+                                                      "Add images to it in Mapflow Web, or upload a GeoTIFF on "
+                                                      "the Imagery sources tab."))
         for image in images:
             self.images_box.addWidget(self._image_card(mosaic_id, image))
         self.images_box.addStretch(1)

@@ -10,7 +10,7 @@ from ..api import auth
 from ..api.client import MapflowApi
 from ..api.http import ApiError, Http
 from ..api.oauth import BrowserSignIn, refresh_tokens
-from ..config import STATUS_INTERVAL_MS, Config
+from ..config import STATUS_IDLE_INTERVAL_MS, STATUS_INTERVAL_MS, Config
 from ..core.models import Project, UserStatus
 from ..core.oauth import Tokens
 
@@ -40,6 +40,7 @@ class Session(QObject):
         self._silent = False
         self._refreshing = False
         self._forced_refresh_at = 0.0
+        self._status_pending = False
         self._timer = QTimer(self)
         self._timer.setInterval(STATUS_INTERVAL_MS)
         self._timer.timeout.connect(self.refresh_status)
@@ -116,6 +117,7 @@ class Session(QObject):
     def _clear_credentials(self) -> None:
         self._refresh_timer.stop()
         self._refreshing = False
+        self.status, self._status_pending = None, False
         self.tokens = None
         self.http.bearer = None
         self.http.auth_config_id = None
@@ -229,12 +231,26 @@ class Session(QObject):
 
     # ---------- account and projects ----------
 
+    def set_active(self, active: bool) -> None:
+        """The Mapflow panel is open: keep the balance current. Closed, check now and then."""
+        self._timer.setInterval(STATUS_INTERVAL_MS if active else STATUS_IDLE_INTERVAL_MS)
+        if active and self.state == SIGNED_IN:
+            self.refresh_status()
+
     def refresh_status(self) -> None:
-        if self.state != SIGNED_IN:
+        if self.state != SIGNED_IN or self._status_pending:
             return
-        self.api.user_status(self._on_status, on_error=lambda e: None)   # periodic: stay quiet on errors
+        self._status_pending = True
+
+        def failed(_error) -> None:                     # periodic: stay quiet on errors
+            self._status_pending = False
+
+        self.api.user_status(self._on_status, on_error=failed)
 
     def _on_status(self, status: UserStatus) -> None:
+        self._status_pending = False
+        if status == self.status:                       # polled every few seconds: only changes count
+            return
         self.status = status
         self.statusChanged.emit(status)
 

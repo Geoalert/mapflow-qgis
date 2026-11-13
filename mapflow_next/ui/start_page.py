@@ -104,7 +104,7 @@ class StartPage(QWidget):
         actions.addWidget(self.all_button, 1)
         actions.addWidget(custom)
         layout.addLayout(actions)
-        agent = link("Describe your task to the Mapflow AI Agent", config.WEB_URL)
+        agent = link("Describe your task to the Mapflow AI Agent", config.AI_AGENT_URL)
         agent.setIcon(icons.icon("message", tokens()["link"], 14))
         layout.addWidget(agent)
 

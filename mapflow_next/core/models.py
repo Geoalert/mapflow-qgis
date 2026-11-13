@@ -177,6 +177,8 @@ class UserStatus:
     search_providers: List[str] = field(default_factory=list)
     review_enabled: bool = False
     max_aois: int = 10
+    # Lowercased provider name and display name → the smallest order area it sells (km²)
+    min_areas: Dict[str, float] = field(default_factory=dict)
 
     @classmethod
     def from_api(cls, data: dict) -> "UserStatus":
@@ -186,15 +188,33 @@ class UserStatus:
             if provider.name and provider.name not in seen:
                 seen.add(provider.name)
                 providers.append(provider)
-        search = [p.get("name") if isinstance(p, dict) else str(p)
-                  for p in data.get("searchDataProviders") or []]
+        search, min_areas = [], {}
+        for item in data.get("searchDataProviders") or []:
+            item = item if isinstance(item, dict) else {"name": str(item)}
+            search += [str(item[k]) for k in ("name", "displayName") if item.get(k)]
+        for item in (data.get("dataProviders") or []) + (data.get("searchDataProviders") or []):
+            minimum = _num(item.get("minAreaSqKm", item.get("minAreaSqkm")), 0.0) if isinstance(item, dict) else 0
+            for key in (item.get("name"), item.get("displayName")) if minimum else ():
+                if key:
+                    min_areas[str(key).lower()] = minimum
         return cls(billing=BillingType.parse(data.get("billingType")),
                    remaining_credits=int(_num(data.get("remainingCredits"))),
                    remaining_area_km2=_num(data.get("remainingArea")) / 1e6,
                    data_providers=providers,
-                   search_providers=[s for s in search if s],
+                   search_providers=search,
                    review_enabled=bool(data.get("reviewWorkflowEnabled")),
-                   max_aois=int(_num(data.get("maxAoisPerProcessing"), 10)) or 10)
+                   max_aois=int(_num(data.get("maxAoisPerProcessing"), 10)) or 10,
+                   min_areas=min_areas)
+
+    def can_search(self, provider: Optional[str]) -> bool:
+        """Whether the plan includes a catalog provider (searchDataProviders, by name or display name).
+        An empty list says nothing either way: the server decides."""
+        if not self.search_providers or not provider:
+            return True
+        return provider.lower() in {p.lower() for p in self.search_providers}
+
+    def min_area_for(self, provider: Optional[str]) -> float:
+        return self.min_areas.get((provider or "").lower(), 0.0)
 
 
 # ---------- projects ----------
@@ -216,6 +236,7 @@ class Project:
     total: Optional[int] = None         # processings, when the API reports it
     updated: Optional[datetime] = None
     created: Optional[datetime] = None
+    starred: Optional[bool] = None      # pinned, here or in Mapflow Web; None when the answer doesn't say
     _share: dict = field(default_factory=dict, repr=False)
 
     @classmethod
@@ -228,6 +249,7 @@ class Project:
                       aoi_area_limit_km2=_num(user.get("aoiAreaLimit")) / 1e6,
                       description=(data.get("description") or "").strip(),
                       updated=parse_datetime(data.get("updated")), created=parse_datetime(data.get("created")),
+                      starred=None if data.get("starred") is None else bool(data.get("starred")),
                       _share=data.get("shareProject") or {})
         counts = data.get("processingCounts") or {}
         project.succeeded = int(_num(counts.get("succeeded")))
@@ -362,6 +384,7 @@ class Processing:
     enabled_blocks: List[str] = field(default_factory=list)
     review_status: Optional[str] = None
     style_name: Optional[str] = None
+    rating: int = 0                     # the user's rating of the results, when Mapflow sends it
 
     @classmethod
     def from_api(cls, data: dict) -> "Processing":
@@ -387,7 +410,8 @@ class Processing:
                    enabled_blocks=[b.get("name") for b in data.get("blocks") or []
                                    if isinstance(b, dict) and b.get("enabled")],
                    review_status=review.get("reviewStatus"),
-                   style_name=wd.get("styleName") or vector.get("styleName"))
+                   style_name=wd.get("styleName") or vector.get("styleName"),
+                   rating=_rating(data.get("rating")))
 
     @property
     def is_done(self) -> bool:
@@ -405,6 +429,14 @@ class Processing:
     def is_final(self) -> bool:
         """Nothing will change without the user: polling can stop."""
         return self.status.is_terminal and self.review_status != "NOT_ACCEPTED"
+
+
+def _rating(value: Any) -> int:
+    """`rating` as a number or as {"rating": n, "feedback": "…"}; 0 when absent."""
+    if isinstance(value, dict):
+        value = value.get("rating")
+    rating = int(_num(value, 0))
+    return rating if 1 <= rating <= 5 else 0
 
 
 def aois_geojson(data: Any) -> dict:

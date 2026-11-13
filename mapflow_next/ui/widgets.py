@@ -302,9 +302,12 @@ class Stars(QWidget):
         self._paint()
 
     def _rate(self, value: int) -> None:
+        self.set_value(value)
+        self.rated.emit(value)
+
+    def set_value(self, value: int) -> None:
         self.value = value
         self._paint()
-        self.rated.emit(value)
 
     def _paint(self) -> None:
         for index, star in enumerate(self.buttons, start=1):

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import re
+import tempfile
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -11,6 +12,8 @@ from qgis.core import (QgsCoordinateReferenceSystem, QgsCoordinateTransform, Qgs
                        QgsMapLayer,
                        QgsProject, QgsRasterLayer, QgsRectangle, QgsVectorFileWriter, QgsVectorLayer,
                        QgsVectorTileLayer)
+
+from qgis.PyQt.QtGui import QImage
 
 from ..config import LAYER_GROUP_NAME, PREVIEW_PROPERTY, PROCESSING_PROPERTY, RESOURCES
 from ..core.models import Mosaic, Processing
@@ -28,6 +31,24 @@ def xyz_uri(url: str, zmin: int = 0, zmax: int = 21) -> str:
     # QGIS reads this URI unencoded; only the characters that would split it are escaped
     url = url.replace("&", "%26").replace("=", "%3D")
     return f"type=xyz&url={url}&zmin={zmin}&zmax={zmax}"
+
+
+def geojson_bounds(geometry: Optional[dict]):
+    """(west, south, east, north) of a GeoJSON geometry's coordinates, or None."""
+    xs, ys = [], []
+
+    def walk(value) -> None:
+        if isinstance(value, (list, tuple)) and len(value) >= 2 and all(isinstance(v, (int, float)) for v in value[:2]):
+            xs.append(float(value[0]))
+            ys.append(float(value[1]))
+        elif isinstance(value, (list, tuple)):
+            for item in value:
+                walk(item)
+
+    walk((geometry or {}).get("coordinates"))
+    if not xs or max(xs) <= min(xs) or max(ys) <= min(ys):
+        return None
+    return min(xs), min(ys), max(xs), max(ys)
 
 
 def bounds_extent(bounds) -> Optional[QgsRectangle]:
@@ -148,6 +169,30 @@ class MapLayers:
 
     def mosaic_layer(self, mosaic: Mosaic) -> Optional[QgsRasterLayer]:
         return self.tile_raster(mosaic.tile_url, f"My imagery · {mosaic.name}") if mosaic.tile_url else None
+
+    def picture_on_footprint(self, data: bytes, footprint: Optional[dict], name: str,
+                             file_stem: str) -> Optional[QgsRasterLayer]:
+        """A catalog image's picture preview (PNG or JPEG) stretched over its footprint's bounding box. A
+        preview, not a georeferenced image: close enough to judge the scene against the area."""
+        box = geojson_bounds(footprint)
+        image = QImage.fromData(data)
+        if box is None or image.isNull():
+            return None
+        jpeg = data[:3] == b"\xff\xd8\xff"
+        folder = Path(tempfile.gettempdir()) / "mapflow_next"
+        folder.mkdir(parents=True, exist_ok=True)
+        path = folder / f"{file_stem}.{'jpg' if jpeg else 'png'}"
+        path.write_bytes(data)
+        west, south, east, north = box
+        dx, dy = (east - west) / image.width(), (north - south) / image.height()
+        # World file: pixel size, rotations, the upper-left pixel's centre
+        path.with_suffix(".jgw" if jpeg else ".pgw").write_text(
+            f"{dx}\n0\n0\n{-dy}\n{west + dx / 2}\n{north - dy / 2}\n", encoding="ascii")
+        layer = QgsRasterLayer(str(path), name, "gdal")
+        if not layer.isValid():
+            return None
+        layer.setCrs(WGS84)
+        return layer
 
     def footprints_layer(self, collection: dict, name: str = "Mapflow · search results") -> Optional[QgsVectorLayer]:
         for layer in self.project.mapLayersByName(name):

@@ -12,13 +12,13 @@ from typing import Dict, List, Optional
 
 from qgis.PyQt.QtCore import QObject, QTimer, QUrl
 from qgis.PyQt.QtGui import QDesktopServices, QPixmap
-from qgis.PyQt.QtWidgets import QFileDialog, QMessageBox
+from qgis.PyQt.QtWidgets import QDialog, QFileDialog, QMessageBox
 from qgis.core import Qgis, QgsGeometry, QgsMessageLog, QgsProject, QgsVectorLayer
 
 from . import config
 from .api.client import MapflowApi
 from .core import formatting
-from .core.draft import Coverage, ImageryChoice, RunDraft
+from .core.draft import Coverage, ImageryChoice, Issue, RunDraft
 from .core.models import BillingType, CatalogImage, Processing, UserStatus
 from .core.scenarios import Catalogue, recommended_zoom, resolve, scenario_for_model
 from .qgis_bridge import aoi as aoi_tools
@@ -33,6 +33,7 @@ from .ui.dock import IMAGERY, PROCESSINGS, DockContent
 from .ui.gallery import GalleryDialog
 from .ui.mosaic_picker import MosaicPicker, image_count_text
 from .ui.projects_dialog import ProjectsDialog
+from .ui.feedback_dialog import FeedbackDialog
 from .ui.rename_dialog import RenameDialog
 from .ui.run_page import CostView, ImageryRow
 from .ui.settings_dialog import SettingsDialog
@@ -86,6 +87,8 @@ class Controller(QObject):
         self._footprints: Dict[tuple, object] = {}       # My imagery footprints (QgsGeometry), by source
         self._extent_layers: Dict[tuple, str] = {}       # extent layers made from them: source → layer id
         self._extent_pending = False                     # waiting for image footprints to make the extent
+        self._use_pending: Optional[str] = None          # a collection chosen before its image list came
+        self._pictures: Dict[str, bytes] = {}             # catalog picture previews, by image id
         self._previous_aoi: Optional[str] = None         # the area layer before the extent replaced it
         self._coverage_for = None
         self._mosaic_render = QTimer(self)        # many collections report their image counts at once
@@ -145,10 +148,13 @@ class Controller(QObject):
         page.rename.connect(self.rename)
         page.duplicate.connect(self.duplicate)
         page.delete.connect(self.delete)
-        page.openWeb.connect(lambda _pid: QDesktopServices.openUrl(QUrl(config.WEB_URL)))
+        page.openWeb.connect(self.open_in_web)
         page.rate.connect(self.rate)
+        page.downloadAoi.connect(self.download_aoi)
         page.startRequested.connect(c.open_start)
-        page.refreshRequested.connect(p.refresh)
+        page.refreshRequested.connect(lambda: p.refresh() or page.set_refreshing(False))
+        p.refreshed.connect(lambda: page.set_refreshing(False))
+        p.rated.connect(self.on_rated)
         page.moreRequested.connect(p.load_more)
 
         imagery_page = c.imagery
@@ -161,6 +167,7 @@ class Controller(QObject):
         imagery_page.useMapExtent.connect(lambda *_: self.on_area_action("extent"))
         imagery_page.layerChosen.connect(self.on_layer)
         imagery_page.clearRequested.connect(self.clear_search)
+        imagery_page.moreResults.connect(self.more_results)
 
         p.changed.connect(self.on_processings)
         p.started.connect(self.on_started)
@@ -171,6 +178,7 @@ class Controller(QObject):
         p.actionFailed.connect(lambda text: self.notify(text, Qgis.MessageLevel.Warning))
 
         self.imagery.searchDone.connect(self.on_search_done)
+        self.imagery.moreDone.connect(self.on_more_results)
         self.imagery.searchFailed.connect(self.on_search_failed)
         self.imagery.mosaicsChanged.connect(self.on_mosaics)
         self.imagery.mosaicImagesChanged.connect(self.on_mosaic_images)
@@ -327,13 +335,34 @@ class Controller(QObject):
         self._query_projects("")
         for project_id in self.pinned_projects():
             self.api.project(project_id, self.session.email, self._pinned_loaded, lambda _e: None)
+        self.api.starred_projects(self.session.email, self._starred_loaded, lambda _e: None)
         dialog.show()
         dialog.raise_()
         dialog.activateWindow()
 
     def _pinned_loaded(self, project) -> None:
+        if project.starred is False:                  # unpinned in Mapflow Web since
+            self._set_pins([i for i in self.pinned_projects() if i != project.id])
+            return
         if self.projects_dialog is not None:
             self.projects_dialog.set_pinned_project(project)
+
+    def _starred_loaded(self, projects) -> None:
+        """Pins follow the account: what is starred in Mapflow Web is pinned here, and the other way round."""
+        ids = [p.id for p in projects]
+        self._set_pins(ids)
+        if self.projects_dialog is not None:
+            for project in projects:
+                self.projects_dialog.set_pinned_project(project)
+
+    def _set_pins(self, ids: List[str]) -> None:
+        self.settings.setValue(self._pinned_key(), json.dumps(ids))
+        dialog = self.projects_dialog
+        if dialog is not None:
+            for project_id in list(dialog.pinned):
+                if project_id not in ids:
+                    dialog.pinned.pop(project_id, None)
+            dialog.set_state(dialog.current_id, ids)
 
     def _query_projects(self, query: str, offset: int = 0) -> None:
         dialog = self.projects_dialog
@@ -346,6 +375,11 @@ class Controller(QObject):
 
         def done(projects, total, q=query, append=offset > 0):
             self._projects_request = 0
+            pins = self.pinned_projects()
+            synced = [i for i in pins if not any(p.id == i and p.starred is False for p in projects)]
+            synced += [p.id for p in projects if p.starred and p.id not in synced]
+            if synced != pins:                        # starred or unstarred in Mapflow Web
+                self._set_pins(synced)
             if self.projects_dialog is not None and self.projects_dialog.query == q:
                 self.projects_dialog.set_results(projects, total, append=append)
 
@@ -372,16 +406,23 @@ class Controller(QObject):
 
     @guarded
     def _pin_project(self, project_id: str, pinned: bool) -> None:
+        """Pin at once, then star it in Mapflow, so Mapflow Web shows it starred. If Mapflow refuses, the
+        pin stays on this computer only."""
         ids = [i for i in self.pinned_projects() if i != project_id]
         if pinned:
             ids.insert(0, project_id)
-        self.settings.setValue(self._pinned_key(), json.dumps(ids))
         dialog = self.projects_dialog
         if dialog is not None:
             known = next((p for p in dialog.results if p.id == project_id), None)
             if pinned and known is not None:
                 dialog.pinned[project_id] = known
-            dialog.set_state(dialog.current_id, ids)
+        self._set_pins(ids)
+
+        def failed(error) -> None:
+            self.notify(f"{'Pinned' if pinned else 'Unpinned'} on this computer only: Mapflow didn't save it "
+                        f"({error.message}).", Qgis.MessageLevel.Warning)
+
+        self.api.star_project(project_id, pinned, lambda _answer: None, failed)
 
     def on_tab(self, tab: int) -> None:
         if tab == IMAGERY:
@@ -524,12 +565,23 @@ class Controller(QObject):
             else:
                 self.start_drawing()
         elif action == "selected":
+            # A tool, not an option: QGIS's Select Features tool on the polygon layer, and the area follows
+            # the selection (all of the layer's polygons while none is selected)
             layer = self.iface.activeLayer()
-            if not aoi_tools.is_polygon_layer(layer) or not layer.selectedFeatureCount():
-                self.notify("Select one or more polygons on a polygon layer first, then press Selected.",
-                            Qgis.MessageLevel.Info)
+            if not aoi_tools.is_polygon_layer(layer):
+                layer = self.aoi_layer if aoi_tools.is_polygon_layer(self.aoi_layer) else None
+            if layer is None:
+                self.notify("Choose a polygon layer in Area (or make one active in the Layers panel), then "
+                            "select its polygons on the map.", Qgis.MessageLevel.Info)
                 return
+            self.iface.setActiveLayer(layer)
+            select = getattr(self.iface, "actionSelect", None)
+            if callable(select):
+                select().trigger()
             self.set_aoi_layer(layer, selected_only=True)
+            if not layer.selectedFeatureCount():
+                self.notify(f"Click polygons of “{layer.name()}” on the map to select them (Shift adds more). "
+                            "The area follows the selection.", Qgis.MessageLevel.Info, duration=8)
         elif action == "extent":
             geometry = QgsGeometry.fromRect(canvas.extent())
             self._area_counter += 1
@@ -632,6 +684,7 @@ class Controller(QObject):
         if self.content.stack.currentWidget() is self.content.run:
             self.refresh_run()
         self.render_imagery_area()
+        self.content.imagery.set_previewing(self._search_previewing())
 
     @guarded
     def on_layers_removed(self, layer_ids) -> None:
@@ -640,6 +693,7 @@ class Controller(QObject):
             self.draft.aoi = None
         self.refresh_run()
         self.render_processings()
+        self.content.imagery.set_previewing(self._search_previewing())
 
     # ---------- run form: imagery ----------
 
@@ -750,9 +804,14 @@ class Controller(QObject):
         choice = self.draft.imagery
         found = self._imagery_footprint()
         if found is None:
-            if choice and choice.kind == "my_imagery" and choice.mosaic_id:
-                self._extent_pending = True          # its footprint comes with the image list
+            # Its footprint comes with the image list. A loaded list without footprints won't get one by
+            # asking again: answering from the cache would call back here, round and round.
+            if choice and choice.kind == "my_imagery" and choice.mosaic_id \
+                    and choice.mosaic_id not in self.imagery.images:
+                self._extent_pending = True
                 self.imagery.load_images(choice.mosaic_id)
+            else:
+                self._extent_pending = False
             return
         self._extent_pending = False
         name, geometry, key = found
@@ -795,8 +854,8 @@ class Controller(QObject):
         self.render_search_results()
 
     def _preview_key(self, choice: Optional[ImageryChoice]) -> Optional[str]:
-        """Which preview layer shows the chosen imagery; None if it has none (a catalog image with a
-        picture preview: the eye zooms to its footprint instead)."""
+        """Which preview layer shows the chosen imagery; None if it has none (a catalog image without a
+        preview: the eye zooms to its footprint)."""
         if choice is None:
             return None
         if choice.kind == "provider" and choice.provider and choice.provider.preview_url:
@@ -804,7 +863,8 @@ class Controller(QObject):
         if choice.kind == "my_imagery" and choice.mosaic_id:
             return f"mosaic:{choice.mosaic_id}"
         image = self.chosen_image
-        if choice.kind == "catalog" and image and image.preview_url and image.preview_type in ("xyz", "tms"):
+        if choice.kind == "catalog" and image and image.preview_url and (
+                image.preview_type in ("xyz", "tms") or self._picture_preview(image)):
             return f"catalog:{image.id}"
         return None
 
@@ -840,7 +900,8 @@ class Controller(QObject):
     def _catalog_choice(self, image: CatalogImage) -> ImageryChoice:
         when = f"{image.acquired.day} {image.acquired:%b %Y}" if image.acquired else ""
         title = f"{_provider_name(image.provider)} {'mosaic' if image.is_mosaic else 'scene'}"
-        return ImageryChoice.from_catalog(image.id, image.provider, image.zoom, f"{title} {when}".strip())
+        return ImageryChoice.from_catalog(image.id, image.provider, image.zoom, f"{title} {when}".strip(),
+                                          image.min_area_km2)
 
     # ---------- run form: rendering ----------
 
@@ -870,7 +931,7 @@ class Controller(QObject):
         layers = [(layer.id(), layer.name()) for layer in aoi_tools.polygon_layers()]
         run.set_layers(layers, self.draft.aoi.layer_id if self.draft.aoi else None)
         self._update_coverage()
-        issues = self.draft.issues(project, status, self.server_cost)
+        issues = self._issues(project, status)
         area_issue = next((i.text for i in issues if i.field == "area" and self.draft.aoi), "")
         coverage = self.draft.coverage
         outside = bool(self.draft.aoi and coverage and not coverage.overlaps)
@@ -902,6 +963,15 @@ class Controller(QObject):
         run.set_cost(self._cost_view(status), credits_billing)
         run.set_issues(issues, self.starting)
         self._maybe_request_cost(issues, status)
+
+    def _issues(self, project, status) -> List[Issue]:
+        issues = self.draft.issues(project, status, self.server_cost)
+        choice = self.draft.imagery
+        mosaic = self.imagery.get_mosaic(choice.mosaic_id) if choice and choice.kind == "my_imagery" else None
+        if mosaic is not None and not choice.image_ids and self._empty_collection(mosaic):
+            issues.append(Issue("imagery", f"“{mosaic.name}” has no images, so it can't be processed. Add images "
+                                           "to it in Mapflow Web, or choose other imagery."))
+        return issues
 
     def _imagery_rows(self, status: Optional[UserStatus], credits_billing: bool):
         """My imagery first, then the basemap providers (zoom z17–z21, the scenario's zoom marked), then an
@@ -1027,7 +1097,7 @@ class Controller(QObject):
     @guarded
     def run(self) -> None:
         project, status = self.session.project, self.session.status
-        issues = self.draft.issues(project, status, self.server_cost)
+        issues = self._issues(project, status)
         if issues or self.starting:
             return
         self.starting = True
@@ -1068,6 +1138,8 @@ class Controller(QObject):
         in_map = self.results.in_map()
         busy = {p.id for p in self.processings.items if self.results.is_busy(p.id)}
         self.content.processings.mosaic_names = {m.id: m.name for m in self.imagery.mosaics}
+        self.content.processings.ratings = {**{p.id: p.rating for p in self.processings.items if p.rating},
+                                            **self._ratings()}
         self.content.processings.set_items(self.processings.items, in_map, busy,
                                            project.role.can_manage if project else False,
                                            loading=self.processings.loading, total=self.processings.total,
@@ -1153,10 +1225,70 @@ class Controller(QObject):
 
     @guarded
     def rate(self, processing_id: str, value: int) -> None:
+        """A star was clicked: nothing is sent until the feedback form is."""
         processing = self.processings.get(processing_id)
-        if processing:
-            self.processings.rate(processing, value)
-            self.notify("Thanks! Your rating helps us improve the models.", Qgis.MessageLevel.Success, duration=3)
+        if not processing:
+            return
+        dialog = FeedbackDialog(processing.name, value, self.content)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            rating, comment = dialog.values()
+            self.processings.rate(processing, rating, comment)
+        else:
+            self.render_processings()           # the stars go back to what was sent before
+
+    def on_rated(self, processing_id: str, rating: int) -> None:
+        ratings = self._ratings()
+        ratings[processing_id] = rating
+        self.settings.setValue("ratings", json.dumps(dict(list(ratings.items())[-500:])))
+        self.render_processings()
+        self.notify("Thanks! Your feedback helps us improve the models.", Qgis.MessageLevel.Success, duration=3)
+
+    def _ratings(self) -> Dict[str, int]:
+        """Ratings sent from this computer: Mapflow keeps them but doesn't send them back with the list."""
+        try:
+            stored = json.loads(self.settings.value("ratings", "{}") or "{}")
+        except (TypeError, ValueError):
+            stored = {}
+        return {str(k): int(v) for k, v in stored.items() if str(v).isdigit()} if isinstance(stored, dict) else {}
+
+    def open_in_web(self, processing_id: str) -> None:
+        processing = self.processings.get(processing_id)
+        project = processing.project_id if processing and processing.project_id else (
+            self.session.project.id if self.session.project else "")
+        url = (f"{self.session.config.web_url}/projects/{project}?processing={processing_id}" if project
+               else self.session.config.web_url)
+        QDesktopServices.openUrl(QUrl(url))
+
+    @guarded
+    def download_aoi(self, processing_id: str) -> None:
+        """The processing's area from Mapflow, saved as GeoJSON and added to the map."""
+        processing = self.processings.get(processing_id)
+        if not processing:
+            return
+        folder = self.results.output_dir
+        safe = "".join(ch if ch.isalnum() or ch in " -_." else "_" for ch in processing.name).strip() or "area"
+        path, _ = QFileDialog.getSaveFileName(self.content, "Download the processing's area",
+                                              str(Path(folder) / f"{safe} · area.geojson"), "GeoJSON (*.geojson)")
+        if not path:
+            return
+
+        def save(collection: dict) -> None:
+            if not collection.get("features"):
+                self.notify("Mapflow sent no area for this processing.", Qgis.MessageLevel.Warning)
+                return
+            for feature in collection["features"]:
+                feature.setdefault("properties", {})["processing"] = processing.name
+            Path(path).write_text(json.dumps(collection), encoding="utf-8")
+            layer = QgsVectorLayer(path, f"Area · {processing.name}", "ogr")
+            if layer.isValid():
+                layer.loadNamedStyle(str(config.RESOURCES / "styles" / "aoi.qml"))
+                self.layers.add(layer)
+                self.layers.zoom_to([layer])
+            self.notify(f"The area is saved to {path} and added to the map.", Qgis.MessageLevel.Success)
+
+        self.api.processing_aois(processing.id, save,
+                                 lambda error: self.notify(f"The area didn't download: {error.message}",
+                                                           Qgis.MessageLevel.Warning))
 
     @guarded
     def duplicate(self, processing_id: str) -> None:
@@ -1248,10 +1380,12 @@ class Controller(QObject):
     def clear_search(self) -> None:
         """Forget the search results and take their footprints off the map. An image already chosen
         for the run stays chosen."""
-        self.imagery.results = []
+        self.imagery.clear_results()
         for layer in QgsProject.instance().mapLayersByName("Mapflow · search results"):
             QgsProject.instance().removeMapLayer(layer.id())
         self.footprints = None
+        self._pictures = {}
+        self.content.imagery.forget_thumbnails()
         self.content.imagery.show_search_message("")
         self.render_search_results()
 
@@ -1262,6 +1396,8 @@ class Controller(QObject):
             return
         self.content.imagery.set_searching(True)
         self.content.imagery.show_search_message("")
+        self.content.imagery.forget_thumbnails()
+        self._pictures = {}
         self.imagery.search(self.draft.aoi.geometry, params["date_from"], params["date_to"], params["max_cloud"],
                             params["max_off_nadir"], params["product_types"])
 
@@ -1272,24 +1408,50 @@ class Controller(QObject):
         if not images:
             page.show_search_message("No images match. Widen the dates or allow more cloud cover.", "info")
         self.render_search_results()
+        self._show_footprints()
+        self._load_thumbnails(images)
+
+    def more_results(self) -> None:
+        self.imagery.search_more()
+        self.render_search_results()
+
+    @guarded
+    def on_more_results(self, images, total: int) -> None:
+        self.render_search_results()
+        self._show_footprints()
+        self._load_thumbnails(images)
+
+    def _show_footprints(self) -> None:
+        images = self.imagery.results
         features = [{"type": "Feature", "geometry": i.footprint,
                      "properties": {"id": i.id, "provider": i.provider,
                                     "date": i.acquired.isoformat() if i.acquired else None, "cloud": i.cloud}}
                     for i in images if i.footprint]
         self.footprints = self.layers.footprints_layer({"type": "FeatureCollection", "features": features})
+
+    def _load_thumbnails(self, images) -> None:
         for image in images:
-            if image.preview_url and image.preview_type in ("png", "jpg", "jpeg", ""):
+            if image.preview_url and self._picture_preview(image) and not self.content.imagery.has_thumbnail(image.id):
                 self.api.preview(image.preview_url,
                                  lambda data, iid=image.id: self._set_thumb(iid, data), lambda _e: None)
+
+    @staticmethod
+    def _picture_preview(image: CatalogImage) -> bool:
+        return image.preview_type in ("png", "jpg", "jpeg", "")
 
     def _set_thumb(self, image_id: str, data: bytes) -> None:
         pixmap = QPixmap()
         if pixmap.loadFromData(data):
+            self._pictures[image_id] = data             # also what the eye puts on the map
             self.content.imagery.set_thumbnail(image_id, pixmap)
 
+    def _search_previewing(self) -> set:
+        return {i.id for i in self.imagery.results if self.layers.previews(f"catalog:{i.id}")}
+
     def render_search_results(self) -> None:
-        self.content.imagery.set_results(self.imagery.results, len(self.imagery.results),
-                                         self.chosen_image.id if self.chosen_image else None)
+        self.content.imagery.set_results(self.imagery.results, self.imagery.total,
+                                         self.chosen_image.id if self.chosen_image else None,
+                                         self._search_previewing(), self.imagery.loading_more)
 
     def on_search_failed(self, text: str) -> None:
         self.content.imagery.set_searching(False)
@@ -1297,9 +1459,16 @@ class Controller(QObject):
 
     @guarded
     def show_image(self, image_id: str) -> None:
+        """The eye on a search result: its preview on the map (or off, if it is there), and its footprint
+        selected and zoomed to."""
         image = self.imagery.get_result(image_id)
         layer = getattr(self, "footprints", None)
         if image is None:
+            return
+        key = f"catalog:{image.id}"
+        shown = self.layers.previews(key)
+        if shown:
+            self.layers.remove(shown)                   # the eyes follow through layersRemoved
             return
         if layer is not None:
             try:
@@ -1309,12 +1478,30 @@ class Controller(QObject):
                     self.iface.mapCanvas().zoomToSelected(layer)
             except RuntimeError:
                 pass
-        key = f"catalog:{image.id}"
-        if image.preview_url and image.preview_type in ("xyz", "tms") and not self.layers.previews(key):
+        name = f"Preview · {_provider_name(image.provider)} {image.id[:8]}"
+        if image.preview_url and image.preview_type in ("xyz", "tms"):
             url = image.preview_url.replace("{y}", "{-y}") if image.preview_type == "tms" else image.preview_url
-            preview = self.layers.tile_raster(url, f"Preview · {_provider_name(image.provider)} {image.id[:8]}")
+            preview = self.layers.tile_raster(url, name)
             if preview:
                 self.layers.add(preview, position=len(self.layers.group().children()), preview=key)
+        elif image.preview_url and self._picture_preview(image):
+            def add(data: bytes) -> None:
+                self._pictures[image.id] = data
+                if self.layers.previews(key):
+                    return
+                picture = self.layers.picture_on_footprint(data, image.footprint, name, f"preview_{image.id[:32]}")
+                if picture is None:
+                    self.notify("This image's preview can't be placed on the map.", Qgis.MessageLevel.Info)
+                    return
+                self.layers.add(picture, position=0, preview=key)   # on top: a preview is to be looked at
+
+            data = self._pictures.get(image.id)
+            if data:
+                add(data)
+            else:
+                self.api.preview(image.preview_url, add,
+                                 lambda error: self.notify(f"The preview didn't load: {error.message}",
+                                                           Qgis.MessageLevel.Warning))
 
     @guarded
     def use_image(self, image_id: str) -> None:
@@ -1342,6 +1529,9 @@ class Controller(QObject):
     @guarded
     def on_mosaic_images(self, mosaic_id: str, images) -> None:
         self._mosaic_render.start()
+        if self._use_pending == mosaic_id:             # a collection was chosen before its images were known
+            self._use_pending = None
+            self.use_mosaic(mosaic_id)
         choice = self.draft.imagery
         if self._extent_pending and choice and choice.kind == "my_imagery" and choice.mosaic_id == mosaic_id:
             self.use_imagery_extent()
@@ -1384,6 +1574,9 @@ class Controller(QObject):
     def _mosaic_chosen(self, mosaic_id: str, image_id: str) -> None:
         mosaic = self.imagery.get_mosaic(mosaic_id)
         if mosaic is None:
+            return
+        if not image_id and self._empty_collection(mosaic):
+            self._refuse_empty(mosaic)
             return
         image = self.imagery.get_image(mosaic_id, image_id) if image_id else None
         self.draft.imagery = ImageryChoice.from_mosaic(mosaic.id, mosaic.name, image.id if image else None,
@@ -1429,9 +1622,29 @@ class Controller(QObject):
             add(None)
 
     @guarded
+    def _empty_collection(self, mosaic) -> Optional[bool]:
+        """True if the collection has no images, None while that isn't known yet."""
+        if mosaic.id in self.imagery.images:
+            return not self.imagery.images[mosaic.id]
+        return None if mosaic.image_count is None else mosaic.image_count == 0
+
+    def _refuse_empty(self, mosaic) -> None:
+        self.notify(f"“{mosaic.name}” has no images, so it can't be processed. Add images to it in Mapflow Web, "
+                    "or upload a GeoTIFF on the Imagery sources tab.", Qgis.MessageLevel.Warning)
+
     def use_mosaic(self, mosaic_id: str) -> None:
         mosaic = self.imagery.get_mosaic(mosaic_id)
-        if mosaic and (mosaic.image_count or 0) > 1:
+        if mosaic is None:
+            return
+        empty = self._empty_collection(mosaic)
+        if empty is None:                               # decided once its image list arrives
+            self._use_pending = mosaic.id
+            self.imagery.load_images(mosaic.id)
+            return
+        if empty:
+            self._refuse_empty(mosaic)
+            return
+        if (mosaic.image_count or 0) > 1:
             self.open_mosaic_picker(mosaic.id)          # several images: the whole collection, or one of them
             return
         if mosaic:

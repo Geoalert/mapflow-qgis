@@ -143,7 +143,7 @@ the two.
 - **Projects window:** project tiles with their description, done and failed counts, the last update
   and whether they're shared.
   - Search by name on the server, and load more with "Show more".
-  - Pin projects to the top.
+  - Pin projects to the top. Pins are Mapflow Web's starred projects, so they follow the account.
   - Share a project, or open the team page, in Mapflow Web.
 - **Zoom:** basemaps offer z17–z21, with the scenario's zoom preselected and marked ★.
 - **My imagery:**
@@ -184,14 +184,17 @@ every Mapflow user. The plugin links to the right page wherever it leaves someth
 
 - **Live API:** the tests use a mock API shaped like the spec. Nothing has been run against the live
   Mapflow API yet.
-- **Mapflow Web links:** they open the app's home page, because deep links to a project or processing
-  need the real web routes. The team page address (`TEAM_URL` in `config.py`) is a guess.
+- **Mapflow Web links:** "Open in Mapflow Web" opens `/projects/{project}?processing={id}`, the address
+  the API itself reports for a processing. The team page address (`TEAM_URL` in `config.py`) is a guess.
+- **AOI names:** a processing is created with its area as one geometry (`geometry` in `processings/v2`).
+  The API documents no field for the names of its AOIs, so Mapflow Web lists them without the names the
+  layer has.
 - **Plugin version header:** requests send `x-plugin-version: 4.0.0`. Check the backend doesn't treat
   it specially.
 - **Scenario → model matching:** scenarios find their model by keywords in the project's model names. A
   stable scenario id on the backend would make this exact.
-- **Pinned projects:** pins are kept on this computer. The backend's starred projects could make them
-  follow the account.
+- **Pinned projects:** pinning stars the project (`POST`/`DELETE /projects/{id}/starred`), and projects
+  starred in Mapflow Web are pinned here. The list of starred projects is read from `POST /projects/starred`.
 - **Browser sign-in:**
   - The `qgis` client has to accept PKCE.
   - The `offline_access` scope would keep a sign-in for weeks.
@@ -205,7 +208,7 @@ Tests and lint run in the official `qgis/qgis` Docker images, so only Docker is 
 make test          # both of the two runs below (the gate before review)
 make test-qgis3    # unit + end-to-end tests on QGIS 3 (qgis/qgis:release-3_28)
 make test-qgis4    # the same on QGIS 4 (qgis/qgis:4.2), plus the Qt 6 code check
-make test-core     # pure-Python tests only (28)
+make test-core     # pure-Python tests only (30)
 make lint          # the plugins.qgis.org checks: flake8, bandit, detect-secrets
 make screens       # run the end-to-end flow and rewrite docs/screens/*.png
 ```
@@ -218,7 +221,7 @@ make test-qt6 QT6_PYTHON=…    # the pages, sign-in and HTTP client on PyQt6 (4
 make check-qt6 QT6_PYTHON=…   # Qt enum names and calls that only Qt 5 accepts
 ```
 
-**The end-to-end test** (`tests/e2e_flow.py`, 170 checks) runs a real offscreen QGIS against a mock
+**The end-to-end test** (`tests/e2e_flow.py`, 197 checks) runs a real offscreen QGIS against a mock
 Mapflow API and sign-in server (`tests/mock_server.py`).
 - **Request checks:** the mock rejects request bodies the real API rejects, such as `myImagery` with both
   `mosaicId` and `imageIds`.

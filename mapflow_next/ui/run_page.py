@@ -1,6 +1,7 @@
 """The run form: ① model → ② area → ③ imagery, with the cost and the Run button always in view."""
 from __future__ import annotations
 
+import html
 from contextlib import contextmanager
 from dataclasses import astuple, dataclass, field
 from typing import Dict, List, Optional, Tuple
@@ -18,6 +19,17 @@ from . import icons
 from .theme import set_prop, tokens
 from .widgets import (Callout, Card, Combo, ElidedLabel, OptionRow, Pill, StepHeader, Toggle, button, clear_layout,
                       label, link, rounded, tool, vbox)
+
+
+ISSUE_LINKS = {"top_up": config.TOP_UP_URL, "pricing": config.PRICING_URL,
+               "support": f"mailto:{config.SUPPORT_EMAIL}"}
+
+
+def issue_html(issue: Issue) -> str:
+    """An issue's text, with its ways out as links."""
+    links = [f'<a href="{ISSUE_LINKS[where]}">{html.escape(text)}</a>' for text, where in issue.links
+             if where in ISSUE_LINKS]
+    return " ".join([html.escape(issue.text)] + ([" · ".join(links)] if links else []))
 
 
 @dataclass
@@ -108,7 +120,7 @@ class RunPage(QWidget):
         self.scenario_title = ElidedLabel("Custom setup", "h2")
         name_row = QHBoxLayout()
         name_row.setSpacing(4)
-        name_row.addWidget(label("Saves as", "meta"))
+        name_row.addWidget(label("Name:", "meta"))
         self.name = QLineEdit(card)
         self.name.setProperty("flat", True)
         self.name.setToolTip("Processing name: edit to rename")
@@ -166,7 +178,7 @@ class RunPage(QWidget):
         self.area_buttons = {}
         for index, (key, icon_name, text, tip) in enumerate((
                 ("draw", "pen", "Draw", "Draw a polygon on the map: click corners, double-click to finish"),
-                ("selected", "pointer", "Selected features", "Use the selected features of the active layer"),
+                ("selected", "pointer", "Select features", "Select features on the map: the area is the selected ones"),
                 ("extent", "maximize", "Map view", "Use what the map shows now"),
                 ("file", "upload", "From file", "Open a vector file (GeoJSON, GeoPackage, Shapefile, KML)"))):
             item = QToolButton(self.area_card)
@@ -463,6 +475,6 @@ class RunPage(QWidget):
     def set_issues(self, issues: List[Issue], busy: bool = False) -> None:
         blocking = [i for i in issues if i.field in ("account",)]
         # Steps show their own hints; the bar only repeats what no step can show
-        self.issues.set("warn", blocking[0].text if blocking else "")
+        self.issues.set("warn", issue_html(blocking[0]) if blocking else "")
         self.run_button.setEnabled(not issues and not busy)
         self.run_button.setText("Starting…" if busy else "Run processing")

@@ -47,6 +47,20 @@ class MapflowApi:
                                   [Project.from_api(p, email) for p in (d or {}).get("results") or []],
                                   int((d or {}).get("total") or 0)))
 
+    def starred_projects(self, email: str, on_done: Callable[[List[Project]], None], on_error: OnError = None) -> None:
+        """The projects the user starred, here or in Mapflow Web (POST /projects/starred, paged like
+        /projects/page; a plain list is read too)."""
+        def done(data):
+            items = data if isinstance(data, list) else (data or {}).get("results") or []
+            on_done([Project.from_api(p, email) for p in items if isinstance(p, dict)])
+        self.http.post("projects/starred", {"limit": 100, "offset": 0, "sortBy": "UPDATED", "sortOrder": "DESC"},
+                       on_success=done, on_error=on_error)
+
+    def star_project(self, project_id: str, starred: bool, on_done: Callable, on_error: OnError = None) -> None:
+        """Pin (star) a project, as Mapflow Web does: POST to star it, DELETE to unstar."""
+        call = self.http.post if starred else self.http.delete
+        call(f"projects/{project_id}/starred", on_success=on_done, on_error=on_error)
+
     def project(self, project_id: str, email: str, on_done: Callable[[Project], None],
                 on_error: OnError = None) -> None:
         self.http.get(f"projects/{project_id}", on_error=on_error,
@@ -106,8 +120,8 @@ class MapflowApi:
     # ---------- imagery ----------
 
     def search_catalog(self, request: dict, on_done: Callable[[List[CatalogImage], int], None],
-                       on_error: OnError = None) -> None:
-        body = {"limit": SEARCH_PAGE_SIZE, "offset": 0, "hideUnavailable": False, **request}
+                       on_error: OnError = None, offset: int = 0) -> None:
+        body = {"limit": SEARCH_PAGE_SIZE, "offset": offset, "hideUnavailable": False, **request}
         self.http.post("catalog/meta", body, timeout=60, on_error=on_error,
                        on_success=lambda d: on_done([CatalogImage.from_api(i) for i in (d or {}).get("images") or []],
                                                     int((d or {}).get("total") or 0)))

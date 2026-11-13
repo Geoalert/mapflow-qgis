@@ -1,9 +1,11 @@
 """Processings of the current project as cards: status at a glance, actions on the selected one."""
 from __future__ import annotations
 
+import time
 from typing import Dict, List, Optional
 
 from qgis.PyQt.QtCore import Qt, QTimer, pyqtSignal
+from qgis.PyQt.QtGui import QIcon, QTransform
 from qgis.PyQt.QtWidgets import (QButtonGroup, QHBoxLayout, QLineEdit, QMenu, QProgressBar, QPushButton, QScrollArea,
                                  QSizePolicy, QToolButton, QVBoxLayout, QWidget)
 
@@ -105,11 +107,12 @@ class ProcessingCard(Card):
             row.addStretch(1)
         else:
             row.addStretch(1)
-        more = tool("more", "More: run again, rename, delete")
+        more = tool("more", "More: run again, rename, download the area, delete")
         menu = QMenu(more)
         menu_action(menu, "copy", "Run again with these settings", lambda: page.duplicate.emit(pid))
         if page.can_manage:
             menu_action(menu, "edit", "Rename…", lambda: page.rename.emit(pid))
+        menu_action(menu, "download", "Download the area (AOI)…", lambda: page.downloadAoi.emit(pid))
         menu_action(menu, "globe", "Open in Mapflow Web", lambda: page.openWeb.emit(pid))
         if page.can_manage:
             menu.addSeparator()
@@ -125,9 +128,11 @@ class ProcessingCard(Card):
             self.add(rule())
             rating = QHBoxLayout()
             rating.setSpacing(6)
-            rating.addWidget(label("Rate the result", "label"))
+            rated = page.ratings.get(pid, 0)
+            rating.addWidget(label("Your rating" if rated else "Rate the result", "label"))
             stars = Stars(self)
-            stars.rated.connect(lambda value: page.rate.emit(pid, value))
+            stars.set_value(rated)
+            stars.rated.connect(lambda value: page.rate.emit(pid, value))   # opens the feedback form
             rating.addWidget(stars)
             rating.addStretch(1)
             self.add(rating)
@@ -147,7 +152,8 @@ class ProcessingsPage(QWidget):
     duplicate = pyqtSignal(str)
     delete = pyqtSignal(str)
     openWeb = pyqtSignal(str)
-    rate = pyqtSignal(str, int)
+    rate = pyqtSignal(str, int)             # a star was clicked: the feedback form opens, nothing is sent yet
+    downloadAoi = pyqtSignal(str)
     startRequested = pyqtSignal()
     refreshRequested = pyqtSignal()
     moreRequested = pyqtSignal()
@@ -166,6 +172,12 @@ class ProcessingsPage(QWidget):
         self.total = 0
         self.provider_names: Dict[str, str] = {}
         self.mosaic_names: Dict[str, str] = {}
+        self.ratings: Dict[str, int] = {}           # processing id → the rating sent from here
+        self._spin = QTimer(self)
+        self._spin.setInterval(40)
+        self._spin.timeout.connect(self._turn)
+        self._angle = 0
+        self._spin_until = 0.0
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -195,8 +207,9 @@ class ProcessingsPage(QWidget):
         search_row.setContentsMargins(16, 4, 16, 4)
         search_row.addWidget(self.search, 1)
         refresh = tool("refresh", "Refresh")       # here, so the filter chips keep the full width
-        refresh.clicked.connect(lambda *_: self.refreshRequested.emit())
+        refresh.clicked.connect(lambda *_: (self.set_refreshing(True), self.refreshRequested.emit()))
         search_row.addWidget(refresh)
+        self.refresh_button = refresh
         outer.addLayout(search_row)
 
         scroll = QScrollArea(self)
@@ -228,6 +241,37 @@ class ProcessingsPage(QWidget):
         footer.addWidget(link("Statistics and sharing in Mapflow Web", config.WEB_URL))
         footer.addStretch(1)
         outer.addLayout(footer)
+
+    # ---------- refreshing ----------
+
+    def set_refreshing(self, on: bool) -> None:
+        """The Refresh button turns while the list is on its way (at least half a second, so a fast
+        answer still shows that something happened)."""
+        if on:
+            self._spin_until = time.monotonic() + 0.5
+            self.refresh_button.setEnabled(False)
+            self._spin.start()
+        elif self._spin.isActive():
+            if time.monotonic() < self._spin_until:
+                QTimer.singleShot(int((self._spin_until - time.monotonic()) * 1000) + 10,
+                                  lambda: self.set_refreshing(False))
+                return
+            self._spin.stop()
+            self._angle = 0
+            self.refresh_button.setIcon(icons.icon("refresh", tokens()["ink"], 16))
+            self.refresh_button.setEnabled(True)
+
+    @property
+    def refreshing(self) -> bool:
+        return self._spin.isActive()
+
+    def _turn(self) -> None:
+        self._angle = (self._angle + 30) % 360
+        pixmap = icons.pixmap("refresh", tokens()["primary_ink"], 16)
+        turned = pixmap.transformed(QTransform().rotate(self._angle), Qt.TransformationMode.SmoothTransformation)
+        side = pixmap.width()
+        x, y = (turned.width() - side) // 2, (turned.height() - side) // 2
+        self.refresh_button.setIcon(QIcon(turned.copy(x, y, side, side)))
 
     def _set_filter(self, key: str) -> None:
         self.filter = key

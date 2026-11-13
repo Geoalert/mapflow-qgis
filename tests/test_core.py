@@ -142,6 +142,33 @@ def test_issues_point_at_the_right_step():
     assert _draft().issues(project, status, server_cost=2000)[0].field == "account"
 
 
+def test_issues_carry_ways_out():
+    project = Project.from_api(PROJECT, "me@example.com")
+    poor = UserStatus.from_api(dict(STATUS, remainingCredits=10))
+    assert _draft().issues(project, poor)[0].links == (("Top up", "top_up"),)
+    # a catalog provider the plan doesn't include: Premium or support
+    status = UserStatus.from_api(STATUS)          # searchDataProviders: maxar
+    image = ImageryChoice.from_catalog("img-9", "orbview", 18, "Orbview scene")
+    draft = _draft()
+    draft.imagery = image
+    blocked = [i for i in draft.issues(project, status) if i.field == "account"]
+    assert blocked and dict(blocked[0].links).keys() == {"See plans", "Contact support"}
+    assert status.can_search("maxar") and status.can_search("MAXAR") and not status.can_search("orbview")
+    # the provider's smallest order
+    big = UserStatus.from_api(dict(STATUS, searchDataProviders=[{"name": "orbview", "minAreaSqKm": 25}]))
+    small = [i for i in draft.issues(project, big) if i.field == "imagery"]
+    assert small and "25.00 km²" in small[0].text
+    draft.aoi.area_km2 = 30
+    assert not [i for i in draft.issues(project, big) if i.field == "imagery"]
+
+
+def test_ratings_are_read_from_processings():
+    rated = dict(processing_json("p", "OK", 100), rating={"rating": 4, "feedback": "ok"})
+    assert Processing.from_api(rated).rating == 4
+    assert Processing.from_api(dict(processing_json("p", "OK", 100), rating=5)).rating == 5
+    assert Processing.from_api(processing_json("p", "OK", 100)).rating == 0
+
+
 def test_error_messages():
     assert "km²" in describe("TOO_LARGE_PROCESSING", {"area": 5e6, "aoiAreaLimit": 3e6})
     assert describe("dataloader.NoDataTile").startswith("The data provider contains no data")

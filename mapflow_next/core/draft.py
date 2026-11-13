@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional, Set, Tuple
 
 from .models import BillingType, DataProvider, Model, Project, UserStatus
 
@@ -37,6 +37,7 @@ class ImageryChoice:
     mosaic_id: Optional[str] = None             # kind == my_imagery
     image_ids: List[str] = field(default_factory=list)   # my_imagery (optional) or catalog
     catalog_provider: Optional[str] = None      # kind == catalog: the image's provider name
+    min_area_km2: float = 0.0                   # kind == catalog: the smallest order the image's provider sells
 
     @classmethod
     def from_provider(cls, provider: DataProvider, zoom: Optional[int] = None) -> "ImageryChoice":
@@ -51,8 +52,19 @@ class ImageryChoice:
         return cls("my_imagery", label, mosaic_id=mosaic_id, image_ids=[image_id] if image_id else [])
 
     @classmethod
-    def from_catalog(cls, image_id: str, provider_name: str, zoom: Optional[int], label: str) -> "ImageryChoice":
-        return cls("catalog", label, image_ids=[image_id], catalog_provider=provider_name, zoom=zoom)
+    def from_catalog(cls, image_id: str, provider_name: str, zoom: Optional[int], label: str,
+                     min_area_km2: float = 0.0) -> "ImageryChoice":
+        return cls("catalog", label, image_ids=[image_id], catalog_provider=provider_name, zoom=zoom,
+                   min_area_km2=min_area_km2 or 0.0)
+
+    @property
+    def source_name(self) -> str:
+        """The imagery's provider as a person reads it."""
+        if self.kind == "provider" and self.provider:
+            return self.provider.display_name
+        if self.kind == "catalog":
+            return (self.catalog_provider or "Catalog").replace("_", " ").title()
+        return "My imagery"
 
     @property
     def price_per_km2(self) -> Optional[float]:
@@ -120,6 +132,9 @@ class Issue:
     """Something that stops the run. `field` tells the form which step to point at."""
     field: str      # model | area | imagery | account
     text: str
+    # Ways out, shown as links next to the text: (label, where) with where one of "top_up",
+    # "pricing" or "support". The form knows the addresses.
+    links: Tuple[Tuple[str, str], ...] = ()
 
 
 @dataclass
@@ -198,18 +213,27 @@ class RunDraft:
                                            f"(this layer has {area.polygons})."))
         if not self.imagery:
             found.append(Issue("imagery", "Choose imagery."))
-        elif self.aoi and self.imagery.kind == "provider" and self.imagery.provider \
-                and self.imagery.provider.min_area_km2 \
-                and self.processed_area.area_km2 < self.imagery.provider.min_area_km2:
-            found.append(Issue("imagery", f"{self.imagery.provider.display_name} needs at least "
-                                          f"{self.imagery.provider.min_area_km2:g} km²."))
+        else:
+            if self.imagery.kind == "catalog" and status is not None \
+                    and not status.can_search(self.imagery.catalog_provider):
+                found.append(Issue("account", f"{self.imagery.source_name} imagery isn't included in your plan. "
+                                              "Switch to a Premium plan, or ask support to enable it.",
+                                   (("See plans", "pricing"), ("Contact support", "support"))))
+            minimum, source = self.imagery.min_area_km2, self.imagery.source_name
+            if self.imagery.kind == "provider" and self.imagery.provider:
+                minimum = max(minimum, self.imagery.provider.min_area_km2)
+            elif self.imagery.kind == "catalog" and status is not None:
+                minimum = max(minimum, status.min_area_for(self.imagery.catalog_provider))
+            if self.aoi and minimum and self.processed_area.area_km2 < minimum:
+                found.append(Issue("imagery", f"{source} sells at least {minimum:,.2f} km² per order; the area is "
+                                              f"{self.processed_area.area_km2:,.2f} km². Choose a larger area."))
         if status and not found:
             if status.billing is BillingType.credits:
                 estimate = self.estimate()
                 cost = server_cost if server_cost is not None else (estimate.credits if estimate else None)
                 if cost is not None and cost > status.remaining_credits:
                     found.append(Issue("account", f"This run needs {cost:,} credits; you have "
-                                                  f"{status.remaining_credits:,}."))
+                                                  f"{status.remaining_credits:,}.", (("Top up", "top_up"),)))
             elif status.billing is BillingType.area and self.aoi:
                 if self.processed_area.area_km2 > status.remaining_area_km2:
                     found.append(Issue("account", f"This run needs {self.processed_area.area_km2:,.2f} km²; you have "

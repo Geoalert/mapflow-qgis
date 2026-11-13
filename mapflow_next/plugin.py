@@ -116,6 +116,7 @@ class MapflowNextPlugin:
         else:
             self.iface.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.dock)
         self.dock.visibilityChanged.connect(self.action.setChecked)
+        self.dock.visibilityChanged.connect(session.set_active)
         session.restore()
 
     def toggle(self, checked: bool = True) -> None:

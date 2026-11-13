@@ -6,6 +6,7 @@ Keycloak for a person who is already signed in to Mapflow in their browser: it c
 the redirect address and PKCE, and hands out short access tokens and rotating refresh tokens.
 """
 import base64
+import copy
 import hashlib
 import json
 import re
@@ -32,6 +33,9 @@ class State:
         self.steps = {}
         self.requests = []
         self.lock = threading.Lock()
+        self.starred = {"project-3"}       # starred in Mapflow Web
+        self.catalog_many = False          # the catalog answers with 60 images, in pages
+        self.extra_mosaics = []            # collections added while the test runs (an empty one)
         self.codes = {}                 # code → (code_challenge, redirect_uri)
         self.access_tokens = set()
         self.refresh_tokens = set()
@@ -135,8 +139,29 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, fixtures.PROJECT)
         if method == "GET" and path == "/user/status":
             return self._send(200, fixtures.STATUS)
+        if method == "POST" and path == "/projects/starred":
+            every = [fixtures.PROJECT, fixtures.PROJECT_2] + fixtures.MORE_PROJECTS
+            with self.state.lock:
+                page = [dict(p, starred=True) for p in every if p["id"] in self.state.starred]
+            return self._send(200, {"results": page, "total": len(page), "count": len(page)})
+        match = re.fullmatch(r"/projects/([\w-]+)/starred", path)
+        if method in ("POST", "DELETE") and match:
+            with self.state.lock:
+                (self.state.starred.add if method == "POST" else self.state.starred.discard)(match.group(1))
+            return self._send(200, "", "text/plain")
+        match = re.fullmatch(r"/processings/([\w-]+)", path)
+        if method == "DELETE" and match:
+            with self.state.lock:
+                self.state.processings = [p for p in self.state.processings if p["id"] != match.group(1)]
+            return self._send(200, "", "text/plain")
+        match = re.fullmatch(r"/catalog/preview/([\w-]+)", path)
+        if method == "GET" and match:
+            return self._send(200, PNG, "image/png")
         if method == "POST" and path == "/projects/page":
-            projects = [fixtures.PROJECT, fixtures.PROJECT_2] + fixtures.MORE_PROJECTS
+            with self.state.lock:
+                starred = set(self.state.starred)
+            projects = [dict(p, starred=p["id"] in starred)
+                        for p in [fixtures.PROJECT, fixtures.PROJECT_2] + fixtures.MORE_PROJECTS]
             needle = (body.get("filter") or "").lower()
             if needle:
                 projects = [p for p in projects if needle in p["name"].lower()]
@@ -200,13 +225,24 @@ class Handler(BaseHTTPRequestHandler):
             if bad:   # what the real API answers
                 return self._send(400, {"code": "BAD_REQUEST", "message": f"Invalid value for: body ('{bad[0]}' is "
                                         "not a member of enum io.geoalert.mapflow.model.enums.ProductType)"})
-            return self._send(200, fixtures.CATALOG)
+            base = f"http://127.0.0.1:{self.server.server_address[1]}/rest"
+            if self.state.catalog_many:
+                every = [dict(copy.deepcopy(fixtures.CATALOG["images"][0]), id=f"many-{n:02d}",
+                              previewUrl=f"{base}/catalog/preview/many-{n:02d}") for n in range(60)]
+                offset, limit = int(body.get("offset") or 0), int(body.get("limit") or 50)
+                return self._send(200, {"images": every[offset:offset + limit], "total": len(every),
+                                        "limit": limit, "offset": offset})
+            catalog = copy.deepcopy(fixtures.CATALOG)
+            catalog["images"][0]["previewUrl"] = f"{base}/catalog/preview/img-1"   # a picture preview
+            return self._send(200, catalog)
         if method == "GET" and path == "/rasters/mosaic":
-            return self._send(200, fixtures.MOSAICS)
+            return self._send(200, fixtures.MOSAICS + self.state.extra_mosaics)
         match = re.fullmatch(r"/rasters/mosaic/([\w-]+)/image", path)
         if method == "GET" and match:
             base = f"http://127.0.0.1:{self.server.server_address[1]}/rest"
             names = fixtures.MOSAIC_IMAGES.get(match.group(1), [])
+            with self.state.lock:
+                self.state.image_requests = getattr(self.state, "image_requests", 0) + 1
             return self._send(200, [fixtures.mosaic_image(f"{match.group(1)}-i{n}", match.group(1), name, base)
                                     for n, name in enumerate(names)])
         match = re.fullmatch(r"/rasters/image/([\w-]+)", path)

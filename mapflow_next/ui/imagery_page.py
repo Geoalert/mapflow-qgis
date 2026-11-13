@@ -7,13 +7,13 @@ from typing import Dict, List, Optional, Tuple
 from qgis.PyQt.QtCore import QDate, Qt, pyqtSignal
 from qgis.PyQt.QtGui import QPixmap
 from qgis.PyQt.QtWidgets import (QComboBox, QDateEdit, QGridLayout, QHBoxLayout, QLabel, QProgressBar, QPushButton,
-                                 QScrollArea, QSlider, QVBoxLayout, QWidget)
+                                 QScrollArea, QSlider, QToolButton, QVBoxLayout, QWidget)
 
 from .. import config
 from ..core import formatting
 from ..core.models import CatalogImage, Mosaic
 from . import icons
-from .theme import tokens
+from .theme import set_prop, tokens
 from .widgets import (Callout, Card, Combo, ElidedLabel, Pill, Segmented, button, clear_layout, label, link,
                       placeholder, rounded, tool, vbox)
 
@@ -21,7 +21,8 @@ from .widgets import (Callout, Card, Combo, ElidedLabel, Pill, Segmented, button
 class ImageryPage(QWidget):
     searchRequested = pyqtSignal(dict)
     useImage = pyqtSignal(str)
-    showImage = pyqtSignal(str)
+    showImage = pyqtSignal(str)               # the eye: the image's preview on or off the map
+    moreResults = pyqtSignal()
     useMosaic = pyqtSignal(str)
     showMosaic = pyqtSignal(str)
     uploadRequested = pyqtSignal()
@@ -33,6 +34,9 @@ class ImageryPage(QWidget):
         super().__init__(parent)
         self.setObjectName("mfPage")
         self._thumbs: Dict[str, QLabel] = {}
+        self._pixmaps: Dict[str, QPixmap] = {}      # loaded thumbnails, kept while the results are
+        self._eyes: Dict[str, QToolButton] = {}
+        self.more_button: Optional[QPushButton] = None
         self.my_data_url = config.WEB_URL + config.MY_DATA_PATH     # the controller sets the environment's
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -143,7 +147,7 @@ class ImageryPage(QWidget):
         self.results = QVBoxLayout()
         self.results.setSpacing(8)
         layout.addLayout(self.results)
-        layout.addWidget(link("Order scenes and connect providers in Mapflow Web", config.WEB_URL))
+        layout.addWidget(link("Get advanced imagery search tools in Mapflow Web", config.WEB_URL))
         layout.addStretch(1)
         return page
 
@@ -209,14 +213,35 @@ class ImageryPage(QWidget):
     def show_search_message(self, text: str, kind: str = "info") -> None:
         self.search_message.set(kind, text)
 
-    def set_results(self, images: List[CatalogImage], total: int, chosen: Optional[str]) -> None:
+    def set_results(self, images: List[CatalogImage], total: int, chosen: Optional[str],
+                    previewing: Optional[set] = None, loading_more: bool = False) -> None:
         self._clear(self.results)
-        self._thumbs = {}
+        self._thumbs, self._eyes = {}, {}
+        if not images:
+            self._pixmaps = {}
         self.results_title.setText(f"{total:,} images over your area" if total else "")
         self.results_title.setVisible(bool(total))
         self.clear_button.setVisible(bool(images))
         for image in images:
             self.results.addWidget(self._result_card(image, image.id == chosen))
+        self.set_previewing(previewing or set())
+        if images and len(images) < total:
+            more = button("Loading…" if loading_more else f"Show more · {len(images):,} of {total:,}", "outline",
+                          size="sm")
+            more.setEnabled(not loading_more)
+            more.clicked.connect(lambda *_: self.moreResults.emit())
+            self.results.addWidget(more)
+            self.more_button = more
+        else:
+            self.more_button = None
+
+    def set_previewing(self, image_ids: set) -> None:
+        """Which results have their preview on the map: their eye shows it as on."""
+        for image_id, eye in self._eyes.items():
+            on = image_id in image_ids
+            eye.setIcon(icons.icon("eye", tokens()["primary_ink" if on else "ink"], 16))
+            eye.setToolTip("Hide the preview" if on else "Show the preview and the footprint on the map")
+            set_prop(eye, "on", on)
 
     def _result_card(self, image: CatalogImage, chosen: bool) -> Card:
         card = Card(margins=(10, 10, 10, 10))
@@ -224,7 +249,8 @@ class ImageryPage(QWidget):
         row.setSpacing(10)
         thumb = QLabel(card)
         thumb.setFixedSize(56, 56)
-        thumb.setPixmap(placeholder("image", 56, 56, 8))
+        cached = self._pixmaps.get(image.id)
+        thumb.setPixmap(rounded(cached, 56, 56, 8) if cached is not None else placeholder("image", 56, 56, 8))
         self._thumbs[image.id] = thumb
         row.addWidget(thumb)
         texts = QVBoxLayout()
@@ -250,8 +276,9 @@ class ImageryPage(QWidget):
         row.addLayout(texts, 1)
         actions = QVBoxLayout()
         actions.setSpacing(4)
-        show = tool("eye", "Show the footprint on the map", "plain")
+        show = tool("eye", "Show the preview and the footprint on the map", "plain")
         show.clicked.connect(lambda *_: self.showImage.emit(image.id))
+        self._eyes[image.id] = show
         use = button("Chosen" if chosen else "Use", "outline" if chosen else "primary", size="sm")
         use.setEnabled(not chosen)
         use.clicked.connect(lambda *_: self.useImage.emit(image.id))
@@ -262,9 +289,18 @@ class ImageryPage(QWidget):
         return card
 
     def set_thumbnail(self, image_id: str, pixmap: QPixmap) -> None:
+        if pixmap.isNull():
+            return
+        self._pixmaps[image_id] = pixmap
         thumb = self._thumbs.get(image_id)
-        if thumb is not None and not pixmap.isNull():
+        if thumb is not None:
             thumb.setPixmap(rounded(pixmap, 56, 56, 8))
+
+    def has_thumbnail(self, image_id: str) -> bool:
+        return image_id in self._pixmaps
+
+    def forget_thumbnails(self) -> None:
+        self._pixmaps = {}
 
     # ---------- My imagery ----------
 

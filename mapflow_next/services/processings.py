@@ -38,6 +38,8 @@ class Processings(QObject):
     failed = pyqtSignal(object)             # a watched processing failed
     costReady = pyqtSignal(int, object, str)   # request token, credits or None, error text
     actionFailed = pyqtSignal(str)
+    refreshed = pyqtSignal()                # a refresh of the list came back (or failed)
+    rated = pyqtSignal(str, int)            # processing id, rating: Mapflow saved it
 
     def __init__(self, api: MapflowApi, parent=None):
         super().__init__(parent)
@@ -59,6 +61,8 @@ class Processings(QObject):
         self._cost_token = 0
         self._cost_request = 0
         self._loading = False
+        self._again = False                     # refresh once more when the request in flight comes back
+        self._deleted: Set[str] = set()         # gone from Mapflow, though a reply in flight may still list it
         self.loading_more = False
 
     # ---------- list ----------
@@ -86,15 +90,21 @@ class Processings(QObject):
         self._poll.stop()
         self._cost_timer.stop()
 
-    def refresh(self) -> None:
-        if not self.project or self._loading:
-            return
+    def refresh(self) -> bool:
+        """Ask for the newest page. False if there is nothing to ask (no project). While a request is in
+        flight, another follows it: what changed in between (a deletion) must show."""
+        if not self.project:
+            return False
+        if self._loading:
+            self._again = True
+            return True
         self._loading = True
         project_id = self.project.id
         # The newest processings, as many as are shown (up to the API's page limit); polling keeps them current
         limit = min(max(PROCESSINGS_PAGE_SIZE, len(self.items)), MAX_PAGE)
         self.api.processings(project_id, partial(self._on_list, project_id), partial(self._on_list_error, project_id),
                              limit=limit)
+        return True
 
     def load_more(self) -> None:
         """The next page of older processings."""
@@ -112,7 +122,7 @@ class Processings(QObject):
         self.loading_more = False
         known = {p.id for p in self.items}
         for item in items:
-            if item.id not in known:
+            if item.id not in known and item.id not in self._deleted:
                 self.items.append(item)
                 self._last_status.setdefault(item.id, item.status)
         self.total = max(total, len(self.items))
@@ -131,20 +141,28 @@ class Processings(QObject):
         if not self._current(project_id):
             return
         self._loading = False
+        items = [p for p in items if p.id not in self._deleted]
         for item in items:
             before = self._last_status.get(item.id)
             if before is not None and not before.is_terminal and item.status.is_terminal:
                 (self.finished if item.status is Status.ok else self.failed).emit(item)
             self._last_status[item.id] = item.status
-        self.items, self.total = _merge(items, self.items), total
+        self.items = [p for p in _merge(items, self.items) if p.id not in self._deleted]
+        self.total = max(total, len(self.items))
         self.changed.emit(self.items)
-        if any(not p.is_final for p in items):
+        self.refreshed.emit()
+        if self._again:
+            self._again = False
+            self.refresh()
+        elif any(not p.is_final for p in items):
             self._poll.start()
 
     def _on_list_error(self, project_id: str, error: ApiError) -> None:
         if not self._current(project_id):
             return
         self._loading = False
+        self._again = False
+        self.refreshed.emit()
         self._poll.start()        # transient errors: try again on the next tick
 
     def get(self, processing_id: str) -> Optional[Processing]:
@@ -196,13 +214,23 @@ class Processings(QObject):
         self.api.restart(processing.id, lambda _: self.refresh(), self._action_failed)
 
     def delete(self, processing: Processing) -> None:
-        self.api.delete(processing.id, lambda _: self.refresh(), self._action_failed)
+        def done(_answer) -> None:
+            # Off the list at once: the next page from Mapflow may still be on its way with it
+            self._deleted.add(processing.id)
+            before = len(self.items)
+            self.items = [p for p in self.items if p.id != processing.id]
+            self.total = max(self.total - (before - len(self.items)), len(self.items))
+            self.changed.emit(self.items)
+            self.refresh()
+
+        self.api.delete(processing.id, done, self._action_failed)
 
     def rename(self, processing: Processing, name: str, description: str) -> None:
         self.api.rename(processing, name, description, lambda _: self.refresh(), self._action_failed)
 
     def rate(self, processing: Processing, rating: int, feedback: str = "") -> None:
-        self.api.rate(processing.id, rating, feedback, lambda _: None, self._action_failed)
+        self.api.rate(processing.id, rating, feedback, lambda _: self.rated.emit(processing.id, rating),
+                      self._action_failed)
 
     def _action_failed(self, error: ApiError) -> None:
         self.actionFailed.emit(error.message)

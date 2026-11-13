@@ -18,9 +18,12 @@ PREVIEW_PROPERTY = "mapflow_next/preview"
 WEB_URL = "https://app.mapflow.ai"
 # Mapflow Web of each environment (mapflow_env). One not listed here opens production's, unless the
 # `mapflow_next/web_url` setting says where it is.
-WEB_URLS = {"production": WEB_URL}
+WEB_URLS = {"production": WEB_URL, "duty": "https://duty.mapflow.ai"}
 MY_DATA_PATH = "/my-data"          # My imagery collections in Mapflow Web
 TOP_UP_URL = f"{WEB_URL}/account/balance"
+PRICING_URL = "https://mapflow.ai/pricing"
+AI_AGENT_URL = f"{WEB_URL}/#home-top"
+SUPPORT_EMAIL = "help@geoalert.io"
 API_TOKEN_URL = f"{WEB_URL}/account/api"
 SIGN_UP_URL = WEB_URL
 PROJECTS_URL = f"{WEB_URL}/en/projects"    # sharing happens here (project card ⋯ → Share)
@@ -31,7 +34,8 @@ CUSTOM_MODELS_URL = "https://mapflow.ai/custom-models"
 RELEASES_URL = "https://github.com/Geoalert/mapflow-qgis/releases"
 
 POLL_INTERVAL_MS = 6_000          # processings list while something runs
-STATUS_INTERVAL_MS = 30_000       # balance and limits
+STATUS_INTERVAL_MS = 5_000        # balance and limits, while the Mapflow panel is open
+STATUS_IDLE_INTERVAL_MS = 60_000  # …and while it is closed
 COST_DEBOUNCE_MS = 400            # wait for the form to settle before asking /cost
 TIMEOUT_S = 30
 RESULT_TIMEOUT_S = 600

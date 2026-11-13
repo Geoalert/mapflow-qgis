@@ -13,6 +13,7 @@ from ..core.models import CatalogImage, Mosaic, MosaicImage
 
 class Imagery(QObject):
     searchDone = pyqtSignal(list, int)        # [CatalogImage], total
+    moreDone = pyqtSignal(list, int)          # the next page's new images, total
     searchFailed = pyqtSignal(str)
     mosaicsChanged = pyqtSignal(list)         # [Mosaic]
     mosaicImagesChanged = pyqtSignal(str, list)   # mosaic id, [MosaicImage]
@@ -24,6 +25,10 @@ class Imagery(QObject):
         super().__init__(parent)
         self.api = api
         self.results: List[CatalogImage] = []
+        self.total = 0                          # images matching the last search, loaded or not
+        self.loading_more = False
+        self._request: Optional[dict] = None
+        self._search_id = 0
         self.mosaics: List[Mosaic] = []
         self.images: Dict[str, List[MosaicImage]] = {}
         self._images_loading: Set[str] = set()
@@ -43,11 +48,50 @@ class Imagery(QObject):
             "sortOrder": "DESC",
         }
         request = {key: value for key, value in request.items() if value is not None}
-        self.api.search_catalog(request, self._found, lambda error: self.searchFailed.emit(error.message))
+        self._request, self.total, self.loading_more = request, 0, False
+        self._search_id += 1
+        search_id = self._search_id
+        self.api.search_catalog(request, lambda images, total: self._found(search_id, images, total),
+                                lambda error: self.searchFailed.emit(error.message))
 
-    def _found(self, images: List[CatalogImage], total: int) -> None:
+    def _found(self, search_id: int, images: List[CatalogImage], total: int) -> None:
+        if search_id != self._search_id:            # a newer search went out
+            return
         self.results = images
-        self.searchDone.emit(images, total)
+        self.total = max(total, len(images))
+        self.searchDone.emit(images, self.total)
+
+    @property
+    def has_more(self) -> bool:
+        return bool(self._request) and len(self.results) < self.total
+
+    def search_more(self) -> None:
+        """The next page of the same search."""
+        if not self.has_more or self.loading_more:
+            return
+        self.loading_more = True
+        search_id = self._search_id
+
+        def done(images: List[CatalogImage], total: int) -> None:
+            if search_id != self._search_id:
+                return
+            self.loading_more = False
+            known = {i.id for i in self.results}
+            self.results += [i for i in images if i.id not in known]
+            # A page that brings nothing new ends the list, whatever the total says
+            self.total = max(total, len(self.results)) if any(i.id not in known for i in images) else len(self.results)
+            self.moreDone.emit([i for i in images if i.id not in known], self.total)
+
+        def failed(error) -> None:
+            if search_id == self._search_id:
+                self.loading_more = False
+                self.searchFailed.emit(f"More images didn't load: {error.message}")
+
+        self.api.search_catalog(self._request, done, failed, offset=len(self.results))
+
+    def clear_results(self) -> None:
+        self._search_id += 1
+        self.results, self.total, self._request, self.loading_more = [], 0, None, False
 
     def get_result(self, image_id: str) -> Optional[CatalogImage]:
         return next((i for i in self.results if i.id == image_id), None)

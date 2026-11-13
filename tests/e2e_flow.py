@@ -21,7 +21,7 @@ from qgis.PyQt.QtGui import QDesktopServices  # noqa: E402
 from qgis.PyQt.QtTest import QTest  # noqa: E402
 from qgis.PyQt.QtWidgets import QAction, QSlider, QToolBar, QToolButton  # noqa: E402
 from qgis.PyQt.QtGui import QColor, QPalette  # noqa: E402
-from qgis.PyQt.QtWidgets import QApplication, QComboBox, QLabel, QPushButton  # noqa: E402
+from qgis.PyQt.QtWidgets import QApplication, QComboBox, QLabel, QPushButton, QWidget  # noqa: E402
 from qgis.core import (QgsFeature, QgsGeometry, QgsPointXY, QgsProject, QgsRectangle, QgsSettings,  # noqa: E402
                        QgsVectorLayer, QgsVectorTileLayer)
 
@@ -397,6 +397,17 @@ def main():
     check(arcgis.price == "+8.5 cr/km²", f"imagery prices per km² are rounded (8.523731677829918 → {arcgis.price})")
     check(run.model_price.text() == "10 cr/km²",
           f"What to map shows the model's price, from pricePerSqKm ({run.model_price.text()!r})")
+    texts = {w.text() for w in run.findChildren(QLabel)} | {b.text() for b in run.findChildren(QToolButton)}
+    check("Name:" in texts and "Saves as" not in texts, "the processing name is labelled “Name:”")
+    check("Select features" in texts and "Selected features" not in texts,
+          "the area tool reads “Select features” (a tool, not an option)")
+    agent = [b for b in content.start.findChildren(QPushButton) if "AI Agent" in b.text()]
+    links.opened.clear()
+    agent and agent[0].click()
+    check(links.opened == ["https://app.mapflow.ai/#home-top"],
+          f"the AI Agent link opens Mapflow's home ({links.opened})")
+    check(session._timer.interval() == 5000 and session._timer.isActive(),
+          "while the panel is open, the balance and plan are checked every 5 seconds")
 
     # the mouse wheel over a zoom list scrolls the form; only the opened list changes the zoom
     from qgis.PyQt.QtCore import QPoint, QPointF
@@ -490,6 +501,52 @@ def main():
     check(wait_until(lambda: processings.get(started["id"]).name == "Old town heights", 5),
           "the renamed processing shows its new name")
 
+    # rate: a star opens the feedback form; only "Send feedback" sends, and the rating stays shown
+    seen = []
+
+    def comment(dialog):
+        dialog.stars.set_value(4)
+        dialog.comment.setPlainText("Missed two small sheds")
+    close_modal_later(seen, comment)
+    content.processings.rate.emit(started["id"], 3)
+
+    def ratings():
+        return [r for r in state.requests if r[0] == "PUT" and r[1] == f"/processings/{started['id']}/rate"]
+    check(seen == ["FeedbackDialog"] and wait_until(lambda: ratings(), 5)
+          and ratings()[-1][2] == {"rating": 4, "feedback": "Missed two small sheds"},
+          "a star opens the feedback form, and Send feedback sends the rating with the comment")
+    check(wait_until(lambda: content.processings.ratings.get(started["id"]) == 4, 3),
+          "the rating stays shown when the processing is opened again")
+    seen = []
+    close_modal_later(seen)                      # Cancel
+    content.processings.rate.emit(started["id"], 1)
+    wait_until(lambda: False, 0.6)
+    check(seen == ["FeedbackDialog"] and len(ratings()) == 1, "cancelling the form sends nothing")
+
+    # Open in Mapflow Web: that processing, in its project
+    links.opened.clear()
+    content.processings.openWeb.emit(started["id"])
+    check(links.opened == [f"https://app.mapflow.ai/projects/project-1?processing={started['id']}"],
+          f"Open in Mapflow Web opens that processing ({links.opened})")
+
+    # Download the area (AOI)
+    import mapflow_next.controller as controller_module
+    aoi_file = Path(tempfile.mkdtemp()) / "area.geojson"
+    saved_dialog = controller_module.QFileDialog.getSaveFileName
+    controller_module.QFileDialog.getSaveFileName = staticmethod(lambda *a, **k: (str(aoi_file), ""))
+    try:
+        content.processings.downloadAoi.emit(started["id"])
+        check(wait_until(lambda: aoi_file.exists(), 5)
+              and QgsProject.instance().mapLayersByName("Area · Old town heights"),
+              "Download the area saves the processing's AOI as GeoJSON and adds it to the map")
+    finally:
+        controller_module.QFileDialog.getSaveFileName = saved_dialog
+
+    # Refresh turns while the list is on its way
+    content.processings.refresh_button.click()
+    check(content.processings.refreshing, "Refresh turns while the list loads")
+    check(wait_until(lambda: not content.processings.refreshing, 5), "…and stops once it's back")
+
     # results as vector tiles: the map goes to the results, not to the whole world
     from mapflow_next.services.results import FILES, TILES
     results = plugin.services[4]
@@ -545,6 +602,39 @@ def main():
           "dates have a calendar picker with a visible calendar icon")
     check(isinstance(imagery_page.cloud, QSlider) and isinstance(imagery_page.nadir, QSlider),
           "cloud cover and off-nadir are sliders")
+    check(wait_until(lambda: imagery_page.has_thumbnail("img-1"), 5), "search results load their picture previews")
+    eye = imagery_page._eyes["img-1"]
+    eye.click()
+    check(wait_until(lambda: any(x.customProperty("mapflow_next/preview") == "catalog:img-1"
+                                 for x in QgsProject.instance().mapLayers().values()), 5)
+          and wait_until(lambda: imagery_page._eyes["img-1"].property("on") is True, 3),
+          "the eye on a search result puts its preview on the map, and shows it as on")
+    imagery_page._eyes["img-1"].click()
+    check(wait_until(lambda: not any(x.customProperty("mapflow_next/preview") == "catalog:img-1"
+                                     for x in QgsProject.instance().mapLayers().values()), 3)
+          and wait_until(lambda: imagery_page._eyes["img-1"].property("on") is not True, 3),
+          "…and a second click takes it off")
+    content.open_start()
+    content.go(2)
+    controller.render_search_results()
+    from mapflow_next.ui.widgets import rounded
+    shown = imagery_page._thumbs["img-1"].pixmap()
+    check(shown is not None and shown.toImage() == rounded(imagery_page._pixmaps["img-1"], 56, 56, 8).toImage(),
+          "back from Start, the results keep their picture previews")
+    links_texts = [b.text() for b in imagery_page.findChildren(QPushButton)]
+    check(any("Get advanced imagery search tools in Mapflow Web" in t for t in links_texts),
+          "the search links to Mapflow Web's advanced imagery search")
+    state.catalog_many = True
+    imagery_page.search_button.click()
+    check(wait_until(lambda: len(plugin.services[3].results) == 50, 5) and imagery_page.more_button is not None
+          and "50 of 60" in imagery_page.more_button.text(), "search results come in pages, with “Show more”")
+    imagery_page.more_button.click()
+    check(wait_until(lambda: len(plugin.services[3].results) == 60, 5) and imagery_page.more_button is None
+          and [r for r in state.requests if r[1] == "/catalog/meta"][-1][2]["offset"] == 50,
+          "“Show more” loads the next page (offset 50), and then there is no more")
+    state.catalog_many = False
+    imagery_page.search_button.click()
+    wait_until(lambda: len(plugin.services[3].results) == 2, 5)
     imagery_page.type_image.setChecked(False)
     imagery_page.cloud.setValue(35)
     imagery_page.search_button.click()
@@ -708,6 +798,25 @@ def main():
     mine = next(b for b in content.imagery.findChildren(QPushButton) if b.text().startswith("Manage collections"))
     mine.click()
     check(links.opened[-1:] == ["https://app.mapflow.ai/my-data"], "…as does the link under My imagery")
+
+    # an empty collection can't be chosen, and asking for its images doesn't go round in circles
+    state.extra_mosaics = [{"id": "m-empty", "name": "Empty upload", "created_at": "2026-11-12T10:00:00Z",
+                            "sizeInBytes": 0, "footprint": None,
+                            "rasterLayer": {"tileUrl": "", "tileJsonUrl": ""}, "tags": []}]   # no image count
+    imagery_service.load_mosaics()
+    check(wait_until(lambda: imagery_service.get_mosaic("m-empty") is not None, 5), "a new empty collection is listed")
+    before = controller.draft.imagery
+    asked = getattr(state, "image_requests", 0)
+    content.imagery.useMosaic.emit("m-empty")
+    wait_until(lambda: False, 1.5)
+    asked = getattr(state, "image_requests", 0) - asked
+    check(controller.draft.imagery is before and asked <= 2,
+          f"using an empty collection is refused, and its image list is asked for once ({asked} requests)")
+    check(any("has no images" in (m or "") for _l, m in iface.bar.messages[-3:]), "…with a message that says why")
+    picker.chosen.emit("m-empty", "")
+    check(controller.draft.imagery is before, "the picker can't choose it either")
+    state.extra_mosaics = []
+    imagery_service.load_mosaics()
     check(controller.aoi_layer.name() == "Extent of Drone survey March"
           and abs(controller.draft.aoi.area_km2 - 3 * extent_area) < 0.02 * 3 * extent_area,
           "the whole collection's extent (all its images) becomes the area")
@@ -769,10 +878,20 @@ def main():
     shot(projects_window, "14-projects", QSize(900, 640))
     projects_window.more_button.click()
     check(wait_until(lambda: len(projects_window.results) == 45, 5), "“Show more” loads the next page")
+    check(wait_until(lambda: controller.pinned_projects() == ["project-3"], 3),
+          f"a project starred in Mapflow Web is pinned here ({controller.pinned_projects()})")
     pin_target = next(t for t in projects_window.tiles if t.project.id == "project-30")
     pin_target.pin_button.click()
-    check(projects_window.tiles[0].project.id == "project-30" and controller.pinned_projects() == ["project-30"],
+    check(projects_window.tiles[0].project.id == "project-30"
+          and controller.pinned_projects() == ["project-30", "project-3"],
           "a pinned project moves to the top and stays pinned")
+    check(wait_until(lambda: "project-30" in state.starred, 3)
+          and any(r[0] == "POST" and r[1] == "/projects/project-30/starred" for r in state.requests),
+          "pinning stars the project in Mapflow (POST /projects/{id}/starred), so Mapflow Web shows it too")
+    unpin = next(t for t in projects_window.tiles if t.project.id == "project-3")
+    unpin.pin_button.click()
+    check(wait_until(lambda: "project-3" not in state.starred, 3) and controller.pinned_projects() == ["project-30"],
+          "unpinning unstars it (DELETE /projects/{id}/starred)")
     projects_window.search.setText("harb")
     check(wait_until(lambda: [p.id for p in projects_window.results] == ["project-2"], 5)
           and [r for r in state.requests if r[1] == "/projects/page"][-1][2].get("filter") == "harb",
@@ -814,10 +933,30 @@ def main():
     content.processings.more_button.click()
     check(wait_until(lambda: len(processings.items) == 70 and content.processings.more_button is None, 5),
           "the last page loads and “Show more” goes away")
-    check(len({p.id for p in processings.items}) == 70, "no processing is listed twice")
+
+    # delete: gone from the list as soon as Mapflow confirms, even with a refresh already on its way
+    import mapflow_next.controller as controller_module
+    from qgis.PyQt.QtWidgets import QMessageBox
+    saved_question = controller_module.QMessageBox.question
+    controller_module.QMessageBox.question = staticmethod(lambda *a, **k: QMessageBox.StandardButton.Yes)
+    try:
+        processings.refresh()                     # a list request in flight, sent before the deletion
+        content.processings.delete.emit("h-05")
+        check(wait_until(lambda: processings.get("h-05") is None and processings.total == 69, 5)
+              and not any(card.processing.id == "h-05"
+                          for card in content.processings.findChildren(QWidget) if hasattr(card, "processing")
+                          and card.isVisibleTo(content.processings)),
+              "a deleted processing leaves the list at once")
+        processings.refresh()
+        wait_until(lambda: False, 0.8)
+        check(processings.get("h-05") is None and chips["all"].text() == "All 69",
+              "…and doesn't come back with the next refresh")
+    finally:
+        controller_module.QMessageBox.question = saved_question
+    check(len({p.id for p in processings.items}) == len(processings.items) == 69, "no processing is listed twice")
     shot(content, "15-processings-paged", QSize(400, 880))
     processings.refresh()
-    check(wait_until(lambda: not processings._loading, 5) and len(processings.items) == 70,
+    check(wait_until(lambda: not processings._loading, 5) and len(processings.items) == 69,
           "polling keeps the older pages in the list")
 
     # ---------- account menu: Settings and Sign out ----------
