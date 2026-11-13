@@ -37,6 +37,7 @@ class State:
         self.catalog_many = False          # the catalog answers with 60 images, in pages
         self.extra_mosaics = []            # collections added while the test runs (an empty one)
         self.created_projects = []         # POST /projects
+        self.no_mosaics = False            # an account without collections
         self.codes = {}                 # code → (code_challenge, redirect_uri)
         self.access_tokens = set()
         self.refresh_tokens = set()
@@ -252,6 +253,8 @@ class Handler(BaseHTTPRequestHandler):
             catalog["images"][0]["previewUrl"] = f"{base}/catalog/preview/img-1"   # a picture preview
             return self._send(200, catalog)
         if method == "GET" and path == "/rasters/mosaic":
+            if self.state.no_mosaics:
+                return self._send(200, [])
             return self._send(200, fixtures.MOSAICS + self.state.extra_mosaics)
         match = re.fullmatch(r"/rasters/mosaic/([\w-]+)/image", path)
         if method == "GET" and match:

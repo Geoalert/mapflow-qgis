@@ -423,7 +423,8 @@ class RunPage(QWidget):
                 column.addWidget(zoom)
             if spec.pick:
                 pick = button(spec.pick, "outline", size="sm")
-                pick.setToolTip("Choose a collection, or one image of it")
+                pick.setToolTip("Upload a GeoTIFF to My imagery" if spec.pick.startswith("Upload")
+                                else "Choose a collection, or one image of it")
                 pick.clicked.connect(lambda *_: self.mosaicPickRequested.emit())
                 column.addWidget(pick)
             if spec.price:

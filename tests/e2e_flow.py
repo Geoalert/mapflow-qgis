@@ -661,10 +661,40 @@ def main():
     wait_until(lambda: controller.server_cost == 70, 3)
     shot(content, "07-run-catalog", QSize(400, 980))
 
+    # No collections yet: My imagery still shows in the run form, and offers the upload
+    imagery_service = plugin.services[3]
+    import mapflow_next.controller as controller_module
+    state.no_mosaics = True
+    imagery_service.load_mosaics()
+    check(wait_until(lambda: not imagery_service.mosaics, 5), "an account without collections")
+    controller.refresh_run()
+    rows, _selected = controller._imagery_rows(session.status, True)
+    mine = next((r for r in rows if r.key == "mosaic"), None)
+    check(mine is not None and mine.pick == "Upload a GeoTIFF…" and "No collections yet" in mine.meta,
+          "without collections, My imagery is still listed, with Upload a GeoTIFF…")
+    asked = []
+    saved_open = controller_module.QFileDialog.getOpenFileName
+    controller_module.QFileDialog.getOpenFileName = staticmethod(lambda *a, **k: (asked.append(a), ("", ""))[1])
+    try:
+        content.go(0)
+        content.open_run()
+        wait_until(lambda: False, 0.3)
+        upload = [b for row in content.run._rows for b in row.findChildren(QPushButton)
+                  if b.text() == "Upload a GeoTIFF…"]
+        upload and upload[0].click()
+        check(len(asked) == 1, "…and the button opens the file dialog to upload one")
+        before = controller.draft.imagery
+        controller.on_imagery("mosaic")
+        check(len(asked) == 2 and controller.draft.imagery is before,
+              "choosing the row asks for a file too, and changes nothing else")
+    finally:
+        controller_module.QFileDialog.getOpenFileName = saved_open
+    state.no_mosaics = False
+    imagery_service.load_mosaics()
+
     # My imagery: image counts, no empty space, the collection picker
     content.go(2)
     content.imagery.show_tab(1)
-    imagery_service = plugin.services[3]
     check(wait_until(lambda: imagery_service.get_mosaic("m-1").image_count == 3
                      and imagery_service.get_mosaic("m-2").image_count == 1, 5),
           "collections know how many images they have")

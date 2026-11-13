@@ -81,6 +81,7 @@ class Controller(QObject):
         self.previous_tool = None
         self.gallery: Optional[GalleryDialog] = None
         self.projects_dialog: Optional[ProjectsDialog] = None
+        self.uploading: Optional[int] = None         # upload progress in %, None when nothing uploads
         self.mosaic_picker: Optional[MosaicPicker] = None
         self._projects_request = 0
         self._area_counter = 0
@@ -182,11 +183,14 @@ class Controller(QObject):
         self.imagery.searchFailed.connect(self.on_search_failed)
         self.imagery.mosaicsChanged.connect(self.on_mosaics)
         self.imagery.mosaicImagesChanged.connect(self.on_mosaic_images)
-        self.imagery.uploadProgress.connect(lambda value: c.imagery.set_upload(value))
+        self.imagery.uploadProgress.connect(self._upload_progress)
         self.imagery.uploadDone.connect(lambda name: (
+            self._upload_progress(None),
             c.imagery.set_upload(None, f"“{name}” is uploaded and ready to use.", "info"),
             self.notify(f"“{name}” is uploaded to My imagery.", Qgis.MessageLevel.Success)))
-        self.imagery.uploadFailed.connect(lambda text: c.imagery.set_upload(None, text, "error"))
+        self.imagery.uploadFailed.connect(lambda text: (
+            self._upload_progress(None), c.imagery.set_upload(None, text, "error"),
+            self.notify(text, Qgis.MessageLevel.Warning)))
 
         self.results.loaded.connect(self.on_results_loaded)
         self.results.failed.connect(self.on_results_failed)
@@ -245,6 +249,7 @@ class Controller(QObject):
             self.results.reset()
             self.content.imagery.set_searching(False)
             self.content.imagery.set_upload(None)
+            self.uploading = None
             for dialog in (self.projects_dialog, self.mosaic_picker):
                 if dialog is not None:
                     dialog.close()
@@ -743,6 +748,10 @@ class Controller(QObject):
             if provider:
                 self.draft.imagery = ImageryChoice.from_provider(
                     provider, self.provider_zoom.get(name, self.preferred_zoom))
+        elif key == "mosaic" and not self.imagery.mosaics:
+            if self.uploading is None:
+                self.upload()
+            return
         elif key == "mosaic" and self.imagery.mosaics:
             if self.draft.imagery and self.draft.imagery.kind == "my_imagery":
                 return                                  # already chosen; "Choose…" opens the picker
@@ -1025,6 +1034,14 @@ class Controller(QObject):
                                    previewing=self._previewing(choice) if mine else None))
             if mine:
                 selected = "mosaic"
+        else:
+            # No collections yet: the row still shows, so the upload is found where imagery is chosen
+            uploading = self.uploading is not None
+            meta = (f"Uploading… {self.uploading}%" if uploading
+                    else "No collections yet. Upload a GeoTIFF to process your own imagery")
+            rows.append(ImageryRow(key="mosaic", title="My imagery", meta=meta,
+                                   pick="" if uploading else "Upload a GeoTIFF…",
+                                   price="Free" if credits_billing else ""))
         for provider in (status.data_providers if status else []):
             chosen = bool(choice and choice.kind == "provider" and choice.provider.name == provider.name)
             zoom = choice.zoom if chosen else provider.nearest_zoom(self.provider_zoom.get(provider.name, recommended))
@@ -1580,8 +1597,8 @@ class Controller(QObject):
     def open_mosaic_picker(self, mosaic_id: Optional[str] = None) -> None:
         """Choose a My imagery collection, or one image of it."""
         if not self.imagery.mosaics:
-            self.notify("No collections in My imagery yet. Upload a GeoTIFF on the Imagery sources tab.",
-                        Qgis.MessageLevel.Info)
+            if self.uploading is None:
+                self.upload()
             return
         if self.mosaic_picker is None:
             picker = MosaicPicker(self.iface.mainWindow(), self.session.config.my_data_url)
@@ -1684,6 +1701,13 @@ class Controller(QObject):
             self.refresh_run()
 
     @guarded
+    def _upload_progress(self, percent: Optional[int]) -> None:
+        """The upload's progress, on Imagery sources and in the run form's My imagery row."""
+        self.uploading = percent
+        if percent is not None:
+            self.content.imagery.set_upload(percent)
+        self.refresh_run()
+
     def upload(self) -> None:
         path, _ = QFileDialog.getOpenFileName(self.content, "Upload a GeoTIFF to My imagery", "",
                                               "GeoTIFF (*.tif *.tiff)")
@@ -1695,6 +1719,7 @@ class Controller(QObject):
                                                   "Cut it into parts or upload it in Mapflow Web.", "error")
             return
         self.content.imagery.set_upload(0, "")
+        self._upload_progress(0)
         self.imagery.upload(path, Path(path).stem)
 
 
