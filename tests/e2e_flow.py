@@ -898,7 +898,13 @@ def main():
           "searching filters projects by name on the server")
     links.opened.clear()
     projects_window.tiles[0].share_button.click()
-    check(links.opened == [config.PROJECTS_URL], "the share icon opens sharing in Mapflow Web")
+    check(links.opened == ["https://app.mapflow.ai/projects/project-2"],
+          f"the share icon opens that project in Mapflow Web ({links.opened})")
+    share = [b for b in projects_window.findChildren(QPushButton) if b.text().startswith("Share project in Mapflow")]
+    links.opened.clear()
+    share and share[0].click()
+    check(links.opened == [f"https://app.mapflow.ai/projects/{session.project.id}"],
+          f"“Share project in Mapflow Web” opens the current project there ({links.opened})")
     team = [b for b in projects_window.findChildren(QPushButton) if b.text().startswith("Team")]
     check(team, "the projects window links to the team page in Mapflow Web")
     shot(projects_window, "14b-projects-search", QSize(900, 640))
@@ -958,6 +964,30 @@ def main():
     processings.refresh()
     check(wait_until(lambda: not processings._loading, 5) and len(processings.items) == 69,
           "polling keeps the older pages in the list")
+
+    # ---------- a new project, from the projects window ----------
+    controller.open_projects()
+    projects_window = controller.projects_dialog
+    new = [b for b in projects_window.findChildren(QPushButton) if b.text() == "New project"]
+    check(new and new[0].isVisible(), "the projects window has New project")
+    seen = []
+
+    def name_it(dialog):
+        check(not dialog.save.isEnabled() and dialog.save.text() == "Create",
+              "Create stays disabled until the project has a name")
+        dialog.name.setText("Coastal survey 2026")
+        dialog.description.setPlainText("Buildings along the coast")
+    close_modal_later(seen, name_it)
+    new[0].click()
+    check(seen == ["RenameDialog"] and wait_until(lambda: session.project.name == "Coastal survey 2026", 5),
+          "New project asks for a name and opens the created project")
+    created = [r for r in state.requests if r[0] == "POST" and r[1] == "/projects"]
+    check(created and created[-1][2] == {"name": "Coastal survey 2026", "description": "Buildings along the coast"},
+          "…created with POST /projects {name, description}")
+    check(not projects_window.isVisible() and session.project.id.startswith("project-new"),
+          "the projects window closes on the new project")
+    session.select_project("project-2")
+    wait_until(lambda: session.project.id == "project-2", 5)
 
     # ---------- account menu: Settings and Sign out ----------
     menu_actions = {a.text(): a for a in content.account_menu.actions()}

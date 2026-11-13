@@ -125,6 +125,7 @@ class ProjectsDialog(QDialog):
     projectChosen = pyqtSignal(str)
     pinToggled = pyqtSignal(str, bool)
     shareRequested = pyqtSignal(str)
+    createRequested = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -154,7 +155,13 @@ class ProjectsDialog(QDialog):
         team = link("Team in Mapflow Web", config.TEAM_URL)
         team.setIcon(icons.icon("users", tokens()["link"], 14))
         head.addWidget(team)
-        head.addWidget(link("New project in Mapflow Web", config.PROJECTS_URL))
+        share = link("Share project in Mapflow Web", lambda: "")      # opens the current project
+        share.clicked.connect(lambda *_: self.shareRequested.emit(self.current_id or ""))
+        head.addWidget(share)
+        create = button("New project", "primary")
+        create.setIcon(icons.icon("plus", tokens()["primary_text"], 14))
+        create.clicked.connect(lambda *_: self.createRequested.emit())
+        head.addWidget(create)
         outer.addLayout(head)
 
         self.search = QLineEdit(self)
@@ -181,8 +188,8 @@ class ProjectsDialog(QDialog):
         outer.addWidget(self.scroll, 1)
 
         foot = QHBoxLayout()
-        foot.addWidget(label("Pinned projects stay on top, on this computer. Sharing and roles are managed in "
-                             "Mapflow Web.", "meta", wrap=True), 1)
+        foot.addWidget(label("Pinned projects stay on top: they are your starred projects in Mapflow Web. "
+                             "Sharing and roles are managed there.", "meta", wrap=True), 1)
         close = button("Close", "ghost")
         close.clicked.connect(lambda *_: self.reject())
         foot.addWidget(close)

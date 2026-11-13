@@ -61,6 +61,14 @@ class MapflowApi:
         call = self.http.post if starred else self.http.delete
         call(f"projects/{project_id}/starred", on_success=on_done, on_error=on_error)
 
+    def create_project(self, name: str, description: str, email: str, on_done: Callable[[Project], None],
+                       on_error: OnError = None) -> None:
+        body = {"name": name}
+        if description:
+            body["description"] = description
+        self.http.post("projects", body, on_error=on_error,
+                       on_success=lambda d: on_done(Project.from_api(d or {}, email)))
+
     def project(self, project_id: str, email: str, on_done: Callable[[Project], None],
                 on_error: OnError = None) -> None:
         self.http.get(f"projects/{project_id}", on_error=on_error,

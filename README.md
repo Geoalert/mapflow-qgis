@@ -32,8 +32,8 @@ The plugin covers the work that belongs next to the map. Each tab has its scenar
   older processings, rename them, run one again with the same settings, or delete it.
 - **Processings › Get the results into QGIS.** Finished results load as styled layers: GeoPackage files,
   or vector tiles for a quick look. Results can also be saved as GeoJSON.
-- **Projects › Work in a team project.** Switch projects, search and pin them, and see which are shared
-  and what your role allows.
+- **Projects › Work in a team project.** Create a project, switch projects, search and pin them, and see
+  which are shared and what your role allows.
 
 Managing data, projects and the team happens in [Mapflow Web](https://app.mapflow.ai), and the plugin
 links there (see [below](#in-the-plugin-and-in-mapflow-web)).
@@ -172,7 +172,8 @@ every Mapflow user. The plugin links to the right page wherever it leaves someth
 | Imagery search in the catalog | **Kept** | Footprints are judged on the map |
 | Upload a GeoTIFF to My imagery | **Kept**, as a new collection | Your imagery is made in QGIS and processed from there |
 | My imagery data management: create, rename and delete collections, add or delete images, download originals | **Mapflow Web** › [My data](https://app.mapflow.ai/my-data) ("Manage collections in Mapflow Web") | File management, not mapping: it needs whole collections in view and many files at once. Deleting is permanent and affects everyone in the project, so it belongs where the whole collection is shown |
-| Projects: create, rename, delete, share | **Mapflow Web** › [Projects](https://app.mapflow.ai/en/projects) (share icon in the Projects window) | Done rarely, and sharing needs the team's members and roles. The plugin switches, searches and pins projects |
+| Create a project | **Kept**: New project in the Projects window | Starting new work shouldn't need a trip to the browser |
+| Projects: rename, delete, share | **Mapflow Web** › the project ("Share project in Mapflow Web" and the share icon in the Projects window) | Done rarely, and sharing needs the team's members and roles. The plugin creates, switches, searches and pins projects |
 | Review: accept or send back results | **Mapflow Web** (the processing links there) | Review is a step of its own, with its own page, after the processing; the plugin shows that a processing needs it |
 | Balance and top-up, API tokens | **Mapflow Web** › [Account](https://app.mapflow.ai/account/balance) ("Top up" in the run form) | Payments and keys stay with the account |
 | Planned processings (search templates) and their areas | **Not yet** | Left out of the first release to keep it to the main flow |
@@ -221,7 +222,7 @@ make test-qt6 QT6_PYTHON=…    # the pages, sign-in and HTTP client on PyQt6 (4
 make check-qt6 QT6_PYTHON=…   # Qt enum names and calls that only Qt 5 accepts
 ```
 
-**The end-to-end test** (`tests/e2e_flow.py`, 197 checks) runs a real offscreen QGIS against a mock
+**The end-to-end test** (`tests/e2e_flow.py`, 203 checks) runs a real offscreen QGIS against a mock
 Mapflow API and sign-in server (`tests/mock_server.py`).
 - **Request checks:** the mock rejects request bodies the real API rejects, such as `myImagery` with both
   `mosaicId` and `imageIds`.

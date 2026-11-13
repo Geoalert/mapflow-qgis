@@ -36,6 +36,7 @@ class State:
         self.starred = {"project-3"}       # starred in Mapflow Web
         self.catalog_many = False          # the catalog answers with 60 images, in pages
         self.extra_mosaics = []            # collections added while the test runs (an empty one)
+        self.created_projects = []         # POST /projects
         self.codes = {}                 # code → (code_challenge, redirect_uri)
         self.access_tokens = set()
         self.refresh_tokens = set()
@@ -49,6 +50,11 @@ class Handler(BaseHTTPRequestHandler):
 
     def log_message(self, *args):
         pass
+
+    def _projects(self):
+        with self.state.lock:
+            created = list(self.state.created_projects)
+        return created + [fixtures.PROJECT, fixtures.PROJECT_2] + fixtures.MORE_PROJECTS
 
     def _send(self, status, body, content_type="application/json"):
         data = body if isinstance(body, bytes) else (body if isinstance(body, str) else json.dumps(body)).encode()
@@ -139,8 +145,18 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, fixtures.PROJECT)
         if method == "GET" and path == "/user/status":
             return self._send(200, fixtures.STATUS)
+        if method == "POST" and path == "/projects":
+            name = (body or {}).get("name", "").strip()
+            if not name:
+                return self._send(400, {"code": "INVALID_BODY", "message": "Invalid value for: body"})
+            project = dict(fixtures.PROJECT, id=f"project-new-{len(self.state.created_projects) + 1}", name=name,
+                           description=(body or {}).get("description"), isDefault=False,
+                           created="2026-11-13T19:00:00Z", updated="2026-11-13T19:00:00Z")
+            with self.state.lock:
+                self.state.created_projects.insert(0, project)
+            return self._send(200, project)
         if method == "POST" and path == "/projects/starred":
-            every = [fixtures.PROJECT, fixtures.PROJECT_2] + fixtures.MORE_PROJECTS
+            every = self._projects()
             with self.state.lock:
                 page = [dict(p, starred=True) for p in every if p["id"] in self.state.starred]
             return self._send(200, {"results": page, "total": len(page), "count": len(page)})
@@ -161,7 +177,7 @@ class Handler(BaseHTTPRequestHandler):
             with self.state.lock:
                 starred = set(self.state.starred)
             projects = [dict(p, starred=p["id"] in starred)
-                        for p in [fixtures.PROJECT, fixtures.PROJECT_2] + fixtures.MORE_PROJECTS]
+                        for p in self._projects()]
             needle = (body.get("filter") or "").lower()
             if needle:
                 projects = [p for p in projects if needle in p["name"].lower()]
@@ -170,7 +186,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, {"results": page, "total": len(projects), "count": len(page)})
         match = re.fullmatch(r"/projects/([\w-]+)", path)
         if method == "GET" and match:
-            every = [fixtures.PROJECT, fixtures.PROJECT_2] + fixtures.MORE_PROJECTS
+            every = self._projects()
             project = next((p for p in every if p["id"] == match.group(1)), None)
             if project:
                 return self._send(200, project)

@@ -324,7 +324,8 @@ class Controller(QObject):
             dialog.moreRequested.connect(self._more_projects)
             dialog.projectChosen.connect(self._choose_project)
             dialog.pinToggled.connect(self._pin_project)
-            dialog.shareRequested.connect(lambda *_: QDesktopServices.openUrl(QUrl(config.PROJECTS_URL)))
+            dialog.shareRequested.connect(self._share_project)
+            dialog.createRequested.connect(self.create_project)
             self.projects_dialog = dialog
         dialog = self.projects_dialog
         dialog.search.blockSignals(True)
@@ -398,6 +399,33 @@ class Controller(QObject):
             self._query_projects(dialog.query, offset=len(dialog.results))
 
     @guarded
+    def _share_project(self, project_id: str) -> None:
+        """Sharing and roles are managed in Mapflow Web: open the project there."""
+        web = self.session.config.web_url
+        QDesktopServices.openUrl(QUrl(f"{web}/projects/{project_id}" if project_id else config.PROJECTS_URL))
+
+    @guarded
+    def create_project(self) -> None:
+        """A new project, made current at once: the next processing runs in it."""
+        dialog = RenameDialog("", "", self.projects_dialog or self.iface.mainWindow(), title="New project",
+                              action="Create", what="project")
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        name, description = dialog.values()
+
+        def created(project):
+            if not project.id:
+                self.notify("Mapflow didn't create the project. Try again.", Qgis.MessageLevel.Warning)
+                return
+            self.notify(f"Project “{project.name}” is created and open.", Qgis.MessageLevel.Success)
+            if self.projects_dialog is not None:
+                self.projects_dialog.accept()
+            self.session.select_project(project.id, fallback=project)      # with its models, as listed
+
+        self.api.create_project(name, description, self.session.email, created,
+                                lambda error: self.notify(f"The project wasn't created: {error.message}",
+                                                          Qgis.MessageLevel.Warning))
+
     def _choose_project(self, project_id: str) -> None:
         if self.projects_dialog is not None:
             self.projects_dialog.accept()
