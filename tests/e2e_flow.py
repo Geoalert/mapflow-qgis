@@ -908,6 +908,50 @@ def main():
         check(wait_until(lambda: getattr(state, "image_requests", 0) > images_asked, 3)
               and "Uploaded to “Drone survey March”" in picker.upload_note.text.text(),
               "…its image list is asked for again, and the window says where the file went")
+
+        # a file the collection already has: the user decides, before anything is sent
+        asked_dup, answer = [], {"value": "skip"}
+        saved_ask = controller._ask_duplicate
+        controller._ask_duplicate = lambda files, where: (asked_dup.append((files, where)), answer["value"])[1]
+        try:
+            wait_until(lambda: "m-1" not in imagery_service._images_loading and "m-1" in imagery_service.images, 5)
+            state.uploads.clear()
+            picked["files"] = [make_geotiff("north.tif")]
+            picker.upload_button.click()
+            check(asked_dup == [(["north.tif"], "Drone survey March")]
+                  and "nothing new" in picker.upload_note.text.text() and not state.uploads,
+                  f"a file the collection already has is asked about first; Skip sends nothing ({asked_dup})")
+            answer["value"] = "upload"
+            picker.upload_button.click()
+            check(wait_until(lambda: [u[:2] for u in state.uploads] == [("image", "m-1")]
+                             and not imagery_service.uploading, 5),
+                  f"…Upload again adds it anyway (allow_duplicate) ({state.uploads})")
+            # Mapflow finds one the plugin's list didn't know about: the same question, then a retry
+            wait_until(lambda: "m-1" not in imagery_service._images_loading, 5)
+            imagery_service.images.pop("m-1", None)
+            state.uploads.clear()
+            asked_dup.clear()
+            picked["files"] = [make_geotiff("south.tif")]
+            picker.upload_button.click()
+            check(wait_until(lambda: [u[0] for u in state.uploads] == ["duplicate", "image"]
+                             and not imagery_service.uploading, 5)
+                  and asked_dup == [(["south.tif"], "Drone survey March")],
+                  f"when Mapflow refuses a repeated file, the user is asked, and Upload again retries it "
+                  f"({state.uploads})")
+            wait_until(lambda: "m-1" not in imagery_service._images_loading, 5)
+            imagery_service.images.pop("m-1", None)
+            state.uploads.clear()
+            answer["value"] = "cancel"
+            picked["files"] = [make_geotiff("centre.tif")]
+            picker.upload_button.click()
+            check(wait_until(lambda: not imagery_service.uploading and controller.uploading is None, 5)
+                  and [u[0] for u in state.uploads] == ["duplicate"]
+                  and "“centre.tif” is already in this collection" in picker.upload_note.text.text()
+                  and "existing_image_id" not in picker.upload_note.text.text(),
+                  f"…Cancel stops, with a readable reason ({picker.upload_note.text.text()})")
+        finally:
+            controller._ask_duplicate = saved_ask
+        wait_until(lambda: "m-1" not in imagery_service._images_loading, 5)
         picker._row_clicked("m-1")
         check(picker.current is None and "new collection" in picker.target.text()
               and not picker.use_all.isVisible(),

@@ -42,6 +42,7 @@ class State:
         self.list_uploads = False          # a one-file upload is listed afterwards as a collection with one image
         self.extra_images = {}             # …and its image: mosaic id → image names
         self.created_tags = {}             # collection id → the tags it was created with
+        self.added_names = {}              # collection id → file names uploaded into it during the run
         self.codes = {}                 # code → (code_challenge, redirect_uri)
         self.access_tokens = set()
         self.refresh_tokens = set()
@@ -297,7 +298,20 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, mosaic)
         match = re.fullmatch(r"/rasters/mosaic/([\w-]+)/image", path)
         if method == "POST" and match:
+            mosaic_id = match.group(1)
+            found = re.search(rb'filename="([^"]+)"', body if isinstance(body, bytes) else b"")
+            filename = found.group(1).decode() if found else ""
+            have = fixtures.MOSAIC_IMAGES.get(mosaic_id, []) + self.state.extra_images.get(mosaic_id, []) \
+                + self.state.added_names.get(mosaic_id, [])
+            if filename.lower() in {n.lower() for n in have} and "allow_duplicate=true" not in self.path:
+                # as the data catalog answers: no message, the file and the image it repeats in the parameters
+                with self.state.lock:
+                    self.state.uploads.append(("duplicate", mosaic_id, filename))
+                return self._send(409, {"detail": {"code": "ImageAlreadyExists", "message": "",
+                                                   "parameters": {"filename": filename,
+                                                                  "existing_image_id": f"{mosaic_id}-i0"}}})
             with self.state.lock:
+                self.state.added_names.setdefault(mosaic_id, []).append(filename)
                 self.state.uploads.append(("image", match.group(1), len(body or b"")))
                 if self.state.list_uploads and match.group(1) not in fixtures.MOSAIC_IMAGES:
                     self.state.extra_images.setdefault(match.group(1), []).append("centre.tif")

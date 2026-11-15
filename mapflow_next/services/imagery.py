@@ -35,6 +35,9 @@ class Imagery(QObject):
         self.images: Dict[str, List[MosaicImage]] = {}
         self._images_loading: Set[str] = set()
         self.uploading = False
+        # Asked when Mapflow says a collection already has a file: (file name, collection name) →
+        # "upload" (add it again), "skip" or "cancel". The controller sets it; without it, the upload stops.
+        self.on_duplicate: Optional[Callable[[str, str], str]] = None
         self._mosaics_at = 0.0                  # when the collections were last asked for (monotonic)
         self._mosaics_loading = False
 
@@ -200,41 +203,62 @@ class Imagery(QObject):
 
         self.api.create_mosaic(name, [], created, failed)
 
-    def upload_into(self, mosaic_id: str, paths: List[str]) -> None:
-        """GeoTIFFs added to an existing collection, one after another."""
+    def upload_into(self, mosaic_id: str, paths: List[str], duplicates_allowed: Optional[Set[str]] = None) -> None:
+        """GeoTIFFs added to an existing collection, one after another. `duplicates_allowed`: file names the
+        user already agreed to add although the collection has them."""
         if self.uploading or not paths:
             return
         self.uploading = True
         mosaic = self.get_mosaic(mosaic_id)
-        self._send_files(mosaic_id, paths, mosaic.name if mosaic else "My imagery")
+        self._send_files(mosaic_id, paths, mosaic.name if mosaic else "My imagery", duplicates_allowed or set())
 
-    def _send_files(self, mosaic_id: str, paths: List[str], name: str) -> None:
-        """Each file in turn into the collection, progress counted in bytes across them all. A failure stops
-        there; what is uploaded stays, and the message names the file."""
+    def _send_files(self, mosaic_id: str, paths: List[str], name: str, allowed: Optional[Set[str]] = None) -> None:
+        """Each file in turn into the collection, progress counted in bytes across them all. A file the
+        collection already has is up to the user (on_duplicate): added again, skipped, or the upload stops.
+        Any other failure stops there; what is uploaded stays, and the message names the file."""
         sizes = [Path(p).stat().st_size for p in paths]
         total = max(1, sum(sizes))
+        allowed = set(allowed or ())
+        sent_files: List[str] = []
 
         def finish() -> None:
             self.load_images(mosaic_id, force=True)
             self.load_mosaics()
 
-        def failed(error: ApiError, file: str):
+        def failed(error: ApiError, index: int):
+            file = Path(paths[index]).name
+            if "existing_image_id" in (error.params or {}) and self.on_duplicate is not None:
+                choice = self.on_duplicate(file, name)
+                if choice == "upload":
+                    allowed.add(file)
+                    send(index)
+                    return
+                if choice == "skip":
+                    send(index + 1)
+                    return
             self.uploading = False
-            self.uploadFailed.emit(f"{Path(file).name}: {error.message}")
+            self.uploadFailed.emit(f"{file}: {error.message}" if file not in error.message else error.message)
             finish()
 
         def send(index: int) -> None:
             if index == len(paths):
                 self.uploading = False
-                self.uploadDone.emit(name)
+                if sent_files:
+                    self.uploadDone.emit(name)
+                else:
+                    self.uploadFailed.emit(f"Nothing new to upload: “{name}” already has these images.")
                 finish()
                 return
             done_bytes = sum(sizes[:index])
 
             def progress(sent: int, _total: int):
                 self.uploadProgress.emit(min(99, int((done_bytes + sent) * 100 / total)))
-            self.api.upload_to_mosaic(mosaic_id, paths[index], lambda _d: send(index + 1),
-                                      lambda error: failed(error, paths[index]), progress)
+
+            def uploaded(_data) -> None:
+                sent_files.append(paths[index])
+                send(index + 1)
+            self.api.upload_to_mosaic(mosaic_id, paths[index], uploaded, lambda error: failed(error, index), progress,
+                                      allow_duplicate=Path(paths[index]).name in allowed)
 
         send(0)
 

@@ -158,8 +158,12 @@ class MapflowApi:
         self.http.post("rasters/mosaic", {"name": name, "tags": list(tags)}, on_success=on_done, on_error=on_error)
 
     def upload_to_mosaic(self, mosaic_id: str, file_path: str, on_done: Callable[[dict], None],
-                         on_error: OnError = None, on_progress: Optional[Callable] = None) -> None:
-        self.http.upload(f"rasters/mosaic/{mosaic_id}/image", file_path,
+                         on_error: OnError = None, on_progress: Optional[Callable] = None,
+                         allow_duplicate: bool = False) -> None:
+        """One file into a collection. Without `allow_duplicate`, Mapflow refuses a file the collection already
+        has (the error's params name it: filename, existing_image_id)."""
+        query = "?allow_duplicate=true" if allow_duplicate else ""
+        self.http.upload(f"rasters/mosaic/{mosaic_id}/image{query}", file_path,
                          on_success=on_done, on_error=on_error, on_progress=on_progress)
 
     def validate_image(self, metadata: dict, on_done: Callable[[dict], None], on_error: OnError = None) -> None:

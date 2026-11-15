@@ -144,6 +144,9 @@ def describe(code: Optional[str], params: Optional[Dict[str, Any]] = None, messa
                 pass
         return ("The area is too large: {area} km² is over the {aoiAreaLimit} km² limit of your plan. "
                 "Reduce the area of interest.").format_map(_Default(params))
+    if "existing_image_id" in params:
+        # The data catalog refuses a file a collection already has; its code varies, its parameters don't
+        return f"“{params.get('filename') or 'This image'}” is already in this collection."
     template = CODES.get(code or "") or BY_MESSAGE.get(message or "")
     if template:
         try:

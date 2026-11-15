@@ -8,7 +8,7 @@ import functools
 import traceback
 from pathlib import Path
 import json
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 from qgis.PyQt.QtCore import QObject, QTimer, QUrl
 from qgis.PyQt.QtGui import QDesktopServices, QPixmap
@@ -201,6 +201,7 @@ class Controller(QObject):
         self.imagery.mosaicsChanged.connect(self.on_mosaics)
         self.imagery.mosaicImagesChanged.connect(self.on_mosaic_images)
         self.imagery.uploadProgress.connect(self._upload_progress)
+        self.imagery.on_duplicate = lambda file, collection: self._ask_duplicate([file], collection)
         self.imagery.uploadDone.connect(lambda name: (
             self._upload_progress(None),
             c.imagery.set_upload(None, f"“{name}” is uploaded and ready to use.", "info"),
@@ -1851,6 +1852,27 @@ class Controller(QObject):
         if problem:
             self._upload_refused(problem)
             return
+        duplicates_allowed: Set[str] = set()
+        if mosaic_id:
+            # Files the collection already has (by name, as far as its image list is known here): asked about
+            # before any bytes go. Mapflow checks again, and the same question comes if it finds one.
+            mosaic = self.imagery.get_mosaic(mosaic_id)
+            known = {(i.filename or "").lower() for i in self.imagery.images.get(mosaic_id, [])}
+            repeated = [p for p in paths if Path(p).name.lower() in known]
+            if repeated:
+                choice = self._ask_duplicate([Path(p).name for p in repeated], mosaic.name if mosaic else "")
+                if choice == "cancel":
+                    return
+                if choice == "skip":
+                    keep = [p not in repeated for p in paths]
+                    paths = [p for p, k in zip(paths, keep) if k]
+                    checked = [c for c, k in zip(checked, keep) if k]
+                    if not paths:
+                        self._upload_refused(f"nothing new: “{mosaic.name if mosaic else 'the collection'}” "
+                                             f"already has {', '.join(Path(p).name for p in repeated)}")
+                        return
+                else:
+                    duplicates_allowed = {Path(p).name for p in repeated}
         folder = Path(paths[0]).parent.name
         name = name or (Path(paths[0]).stem if len(paths) == 1 else (folder or Path(paths[0]).stem))
         self.content.imagery.set_upload(0, "Checking…")
@@ -1870,7 +1892,7 @@ class Controller(QObject):
             if warnings:
                 self.notify("Mapflow: " + "; ".join(warnings[:3]), Qgis.MessageLevel.Info, duration=8)
             if mosaic_id:
-                self.imagery.upload_into(mosaic_id, paths)
+                self.imagery.upload_into(mosaic_id, paths, duplicates_allowed)
             elif len(paths) == 1:
                 self.imagery.upload(paths[0], name)
             else:
@@ -1938,6 +1960,24 @@ class Controller(QObject):
             self.notify(f"Couldn't create the collection “{name}”: {message}", Qgis.MessageLevel.Warning)
 
         self.imagery.create_collection(name, tags, created, failed)
+
+    def _ask_duplicate(self, files: List[str], collection: str) -> str:
+        """A collection already has these files: "upload" them again, "skip" them, or "cancel" the upload."""
+        names = ", ".join(f"“{f}”" for f in files[:5]) + (f" and {len(files) - 5} more" if len(files) > 5 else "")
+        where = f"“{collection}”" if collection else "this collection"
+        box = QMessageBox(self.mosaic_picker if self._picker_open() else self.iface.mainWindow())
+        box.setIcon(QMessageBox.Icon.Question)
+        box.setWindowTitle("Already in the collection")
+        box.setText(f"{where} already has {names}.")
+        box.setInformativeText("Upload again to add another copy, or skip "
+                               + ("it." if len(files) == 1 else "them and upload the rest."))
+        upload = box.addButton("Upload again", QMessageBox.ButtonRole.AcceptRole)
+        skip = box.addButton("Skip", QMessageBox.ButtonRole.DestructiveRole)
+        box.addButton(QMessageBox.StandardButton.Cancel)
+        box.setDefaultButton(skip)
+        box.exec()
+        clicked = box.clickedButton()
+        return "upload" if clicked is upload else "skip" if clicked is skip else "cancel"
 
     def _upload_refused(self, problem: str) -> None:
         text = f"Can't upload {problem}."
