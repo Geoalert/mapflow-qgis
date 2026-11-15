@@ -226,7 +226,7 @@ make test-qt6 QT6_PYTHON=…    # the pages, sign-in and HTTP client on PyQt6 (4
 make check-qt6 QT6_PYTHON=…   # Qt enum names and calls that only Qt 5 accepts
 ```
 
-**The end-to-end test** (`tests/e2e_flow.py`, 230 checks) runs a real offscreen QGIS against a mock
+**The end-to-end test** (`tests/e2e_flow.py`, 239 checks) runs a real offscreen QGIS against a mock
 Mapflow API and sign-in server (`tests/mock_server.py`).
 - **Request checks:** the mock rejects request bodies the real API rejects, such as `myImagery` with both
   `mosaicId` and `imageIds`.
@@ -242,6 +242,15 @@ Mapflow API and sign-in server (`tests/mock_server.py`).
 CI (`.github/workflows/tests.yml`) runs `test-qgis3`, `test-qgis4` and `lint` on every push to `dev` and
 `master` and on pull requests. Releases go through `qgis-plugin-ci` (`.qgis-plugin-ci` points at
 `mapflow_next`).
+
+**Release review.** Every release PR into `master` is reviewed by Claude, following
+[`.claude/agents/release-reviewer.md`](.claude/agents/release-reviewer.md)
+(`.github/workflows/release-review.yml`). It reads the whole plugin and starts from what changed since the
+last `v*` tag. It looks for wrong paid runs, stuck states, stale async answers, deleted QGIS objects, API
+contracts (checked against Mapflow's published OpenAPI) and QGIS 3/4 support. The report is posted on the PR
+and in the job summary. CRITICAL findings fail the check: make "release review" a required check on `master`.
+It needs an `ANTHROPIC_API_KEY` repository secret. To run it on any commit, use the workflow's "Run
+workflow" button; locally, ask Claude Code to "run the release-reviewer agent".
 
 ## Contributing
 
