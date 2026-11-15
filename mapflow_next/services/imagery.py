@@ -4,7 +4,7 @@ from __future__ import annotations
 import time
 from datetime import date
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Set
+from typing import Callable, Dict, List, Optional, Set, Tuple
 
 from qgis.PyQt.QtCore import QObject, pyqtSignal
 
@@ -207,30 +207,30 @@ class Imagery(QObject):
 
         self.api.create_mosaic(name, created, failed)
 
-    def validate(self, metadata: List[dict], on_done: Callable[[List[str]], None]) -> None:
-        """Mapflow's check of each image before it is uploaded: `on_done` gets the problems it reports (none:
-        all fine). An answer that isn't a verdict (the check isn't there, or failed) doesn't block the upload,
-        which Mapflow checks again anyway."""
+    def validate(self, images: List[Tuple[str, dict]], on_done: Callable[[List[str], List[str]], None]) -> None:
+        """Mapflow's check of each image, (file name, request), before it is uploaded. `on_done` gets the
+        reasons it refuses images and its warnings about the others. A request it can't answer (the check
+        isn't there, or failed) doesn't block the upload: the upload itself is checked again."""
         problems: List[str] = []
+        warnings: List[str] = []
 
         def ask(index: int) -> None:
-            if index == len(metadata):
-                on_done(problems)
+            if index == len(images):
+                on_done(problems, warnings)
                 return
-            meta = metadata[index]
+            filename, request = images[index]
 
             def answered(data: dict) -> None:
-                verdict = data.get("valid", data.get("isValid"))
-                if verdict is False:
-                    reason = data.get("message") or "; ".join(str(e) for e in data.get("errors") or []) \
-                        or "Mapflow can't process it"
-                    problems.append(f"{meta.get('filename', 'image')}: {reason}")
+                def messages(key: str) -> List[str]:
+                    return [str(r.get("message") or r.get("code")) for r in data.get(key) or []
+                            if isinstance(r, dict) and (r.get("message") or r.get("code"))]
+                if data.get("compatible") is False:
+                    problems.append(f"{filename}: {'; '.join(messages('reasons')) or 'Mapflow can’t process it'}")
+                warnings.extend(f"{filename}: {m}" for m in messages("warnings"))
                 ask(index + 1)
 
-            def refused(error: ApiError) -> None:
-                if error.status in (400, 422) and error.message:
-                    problems.append(f"{meta.get('filename', 'image')}: {error.message}")
+            def failed(_error: ApiError) -> None:      # http logs it
                 ask(index + 1)
-            self.api.validate_image(meta, answered, refused)
+            self.api.validate_image(request, answered, failed)
 
         ask(0)

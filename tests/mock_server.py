@@ -256,12 +256,31 @@ class Handler(BaseHTTPRequestHandler):
             catalog["images"][0]["previewUrl"] = f"{base}/catalog/preview/img-1"   # a picture preview
             return self._send(200, catalog)
         if method == "POST" and path == "/rasters/validate-image-metadata":
-            meta = body if isinstance(body, dict) else {}
-            if meta.get("count") not in (1, 3, 4) or not meta.get("crs"):
-                return self._send(400, {"code": "INVALID_IMAGE", "message": "Mapflow can't process this image"})
-            if (meta.get("dtypes") or ["uint8"])[0] != "uint8":
-                return self._send(200, {"valid": False, "message": "the image must be 8-bit"})
-            return self._send(200, {"valid": True})
+            # the schema of Mapflow's ValidationRequest (rasters/openapi.json): these fields, no others
+            body = body if isinstance(body, dict) else {}
+            required = {"width", "height", "channels", "dtype", "crs", "pixel_size_meters", "footprint",
+                        "file_size_bytes"}
+            detail = [{"loc": ["body", k], "msg": "Field required", "type": "missing"}
+                      for k in sorted(required - set(body))]
+            detail += [{"loc": ["body", k], "msg": "Extra inputs are not permitted", "type": "extra_forbidden"}
+                       for k in sorted(set(body) - required - {"mosaic_id", "preserve_data_type"})]
+            footprint = body.get("footprint") or {}
+            if body.get("dtype", "uint8") not in ("uint8", "uint16", "int16", "float32", "int32") \
+                    or len(body.get("pixel_size_meters") or [0, 0]) != 2 \
+                    or (footprint and (footprint.get("type") != "Polygon" or not footprint.get("coordinates"))):
+                detail.append({"loc": ["body"], "msg": "Input should be valid", "type": "value_error"})
+            if detail:
+                return self._send(422, {"detail": detail})
+            reasons, warnings = [], []
+            if body["dtype"] != "uint8":
+                reasons.append({"code": "FileValidationFailed", "parameters": {"dtype": body["dtype"]},
+                                "message": "the image must be 8-bit"})
+            if body["channels"] == 1:
+                warnings.append({"code": "SingleBand", "parameters": {},
+                                 "message": "a single band is processed as grayscale"})
+            return self._send(200, {"compatible": not reasons, "reasons": reasons, "warnings": warnings,
+                                    "needs_preprocessing": False, "needs_async_preprocessing": False,
+                                    "estimated_preprocessed_size_bytes": None})
         if method == "POST" and path == "/rasters/mosaic":
             mosaic = {"id": f"m-new-{len(self.state.uploads) + 1}", "name": (body or {}).get("name"),
                       "created_at": "2026-11-13T21:00:00Z", "tags": []}

@@ -5,12 +5,16 @@ from __future__ import annotations
 from pathlib import Path
 from typing import List, Optional, Tuple
 
-from qgis.core import QgsMapLayer, QgsProject, QgsRasterLayer
+from qgis.core import (QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsDistanceArea, QgsMapLayer,
+                       QgsPointXY, QgsProject, QgsRasterLayer)
 
 GEOTIFF = (".tif", ".tiff")
 UPLOAD_LIMIT_GB = 2               # as Mapflow's upload accepts (3.x checked the same limits)
 MAX_SIDE_PIXELS = 30_000
 BANDS = (1, 3, 4)                 # what Mapflow's models read from your own imagery
+# Data types rasters/validate-image-metadata accepts (its request schema's enum)
+DTYPES = ("uint8", "uint16", "int16", "float32", "int32")
+WGS84 = QgsCoordinateReferenceSystem("EPSG:4326")
 
 
 def geotiff_path(layer: Optional[QgsMapLayer]) -> str:
@@ -35,9 +39,34 @@ def _dtype(layer: QgsRasterLayer, band: int) -> str:
             "Float32": "float32", "Float64": "float64", "Int8": "int8"}.get(name, name.lower())
 
 
+def _footprint(layer: QgsRasterLayer) -> dict:
+    """The image's four corners in WGS84, as a GeoJSON polygon."""
+    extent = layer.extent()
+    to_wgs84 = QgsCoordinateTransform(layer.crs(), WGS84, QgsProject.instance())
+    ring = [to_wgs84.transform(QgsPointXY(x, y)) for x, y in (
+        (extent.xMinimum(), extent.yMinimum()), (extent.xMaximum(), extent.yMinimum()),
+        (extent.xMaximum(), extent.yMaximum()), (extent.xMinimum(), extent.yMaximum()))]
+    coordinates = [[round(point.x(), 8), round(point.y(), 8)] for point in ring]
+    return {"type": "Polygon", "coordinates": [coordinates + coordinates[:1]]}
+
+
+def _pixel_size_meters(layer: QgsRasterLayer) -> List[float]:
+    """One pixel's width and height on the ground at the image's centre, whatever units its CRS uses."""
+    centre = layer.extent().center()
+    dx, dy = abs(layer.rasterUnitsPerPixelX()), abs(layer.rasterUnitsPerPixelY())
+    to_wgs84 = QgsCoordinateTransform(layer.crs(), WGS84, QgsProject.instance())
+    calculator = QgsDistanceArea()
+    calculator.setSourceCrs(WGS84, QgsProject.instance().transformContext())
+    calculator.setEllipsoid(WGS84.ellipsoidAcronym() or "EPSG:7030")
+    origin = to_wgs84.transform(centre)
+    across = to_wgs84.transform(QgsPointXY(centre.x() + dx, centre.y()))
+    down = to_wgs84.transform(QgsPointXY(centre.x(), centre.y() + dy))
+    return [round(calculator.measureLine(origin, across), 4), round(calculator.measureLine(origin, down), 4)]
+
+
 def geotiff_metadata(path: str) -> Tuple[dict, str]:
-    """What Mapflow needs to know about a GeoTIFF before it's uploaded, as GET /rasters/image/{id} lists it,
-    and the reason it can't be uploaded (empty if it can)."""
+    """What the plugin and Mapflow need to know about a GeoTIFF before it's uploaded, and the reason it can't
+    be uploaded (empty if it can). `validation_request` turns it into the check Mapflow takes."""
     file = Path(path)
     meta = {"filename": file.name}
     if not file.is_file():
@@ -52,17 +81,28 @@ def geotiff_metadata(path: str) -> Tuple[dict, str]:
     if not layer.isValid():
         return meta, "QGIS can't read it as a raster"
     count = layer.bandCount()
+    crs = layer.crs()
     meta.update(width=layer.width(), height=layer.height(), count=count,
                 dtypes=[_dtype(layer, band) for band in range(1, count + 1)],
                 pixel_size=[abs(layer.rasterUnitsPerPixelX()), abs(layer.rasterUnitsPerPixelY())],
-                crs=layer.crs().authid() if layer.crs().isValid() else "")
-    if not layer.crs().isValid():
+                crs=(crs.authid() or crs.toWkt()) if crs.isValid() else "")
+    if not crs.isValid():
         return meta, "it isn't georeferenced (no coordinate system)"
     if max(layer.width(), layer.height()) >= MAX_SIDE_PIXELS:
         return meta, f"it's {layer.width():,} × {layer.height():,} px; the limit is {MAX_SIDE_PIXELS:,} px a side"
     if count not in BANDS:
         return meta, f"it has {count} bands; Mapflow takes 1, 3 or 4"
+    if meta["dtypes"][0] not in DTYPES:
+        return meta, f"its pixels are {meta['dtypes'][0]}; Mapflow takes {', '.join(DTYPES)}"
+    meta.update(footprint=_footprint(layer), pixel_size_meters=_pixel_size_meters(layer))
     return meta, ""
+
+
+def validation_request(meta: dict) -> dict:
+    """The body of POST rasters/validate-image-metadata. Its schema forbids other fields."""
+    return {"width": meta["width"], "height": meta["height"], "channels": meta["count"],
+            "dtype": meta["dtypes"][0], "crs": meta["crs"], "pixel_size_meters": meta["pixel_size_meters"],
+            "footprint": meta["footprint"], "file_size_bytes": meta["file_size"]}
 
 
 def mixed(metadata: List[dict]) -> str:

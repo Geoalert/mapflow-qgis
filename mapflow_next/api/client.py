@@ -162,8 +162,8 @@ class MapflowApi:
                          on_success=on_done, on_error=on_error, on_progress=on_progress)
 
     def validate_image(self, metadata: dict, on_done: Callable[[dict], None], on_error: OnError = None) -> None:
-        """Ask Mapflow whether an image is acceptable before uploading it (POST
-        /rasters/validate-image-metadata with the image's metadata, as GET /rasters/image/{id} lists it)."""
+        """Ask Mapflow whether an image is acceptable before uploading it (POST rasters/validate-image-metadata,
+        body: rasters.validation_request; answer: {compatible, reasons[], warnings[], needs_preprocessing, …})."""
         self.http.post("rasters/validate-image-metadata", metadata, on_success=lambda d: on_done(d or {}),
                        on_error=on_error)
 

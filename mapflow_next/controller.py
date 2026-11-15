@@ -1784,18 +1784,21 @@ class Controller(QObject):
         self._upload_progress(0)
         self._choose_uploaded = name if choose else None
 
-        def validated(problems: List[str]) -> None:
+        def validated(problems: List[str], warnings: List[str]) -> None:
             if problems:
                 self._choose_uploaded = None
                 self._upload_progress(None)
                 self._upload_refused("; ".join(problems[:3]))
                 return
+            if warnings:
+                self.notify("Mapflow: " + "; ".join(warnings[:3]), Qgis.MessageLevel.Info, duration=8)
             if len(paths) == 1:
                 self.imagery.upload(paths[0], name)
             else:
                 self.imagery.upload_many(paths, name)
 
-        self.imagery.validate([meta for meta, _why in checked], validated)
+        self.imagery.validate([(meta["filename"], rasters.validation_request(meta)) for meta, _why in checked],
+                              validated)
 
     # ---------- the Layers panel's Mapflow actions ----------
 

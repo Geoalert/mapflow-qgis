@@ -727,9 +727,14 @@ def main():
         check(wait_until(lambda: controller.uploading is None and not imagery_service.uploading, 5),
               "…and the upload finishes")
         validated = [r[2] for r in state.requests if r[1] == "/rasters/validate-image-metadata"][-1]
-        check(validated.get("crs") == "EPSG:4326" and validated.get("count") == 3
-              and validated.get("dtypes") == ["uint8"] * 3 and validated.get("filename") == "tile_2.tif",
-              f"Mapflow is asked about each image's metadata before the upload ({validated})")
+        ring = (validated.get("footprint") or {}).get("coordinates", [[]])[0]
+        check(set(validated) == {"width", "height", "channels", "dtype", "crs", "pixel_size_meters", "footprint",
+                                 "file_size_bytes"}
+              and validated["crs"] == "EPSG:4326" and validated["channels"] == 3 and validated["dtype"] == "uint8"
+              and len(ring) == 5 and ring[0] == ring[-1]
+              # 0.0001° at 55.75° N: 6.3 m across, 11.1 m down
+              and 6 < validated["pixel_size_meters"][0] < 6.6 and 10.9 < validated["pixel_size_meters"][1] < 11.4,
+              f"Mapflow is asked about each image in the shape its check takes ({validated})")
 
         def refused(files, says):
             state.uploads.clear()
@@ -747,6 +752,15 @@ def main():
               "images in different coordinate systems can't share a collection")
         check(refused([make_geotiff("deep.tif", data_type=gdal.GDT_UInt16)], "must be 8-bit"),
               "an image Mapflow's check refuses isn't uploaded, and its reason is shown")
+        check(refused([make_geotiff("depth.tif", bands=3, data_type=gdal.GDT_Float64)], "Mapflow takes uint8"),
+              "…and one whose data type the check doesn't take is refused here")
+        state.uploads.clear()
+        iface.bar.messages.clear()
+        picked["files"] = [make_geotiff("grey.tif", bands=1)]
+        controller.upload()
+        check(wait_until(lambda: [u[0] for u in state.uploads] == ["new"] and controller.uploading is None, 5)
+              and any("processed as grayscale" in (m or "") for _l, m in iface.bar.messages),
+              f"the check's warnings are shown, and the upload goes on ({state.uploads})")
     finally:
         controller_module.QFileDialog.getOpenFileNames = saved_open
 
