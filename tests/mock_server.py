@@ -43,6 +43,8 @@ class State:
         self.extra_images = {}             # …and its image: mosaic id → image names
         self.created_tags = {}             # collection id → the tags it was created with
         self.added_names = {}              # collection id → file names uploaded into it during the run
+        self.deleted_mosaics = set()       # DELETE rasters/mosaic/{id}
+        self.deleted_images = set()        # DELETE rasters/image/{id}
         self.codes = {}                 # code → (code_challenge, redirect_uri)
         self.access_tokens = set()
         self.refresh_tokens = set()
@@ -331,15 +333,27 @@ class Handler(BaseHTTPRequestHandler):
         if method == "GET" and path == "/rasters/mosaic":
             if self.state.no_mosaics:
                 return self._send(200, [])
-            return self._send(200, fixtures.MOSAICS + self.state.extra_mosaics)
+            return self._send(200, [m for m in fixtures.MOSAICS + self.state.extra_mosaics
+                                    if m["id"] not in self.state.deleted_mosaics])
+        match = re.fullmatch(r"/rasters/mosaic/([\w-]+)", path)
+        if method == "DELETE" and match:
+            with self.state.lock:
+                self.state.deleted_mosaics.add(match.group(1))
+            return self._send(200, {})
+        match = re.fullmatch(r"/rasters/image/([\w-]+)", path)
+        if method == "DELETE" and match:
+            with self.state.lock:
+                self.state.deleted_images.add(match.group(1))
+            return self._send(200, {})
         match = re.fullmatch(r"/rasters/mosaic/([\w-]+)/image", path)
         if method == "GET" and match:
             base = f"http://127.0.0.1:{self.server.server_address[1]}/rest"
             names = fixtures.MOSAIC_IMAGES.get(match.group(1)) or self.state.extra_images.get(match.group(1), [])
             with self.state.lock:
                 self.state.image_requests = getattr(self.state, "image_requests", 0) + 1
-            return self._send(200, [fixtures.mosaic_image(f"{match.group(1)}-i{n}", match.group(1), name, base)
-                                    for n, name in enumerate(names)])
+            images = [fixtures.mosaic_image(f"{match.group(1)}-i{n}", match.group(1), name, base)
+                      for n, name in enumerate(names)]
+            return self._send(200, [i for i in images if i["id"] not in self.state.deleted_images])
         match = re.fullmatch(r"/rasters/image/([\w-]+)", path)
         if method == "GET" and match:
             base = f"http://127.0.0.1:{self.server.server_address[1]}/rest"

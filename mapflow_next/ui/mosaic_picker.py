@@ -32,6 +32,8 @@ class MosaicPicker(QDialog):
     uploadRequested = pyqtSignal(str)           # into this collection ("" = a new one)
     layerUploadRequested = pyqtSignal(str, str)  # a GeoTIFF layer's id, into this collection ("" = a new one)
     createRequested = pyqtSignal()              # "Create collection"
+    deleteCollectionRequested = pyqtSignal(str)   # mosaic id
+    deleteImageRequested = pyqtSignal(str, str)   # mosaic id, image id
 
     def __init__(self, parent=None, my_data_url: str = config.WEB_URL + config.MY_DATA_PATH):
         super().__init__(parent)
@@ -112,6 +114,9 @@ class MosaicPicker(QDialog):
         self.show_button = tool("eye", "Show the collection on the map", "plain", 18)
         self.show_button.clicked.connect(lambda *_: self.current and self.showRequested.emit(self.current))
         title_row.addWidget(self.show_button)
+        self.more_button = tool("more", "More actions", "plain", 18)
+        self.more_button.clicked.connect(lambda *_: self._popup(self.collection_menu(), self.more_button))
+        title_row.addWidget(self.more_button)
         right.addLayout(title_row)
         self.meta = label("", "meta", wrap=True)
         right.addWidget(self.meta)
@@ -192,7 +197,7 @@ class MosaicPicker(QDialog):
         for mid, row in self._rows.items():
             row.set_selected(mid == self.current)
         self._show_target()
-        for widget in (self.title, self.show_button, self.meta, self.use_all):
+        for widget in (self.title, self.show_button, self.more_button, self.meta, self.use_all):
             widget.setVisible(mosaic is not None)
         if mosaic is None:
             clear_layout(self.images_box)
@@ -212,6 +217,26 @@ class MosaicPicker(QDialog):
         self.images_box.addWidget(label("Loading images…", "meta"))
         self.images_box.addStretch(1)
         self.collectionOpened.emit(mosaic_id)
+
+    # ---------- "⋯" menus ----------
+
+    @staticmethod
+    def _popup(menu: QMenu, anchor: QWidget) -> None:
+        menu.exec(anchor.mapToGlobal(anchor.rect().bottomLeft()))
+
+    def collection_menu(self) -> QMenu:
+        """The selected collection's actions."""
+        menu = QMenu(self)
+        mosaic_id = self.current or ""
+        menu_action(menu, "trash", "Delete collection…", lambda: self.deleteCollectionRequested.emit(mosaic_id),
+                    ink=tokens()["err_fg"])
+        return menu
+
+    def image_menu(self, mosaic_id: str, image_id: str) -> QMenu:
+        menu = QMenu(self)
+        menu_action(menu, "trash", "Delete from the collection…",
+                    lambda: self.deleteImageRequested.emit(mosaic_id, image_id), ink=tokens()["err_fg"])
+        return menu
 
     # ---------- adding imagery ----------
 
@@ -282,6 +307,10 @@ class MosaicPicker(QDialog):
         use.setEnabled(not chosen)
         use.clicked.connect(lambda *_, iid=image.id: self.chosen.emit(mosaic_id, iid))
         row.addWidget(use, 0, Qt.AlignmentFlag.AlignVCenter)
+        more = tool("more", "More actions", "plain", 16)
+        more.setObjectName(f"more:{image.id}")
+        more.clicked.connect(lambda *_, iid=image.id, anchor=more: self._popup(self.image_menu(mosaic_id, iid), anchor))
+        row.addWidget(more, 0, Qt.AlignmentFlag.AlignVCenter)
         card.add(row)
         return card
 

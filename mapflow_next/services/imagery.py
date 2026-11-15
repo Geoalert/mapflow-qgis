@@ -262,6 +262,31 @@ class Imagery(QObject):
 
         send(0)
 
+    def delete_mosaic(self, mosaic_id: str, on_done: Callable[[], None], on_error: Callable[[str], None]) -> None:
+        def done(_data):
+            self.mosaics = [m for m in self.mosaics if m.id != mosaic_id]
+            self.images.pop(mosaic_id, None)
+            self.mosaicsChanged.emit(self.mosaics)
+            on_done()
+            self.load_mosaics()
+
+        self.api.delete_mosaic(mosaic_id, done, lambda error: on_error(error.message))
+
+    def delete_image(self, mosaic_id: str, image_id: str, on_done: Callable[[], None],
+                     on_error: Callable[[str], None]) -> None:
+        """The collection stays when its last image goes: empty, ready for other uploads."""
+        def done(_data):
+            left = [i for i in self.images.get(mosaic_id, []) if i.id != image_id]
+            self.images[mosaic_id] = left
+            mosaic = self.get_mosaic(mosaic_id)
+            if mosaic is not None:
+                mosaic.image_count = len(left)
+            self.mosaicImagesChanged.emit(mosaic_id, left)
+            on_done()
+            self.load_mosaics()                     # its size changes
+
+        self.api.delete_image(image_id, done, lambda error: on_error(error.message))
+
     def create_collection(self, name: str, tags: List[str], on_done: Callable[[str], None],
                           on_error: Callable[[str], None]) -> None:
         """An empty collection, for uploads to come. `on_done` gets its id once Mapflow lists it."""

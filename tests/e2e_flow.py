@@ -1002,6 +1002,46 @@ def main():
               "Create collection makes it in Mapflow with its tags, and selects it in the window")
     finally:
         controller_module.CollectionDialog = saved_dialog
+
+    # ⋯ menus: delete an image (the collection stays, even empty), delete a collection; both asked first
+    confirms, answer_del = [], {"value": False}
+    saved_confirm, imagery_kept = controller._confirm_delete, controller.draft.imagery
+    controller._confirm_delete = lambda title, text, detail: (confirms.append((title, text, detail)),
+                                                              answer_del["value"])[1]
+    try:
+        jetty = next(m for m in imagery_service.mosaics if m.name == "Jetty")
+        image_id = f"{jetty.id}-i0"
+        picker.open_collection(jetty.id)
+        check(wait_until(lambda: len(picker._thumbs) == 1, 5), "the new collection shows its uploaded image")
+        menu = picker.image_menu(jetty.id, image_id)
+        check(picker.findChild(QToolButton, f"more:{image_id}") is not None
+              and [a.text() for a in menu.actions()] == ["Delete from the collection…"],
+              "each image has a ⋯ menu with Delete (no extra large buttons)")
+        menu.actions()[0].trigger()
+        check(not state.deleted_images and confirms[-1][1] == "Delete “centre.tif” from “Jetty”?",
+              f"deleting an image asks first; Cancel deletes nothing ({confirms[-1:]})")
+        answer_del["value"] = True
+        controller.draft.imagery = controller_module.ImageryChoice.from_mosaic(jetty.id, "Jetty", image_id,
+                                                                               "centre.tif")
+        picker.image_menu(jetty.id, image_id).actions()[0].trigger()
+        check(wait_until(lambda: image_id in state.deleted_images and not picker._thumbs
+                         and any("no images yet" in w.text() for w in picker.findChildren(QLabel) if w.isVisible()), 5)
+              and "stays, empty" in confirms[-1][2]
+              and imagery_service.get_mosaic(jetty.id) is not None and jetty.id not in state.deleted_mosaics,
+              "deleting the last image leaves the collection in place, empty, and says so")
+        check(controller.draft.imagery is None, "…and the run form no longer uses the deleted image")
+        menu = picker.collection_menu()
+        check(picker.more_button.isVisible() and [a.text() for a in menu.actions()] == ["Delete collection…"],
+              "the selected collection has a ⋯ menu with Delete collection")
+        controller.draft.imagery = controller_module.ImageryChoice.from_mosaic(jetty.id, "Jetty")
+        menu.actions()[0].trigger()
+        check(wait_until(lambda: jetty.id in state.deleted_mosaics and imagery_service.get_mosaic(jetty.id) is None
+                         and picker.current is None and jetty.id not in picker._rows, 5)
+              and confirms[-1][1] == "Delete “Jetty”?" and controller.draft.imagery is None,
+              "Delete collection removes it from Mapflow and from the list, and the run form drops it")
+    finally:
+        controller._confirm_delete = saved_confirm
+        controller.draft.imagery = imagery_kept
     state.list_uploads = False
     state.extra_mosaics, state.extra_images = [], {}
     imagery_service.load_mosaics()

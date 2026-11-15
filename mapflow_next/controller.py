@@ -1707,6 +1707,8 @@ class Controller(QObject):
             picker.uploadRequested.connect(lambda target: self.upload(target or None))
             picker.layerUploadRequested.connect(lambda lid, target: self.upload_layer(lid, mosaic_id=target or None))
             picker.createRequested.connect(self.create_collection)
+            picker.deleteCollectionRequested.connect(self.delete_collection)
+            picker.deleteImageRequested.connect(self.delete_image)
             picker.geotiff_layers = lambda: [(layer.id(), layer.name()) for layer in rasters.geotiff_layers()]
             self.mosaic_picker = picker
         choice = self.draft.imagery
@@ -1960,6 +1962,77 @@ class Controller(QObject):
             self.notify(f"Couldn't create the collection “{name}”: {message}", Qgis.MessageLevel.Warning)
 
         self.imagery.create_collection(name, tags, created, failed)
+
+    def _confirm_delete(self, title: str, text: str, detail: str) -> bool:
+        box = QMessageBox(self.mosaic_picker if self._picker_open() else self.iface.mainWindow())
+        box.setIcon(QMessageBox.Icon.Warning)
+        box.setWindowTitle(title)
+        box.setText(text)
+        box.setInformativeText(detail)
+        delete = box.addButton("Delete", QMessageBox.ButtonRole.DestructiveRole)
+        cancel = box.addButton(QMessageBox.StandardButton.Cancel)
+        box.setDefaultButton(cancel)
+        box.exec()
+        return box.clickedButton() is delete
+
+    def _picker_note(self, text: str, kind: str = "info") -> None:
+        if self.mosaic_picker is not None:
+            self.mosaic_picker.set_upload(None, text, kind)
+
+    @guarded
+    def delete_collection(self, mosaic_id: str) -> None:
+        mosaic = self.imagery.get_mosaic(mosaic_id)
+        if mosaic is None:
+            return
+        count = mosaic.image_count
+        images = "its image" if count == 1 else f"its {count} images" if count else "its images"
+        if not self._confirm_delete("Delete collection", f"Delete “{mosaic.name}”?",
+                                    f"The collection and {images} are deleted from Mapflow. This can't be undone."):
+            return
+        name = mosaic.name
+
+        def done() -> None:
+            choice = self.draft.imagery
+            if choice and choice.kind == "my_imagery" and choice.mosaic_id == mosaic_id:
+                self.draft.imagery = None           # nothing to process any more: the user chooses again
+            self.layers.remove(self.layers.previews(f"mosaic:{mosaic_id}"))   # its map preview is gone too
+            self._picker_note(f"“{name}” is deleted.")
+            self.refresh_run()
+
+        def failed(message: str) -> None:
+            self._picker_note(f"Couldn't delete “{name}”: {message}", "error")
+            self.notify(f"Couldn't delete “{name}”: {message}", Qgis.MessageLevel.Warning)
+
+        self.imagery.delete_mosaic(mosaic_id, done, failed)
+
+    @guarded
+    def delete_image(self, mosaic_id: str, image_id: str) -> None:
+        mosaic = self.imagery.get_mosaic(mosaic_id)
+        image = self.imagery.get_image(mosaic_id, image_id)
+        if mosaic is None or image is None:
+            return
+        last = len(self.imagery.images.get(mosaic_id, [])) == 1
+        filename = image.filename or image.id
+        if not self._confirm_delete("Delete image", f"Delete “{filename}” from “{mosaic.name}”?",
+                                    "This can't be undone." + (" The collection stays, empty, for other uploads."
+                                                               if last else "")):
+            return
+
+        def done() -> None:
+            choice = self.draft.imagery
+            if choice and choice.kind == "my_imagery" and choice.image_ids == [image_id]:
+                self.draft.imagery = None           # that image was the imagery: the user chooses again
+            picker = self.mosaic_picker
+            if picker is not None and picker.chosen_image == image_id:
+                picker.chosen_mosaic = picker.chosen_image = None
+            self._picker_note(f"“{filename}” is deleted from “{mosaic.name}”.")
+            self.refresh_run()
+
+        def failed(message: str) -> None:
+            self._picker_note(f"Couldn't delete “{filename}”: {message}", "error")
+            self.notify(f"Couldn't delete “{filename}”: {message}", Qgis.MessageLevel.Warning)
+
+        self.imagery.delete_image(mosaic_id, image_id, done, failed)
 
     def _ask_duplicate(self, files: List[str], collection: str) -> str:
         """A collection already has these files: "upload" them again, "skip" them, or "cancel" the upload."""

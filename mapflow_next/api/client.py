@@ -166,6 +166,14 @@ class MapflowApi:
         self.http.upload(f"rasters/mosaic/{mosaic_id}/image{query}", file_path,
                          on_success=on_done, on_error=on_error, on_progress=on_progress)
 
+    def delete_mosaic(self, mosaic_id: str, on_done: Callable[[object], None], on_error: OnError = None) -> None:
+        """A collection and its images (DELETE rasters/mosaic/{id})."""
+        self.http.delete(f"rasters/mosaic/{mosaic_id}", on_success=on_done, on_error=on_error)
+
+    def delete_image(self, image_id: str, on_done: Callable[[object], None], on_error: OnError = None) -> None:
+        """One image of a collection; the collection stays, even empty (DELETE rasters/image/{id})."""
+        self.http.delete(f"rasters/image/{image_id}", on_success=on_done, on_error=on_error)
+
     def validate_image(self, metadata: dict, on_done: Callable[[dict], None], on_error: OnError = None) -> None:
         """Ask Mapflow whether an image is acceptable before uploading it (POST rasters/validate-image-metadata,
         body: rasters.validation_request; answer: {compatible, reasons[], warnings[], needs_preprocessing, …})."""

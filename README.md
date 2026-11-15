@@ -27,7 +27,7 @@ The plugin covers the work that belongs next to the map. Each tab has its scenar
 - **Start › Map your own imagery.** In the run form, My imagery opens a window with your collections. Choose a
   collection or one image in it, or add imagery right there: upload GeoTIFFs, from files or from the project's
   GeoTIFF layers, into the selected collection, or into a new one when none is selected. You can also create a
-  collection with a name and tags. Files are checked before upload: bands, CRS, size, that they match each
+  collection with a name and tags, and delete a collection or an image from its ⋯ menu. Files are checked before upload: bands, CRS, size, that they match each
   other, and, for an existing collection, that they fit it.
   The imagery's extent becomes the area, and its preview goes on the map.
 - **Layers panel › Use a layer in Mapflow.** Right-click a polygon layer for "Use as AOI in Mapflow", or a
@@ -228,7 +228,7 @@ make test-qt6 QT6_PYTHON=…    # the pages, sign-in and HTTP client on PyQt6 (4
 make check-qt6 QT6_PYTHON=…   # Qt enum names and calls that only Qt 5 accepts
 ```
 
-**The end-to-end test** (`tests/e2e_flow.py`, 252 checks) runs a real offscreen QGIS against a mock
+**The end-to-end test** (`tests/e2e_flow.py`, 259 checks) runs a real offscreen QGIS against a mock
 Mapflow API and sign-in server (`tests/mock_server.py`).
 - **Request checks:** the mock rejects request bodies the real API rejects, such as `myImagery` with both
   `mosaicId` and `imageIds`.
