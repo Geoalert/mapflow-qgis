@@ -192,7 +192,7 @@ def icon_file(name: str, color: str) -> str:
 
 
 MARK_COLOR_DARK = "#FFFFFF"
-APP_ICON_COLOR = "#09346E"            # the single-stripe mark (toolbar, header, Plugin Manager)
+APP_ICON_COLOR = "#1A234B"            # the single-stripe mark (toolbar, header, Plugin Manager)
 
 
 def _svg_widget(data: bytes, width: int, height: int, parent: Optional[QWidget]) -> QSvgWidget:

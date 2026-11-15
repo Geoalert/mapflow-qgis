@@ -22,7 +22,7 @@ from qgis.PyQt.QtTest import QTest  # noqa: E402
 from qgis.PyQt.QtWidgets import QAction, QSlider, QToolBar, QToolButton  # noqa: E402
 from qgis.PyQt.QtGui import QColor, QPalette  # noqa: E402
 from qgis.PyQt.QtWidgets import QApplication, QComboBox, QLabel, QPushButton, QWidget  # noqa: E402
-from qgis.core import (QgsFeature, QgsGeometry, QgsPointXY, QgsProject, QgsRectangle, QgsSettings,  # noqa: E402
+from qgis.core import (Qgis, QgsFeature, QgsGeometry, QgsPointXY, QgsProject, QgsRectangle, QgsSettings,  # noqa: E402
                        QgsVectorLayer, QgsVectorTileLayer)
 
 from . import fixtures, mock_server  # noqa: E402
@@ -772,7 +772,7 @@ def main():
     check(not light.isNull() and not dark.isNull() and plugin.action.icon().cacheKey() != 0,
           "the toolbar icon is the SVG mark with one stripe")
     dark_file = Path(tempfile.gettempdir()) / "mapflow_next_icons" / "mark-simple-dark.svg"
-    check(dark_file.exists() and "#FFFFFF" in dark_file.read_text() and "#09346E" not in dark_file.read_text(),
+    check(dark_file.exists() and "#FFFFFF" in dark_file.read_text() and "#1A234B" not in dark_file.read_text(),
           "on a dark QGIS theme the mark is white")
     eye_icon = icon_module.icon("eye", "#000000", 16)
     check(Size(16, 16) in eye_icon.availableSizes() and Size(32, 32) in eye_icon.availableSizes(),
@@ -931,6 +931,19 @@ def main():
     check(any("has no images" in (m or "") for _l, m in iface.bar.messages[-3:]), "…with a message that says why")
     picker.chosen.emit("m-empty", "")
     check(controller.draft.imagery is before, "the picker can't choose it either")
+    refused = [m for level, m in iface.bar.messages if "has no images" in (m or "")]
+    check(any(level == Qgis.MessageLevel.Critical for level, m in iface.bar.messages if "has no images" in (m or ""))
+          and iface.bar.widgets and iface.bar.widgets[-1].findChildren(QPushButton)[-1].text() == "Mapflow Web",
+          "…the message bar shows it as an error, with a button to Mapflow Web")
+    # chosen another way (a scenario's default, Run again): the run form says it, and so does the message bar, once
+    controller.draft.imagery = controller_module.ImageryChoice.from_mosaic("m-empty", "Empty upload")
+    controller.refresh_run()
+    controller.refresh_run()
+    again = [m for _l, m in iface.bar.messages if "has no images" in (m or "")]
+    check(len(again) == len(refused) + 1, f"an empty collection in the run form is named in the message bar once "
+                                          f"({len(again) - len(refused)} messages)")
+    controller.draft.imagery = before
+    controller.refresh_run()
     state.extra_mosaics = []
     imagery_service.load_mosaics()
     check(controller.aoi_layer.name() == "Extent of Drone survey March"

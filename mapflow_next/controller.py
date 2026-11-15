@@ -90,6 +90,7 @@ class Controller(QObject):
         self._extent_layers: Dict[tuple, str] = {}       # extent layers made from them: source → layer id
         self._extent_pending = False                     # waiting for image footprints to make the extent
         self._use_pending: Optional[str] = None          # a collection chosen before its image list came
+        self._empty_warned: Optional[str] = None         # the empty collection the message bar has named
         self._pictures: Dict[str, bytes] = {}             # catalog picture previews, by image id
         self._previous_aoi: Optional[str] = None         # the area layer before the extent replaced it
         self._coverage_for = None
@@ -1023,6 +1024,13 @@ class Controller(QObject):
         if mosaic is not None and not choice.image_ids and self._empty_collection(mosaic):
             issues.append(Issue("imagery", f"“{mosaic.name}” has no images, so it can't be processed. Add images "
                                            "to it in Mapflow Web, or choose other imagery."))
+            # chosen without the picker (a scenario's default, Run again, images deleted in Mapflow Web):
+            # the form's issue is easy to miss, so say it once in the message bar too
+            if self._empty_warned != mosaic.id:
+                self._empty_warned = mosaic.id
+                self._refuse_empty(mosaic)
+        else:
+            self._empty_warned = None
         return issues
 
     def _imagery_rows(self, status: Optional[UserStatus], credits_billing: bool):
@@ -1690,8 +1698,10 @@ class Controller(QObject):
         return None if mosaic.image_count is None else mosaic.image_count == 0
 
     def _refuse_empty(self, mosaic) -> None:
+        my_data = self.session.config.my_data_url
         self.notify(f"“{mosaic.name}” has no images, so it can't be processed. Add images to it in Mapflow Web, "
-                    "or upload a GeoTIFF on the Imagery sources tab.", Qgis.MessageLevel.Warning)
+                    "or upload a GeoTIFF on the Imagery sources tab.", Qgis.MessageLevel.Critical,
+                    ("Mapflow Web", lambda: QDesktopServices.openUrl(QUrl(my_data))), duration=10)
 
     def use_mosaic(self, mosaic_id: str) -> None:
         mosaic = self.imagery.get_mosaic(mosaic_id)
