@@ -20,3 +20,12 @@ else:                                                     # QGIS 3.22 – 3.28
     POINT_GEOMETRY = QgsWkbTypes.PointGeometry
     LINE_GEOMETRY = QgsWkbTypes.LineGeometry
     POLYGON_GEOMETRY = QgsWkbTypes.PolygonGeometry
+
+# Layer types (the Layers panel's per-type actions): Qgis.LayerType since 3.30 (and in QGIS 4); QgsMapLayerType before.
+if hasattr(Qgis, "LayerType"):
+    VECTOR_LAYER = Qgis.LayerType.Vector
+    RASTER_LAYER = Qgis.LayerType.Raster
+else:                                                     # QGIS 3.22 – 3.28
+    from qgis.core import QgsMapLayerType
+    VECTOR_LAYER = QgsMapLayerType.VectorLayer
+    RASTER_LAYER = QgsMapLayerType.RasterLayer

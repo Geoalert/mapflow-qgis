@@ -20,6 +20,10 @@ class Qgis:
         Point = 0
         Line = 1
         Polygon = 2
+
+    class LayerType(enum.IntEnum):
+        Vector = 0
+        Raster = 1
         Unknown = 3
         Null = 4
 

@@ -3,14 +3,29 @@ metadata it validates."""
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
-from qgis.core import QgsRasterLayer
+from qgis.core import QgsMapLayer, QgsProject, QgsRasterLayer
 
 GEOTIFF = (".tif", ".tiff")
 UPLOAD_LIMIT_GB = 2               # as Mapflow's upload accepts (3.x checked the same limits)
 MAX_SIDE_PIXELS = 30_000
 BANDS = (1, 3, 4)                 # what Mapflow's models read from your own imagery
+
+
+def geotiff_path(layer: Optional[QgsMapLayer]) -> str:
+    """The file a raster layer reads when it is a local GeoTIFF; "" for anything else (XYZ/TMS tiles, WMS,
+    other formats, a file that has moved): those can't be uploaded from QGIS."""
+    if not isinstance(layer, QgsRasterLayer) or not layer.isValid() or layer.providerType() != "gdal":
+        return ""
+    path = layer.source().split("|")[0]
+    return path if path.lower().endswith(GEOTIFF) and Path(path).is_file() else ""
+
+
+def geotiff_layers(project: Optional[QgsProject] = None) -> List[QgsRasterLayer]:
+    project = project or QgsProject.instance()
+    layers = [layer for layer in project.mapLayers().values() if geotiff_path(layer)]
+    return sorted(layers, key=lambda layer: layer.name().lower())
 
 
 def _dtype(layer: QgsRasterLayer, band: int) -> str:

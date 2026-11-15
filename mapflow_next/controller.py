@@ -8,7 +8,7 @@ import functools
 import traceback
 from pathlib import Path
 import json
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 from qgis.PyQt.QtCore import QObject, QTimer, QUrl
 from qgis.PyQt.QtGui import QDesktopServices, QPixmap
@@ -91,6 +91,8 @@ class Controller(QObject):
         self._extent_pending = False                     # waiting for image footprints to make the extent
         self._use_pending: Optional[str] = None          # a collection chosen before its image list came
         self._empty_warned: Optional[str] = None         # the empty collection the message bar has named
+        self._choose_uploaded: Optional[str] = None      # an upload to use as the imagery once it's listed
+        self._after_sign_in: Optional[Tuple[str, str]] = None   # a Layers-panel action waiting for sign-in
         self._pictures: Dict[str, bytes] = {}             # catalog picture previews, by image id
         self._previous_aoi: Optional[str] = None         # the area layer before the extent replaced it
         self._coverage_for = None
@@ -172,6 +174,8 @@ class Controller(QObject):
         imagery_page.useMosaic.connect(self.use_mosaic)
         imagery_page.showMosaic.connect(self.show_mosaic)
         imagery_page.uploadRequested.connect(lambda *_: self.upload())
+        imagery_page.layerUploadRequested.connect(self.upload_layer)
+        imagery_page.geotiff_layers = lambda: [(layer.id(), layer.name()) for layer in rasters.geotiff_layers()]
         imagery_page.tabs.changed.connect(lambda index: index == 1 and self._refresh_mosaics())
         imagery_page.useMapExtent.connect(lambda *_: self.on_area_action("extent"))
         imagery_page.layerChosen.connect(self.on_layer)
@@ -197,6 +201,7 @@ class Controller(QObject):
             c.imagery.set_upload(None, f"“{name}” is uploaded and ready to use.", "info"),
             self.notify(f"“{name}” is uploaded to My imagery.", Qgis.MessageLevel.Success)))
         self.imagery.uploadFailed.connect(lambda text: (
+            setattr(self, "_choose_uploaded", None),
             self._upload_progress(None), c.imagery.set_upload(None, text, "error"),
             self.notify(text, Qgis.MessageLevel.Warning)))
 
@@ -271,6 +276,9 @@ class Controller(QObject):
             self.content.set_project(self.session.project)
             self.content.show_signed_in()
             self.imagery.load_mosaics()
+            pending, self._after_sign_in = self._after_sign_in, None
+            if pending:
+                {"aoi": self.use_layer_as_aoi, "imagery": self.use_layer_as_imagery}[pending[0]](pending[1])
 
     def on_session_error(self, text: str) -> None:
         if self.session.state != SIGNED_IN:
@@ -1585,6 +1593,12 @@ class Controller(QObject):
     @guarded
     def on_mosaics(self, mosaics) -> None:
         self._render_mosaics()
+        name = self._choose_uploaded
+        if name and self.uploading is None:
+            uploaded = [m for m in self.imagery.mosaics if m.name == name]
+            if uploaded:
+                self._choose_uploaded = None
+                self.use_mosaic(max(uploaded, key=lambda m: str(m.created or "")).id)
 
     def _render_mosaics(self) -> None:
         choice = self.draft.imagery
@@ -1740,8 +1754,23 @@ class Controller(QObject):
             return
         paths, _ = QFileDialog.getOpenFileNames(self.content, "Upload GeoTIFFs to My imagery", "",
                                                 "GeoTIFF (*.tif *.tiff)")
-        paths = [p for p in paths or [] if p]
-        if not paths:
+        self.upload_files([p for p in paths or [] if p])
+
+    @guarded
+    def upload_layer(self, layer_id: str, choose: bool = False) -> None:
+        """Upload the file of a GeoTIFF layer of the project, named as the layer is."""
+        layer = QgsProject.instance().mapLayer(layer_id)
+        path = rasters.geotiff_path(layer)
+        if not path:
+            self._upload_refused(f"“{layer.name() if layer else 'this layer'}”: only a layer read from a GeoTIFF "
+                                 "file can be uploaded")
+            return
+        self.upload_files([path], layer.name(), choose)
+
+    def upload_files(self, paths: List[str], name: str = "", choose: bool = False) -> None:
+        """Check the files, here and with Mapflow, then upload them as one new collection. `choose`: use it as
+        the imagery once Mapflow lists it."""
+        if not paths or self.uploading is not None or self.imagery.uploading:
             return
         checked = [rasters.geotiff_metadata(p) for p in paths]
         problem = next((f"{meta['filename']}: {why}" for meta, why in checked if why), "") \
@@ -1750,12 +1779,14 @@ class Controller(QObject):
             self._upload_refused(problem)
             return
         folder = Path(paths[0]).parent.name
-        name = Path(paths[0]).stem if len(paths) == 1 else (folder or Path(paths[0]).stem)
+        name = name or (Path(paths[0]).stem if len(paths) == 1 else (folder or Path(paths[0]).stem))
         self.content.imagery.set_upload(0, "Checking…")
         self._upload_progress(0)
+        self._choose_uploaded = name if choose else None
 
         def validated(problems: List[str]) -> None:
             if problems:
+                self._choose_uploaded = None
                 self._upload_progress(None)
                 self._upload_refused("; ".join(problems[:3]))
                 return
@@ -1765,6 +1796,43 @@ class Controller(QObject):
                 self.imagery.upload_many(paths, name)
 
         self.imagery.validate([meta for meta, _why in checked], validated)
+
+    # ---------- the Layers panel's Mapflow actions ----------
+
+    @guarded
+    def use_layer_as_aoi(self, layer_id: str) -> None:
+        """“Use as AOI in Mapflow” on a polygon layer: it becomes the run form's area."""
+        layer = QgsProject.instance().mapLayer(layer_id)
+        if not aoi_tools.is_polygon_layer(layer):
+            self.notify("Only a polygon layer can be the area to process.", Qgis.MessageLevel.Warning)
+            return
+        if self.session.state != SIGNED_IN:
+            self._after_sign_in = ("aoi", layer_id)
+            return
+        self.set_aoi_layer(layer)
+        self.content.open_run()
+        self.refresh_run()
+        self.render_imagery_area()
+
+    @guarded
+    def use_layer_as_imagery(self, layer_id: str) -> None:
+        """“Use as imagery in Mapflow” on a GeoTIFF layer: uploaded to My imagery, then chosen as the imagery."""
+        layer = QgsProject.instance().mapLayer(layer_id)
+        if not rasters.geotiff_path(layer):
+            self.notify("Only a layer read from a GeoTIFF file can be uploaded to Mapflow.",
+                        Qgis.MessageLevel.Warning)
+            return
+        if self.session.state != SIGNED_IN:
+            self._after_sign_in = ("imagery", layer_id)
+            return
+        if self.uploading is not None or self.imagery.uploading:
+            self.notify("Another upload is running. Try again when it's done.", Qgis.MessageLevel.Info)
+            return
+        self.content.open_run()
+        self.upload_layer(layer_id, choose=True)
+        if self._choose_uploaded:
+            self.notify(f"Uploading “{layer.name()}” to My imagery. It becomes the imagery when it's ready.",
+                        Qgis.MessageLevel.Info, duration=6)
 
     def _upload_refused(self, problem: str) -> None:
         text = f"Can't upload {problem}."

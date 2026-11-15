@@ -750,6 +750,63 @@ def main():
     finally:
         controller_module.QFileDialog.getOpenFileNames = saved_open
 
+    # the project's GeoTIFF layers: My imagery's "Choose from raster layer", and the Layers panel's menu
+    from qgis.core import QgsRasterLayer
+    from mapflow_next.qgis_bridge import aoi as aoi_module
+    project = QgsProject.instance()
+    pier = QgsRasterLayer(make_geotiff("pier.tif"), "Pier 7")
+    xyz = QgsRasterLayer("type=xyz&url=https://tile.example.com/%7Bz%7D/%7Bx%7D/%7By%7D.png&zmax=19&zmin=0",
+                         "Street tiles", "wms")
+    wells = QgsVectorLayer("Point?crs=EPSG:4326", "Wells", "memory")
+    harbour = QgsVectorLayer("Polygon?crs=EPSG:4326", "Harbour area", "memory")
+    feature = QgsFeature()
+    feature.setGeometry(QgsGeometry.fromRect(QgsRectangle(37.60, 55.74, 37.62, 55.75)))
+    harbour.dataProvider().addFeatures([feature])
+    project.addMapLayers([pier, xyz, wells, harbour])
+    page = content.imagery
+    page._fill_layer_menu()
+    check([a.text() for a in page.layer_menu.actions()] == ["Pier 7"],
+          f"Choose from raster layer lists only GeoTIFF file layers ({[a.text() for a in page.layer_menu.actions()]})")
+    state.uploads.clear()
+    page.layer_menu.actions()[0].trigger()
+    check(wait_until(lambda: [u[:2] for u in state.uploads] == [("new", "Pier 7")] and controller.uploading is None
+                     and not imagery_service.uploading, 5),
+          f"…and picking one uploads its file as a collection named after the layer ({state.uploads})")
+    menus = {layer.name(): iface.layer_menu(layer) for layer in (pier, xyz, wells, harbour)}
+    check(menus == {"Pier 7": ["Use as imagery in Mapflow"], "Street tiles": [], "Wells": [],
+                    "Harbour area": ["Use as AOI in Mapflow"]},
+          f"the Layers panel offers Mapflow's actions on GeoTIFF and polygon layers only ({menus})")
+    check(not plugin.aoi_action.icon().isNull() and not plugin.imagery_action.icon().isNull(),
+          "…with the Mapflow mark")
+    area_before, imagery_before = controller.aoi_layer, controller.draft.imagery
+    content.go(2)
+    iface.setActiveLayer(harbour)
+    plugin.aoi_action.trigger()
+    check(controller.draft.aoi is not None and controller.draft.aoi.layer_id == harbour.id()
+          and content.stack.currentWidget() is content.run,
+          "Use as AOI in Mapflow: the layer becomes the area, and the run form opens")
+    state.uploads.clear()
+    state.list_uploads = True
+    iface.setActiveLayer(pier)
+    plugin.imagery_action.trigger()
+
+    def chosen_name():
+        choice = controller.draft.imagery
+        mosaic = imagery_service.get_mosaic(choice.mosaic_id) if choice and choice.kind == "my_imagery" else None
+        return mosaic.name if mosaic else ""
+
+    check(wait_until(lambda: chosen_name() == "Pier 7", 8),
+          f"Use as imagery in Mapflow: the layer is uploaded and becomes the imagery ({state.uploads})")
+    state.list_uploads = False
+    state.extra_mosaics, state.extra_images = [], {}
+    controller.draft.imagery = imagery_before
+    if area_before is not None:
+        controller.set_aoi_layer(area_before)
+    project.removeMapLayers([pier.id(), xyz.id(), wells.id(), harbour.id()])
+    check(aoi_module.is_polygon_layer(controller.aoi_layer) or area_before is None, "…and the area is put back")
+    imagery_service.load_mosaics()
+    controller.refresh_run()
+
     # a collection made in Mapflow Web shows up without restarting
     state.extra_mosaics = [{"id": "m-web", "name": "Made in Web", "created_at": "2026-11-13T20:00:00Z",
                             "sizeInBytes": 10, "footprint": None, "rasterLayer": {"tileUrl": "", "tileJsonUrl": ""},

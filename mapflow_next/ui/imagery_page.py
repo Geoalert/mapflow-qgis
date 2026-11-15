@@ -2,12 +2,12 @@
 from __future__ import annotations
 
 from datetime import date
-from typing import Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 
 from qgis.PyQt.QtCore import QDate, Qt, pyqtSignal
 from qgis.PyQt.QtGui import QPixmap
-from qgis.PyQt.QtWidgets import (QComboBox, QDateEdit, QGridLayout, QHBoxLayout, QLabel, QProgressBar, QPushButton,
-                                 QScrollArea, QSlider, QToolButton, QVBoxLayout, QWidget)
+from qgis.PyQt.QtWidgets import (QComboBox, QDateEdit, QGridLayout, QHBoxLayout, QLabel, QMenu, QProgressBar,
+                                 QPushButton, QScrollArea, QSlider, QToolButton, QVBoxLayout, QWidget)
 
 from .. import config
 from ..core import formatting
@@ -15,7 +15,7 @@ from ..core.models import CatalogImage, Mosaic
 from . import icons
 from .theme import set_prop, tokens
 from .widgets import (Callout, Card, Combo, ElidedLabel, Pill, Segmented, button, clear_layout, label, link,
-                      placeholder, rounded, tool, vbox)
+                      menu_action, placeholder, rounded, tool, vbox)
 
 
 class ImageryPage(QWidget):
@@ -26,6 +26,7 @@ class ImageryPage(QWidget):
     useMosaic = pyqtSignal(str)
     showMosaic = pyqtSignal(str)
     uploadRequested = pyqtSignal()
+    layerUploadRequested = pyqtSignal(str)    # a GeoTIFF layer of the project, by layer id
     useMapExtent = pyqtSignal()
     layerChosen = pyqtSignal(str)
     clearRequested = pyqtSignal()
@@ -37,6 +38,8 @@ class ImageryPage(QWidget):
         self._pixmaps: Dict[str, QPixmap] = {}      # loaded thumbnails, kept while the results are
         self._eyes: Dict[str, QToolButton] = {}
         self.more_button: Optional[QPushButton] = None
+        # (layer id, name) of the project's GeoTIFF layers, asked for when the menu opens; the controller sets it
+        self.geotiff_layers: Callable[[], List[Tuple[str, str]]] = lambda: []
         self.my_data_url = config.WEB_URL + config.MY_DATA_PATH     # the controller sets the environment's
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -312,11 +315,17 @@ class ImageryPage(QWidget):
         layout.setSpacing(12)
         upload = Card(spacing=8)
         upload.add(label("Your own imagery", "h2"))
-        upload.add(label("Upload an RGB GeoTIFF (up to 1 GB) as a new collection. It costs no imagery credits "
-                         "to process.", "meta", wrap=True))
+        upload.add(label("Upload RGB GeoTIFFs (up to 2 GB each) as a new collection, from files or from the "
+                         "project's raster layers. It costs no imagery credits to process.", "meta", wrap=True))
         self.upload_button = button("Upload a GeoTIFF", "outline", "upload")
         self.upload_button.clicked.connect(lambda *_: self.uploadRequested.emit())
         upload.add(self.upload_button)
+        self.layer_button = button("Choose from raster layer", "outline", "layers")
+        self.layer_menu = QMenu(self.layer_button)
+        self.layer_menu.aboutToShow.connect(self._fill_layer_menu)
+        self.layer_button.clicked.connect(
+            lambda *_: self.layer_menu.exec(self.layer_button.mapToGlobal(self.layer_button.rect().bottomLeft())))
+        upload.add(self.layer_button)
         self.upload_bar = QProgressBar()
         self.upload_bar.setTextVisible(False)
         self.upload_bar.setVisible(False)
@@ -360,11 +369,22 @@ class ImageryPage(QWidget):
             card.add(row)
             self.mosaic_list.addWidget(card)
 
+    def _fill_layer_menu(self) -> None:
+        """Only GeoTIFF files: tile layers (XYZ, TMS, WMS) have no file to upload."""
+        self.layer_menu.clear()
+        layers = self.geotiff_layers()
+        for layer_id, name in layers:
+            menu_action(self.layer_menu, "image", name, lambda lid=layer_id: self.layerUploadRequested.emit(lid))
+        if not layers:
+            empty = self.layer_menu.addAction("No GeoTIFF layers in the project")
+            empty.setEnabled(False)
+
     def set_upload(self, percent: Optional[int], message: str = "", kind: str = "info") -> None:
         uploading = percent is not None
         self.upload_bar.setVisible(uploading)
         self.upload_bar.setValue(percent or 0)
         self.upload_button.setEnabled(not uploading)
+        self.layer_button.setEnabled(not uploading)
         self.upload_button.setText(f"Uploading… {percent}%" if uploading else "Upload a GeoTIFF")
         self.upload_message.set(kind, message)
 

@@ -25,9 +25,11 @@ The plugin covers the work that belongs next to the map. Each tab has its scenar
 - **Start › Run a processing.** Pick a scenario or a model, set the area (a layer, a selection, a drawing
   or the map view), choose imagery, check the cost and run.
 - **Start › Map your own imagery.** Upload one or several GeoTIFFs (they become one collection) to My imagery,
-  or choose a collection or one image in it. Files are checked before upload: bands, CRS, size, and that
-  they match each other.
+  from files or from the project's GeoTIFF layers, or choose a collection or one image in it. Files are
+  checked before upload: bands, CRS, size, and that they match each other.
   The imagery's extent becomes the area, and its preview goes on the map.
+- **Layers panel › Use a layer in Mapflow.** Right-click a polygon layer for "Use as AOI in Mapflow", or a
+  GeoTIFF layer for "Use as imagery in Mapflow": it's uploaded to My imagery and chosen when it's ready.
 - **Imagery sources › Find imagery in the catalog.** Search by area, dates, cloud cover and off-nadir
   angle, look at the footprints on the map, and use an image in the run form.
 - **Processings › Follow the work and its history.** Progress updates on its own. Filter, search, load
@@ -224,7 +226,7 @@ make test-qt6 QT6_PYTHON=…    # the pages, sign-in and HTTP client on PyQt6 (4
 make check-qt6 QT6_PYTHON=…   # Qt enum names and calls that only Qt 5 accepts
 ```
 
-**The end-to-end test** (`tests/e2e_flow.py`, 221 checks) runs a real offscreen QGIS against a mock
+**The end-to-end test** (`tests/e2e_flow.py`, 228 checks) runs a real offscreen QGIS against a mock
 Mapflow API and sign-in server (`tests/mock_server.py`).
 - **Request checks:** the mock rejects request bodies the real API rejects, such as `myImagery` with both
   `mosaicId` and `imageIds`.

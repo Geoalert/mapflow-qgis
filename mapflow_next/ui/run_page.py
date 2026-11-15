@@ -246,7 +246,7 @@ class RunPage(QWidget):
         layout.addWidget(self.issues)
         top = QHBoxLayout()
         self.cost_label = label("Estimated cost", "title")
-        self.cost_value = label("—", "big")
+        self.cost_value = label("—", "title")
         top.addWidget(self.cost_label, 1)
         top.addWidget(self.cost_value)
         layout.addLayout(top)

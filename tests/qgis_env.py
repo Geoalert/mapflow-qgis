@@ -132,3 +132,29 @@ class FakeIface:
 
     def zoomToActiveLayer(self):
         pass
+
+    # the Layers panel's custom actions, kept as QGIS keeps them: per layer type, for all its layers or listed ones
+    def addCustomActionForLayerType(self, action, menu, layer_type, allLayers=True):
+        self.layer_actions_by_type = getattr(self, "layer_actions_by_type", {})
+        self.layer_actions_by_type[action] = (layer_type, allLayers, set())
+
+    def addCustomActionForLayer(self, action, layer):
+        entry = getattr(self, "layer_actions_by_type", {}).get(action)
+        if entry is not None:
+            entry[2].add(layer.id())
+
+    def removeCustomActionForLayerType(self, action):
+        return getattr(self, "layer_actions_by_type", {}).pop(action, None) is not None
+
+    def layer_menu(self, layer):
+        """The texts of the custom actions the Layers panel's menu shows for a layer."""
+        return [action.text() for action, (layer_type, every, ids) in getattr(self, "layer_actions_by_type", {}).items()
+                if layer.type() == layer_type and (every or layer.id() in ids)]
+
+    def layerTreeView(self):
+        iface = self
+
+        class _View:
+            def currentLayer(self):
+                return iface._active
+        return _View()

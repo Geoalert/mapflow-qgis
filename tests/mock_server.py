@@ -12,7 +12,7 @@ import json
 import re
 import threading
 import uuid
-from urllib.parse import parse_qs, urlencode, urlsplit
+from urllib.parse import parse_qs, unquote, urlencode, urlsplit
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from . import fixtures
@@ -39,6 +39,8 @@ class State:
         self.created_projects = []         # POST /projects
         self.no_mosaics = False            # an account without collections
         self.uploads = []                  # (what, mosaic, detail) for each upload request
+        self.list_uploads = False          # a one-file upload is listed afterwards as a collection with one image
+        self.extra_images = {}             # …and its image: mosaic id → image names
         self.codes = {}                 # code → (code_challenge, redirect_uri)
         self.access_tokens = set()
         self.refresh_tokens = set()
@@ -272,8 +274,16 @@ class Handler(BaseHTTPRequestHandler):
                 self.state.uploads.append(("image", match.group(1), len(body or b"")))
             return self._send(200, {"id": f"img-{len(self.state.uploads)}", "mosaic_id": match.group(1)})
         if method == "POST" and path == "/rasters/mosaic/image":
+            name = unquote(self.path.split("name=")[-1].split("&")[0])
             with self.state.lock:
-                self.state.uploads.append(("new", self.path.split("name=")[-1].split("&")[0], len(body or b"")))
+                self.state.uploads.append(("new", name, len(body or b"")))
+                if self.state.list_uploads:
+                    mosaic_id = f"m-up-{len(self.state.uploads)}"
+                    self.state.extra_mosaics.append({
+                        "id": mosaic_id, "name": name, "created_at": "2026-11-15T12:00:00Z", "sizeInBytes": 10,
+                        "footprint": None, "rasterLayer": {"tileUrl": "", "tileJsonUrl": ""}, "tags": []})
+                    self.state.extra_images[mosaic_id] = ["centre.tif"]     # a footprint the fixtures know
+                    return self._send(200, {"id": "img-new", "mosaic_id": mosaic_id})
             return self._send(200, {"id": "img-new", "mosaic_id": "m-new"})
         if method == "GET" and path == "/rasters/mosaic":
             if self.state.no_mosaics:
@@ -282,7 +292,7 @@ class Handler(BaseHTTPRequestHandler):
         match = re.fullmatch(r"/rasters/mosaic/([\w-]+)/image", path)
         if method == "GET" and match:
             base = f"http://127.0.0.1:{self.server.server_address[1]}/rest"
-            names = fixtures.MOSAIC_IMAGES.get(match.group(1), [])
+            names = fixtures.MOSAIC_IMAGES.get(match.group(1)) or self.state.extra_images.get(match.group(1), [])
             with self.state.lock:
                 self.state.image_requests = getattr(self.state, "image_requests", 0) + 1
             return self._send(200, [fixtures.mosaic_image(f"{match.group(1)}-i{n}", match.group(1), name, base)
