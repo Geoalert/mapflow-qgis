@@ -30,7 +30,7 @@ class AreaOfInterest:
 @dataclass
 class ImageryChoice:
     """Where the pixels come from. Exactly one of the three kinds."""
-    kind: str                                   # provider | my_imagery | catalog | tiles
+    kind: str                                   # provider | my_imagery | catalog
     label: str
     provider: Optional[DataProvider] = None     # kind == provider
     zoom: Optional[int] = None
@@ -38,10 +38,6 @@ class ImageryChoice:
     image_ids: List[str] = field(default_factory=list)   # my_imagery (optional) or catalog
     catalog_provider: Optional[str] = None      # kind == catalog: the image's provider name
     min_area_km2: float = 0.0                   # kind == catalog: the smallest order the image's provider sells
-    url: str = ""                               # kind == tiles: a tile URL from a layer in the QGIS project
-    source_type: str = ""                       # kind == tiles: XYZ | TMS | QUADKEY
-    login: str = ""                             # kind == tiles: for a tile server that asks for them
-    password: str = ""
 
     @classmethod
     def from_provider(cls, provider: DataProvider, zoom: Optional[int] = None) -> "ImageryChoice":
@@ -61,14 +57,6 @@ class ImageryChoice:
         return cls("catalog", label, image_ids=[image_id], catalog_provider=provider_name, zoom=zoom,
                    min_area_km2=min_area_km2 or 0.0)
 
-    @classmethod
-    def from_tiles(cls, url: str, source_type: str, zoom: int, layer_name: str, login: Optional[str] = None,
-                   password: Optional[str] = None) -> "ImageryChoice":
-        """The tiles of an XYZ/TMS layer in the QGIS project, which Mapflow reads from the same URL
-        (userDefined): the server must be reachable from Mapflow, not only from this computer."""
-        return cls("tiles", f"{layer_name} · zoom {zoom}", zoom=zoom, url=url, source_type=source_type.upper(),
-                   login=login or "", password=password or "")
-
     @property
     def source_name(self) -> str:
         """The imagery's provider as a person reads it."""
@@ -76,8 +64,6 @@ class ImageryChoice:
             return self.provider.display_name
         if self.kind == "catalog":
             return (self.catalog_provider or "Catalog").replace("_", " ").title()
-        if self.kind == "tiles":
-            return "Your tile layer"
         return "My imagery"
 
     @property
@@ -85,7 +71,7 @@ class ImageryChoice:
         """Known locally for basemaps; your own imagery is free; catalog prices come from /cost."""
         if self.kind == "provider" and self.provider:
             return self.provider.price_at(self.zoom)
-        if self.kind in ("my_imagery", "tiles"):
+        if self.kind == "my_imagery":
             return 0.0
         return None
 
@@ -103,11 +89,6 @@ class ImageryChoice:
             if self.zoom is not None:
                 params["zoom"] = int(self.zoom)
             return {"imagerySearch": params}
-        if self.kind == "tiles":
-            params = {"sourceType": self.source_type, "url": self.url, "zoom": str(self.zoom), "crs": "epsg:3857"}
-            if self.login or self.password:
-                params.update(rasterLogin=self.login, rasterPassword=self.password)
-            return {"userDefined": params}
         raise ValueError(f"Unknown imagery kind {self.kind}")
 
 
@@ -117,8 +98,6 @@ def processing_meta(imagery: "ImageryChoice", version: str = "") -> Dict[str, st
         source = imagery.provider.name.lower()
     elif imagery.kind == "my_imagery":
         source = "my imagery"
-    elif imagery.kind == "tiles":
-        source = imagery.source_type.lower()
     else:
         source = "imagery search"
     meta = {"source-app": "qgis", "source": source}

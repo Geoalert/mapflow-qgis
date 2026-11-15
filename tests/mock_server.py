@@ -334,12 +334,6 @@ def valid_processing(body) -> bool:
     mine = source.get("myImagery")
     if mine is not None and (("mosaicId" in mine) == ("imageIds" in mine)):
         return False
-    tiles = source.get("userDefined")
-    if tiles is not None:
-        url = tiles.get("url") or ""
-        if tiles.get("sourceType") not in ("XYZ", "TMS", "QUADKEY") or not url.startswith("http") \
-                or not str(tiles.get("zoom") or "").isdigit() or "{-y}" in url:
-            return False
     meta = body.get("meta") or {}
     if not isinstance(meta, dict) or not all(isinstance(v, str) for v in meta.values()):
         return False

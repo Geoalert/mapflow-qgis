@@ -169,18 +169,6 @@ def test_ratings_are_read_from_processings():
     assert Processing.from_api(processing_json("p", "OK", 100)).rating == 0
 
 
-def test_tile_layers_are_processed_as_user_defined_imagery():
-    tiles = ImageryChoice.from_tiles("https://tiles.example.com/{z}/{x}/{y}.png", "xyz", 19, "Drone tiles")
-    assert tiles.source_params() == {"userDefined": {"sourceType": "XYZ", "zoom": "19", "crs": "epsg:3857",
-                                                     "url": "https://tiles.example.com/{z}/{x}/{y}.png"}}
-    assert tiles.price_per_km2 == 0 and tiles.source_name == "Your tile layer"
-    signed = ImageryChoice.from_tiles("https://t.example.com/{z}/{x}/{y}", "TMS", 18, "Private", "me", "secret")
-    assert signed.source_params()["userDefined"]["rasterLogin"] == "me"
-    draft = _draft()
-    draft.imagery = tiles
-    assert draft.payload("project-1")["meta"]["source"] == "xyz"
-
-
 def test_error_messages():
     assert "km²" in describe("TOO_LARGE_PROCESSING", {"area": 5e6, "aoiAreaLimit": 3e6})
     assert describe("dataloader.NoDataTile").startswith("The data provider contains no data")

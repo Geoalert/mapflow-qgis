@@ -677,83 +677,36 @@ def main():
     wait_until(lambda: controller.server_cost == 70, 3)
     shot(content, "07-run-catalog", QSize(400, 980))
 
-    # No collections yet: My imagery still shows in the run form, and offers to add imagery
+    # No collections yet: My imagery still shows in the run form, and offers the upload
     imagery_service = plugin.services[3]
     import mapflow_next.controller as controller_module
-    from qgis.core import QgsRasterLayer
     state.no_mosaics = True
     imagery_service.load_mosaics()
     check(wait_until(lambda: not imagery_service.mosaics, 5), "an account without collections")
-    # raster layers in the project: a GeoTIFF file, XYZ and TMS tiles, and a WMS layer
-    tif = make_geotiff("drone_ortho.tif")
-    file_layer = QgsRasterLayer(tif, "Drone ortho")
-    xyz = QgsRasterLayer("type=xyz&url=https://tiles.example.com/{z}/{x}/{y}.png&zmax=19&zmin=0", "City tiles", "wms")
-    tms = QgsRasterLayer("type=xyz&url=https://tms.example.com/{z}/{x}/{-y}.jpg&zmax=20&zmin=0", "TMS tiles", "wms")
-    wms = QgsRasterLayer("crs=EPSG:3857&format=image/png&layers=a&styles=&url=https://wms.example.com/wms",
-                         "Some WMS", "wms")
-    QgsProject.instance().addMapLayers([file_layer, xyz, tms, wms])
     controller.refresh_run()
     rows, _selected = controller._imagery_rows(session.status, True)
     mine = next((r for r in rows if r.key == "mosaic"), None)
-    adds = {text.split(":")[0]: (key, enabled) for key, text, enabled, _tip in (mine.adds if mine else ())}
-    check(mine is not None and "No collections yet" in mine.meta and mine.add_label == "Add your imagery…"
-          and adds.get("Upload a GeoTIFF…", ("", False))[1],
-          "without collections, My imagery is still listed, with Add your imagery… › Upload a GeoTIFF…")
-    check(adds.get("Drone ortho", ("", False))[1] and adds.get("City tiles", ("", False))[1]
-          and adds.get("TMS tiles", ("", False))[1] and adds.get("Some WMS", ("", True))[1] is False,
-          f"…and the project's raster layers: files and tile layers can be used, a WMS can't ({sorted(adds)})")
-    asked, uploads = [], []
+    check(mine is not None and mine.pick == "Upload a GeoTIFF…" and "No collections yet" in mine.meta,
+          "without collections, My imagery is still listed, with Upload a GeoTIFF…")
+    asked = []
     saved_open = controller_module.QFileDialog.getOpenFileNames
-    saved_upload = imagery_service.upload
     controller_module.QFileDialog.getOpenFileNames = staticmethod(lambda *a, **k: (asked.append(a), ([], ""))[1])
-    imagery_service.upload = lambda path, name: uploads.append((path, name))
     try:
         content.go(0)
         content.open_run()
         wait_until(lambda: False, 0.3)
-        add = [b for row in content.run._rows for b in row.findChildren(QPushButton) if b.text() == "Add your imagery…"]
-        menu_texts = [a.text() for a in add[0].menu().actions()] if add and add[0].menu() else []
-        check(add and menu_texts[0] == "Upload a GeoTIFF…", f"the run form shows that menu ({menu_texts})")
-        add[0].menu().actions()[0].trigger()
-        check(len(asked) == 1, "Upload a GeoTIFF… opens the file dialog")
+        upload = [b for row in content.run._rows for b in row.findChildren(QPushButton)
+                  if b.text() == "Upload a GeoTIFF…"]
+        upload and upload[0].click()
+        check(len(asked) == 1, "…and the button opens the file dialog to upload one")
         before = controller.draft.imagery
         controller.on_imagery("mosaic")
         check(len(asked) == 2 and controller.draft.imagery is before,
-              "choosing the empty My imagery row asks for a file too, and changes nothing else")
-        content.run.addImagery.emit(adds["Drone ortho"][0])
-        check(wait_until(lambda: uploads == [(tif, "drone_ortho")], 5),
-              "a GeoTIFF layer is uploaded to a new collection")
-        controller._upload_progress(None)
+              "choosing the row asks for a file too, and changes nothing else")
     finally:
         controller_module.QFileDialog.getOpenFileNames = saved_open
-        imagery_service.upload = saved_upload
-    content.run.addImagery.emit(adds["City tiles"][0])
-    choice = controller.draft.imagery
-    sent = choice.source_params().get("userDefined", {}) if choice.kind == "tiles" else {}
-    check(sent.get("url") == "https://tiles.example.com/{z}/{x}/{y}.png" and sent.get("sourceType") == "XYZ",
-          "an XYZ layer becomes the imagery, processed from its own tiles (userDefined)")
-    rows, selected = controller._imagery_rows(session.status, True)
-    tiles_row = next((r for r in rows if r.key == "tiles"), None)
-    check(selected == "tiles" and tiles_row and max(tiles_row.zooms) == 19 and tiles_row.removable,
-          "…listed as Your tile layer, with zooms up to the layer's own maximum")
-    check(wait_until(lambda: controller.server_cost == 70, 5)
-          and any(r[1] == "/processing/cost/v2" and "userDefined" in r[2]["params"]["sourceParams"]
-                  for r in state.requests), "…and Mapflow prices it")
-    content.run.addImagery.emit(adds["TMS tiles"][0])
-    params = controller.draft.imagery.source_params()["userDefined"]
-    check(params["sourceType"] == "TMS" and params["url"] == "https://tms.example.com/{z}/{x}/{y}.jpg",
-          "a TMS layer is sent as TMS, with Mapflow's {y} rows")
-    content.run.tilesRemoved.emit()
-    check(controller.draft.imagery.kind == "provider" and controller.tiles_layer is None,
-          "removing the tile layer goes back to a basemap")
-    # an upload started from the run form is used once Mapflow lists it
-    controller._choose_uploaded = "Beirut"
     state.no_mosaics = False
     imagery_service.load_mosaics()
-    check(wait_until(lambda: controller.draft.imagery.kind == "my_imagery"
-                     and controller.draft.imagery.mosaic_id == "m-2", 5),
-          "the uploaded collection becomes the imagery when it appears")
-    QgsProject.instance().removeMapLayers([file_layer.id(), xyz.id(), tms.id(), wms.id()])
 
     # several GeoTIFFs at once, into one collection; each checked here and by Mapflow first
     from osgeo import gdal
