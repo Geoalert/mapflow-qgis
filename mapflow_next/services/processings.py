@@ -16,10 +16,11 @@ from ..core.models import Processing, Project, Status
 MAX_PAGE = 100
 
 
-def _merge(fresh: List[Processing], shown: List[Processing]) -> List[Processing]:
+def _merge(fresh: List[Processing], shown: List[Processing], complete: bool) -> List[Processing]:
     """The refreshed newest page, then the older processings already shown below it (from "Show more").
-    Something deleted inside the refreshed window drops out; older ones stay in place."""
-    if len(shown) <= len(fresh):
+    Something deleted inside the refreshed window drops out; older ones stay in place. A `complete` page
+    (the project has no more than it holds) is the whole list: nothing shown before survives it."""
+    if complete or len(shown) <= len(fresh):
         return list(fresh)
     ids = {p.id for p in fresh}
     oldest = fresh[-1].created if fresh else None
@@ -102,8 +103,8 @@ class Processings(QObject):
         project_id = self.project.id
         # The newest processings, as many as are shown (up to the API's page limit); polling keeps them current
         limit = min(max(PROCESSINGS_PAGE_SIZE, len(self.items)), MAX_PAGE)
-        self.api.processings(project_id, partial(self._on_list, project_id), partial(self._on_list_error, project_id),
-                             limit=limit)
+        self.api.processings(project_id, partial(self._on_list, project_id, limit),
+                             partial(self._on_list_error, project_id), limit=limit)
         return True
 
     def load_more(self) -> None:
@@ -137,17 +138,18 @@ class Processings(QObject):
     def _current(self, project_id: str) -> bool:
         return self.project is not None and self.project.id == project_id
 
-    def _on_list(self, project_id: str, items: List[Processing], total: int) -> None:
+    def _on_list(self, project_id: str, limit: int, items: List[Processing], total: int) -> None:
         if not self._current(project_id):
             return
         self._loading = False
+        complete = len(items) < limit          # fewer than asked for: that is all there is
         items = [p for p in items if p.id not in self._deleted]
         for item in items:
             before = self._last_status.get(item.id)
             if before is not None and not before.is_terminal and item.status.is_terminal:
                 (self.finished if item.status is Status.ok else self.failed).emit(item)
             self._last_status[item.id] = item.status
-        self.items = [p for p in _merge(items, self.items) if p.id not in self._deleted]
+        self.items = [p for p in _merge(items, self.items, complete) if p.id not in self._deleted]
         self.total = max(total, len(self.items))
         self.changed.emit(self.items)
         self.refreshed.emit()

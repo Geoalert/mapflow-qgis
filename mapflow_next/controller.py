@@ -91,6 +91,9 @@ class Controller(QObject):
         self._extent_pending = False                     # waiting for image footprints to make the extent
         self._use_pending: Optional[str] = None          # a collection chosen before its image list came
         self._empty_warned: Optional[str] = None         # the empty collection the message bar has named
+        self._restoring = 0                              # counts Run again: a late answer for an earlier one is dropped
+        self._imagery_to_choose = False                  # Run again left the imagery empty: no default fills it
+        self._aoi_layer_id: Optional[str] = None         # aoi_layer's id, for when the layer is already deleted
         self._choose_uploaded: Optional[str] = None      # an upload to use as the imagery once it's listed
         self._after_sign_in: Optional[Tuple[str, str]] = None   # a Layers-panel action waiting for sign-in
         self._pictures: Dict[str, bytes] = {}             # catalog picture previews, by image id
@@ -265,6 +268,12 @@ class Controller(QObject):
             self.content.imagery.set_searching(False)
             self.content.imagery.set_upload(None)
             self.uploading = None
+            # …nor do a start or an upload in flight: their busy flags would stay up after signing back in
+            self.starting = False
+            self.imagery.reset_busy()
+            self._choose_uploaded = self._use_pending = None
+            self._extent_pending = False
+            self._restoring += 1
             for dialog in (self.projects_dialog, self.mosaic_picker):
                 if dialog is not None:
                     dialog.close()
@@ -297,7 +306,7 @@ class Controller(QObject):
         else:
             self.content.set_credits("", "")
         self.content.processings.provider_names = {p.name: p.display_name for p in status.data_providers}
-        if self.draft.imagery is None:
+        if self.draft.imagery is None and not self._imagery_to_choose:
             self._choose_default_imagery()
         elif self.draft.imagery.kind == "provider":
             # providers may have been updated: re-attach the fresh object
@@ -494,6 +503,7 @@ class Controller(QObject):
         scenario = self.catalogue.get(scenario_id)
         if scenario is None:
             return
+        self._imagery_to_choose = False
         if self.gallery:
             self.gallery.hide()
         if scenario.imagery_hint == "search":
@@ -709,13 +719,18 @@ class Controller(QObject):
 
     def _watch_layer(self, layer: Optional[QgsVectorLayer]) -> None:
         if self.aoi_layer is not None:
-            for signal in (self.aoi_layer.selectionChanged, self.aoi_layer.editingStopped,
-                           self.aoi_layer.featuresDeleted, self.aoi_layer.featureAdded):
+            try:
+                signals = (self.aoi_layer.selectionChanged, self.aoi_layer.editingStopped,
+                           self.aoi_layer.featuresDeleted, self.aoi_layer.featureAdded)
+            except RuntimeError:                        # removed from the project and deleted
+                signals = ()
+            for signal in signals:
                 try:
                     signal.disconnect(self._layer_changed)
                 except (TypeError, RuntimeError):
                     pass
         self.aoi_layer = layer
+        self._aoi_layer_id = layer.id() if layer is not None else None
         if layer is not None:
             for signal in (layer.selectionChanged, layer.editingStopped, layer.featuresDeleted, layer.featureAdded):
                 signal.connect(self._layer_changed)
@@ -745,8 +760,11 @@ class Controller(QObject):
 
     @guarded
     def on_layers_removed(self, layer_ids) -> None:
-        if self.aoi_layer is not None and self.draft.aoi and self.draft.aoi.layer_id in layer_ids:
+        # Compared by the id kept when the layer was chosen: by now the layer object itself is deleted, and an
+        # empty layer gives the form no area (draft.aoi) to compare with
+        if self._aoi_layer_id is not None and self._aoi_layer_id in layer_ids:
             self.aoi_layer = None
+            self._aoi_layer_id = None
             self.draft.aoi = None
         self.refresh_run()
         self.render_processings()
@@ -872,6 +890,9 @@ class Controller(QObject):
                 self._extent_pending = True
                 self.imagery.load_images(choice.mosaic_id)
             else:
+                if self._extent_pending or choice is not None:
+                    self.notify("Mapflow has no outline for this imagery yet, so its extent can't be the area. "
+                                "Choose the area another way.", Qgis.MessageLevel.Info)
                 self._extent_pending = False
             return
         self._extent_pending = False
@@ -1117,9 +1138,9 @@ class Controller(QObject):
         if status.billing is BillingType.area:
             if not self.draft.aoi:
                 return CostView(value="—", balance=f"{formatting.km2(status.remaining_area_km2)} left on your plan")
-            left = status.remaining_area_km2 - self.draft.aoi.area_km2
-            return CostView(value=formatting.km2(self.draft.aoi.area_km2),
-                            balance=f"{formatting.km2(max(left, 0))} left after this run")
+            area = self.draft.processed_area.area_km2      # for My imagery, the part inside the imagery
+            left = status.remaining_area_km2 - area
+            return CostView(value=formatting.km2(area), balance=f"{formatting.km2(max(left, 0))} left after this run")
         view = CostView(show_top_up=True)
         if estimate is None:
             view.balance = f"Balance: {status.remaining_credits:,} credits"
@@ -1379,6 +1400,11 @@ class Controller(QObject):
         self.draft.options = set(processing.enabled_blocks) & {b.name for b in model.options} if model else set()
         match = scenario_for_model(self.catalogue, model, list(self.draft.options)) if model else None
         self.draft.scenario_id = match.id if match else None
+        # The imagery and the area of the form before are never kept: a run on them would be paid for and
+        # wrong. Whatever can't be restored stays empty until the user chooses it.
+        self._restoring += 1
+        restoring = self._restoring
+        self.draft.imagery = None
         source, status = processing.source, self.session.status
         if source.kind == "provider" and status:
             provider = next((p for p in status.data_providers if p.name == source.provider), None)
@@ -1386,7 +1412,16 @@ class Controller(QObject):
                 self.provider_zoom[provider.name] = source.zoom or provider.nearest_zoom(None)
                 self.draft.imagery = ImageryChoice.from_provider(provider, source.zoom)
         elif source.kind == "my_imagery" and (source.mosaic_id or source.image_ids):
-            self._restore_my_imagery(source.mosaic_id, source.image_ids[0] if source.image_ids else None)
+            self._restore_my_imagery(source.mosaic_id, source.image_ids[0] if source.image_ids else None,
+                                     restoring)
+        elif source.kind == "catalog" and source.image_ids:
+            image_id = source.image_ids[0]
+            self.draft.imagery = ImageryChoice.from_catalog(image_id, source.provider, source.zoom,
+                                                            f"Catalog image · {image_id[:12]}")
+        self._imagery_to_choose = self.draft.imagery is None
+        if self.draft.imagery is None and source.kind != "my_imagery":
+            self.notify(f"The imagery of “{processing.name}” can't be chosen again here. Choose the imagery.",
+                        Qgis.MessageLevel.Warning)
         self.draft.name, self.draft.name_edited = processing.name, True
 
         # The area comes from Mapflow, not from the map: the layer it was drawn on may be gone or changed.
@@ -1395,6 +1430,8 @@ class Controller(QObject):
         self.draft.aoi = None
 
         def with_area(collection: dict):
+            if restoring != self._restoring:
+                return                                  # another Run again came after this one
             layer = aoi_tools.geojson_layer(collection, f"Area · {processing.name}")
             if layer is None:
                 self.notify("Mapflow sent no area for this processing. Choose the area again.",
@@ -1412,23 +1449,35 @@ class Controller(QObject):
         self.content.open_run()
         self.refresh_run()
 
-    def _restore_my_imagery(self, mosaic_id: Optional[str], image_id: Optional[str]) -> None:
+    def _restore_my_imagery(self, mosaic_id: Optional[str], image_id: Optional[str], restoring: int,
+                            image=None) -> None:
         """My imagery of an earlier processing: a whole collection, or one image (the API keeps only the
-        image id then, so its collection is looked up)."""
-        if image_id:
-            known = next((i for images in self.imagery.images.values() for i in images if i.id == image_id), None)
-            if known is None:
-                def found(image):
-                    if image.mosaic_id:
-                        self.imagery.images.setdefault(image.mosaic_id, [image])
-                        self._restore_my_imagery(image.mosaic_id, image.id)
-                self.api.mosaic_image(image_id, found, lambda _e: None)
+        image id then, so its collection is looked up). The image found that way isn't put in the collection's
+        cached image list: that list would then look complete with one image in it."""
+        if restoring != self._restoring:
+            return                                      # another Run again came after this one
+        if image_id and image is None:
+            image = next((i for images in self.imagery.images.values() for i in images if i.id == image_id), None)
+            if image is None:
+                def found(found_image):
+                    if found_image.mosaic_id:
+                        self._restore_my_imagery(found_image.mosaic_id, image_id, restoring, found_image)
+                    elif restoring == self._restoring:
+                        self.notify("The image of that processing is no longer in My imagery. Choose the imagery.",
+                                    Qgis.MessageLevel.Warning)
+
+                def missing(_error):
+                    if restoring == self._restoring:
+                        self.notify("The image of that processing is no longer in My imagery. Choose the "
+                                    "imagery.", Qgis.MessageLevel.Warning)
+                self.api.mosaic_image(image_id, found, missing)
                 return
-            mosaic_id = known.mosaic_id or mosaic_id
+        if image is not None:
+            mosaic_id = image.mosaic_id or mosaic_id
         mosaic = self.imagery.get_mosaic(mosaic_id)
-        image = self.imagery.get_image(mosaic_id, image_id) if image_id else None
         self.draft.imagery = ImageryChoice.from_mosaic(mosaic_id, mosaic.name if mosaic else "My imagery",
                                                        image_id, image.filename if image else "")
+        self._imagery_to_choose = False
         self.refresh_run()
 
     # ---------- imagery tab ----------

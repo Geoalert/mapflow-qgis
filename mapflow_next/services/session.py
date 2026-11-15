@@ -216,6 +216,8 @@ class Session(QObject):
     def _on_unauthorized(self) -> None:
         if self.state != SIGNED_IN:
             return
+        if self.method == BROWSER and self._refreshing:
+            return          # several requests ran out together (a laptop waking up): one renewal answers them all
         if self.method == BROWSER and time.time() - self._forced_refresh_at > 60:
             # The access token may have run out early (a sleeping laptop): renew once before giving up
             self._forced_refresh_at = time.time()

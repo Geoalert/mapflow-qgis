@@ -125,6 +125,14 @@ class Imagery(QObject):
             if mosaic.image_count is None:
                 self.load_images(mosaic.id)
 
+    def reset_busy(self) -> None:
+        """After sign-out: requests in flight were aborted and won't call back, so nothing is loading."""
+        self.uploading = False
+        self.loading_more = False
+        self._images_loading.clear()
+        self._mosaics_loading = False
+        self._search_id += 1
+
     def load_images(self, mosaic_id: str, force: bool = False) -> None:
         if mosaic_id in self._images_loading or (mosaic_id in self.images and not force):
             if mosaic_id in self.images:

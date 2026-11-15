@@ -287,6 +287,18 @@ def main():
     session.refresh_status()
     check(wait_until(lambda: session.http.bearer == "access-3") and session.state == "signed_in",
           "a rejected access token is renewed once instead of signing out")
+    # several requests out when the token ran out (a laptop waking up): one renewal, and no sign-out
+    session._forced_refresh_at = 0.0                     # a minute later
+    with state.lock:
+        state.access_tokens.discard("access-3")
+    answers = []
+    for _ in range(4):
+        session.http.get("user/status", on_success=lambda _d: answers.append("ok"),
+                         on_error=lambda e: answers.append(e.status))
+    check(wait_until(lambda: len(answers) == 4 and session.http.bearer == "access-4", 5)
+          and session.state == "signed_in" and answers.count(401) == 4,
+          f"four requests rejected together renew the token once and keep the sign-in ({answers}, "
+          f"{session.http.bearer}, {session.state})")
 
     # QGIS restart: the saved sign-in comes back without opening the browser
     opened = len(browser.opened)
@@ -300,10 +312,15 @@ def main():
     session, processings, controller = plugin.services[1], plugin.services[2], plugin.controller
     processings._poll.setInterval(150)
     check(wait_until(lambda: session.state == "signed_in") and len(browser.opened) == opened
-          and session.http.bearer == "access-4", "after a restart the browser sign-in is restored silently")
+          and session.http.bearer == "access-5", "after a restart the browser sign-in is restored silently")
+    imagery_now = plugin.services[3]
+    controller.starting, imagery_now.uploading = True, True        # a start and an upload in flight
+    imagery_now._images_loading.add("m-1")
     session.sign_out()
     check(wait_until(lambda: session.state == "signed_out") and not auth.load_refresh_token(session.config),
           "signing out forgets the browser sign-in")
+    check(not controller.starting and not imagery_now.uploading and not imagery_now._images_loading,
+          "…and what was in flight isn't left busy for the next sign-in (Run, uploads, image lists)")
 
     # a saved sign-in that has run out: back to the sign-in page, no browser popping up
     auth.store_refresh_token(session.config, "refresh-expired")
@@ -819,6 +836,7 @@ def main():
     project.removeMapLayers([pier.id(), xyz.id(), wells.id(), harbour.id()])
     check(aoi_module.is_polygon_layer(controller.aoi_layer) or area_before is None, "…and the area is put back")
     imagery_service.load_mosaics()
+    wait_until(lambda: not imagery_service._mosaics_loading, 5)    # or the check below would ride on this load
     controller.refresh_run()
 
     # a collection made in Mapflow Web shows up without restarting
@@ -1047,6 +1065,30 @@ def main():
                      and controller.draft.imagery.mosaic_id == "m-1"
                      and controller.draft.imagery.image_ids == ["m-1-i1"], 5),
           "“Run again” on one image finds its collection and picks the same image")
+    cached = plugin.services[3].images.get("m-1")
+    check(cached is None or len(cached) == len(fixtures.MOSAIC_IMAGES["m-1"]),
+          f"…without caching that one image as the collection's whole image list ({cached})")
+
+    # Run again on catalog imagery restores the image; imagery it can't restore is left for the user to choose
+    from mapflow_next.core.models import Processing as ProcessingModel
+    for pid, source in (("cat-1", {"imagerySearch": {"dataProvider": "Maxar", "zoom": "18",
+                                                     "imageIds": ["10300100ABCDEF01"]}}),
+                        ("custom-1", {"userDefined": {"sourceType": "XYZ", "url": "https://x/{z}/{x}/{y}"}})):
+        item = fixtures.processing_json(pid, "OK", 100, name=f"Run {pid}")
+        item["params"] = {"sourceParams": source}
+        processings.items.insert(0, ProcessingModel.from_api(item))
+    controller.draft.imagery = controller_module.ImageryChoice.from_mosaic("m-1", "Drone survey March")
+    iface.bar.messages.clear()
+    content.processings.duplicate.emit("cat-1")
+    check(controller.draft.imagery is not None and controller.draft.imagery.kind == "catalog"
+          and controller.draft.imagery.image_ids == ["10300100ABCDEF01"],
+          "“Run again” on a catalog image chooses the same image, not the imagery chosen before")
+    content.processings.duplicate.emit("custom-1")
+    controller.on_status(session.status)
+    check(controller.draft.imagery is None
+          and any("Choose the imagery" in (m or "") for _l, m in iface.bar.messages),
+          "…imagery it can't restore stays empty, with a message, and no default fills it in")
+    processings.items = [p for p in processings.items if p.id not in ("cat-1", "custom-1")]
 
     # duplicate → run again: the area comes from Mapflow (GET /processings/{id}/aois answers a list)
     content.processings.duplicate.emit("old-1")
@@ -1057,6 +1099,37 @@ def main():
     check(any(r[1] == "/processings/old-1/aois" for r in state.requests)
           and controller.aoi_layer.featureCount() == 1 and controller.draft.aoi.area_km2 > 0,
           "…downloaded from Mapflow, so it works when the original layer is gone")
+
+    # an empty area layer, removed: the form forgets it (its object is gone), and another area can be chosen
+    empty = QgsVectorLayer("Polygon?crs=EPSG:4326", "Empty area", "memory")
+    QgsProject.instance().addMapLayer(empty)
+    restored = controller.aoi_layer
+    controller.set_aoi_layer(empty)
+    QgsProject.instance().removeMapLayer(empty.id())
+    check(controller.aoi_layer is None, "removing an empty area layer clears it from the form")
+    controller.set_aoi_layer(restored)
+    check(controller.aoi_layer is restored and controller.draft.aoi is not None, "…and another area can be chosen")
+
+    # area plans: the usage shown is the area that is processed (inside My imagery), not the whole area
+    import dataclasses
+    from mapflow_next.core.models import BillingType
+    area_plan = dataclasses.replace(session.status, billing=BillingType.area, remaining_area_km2=100.0)
+    whole = controller.draft.aoi
+    clipped = dataclasses.replace(whole, area_km2=whole.area_km2 / 4)
+    saved_coverage = controller.draft.coverage
+    controller.draft.coverage = type("Coverage", (), {"overlaps": True, "clipped": clipped})()
+    view = controller._cost_view(area_plan)
+    check(view.value == controller_module.formatting.km2(clipped.area_km2)
+          and controller_module.formatting.km2(100.0 - clipped.area_km2) in view.balance,
+          f"an area plan shows the processed (clipped) area and what's left after it ({view.value}, {view.balance})")
+    controller.draft.coverage = saved_coverage
+
+    # the processings list follows the server: a page smaller than asked for is the whole list
+    from mapflow_next.services.processings import _merge
+    one, two, three = (ProcessingModel.from_api(fixtures.processing_json(f"m{n}", "OK", 100)) for n in (1, 2, 3))
+    check(_merge([], [one, two], complete=True) == [] and _merge([one], [one, two, three], complete=True) == [one]
+          and _merge([one], [one, two, three], complete=False) == [one, two, three],
+          "a refresh drops processings deleted elsewhere, down to the last one; a full page keeps the older ones")
 
     # ---------- projects window ----------
     with state.lock:

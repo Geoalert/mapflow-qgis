@@ -104,6 +104,7 @@ class _Pending:
     sink: Optional[QSaveFile] = None
     keep: Any = None              # objects that must live as long as the request (multipart body)
     authorized: bool = False      # carried Mapflow credentials: a 401 means the sign-in has ended
+    bearer: Optional[str] = None  # …the access token it carried, if any
 
 
 class Http(QObject):
@@ -226,7 +227,7 @@ class Http(QObject):
 
         key = next(self._ids)
         pending = _Pending(reply, on_success, on_error, parse, sink=sink, keep=body if upload else None,
-                           authorized=authorize)
+                           authorized=authorize, bearer=self.bearer if authorize else None)
         self._pending[key] = pending
         reply.finished.connect(partial(self._finished, key))
         if sink is not None:
@@ -272,7 +273,8 @@ class Http(QObject):
                 error = classify(reply.error(), status, body, reply.url().toString(), pending.timed_out)
                 QgsMessageLog.logMessage(f"{error.kind} {status} {error.url}: {error.code} {error.body[:500]}",
                                          PLUGIN_NAME, Qgis.MessageLevel.Warning)
-                if error.kind == "auth" and pending.authorized:
+                # A request sent with an access token renewed since says nothing about the current sign-in
+                if error.kind == "auth" and pending.authorized and pending.bearer == self.bearer:
                     self.unauthorized.emit()
                 self._fail(pending.on_error, error)
                 return
