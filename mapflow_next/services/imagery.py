@@ -180,40 +180,73 @@ class Imagery(QObject):
         self.api.upload_to_new_mosaic(file_path, name, done, failed, progress)
 
     def upload_many(self, paths: List[str], name: str) -> None:
-        """Several GeoTIFFs into one new collection: the collection first, then each file in turn. A failure
-        stops there; what is uploaded stays, and the message names the file."""
+        """Several GeoTIFFs into one new collection: the collection first, then each file in turn."""
         if self.uploading or not paths:
             return
         self.uploading = True
+
+        def created(data):
+            mosaic_id = (data or {}).get("id")
+            if not mosaic_id:
+                self.uploading = False
+                self.uploadFailed.emit("Mapflow didn't create the collection")
+                self.load_mosaics()
+                return
+            self._send_files(mosaic_id, paths, name)
+
+        def failed(error: ApiError):
+            self.uploading = False
+            self.uploadFailed.emit(error.message)
+
+        self.api.create_mosaic(name, [], created, failed)
+
+    def upload_into(self, mosaic_id: str, paths: List[str]) -> None:
+        """GeoTIFFs added to an existing collection, one after another."""
+        if self.uploading or not paths:
+            return
+        self.uploading = True
+        mosaic = self.get_mosaic(mosaic_id)
+        self._send_files(mosaic_id, paths, mosaic.name if mosaic else "My imagery")
+
+    def _send_files(self, mosaic_id: str, paths: List[str], name: str) -> None:
+        """Each file in turn into the collection, progress counted in bytes across them all. A failure stops
+        there; what is uploaded stays, and the message names the file."""
         sizes = [Path(p).stat().st_size for p in paths]
         total = max(1, sum(sizes))
 
-        def failed(error: ApiError, file: str = ""):
-            self.uploading = False
-            self.uploadFailed.emit(f"{Path(file).name}: {error.message}" if file else error.message)
+        def finish() -> None:
+            self.load_images(mosaic_id, force=True)
             self.load_mosaics()
 
-        def send(mosaic_id: str, index: int) -> None:
+        def failed(error: ApiError, file: str):
+            self.uploading = False
+            self.uploadFailed.emit(f"{Path(file).name}: {error.message}")
+            finish()
+
+        def send(index: int) -> None:
             if index == len(paths):
                 self.uploading = False
                 self.uploadDone.emit(name)
-                self.load_mosaics()
+                finish()
                 return
             done_bytes = sum(sizes[:index])
 
             def progress(sent: int, _total: int):
                 self.uploadProgress.emit(min(99, int((done_bytes + sent) * 100 / total)))
-            self.api.upload_to_mosaic(mosaic_id, paths[index], lambda _d: send(mosaic_id, index + 1),
+            self.api.upload_to_mosaic(mosaic_id, paths[index], lambda _d: send(index + 1),
                                       lambda error: failed(error, paths[index]), progress)
 
-        def created(data):
-            mosaic_id = (data or {}).get("id")
-            if not mosaic_id:
-                failed(ApiError("server", "Mapflow didn't create the collection"))
-                return
-            send(mosaic_id, 0)
+        send(0)
 
-        self.api.create_mosaic(name, created, failed)
+    def create_collection(self, name: str, tags: List[str], on_done: Callable[[str], None],
+                          on_error: Callable[[str], None]) -> None:
+        """An empty collection, for uploads to come. `on_done` gets its id once Mapflow lists it."""
+        def created(data):
+            mosaic_id = (data or {}).get("id") or ""
+            self.load_mosaics()
+            on_done(mosaic_id)
+
+        self.api.create_mosaic(name, tags, created, lambda error: on_error(error.message))
 
     def validate(self, images: List[Tuple[str, dict]], on_done: Callable[[List[str], List[str]], None]) -> None:
         """Mapflow's check of each image, (file name, request), before it is uploaded. `on_done` gets the

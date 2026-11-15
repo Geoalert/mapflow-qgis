@@ -1,19 +1,20 @@
-"""My imagery picker: choose a collection, or one image of it, to process."""
+"""My imagery: choose a collection, or one image of it, to process; upload GeoTIFFs and create collections."""
 from __future__ import annotations
 
-from typing import Dict, List, Optional
+from typing import Callable, Dict, List, Optional, Tuple
 
 from qgis.PyQt.QtCore import Qt, pyqtSignal
 from qgis.PyQt.QtGui import QPixmap
-from qgis.PyQt.QtWidgets import (QDialog, QFrame, QHBoxLayout, QLabel, QLineEdit, QScrollArea, QVBoxLayout, QWidget)
+from qgis.PyQt.QtWidgets import (QDialog, QFrame, QHBoxLayout, QLabel, QLineEdit, QMenu, QProgressBar, QScrollArea,
+                                 QVBoxLayout, QWidget)
 
 from .. import config
 from ..core import formatting
 from ..core.models import Mosaic, MosaicImage
 from . import icons
 from .theme import stylesheet, tokens
-from .widgets import (Callout, Card, ElidedLabel, OptionRow, button, clear_layout, label, link, placeholder, rounded,
-                      tool)
+from .widgets import (Callout, Card, ElidedLabel, OptionRow, button, clear_layout, label, link, menu_action,
+                      placeholder, rounded, tool)
 
 THUMB = 72
 
@@ -28,11 +29,14 @@ class MosaicPicker(QDialog):
     collectionOpened = pyqtSignal(str)          # mosaic id: show its images (the controller loads them)
     chosen = pyqtSignal(str, str)               # mosaic id, image id ("" = the whole collection)
     showRequested = pyqtSignal(str)             # mosaic id: show it on the map
+    uploadRequested = pyqtSignal(str)           # into this collection ("" = a new one)
+    layerUploadRequested = pyqtSignal(str, str)  # a GeoTIFF layer's id, into this collection ("" = a new one)
+    createRequested = pyqtSignal()              # "Create collection"
 
     def __init__(self, parent=None, my_data_url: str = config.WEB_URL + config.MY_DATA_PATH):
         super().__init__(parent)
         self.setObjectName("mfRoot")
-        self.setWindowTitle("Choose from My imagery")
+        self.setWindowTitle("My imagery")
         self.setStyleSheet(stylesheet())
         self.resize(820, 560)
         self.mosaics: List[Mosaic] = []
@@ -42,6 +46,8 @@ class MosaicPicker(QDialog):
         self._thumbs: Dict[str, QLabel] = {}
         self.previews: set = set()            # images whose preview is shown
         self._rows: Dict[str, OptionRow] = {}
+        # (layer id, name) of the project's GeoTIFF layers, asked for when the menu opens; the controller sets it
+        self.geotiff_layers: Callable[[], List[Tuple[str, str]]] = lambda: []
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(20, 18, 20, 14)
@@ -51,6 +57,34 @@ class MosaicPicker(QDialog):
         head.addStretch(1)
         head.addWidget(link("Manage collections in Mapflow Web", my_data_url))
         outer.addLayout(head)
+
+        # Adding imagery: into the collection selected on the left, or into a new one when none is
+        actions = QHBoxLayout()
+        actions.setSpacing(8)
+        self.upload_button = button("Upload a GeoTIFF", "outline", "upload")
+        self.upload_button.clicked.connect(lambda *_: self.uploadRequested.emit(self.current or ""))
+        actions.addWidget(self.upload_button)
+        self.layer_button = button("Choose from raster layer", "outline", "layers")
+        self.layer_menu = QMenu(self.layer_button)
+        self.layer_menu.aboutToShow.connect(self._fill_layer_menu)
+        self.layer_button.clicked.connect(
+            lambda *_: self.layer_menu.exec(self.layer_button.mapToGlobal(self.layer_button.rect().bottomLeft())))
+        actions.addWidget(self.layer_button)
+        actions.addStretch(1)
+        self.create_button = button("Create collection", "ghost", "plus")
+        self.create_button.clicked.connect(lambda *_: self.createRequested.emit())
+        actions.addWidget(self.create_button)
+        outer.addLayout(actions)
+        self.target = label("", "meta", wrap=True)
+        outer.addWidget(self.target)
+        self.upload_bar = QProgressBar(self)
+        self.upload_bar.setTextVisible(False)
+        self.upload_bar.setFixedHeight(6)
+        self.upload_bar.setVisible(False)
+        outer.addWidget(self.upload_bar)
+        self.upload_note = Callout("info", "")
+        self.upload_note.setVisible(False)
+        outer.addWidget(self.upload_note)
 
         columns = QHBoxLayout()
         columns.setSpacing(16)
@@ -128,7 +162,7 @@ class MosaicPicker(QDialog):
                                           if mosaic.size_bytes else "") if t)
             row = OptionRow(mosaic.name, meta)
             row.set_selected(mosaic.id == self.current)
-            row.clicked.connect(lambda *_, mid=mosaic.id: self.open_collection(mid))
+            row.clicked.connect(lambda *_, mid=mosaic.id: self._row_clicked(mid))
             self.list_box.addWidget(row)
             self._rows[mosaic.id] = row
         if not self._rows:
@@ -144,13 +178,29 @@ class MosaicPicker(QDialog):
                 row.meta.setText(meta)
                 row.meta.setVisible(bool(meta))
 
-    def open_collection(self, mosaic_id: str) -> None:
+    def _row_clicked(self, mosaic_id: str) -> None:
+        """One collection at a time; clicking the selected one again clears the selection (uploads then make
+        a new collection)."""
+        if mosaic_id == self.current:
+            self.open_collection(None)
+        else:
+            self.open_collection(mosaic_id)
+
+    def open_collection(self, mosaic_id: Optional[str]) -> None:
         mosaic = next((m for m in self.mosaics if m.id == mosaic_id), None)
-        if mosaic is None:
-            return
-        self.current = mosaic_id
+        self.current = mosaic.id if mosaic else None
         for mid, row in self._rows.items():
-            row.set_selected(mid == mosaic_id)
+            row.set_selected(mid == self.current)
+        self._show_target()
+        for widget in (self.title, self.show_button, self.meta, self.use_all):
+            widget.setVisible(mosaic is not None)
+        if mosaic is None:
+            clear_layout(self.images_box)
+            self._thumbs = {}
+            self.images_box.addWidget(label("Select a collection to see its images and use it, or to upload "
+                                            "GeoTIFFs into it.", "meta", wrap=True))
+            self.images_box.addStretch(1)
+            return
         self.title.setText(mosaic.name)
         self.meta.setText(" · ".join(t for t in (image_count_text(mosaic), formatting.size(mosaic.size_bytes)
                                                  if mosaic.size_bytes else "", formatting.when(mosaic.created)) if t))
@@ -163,6 +213,37 @@ class MosaicPicker(QDialog):
         self.images_box.addStretch(1)
         self.collectionOpened.emit(mosaic_id)
 
+    # ---------- adding imagery ----------
+
+    def _show_target(self) -> None:
+        mosaic = next((m for m in self.mosaics if m.id == self.current), None)
+        if mosaic is not None:
+            self.target.setText(f"GeoTIFFs are added to “{mosaic.name}”. Click it again to upload into a new "
+                                f"collection instead.")
+        else:
+            self.target.setText("GeoTIFFs go into a new collection. Select a collection to add them to it.")
+
+    def _fill_layer_menu(self) -> None:
+        """Only GeoTIFF files: tile layers (XYZ, TMS, WMS) have no file to upload."""
+        self.layer_menu.clear()
+        layers = self.geotiff_layers()
+        for layer_id, name in layers:
+            menu_action(self.layer_menu, "image", name,
+                        lambda lid=layer_id: self.layerUploadRequested.emit(lid, self.current or ""))
+        if not layers:
+            self.layer_menu.addAction("No GeoTIFF layers in the project").setEnabled(False)
+
+    def set_upload(self, percent: Optional[int], message: str = "", kind: str = "info") -> None:
+        uploading = percent is not None
+        self.upload_bar.setVisible(uploading)
+        self.upload_bar.setValue(percent or 0)
+        for widget in (self.upload_button, self.layer_button, self.create_button):
+            widget.setEnabled(not uploading)
+        if uploading and not message:
+            message = f"Uploading… {percent}%"
+        self.upload_note.set(kind, message)
+        self.upload_note.setVisible(bool(message))
+
     # ---------- images ----------
 
     def set_images(self, mosaic_id: str, images: List[MosaicImage]) -> None:
@@ -172,9 +253,8 @@ class MosaicPicker(QDialog):
         self._thumbs = {}
         if not images:      # nothing to process: the collection can't be chosen
             self.use_all.setEnabled(False)
-            self.images_box.addWidget(Callout("warn", "This collection has no images, so it can't be processed. "
-                                                      "Add images to it in Mapflow Web, or upload a GeoTIFF on "
-                                                      "the Imagery sources tab."))
+            self.images_box.addWidget(Callout("warn", "This collection has no images yet, so it can't be "
+                                                      "processed. Upload a GeoTIFF into it above."))
         for image in images:
             self.images_box.addWidget(self._image_card(mosaic_id, image))
         self.images_box.addStretch(1)

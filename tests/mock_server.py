@@ -41,6 +41,7 @@ class State:
         self.uploads = []                  # (what, mosaic, detail) for each upload request
         self.list_uploads = False          # a one-file upload is listed afterwards as a collection with one image
         self.extra_images = {}             # …and its image: mosaic id → image names
+        self.created_tags = {}             # collection id → the tags it was created with
         self.codes = {}                 # code → (code_challenge, redirect_uri)
         self.access_tokens = set()
         self.refresh_tokens = set()
@@ -282,15 +283,24 @@ class Handler(BaseHTTPRequestHandler):
                                     "needs_preprocessing": False, "needs_async_preprocessing": False,
                                     "estimated_preprocessed_size_bytes": None})
         if method == "POST" and path == "/rasters/mosaic":
-            mosaic = {"id": f"m-new-{len(self.state.uploads) + 1}", "name": (body or {}).get("name"),
-                      "created_at": "2026-11-13T21:00:00Z", "tags": []}
+            body = body if isinstance(body, dict) else {}
+            if not body.get("name") or not isinstance(body.get("tags"), list):     # MosaicCreateRequestSchema
+                return self._send(422, {"detail": [{"loc": ["body"], "msg": "Field required", "type": "missing"}]})
+            mosaic = {"id": f"m-new-{len(self.state.uploads) + 1}", "name": body["name"],
+                      "created_at": "2026-11-13T21:00:00Z", "tags": body["tags"], "sizeInBytes": 0,
+                      "footprint": None, "rasterLayer": {"tileUrl": "", "tileJsonUrl": ""}}
             with self.state.lock:
                 self.state.uploads.append(("create", mosaic["id"], mosaic["name"]))
+                self.state.created_tags[mosaic["id"]] = body["tags"]
+                if self.state.list_uploads:
+                    self.state.extra_mosaics.append(mosaic)
             return self._send(200, mosaic)
         match = re.fullmatch(r"/rasters/mosaic/([\w-]+)/image", path)
         if method == "POST" and match:
             with self.state.lock:
                 self.state.uploads.append(("image", match.group(1), len(body or b"")))
+                if self.state.list_uploads and match.group(1) not in fixtures.MOSAIC_IMAGES:
+                    self.state.extra_images.setdefault(match.group(1), []).append("centre.tif")
             return self._send(200, {"id": f"img-{len(self.state.uploads)}", "mosaic_id": match.group(1)})
         if method == "POST" and path == "/rasters/mosaic/image":
             name = unquote(self.path.split("name=")[-1].split("&")[0])

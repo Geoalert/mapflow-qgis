@@ -32,6 +32,7 @@ from .services.results import Results
 from .services.session import SIGNED_IN, SIGNED_OUT, SIGNING_IN, Session
 from .ui.dock import IMAGERY, PROCESSINGS, DockContent
 from .ui.gallery import GalleryDialog
+from .ui.collection_dialog import CollectionDialog
 from .ui.mosaic_picker import MosaicPicker, image_count_text
 from .ui.projects_dialog import ProjectsDialog
 from .ui.feedback_dialog import FeedbackDialog
@@ -94,6 +95,7 @@ class Controller(QObject):
         self._restoring = 0                              # counts Run again: a late answer for an earlier one is dropped
         self._imagery_to_choose = False                  # Run again left the imagery empty: no default fills it
         self._aoi_layer_id: Optional[str] = None         # aoi_layer's id, for when the layer is already deleted
+        self._select_in_picker: Optional[str] = None     # a new collection (id or name) to select once listed
         self._choose_uploaded: Optional[str] = None      # an upload to use as the imagery once it's listed
         self._after_sign_in: Optional[Tuple[str, str]] = None   # a Layers-panel action waiting for sign-in
         self._pictures: Dict[str, bytes] = {}             # catalog picture previews, by image id
@@ -202,10 +204,12 @@ class Controller(QObject):
         self.imagery.uploadDone.connect(lambda name: (
             self._upload_progress(None),
             c.imagery.set_upload(None, f"“{name}” is uploaded and ready to use.", "info"),
+            self.mosaic_picker and self.mosaic_picker.set_upload(None, f"Uploaded to “{name}”.", "info"),
             self.notify(f"“{name}” is uploaded to My imagery.", Qgis.MessageLevel.Success)))
         self.imagery.uploadFailed.connect(lambda text: (
             setattr(self, "_choose_uploaded", None),
             self._upload_progress(None), c.imagery.set_upload(None, text, "error"),
+            self.mosaic_picker and self.mosaic_picker.set_upload(None, text, "error"),
             self.notify(text, Qgis.MessageLevel.Warning)))
 
         self.results.loaded.connect(self.on_results_loaded)
@@ -791,8 +795,7 @@ class Controller(QObject):
                 self.draft.imagery = ImageryChoice.from_provider(
                     provider, self.provider_zoom.get(name, self.preferred_zoom))
         elif key == "mosaic" and not self.imagery.mosaics:
-            if self.uploading is None:
-                self.upload()
+            self.open_mosaic_picker()
             return
         elif key == "mosaic" and self.imagery.mosaics:
             if self.draft.imagery and self.draft.imagery.kind == "my_imagery":
@@ -1092,7 +1095,7 @@ class Controller(QObject):
             meta = (f"Uploading… {self.uploading}%" if uploading
                     else "No collections yet. Upload a GeoTIFF to process your own imagery")
             rows.append(ImageryRow(key="mosaic", title="My imagery", meta=meta,
-                                   pick="" if uploading else "Upload a GeoTIFF…",
+                                   pick="" if uploading else "Add imagery…",
                                    price="Free" if credits_billing else ""))
         for provider in (status.data_providers if status else []):
             chosen = bool(choice and choice.kind == "provider" and choice.provider.name == provider.name)
@@ -1653,8 +1656,20 @@ class Controller(QObject):
         choice = self.draft.imagery
         self.content.imagery.set_mosaics(self.imagery.mosaics,
                                          choice.mosaic_id if choice and choice.kind == "my_imagery" else None)
-        if self.mosaic_picker is not None:
-            self.mosaic_picker.update_counts()
+        picker = self.mosaic_picker
+        if picker is not None:
+            listed = {m.id for m in picker.mosaics}
+            select = self._select_in_picker
+            new = next((m for m in self.imagery.mosaics if m.id == select or (m.id not in listed and m.name == select)),
+                       None) if select else None
+            if {m.id for m in self.imagery.mosaics} != listed or new is not None:
+                picker.set_collections(self.imagery.mosaics, picker.chosen_mosaic, picker.chosen_image)
+                if new is not None:
+                    self._select_in_picker = None
+                    picker.open_collection(new.id)
+                elif picker.current not in {m.id for m in self.imagery.mosaics}:
+                    picker.open_collection(None)
+            picker.update_counts()
         self.refresh_run(keep_name=True)
 
     @guarded
@@ -1683,21 +1698,23 @@ class Controller(QObject):
     def open_mosaic_picker(self, mosaic_id: Optional[str] = None) -> None:
         """Choose a My imagery collection, or one image of it."""
         self._refresh_mosaics()
-        if not self.imagery.mosaics:
-            if self.uploading is None:
-                self.upload()
-            return
         if self.mosaic_picker is None:
             picker = MosaicPicker(self.iface.mainWindow(), self.session.config.my_data_url)
             picker.collectionOpened.connect(lambda mid: self.imagery.load_images(mid))
             picker.chosen.connect(self._mosaic_chosen)
             picker.showRequested.connect(self.show_mosaic)
+            picker.uploadRequested.connect(lambda target: self.upload(target or None))
+            picker.layerUploadRequested.connect(lambda lid, target: self.upload_layer(lid, mosaic_id=target or None))
+            picker.createRequested.connect(self.create_collection)
+            picker.geotiff_layers = lambda: [(layer.id(), layer.name()) for layer in rasters.geotiff_layers()]
             self.mosaic_picker = picker
         choice = self.draft.imagery
         chosen_mosaic = choice.mosaic_id if choice and choice.kind == "my_imagery" else None
         chosen_image = choice.image_ids[0] if chosen_mosaic and choice.image_ids else None
         self.mosaic_picker.set_collections(self.imagery.mosaics, chosen_mosaic, chosen_image)
-        self.mosaic_picker.open_collection(mosaic_id or chosen_mosaic or self.imagery.mosaics[0].id)
+        # Nothing selected unless asked for: a selection is also where uploads go
+        self.mosaic_picker.open_collection(mosaic_id or chosen_mosaic)
+        self.mosaic_picker.set_upload(self.uploading)
         self.mosaic_picker.show()
         self.mosaic_picker.raise_()
         self.mosaic_picker.activateWindow()
@@ -1795,30 +1812,37 @@ class Controller(QObject):
         self.uploading = percent
         if percent is not None:
             self.content.imagery.set_upload(percent)
+            if self.mosaic_picker is not None and percent > 0:     # 0 keeps "Checking…"
+                self.mosaic_picker.set_upload(percent)
         self.refresh_run()
 
-    def upload(self) -> None:
-        """Upload GeoTIFFs to a new My imagery collection: one file, or several picked together."""
+    def upload(self, mosaic_id: Optional[str] = None) -> None:
+        """Upload GeoTIFFs, one or several picked together: into the collection `mosaic_id`, or into a new one."""
         if self.uploading is not None or self.imagery.uploading:
             return
-        paths, _ = QFileDialog.getOpenFileNames(self.content, "Upload GeoTIFFs to My imagery", "",
-                                                "GeoTIFF (*.tif *.tiff)")
-        self.upload_files([p for p in paths or [] if p])
+        paths, _ = QFileDialog.getOpenFileNames(self.mosaic_picker if self._picker_open() else self.content,
+                                                "Upload GeoTIFFs to My imagery", "", "GeoTIFF (*.tif *.tiff)")
+        self.upload_files([p for p in paths or [] if p], mosaic_id=mosaic_id)
+
+    def _picker_open(self) -> bool:
+        return self.mosaic_picker is not None and self.mosaic_picker.isVisible()
 
     @guarded
-    def upload_layer(self, layer_id: str, choose: bool = False) -> None:
-        """Upload the file of a GeoTIFF layer of the project, named as the layer is."""
+    def upload_layer(self, layer_id: str, choose: bool = False, mosaic_id: Optional[str] = None) -> None:
+        """Upload the file of a GeoTIFF layer of the project: into `mosaic_id`, or as a new collection named as
+        the layer is."""
         layer = QgsProject.instance().mapLayer(layer_id)
         path = rasters.geotiff_path(layer)
         if not path:
             self._upload_refused(f"“{layer.name() if layer else 'this layer'}”: only a layer read from a GeoTIFF "
                                  "file can be uploaded")
             return
-        self.upload_files([path], layer.name(), choose)
+        self.upload_files([path], layer.name(), choose, mosaic_id)
 
-    def upload_files(self, paths: List[str], name: str = "", choose: bool = False) -> None:
-        """Check the files, here and with Mapflow, then upload them as one new collection. `choose`: use it as
-        the imagery once Mapflow lists it."""
+    def upload_files(self, paths: List[str], name: str = "", choose: bool = False,
+                     mosaic_id: Optional[str] = None) -> None:
+        """Check the files, here and with Mapflow, then upload them into the collection `mosaic_id`, or as one
+        new collection. `choose`: use the new collection as the imagery once Mapflow lists it."""
         if not paths or self.uploading is not None or self.imagery.uploading:
             return
         checked = [rasters.geotiff_metadata(p) for p in paths]
@@ -1830,8 +1854,12 @@ class Controller(QObject):
         folder = Path(paths[0]).parent.name
         name = name or (Path(paths[0]).stem if len(paths) == 1 else (folder or Path(paths[0]).stem))
         self.content.imagery.set_upload(0, "Checking…")
+        if self.mosaic_picker is not None:
+            self.mosaic_picker.set_upload(0, "Checking…")
         self._upload_progress(0)
-        self._choose_uploaded = name if choose else None
+        self._choose_uploaded = name if choose and not mosaic_id else None
+        if not mosaic_id and self._picker_open():
+            self._select_in_picker = name           # the new collection is selected once listed
 
         def validated(problems: List[str], warnings: List[str]) -> None:
             if problems:
@@ -1841,13 +1869,17 @@ class Controller(QObject):
                 return
             if warnings:
                 self.notify("Mapflow: " + "; ".join(warnings[:3]), Qgis.MessageLevel.Info, duration=8)
-            if len(paths) == 1:
+            if mosaic_id:
+                self.imagery.upload_into(mosaic_id, paths)
+            elif len(paths) == 1:
                 self.imagery.upload(paths[0], name)
             else:
                 self.imagery.upload_many(paths, name)
 
-        self.imagery.validate([(meta["filename"], rasters.validation_request(meta)) for meta, _why in checked],
-                              validated)
+        # Into an existing collection, Mapflow also checks the image fits it (CRS, bands, resolution)
+        extra = {"mosaic_id": mosaic_id} if mosaic_id else {}
+        self.imagery.validate([(meta["filename"], {**rasters.validation_request(meta), **extra})
+                               for meta, _why in checked], validated)
 
     # ---------- the Layers panel's Mapflow actions ----------
 
@@ -1886,9 +1918,32 @@ class Controller(QObject):
             self.notify(f"Uploading “{layer.name()}” to My imagery. It becomes the imagery when it's ready.",
                         Qgis.MessageLevel.Info, duration=6)
 
+    @guarded
+    def create_collection(self) -> None:
+        """“Create collection” in My imagery: a name and tags; the new collection is selected, ready for uploads."""
+        dialog = CollectionDialog(self.mosaic_picker if self._picker_open() else self.iface.mainWindow())
+        if not dialog.exec():
+            return
+        name, tags = dialog.values()
+        picker = self.mosaic_picker
+
+        def created(mosaic_id: str) -> None:
+            self._select_in_picker = mosaic_id or name
+            if picker is not None:
+                picker.set_upload(None, f"“{name}” is created. Upload GeoTIFFs into it.", "info")
+
+        def failed(message: str) -> None:
+            if picker is not None:
+                picker.set_upload(None, f"Couldn't create “{name}”: {message}", "error")
+            self.notify(f"Couldn't create the collection “{name}”: {message}", Qgis.MessageLevel.Warning)
+
+        self.imagery.create_collection(name, tags, created, failed)
+
     def _upload_refused(self, problem: str) -> None:
         text = f"Can't upload {problem}."
         self.content.imagery.set_upload(None, text, "error")
+        if self.mosaic_picker is not None:
+            self.mosaic_picker.set_upload(None, text, "error")
         self.notify(text, Qgis.MessageLevel.Warning)
 
 

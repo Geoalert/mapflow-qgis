@@ -703,25 +703,24 @@ def main():
     controller.refresh_run()
     rows, _selected = controller._imagery_rows(session.status, True)
     mine = next((r for r in rows if r.key == "mosaic"), None)
-    check(mine is not None and mine.pick == "Upload a GeoTIFF…" and "No collections yet" in mine.meta,
-          "without collections, My imagery is still listed, with Upload a GeoTIFF…")
-    asked = []
-    saved_open = controller_module.QFileDialog.getOpenFileNames
-    controller_module.QFileDialog.getOpenFileNames = staticmethod(lambda *a, **k: (asked.append(a), ([], ""))[1])
-    try:
-        content.go(0)
-        content.open_run()
-        wait_until(lambda: False, 0.3)
-        upload = [b for row in content.run._rows for b in row.findChildren(QPushButton)
-                  if b.text() == "Upload a GeoTIFF…"]
-        upload and upload[0].click()
-        check(len(asked) == 1, "…and the button opens the file dialog to upload one")
-        before = controller.draft.imagery
-        controller.on_imagery("mosaic")
-        check(len(asked) == 2 and controller.draft.imagery is before,
-              "choosing the row asks for a file too, and changes nothing else")
-    finally:
-        controller_module.QFileDialog.getOpenFileNames = saved_open
+    check(mine is not None and mine.pick == "Add imagery…" and "No collections yet" in mine.meta,
+          "without collections, My imagery is still listed, with Add imagery…")
+    content.go(0)
+    content.open_run()
+    wait_until(lambda: False, 0.3)
+    add = [b for row in content.run._rows for b in row.findChildren(QPushButton) if b.text() == "Add imagery…"]
+    add and add[0].click()
+    picker = controller.mosaic_picker
+    check(picker is not None and picker.isVisible() and picker.current is None
+          and picker.upload_button.isVisible() and picker.create_button.isVisible()
+          and "new collection" in picker.target.text(),
+          "…and the button opens My imagery, ready to upload into a new collection or create one")
+    picker.close()
+    before = controller.draft.imagery
+    controller.on_imagery("mosaic")
+    check(controller.mosaic_picker.isVisible() and controller.draft.imagery is before,
+          "choosing the row opens it too, and changes nothing else")
+    controller.mosaic_picker.close()
     state.no_mosaics = False
     imagery_service.load_mosaics()
 
@@ -886,11 +885,89 @@ def main():
           "using a collection of several images opens the picker with its images")
     ok = wait_until(lambda: len(picker.previews) == 3, 5)
     check(ok, "the picker shows each image's preview")
-    shot(picker, "13-my-imagery-picker", QSize(820, 560))
     manage = next(b for b in picker.findChildren(QPushButton) if b.text().startswith("Manage collections"))
     manage.click()
     check(links.opened[-1:] == ["https://app.mapflow.ai/my-data"], f"“Manage collections” opens My data in Mapflow "
                                                                    f"Web ({links.opened[-1:]})")
+
+    # adding imagery from My imagery: into the selected collection, or into a new one
+    check(picker.current == "m-1" and "added to “Drone survey March”" in picker.target.text(),
+          "the collection opened is selected, and uploads go into it")
+    picked = {"files": [make_geotiff("extra.tif")]}
+    saved_open = controller_module.QFileDialog.getOpenFileNames
+    controller_module.QFileDialog.getOpenFileNames = staticmethod(lambda *a, **k: (picked["files"], ""))
+    try:
+        state.uploads.clear()
+        images_asked = getattr(state, "image_requests", 0)
+        picker.upload_button.click()
+        check(wait_until(lambda: [u[:2] for u in state.uploads] == [("image", "m-1")]
+                         and controller.uploading is None and not imagery_service.uploading, 5),
+              f"Upload a GeoTIFF adds the file to the selected collection, without a new one ({state.uploads})")
+        asked = [r[2] for r in state.requests if r[1] == "/rasters/validate-image-metadata"][-1]
+        check(asked.get("mosaic_id") == "m-1", "…and Mapflow checks the file fits that collection (mosaic_id)")
+        check(wait_until(lambda: getattr(state, "image_requests", 0) > images_asked, 3)
+              and "Uploaded to “Drone survey March”" in picker.upload_note.text.text(),
+              "…its image list is asked for again, and the window says where the file went")
+        picker._row_clicked("m-1")
+        check(picker.current is None and "new collection" in picker.target.text()
+              and not picker.use_all.isVisible(),
+              "clicking the selected collection again clears the selection: uploads make a new collection")
+        state.uploads.clear()
+        state.list_uploads = True
+        picked["files"] = [make_geotiff("Jetty.tif")]
+        picker.upload_button.click()
+        check(wait_until(lambda: [u[:2] for u in state.uploads] == [("new", "Jetty")]
+                         and picker.current is not None and imagery_service.get_mosaic(picker.current).name == "Jetty",
+                         8),
+              f"…and once the new collection is listed, it's selected in the window ({state.uploads})")
+    finally:
+        controller_module.QFileDialog.getOpenFileNames = saved_open
+
+    # Create collection: a name and tags, then it's selected, ready for uploads
+    from mapflow_next.ui.collection_dialog import CollectionDialog
+    dialog = CollectionDialog()
+    check(not dialog.create.isEnabled(), "a new collection needs a name: Create waits for it")
+    dialog.name.setText("Coastline 2026")
+    for tag in ("coast", "Coast", "2026"):
+        dialog.tag.setText(tag)
+        QTest.keyClick(dialog.tag, Qt.Key.Key_Return)
+    check(dialog.create.isEnabled() and dialog.values() == ("Coastline 2026", ["coast", "2026"])
+          and dialog.result() == 0,
+          f"tags are added with Enter or +, once each, and Enter doesn't create yet ({dialog.values()})")
+    shot(dialog, "19-new-collection", QSize(460, 300))
+    dialog.close()
+
+    class FakeCollectionDialog:
+        def __init__(self, *_a, **_k):
+            pass
+
+        def exec(self):
+            return 1
+
+        def values(self):
+            return "Coastline 2026", ["coast", "2026"]
+
+    saved_dialog = controller_module.CollectionDialog
+    controller_module.CollectionDialog = FakeCollectionDialog
+    try:
+        state.uploads.clear()
+        picker.create_button.click()
+        check(wait_until(lambda: picker.current is not None
+                         and imagery_service.get_mosaic(picker.current).name == "Coastline 2026", 5)
+              and state.created_tags.get(picker.current) == ["coast", "2026"],
+              "Create collection makes it in Mapflow with its tags, and selects it in the window")
+    finally:
+        controller_module.CollectionDialog = saved_dialog
+    state.list_uploads = False
+    state.extra_mosaics, state.extra_images = [], {}
+    imagery_service.load_mosaics()
+    wait_until(lambda: not imagery_service._mosaics_loading, 5)
+    picker.set_upload(None)
+    picker.open_collection(None)
+    shot(picker, "13b-my-imagery-none-selected", QSize(820, 600))
+    picker.open_collection("m-1")
+    wait_until(lambda: len(picker.previews) == 3, 5)
+    shot(picker, "13-my-imagery-picker", QSize(820, 600))
     picker.chosen.emit("m-1", "m-1-i1")
 
     def previews(name):
