@@ -13,7 +13,7 @@ from ..core.scenarios import Catalogue, Scenario
 from . import icons
 from .start_page import plain, scenario_pixmap
 from .theme import color, is_dark, stylesheet, tokens
-from .widgets import Callout, Card, button, label, link, rounded, vbox
+from .widgets import Callout, Card, FocusRing, button, label, link, rounded, vbox
 
 IMAGE_RATIO = 10 / 16
 LEFT_MIDDLE = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
@@ -39,7 +39,7 @@ def _elide_lines(text: str, metrics: QFontMetrics, width: int, lines: int) -> st
     return "\n".join(out)
 
 
-class CategoryButton(QAbstractButton):
+class CategoryButton(FocusRing, QAbstractButton):
     def __init__(self, text: str, count: int, parent=None):
         super().__init__(parent)
         self.setText(text)
@@ -67,7 +67,7 @@ class CategoryButton(QAbstractButton):
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(background)
             painter.drawRoundedRect(rect, 8, 8)
-        if self.hasFocus():
+        if self.focus_ring():
             painter.setPen(QPen(color("focus"), 1.5))
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawRoundedRect(rect.adjusted(1, 1, -1, -1), 7, 7)
@@ -84,7 +84,7 @@ class CategoryButton(QAbstractButton):
         painter.end()
 
 
-class ScenarioCard(QAbstractButton):
+class ScenarioCard(FocusRing, QAbstractButton):
     """Picture with model chips, title, two-line description, price and zoom."""
 
     def __init__(self, scenario: Scenario, picture: QPixmap, parent=None):
@@ -109,9 +109,9 @@ class ScenarioCard(QAbstractButton):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         rect = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
-        hover = self.underMouse() or self.hasFocus()
-        painter.setPen(QPen(color("focus" if self.hasFocus() else ("stroke" if hover else "border")),
-                            2 if self.hasFocus() else 1))
+        ring = self.focus_ring()
+        hover = self.underMouse() or ring
+        painter.setPen(QPen(color("focus" if ring else ("stroke" if hover else "border")), 2 if ring else 1))
         painter.setBrush(color("bg"))
         painter.drawRoundedRect(rect, 15, 15)
         image_h = int(self.width() * IMAGE_RATIO)

@@ -43,6 +43,7 @@ RESULT_TIMEOUT_S = 600
 PROCESSINGS_PAGE_SIZE = 30
 PROJECTS_PAGE_SIZE = 50
 SEARCH_PAGE_SIZE = 50
+MOSAICS_PAGE_SIZE = 50              # My imagery collections listed at a time ("Show more" for the next)
 MIN_BILLED_AREA_KM2 = 1.0         # areas under 1 km² are billed as 1 km²
 
 # Browser sign-in: Mapflow's public OAuth2 client for QGIS (the one the current plugin uses).

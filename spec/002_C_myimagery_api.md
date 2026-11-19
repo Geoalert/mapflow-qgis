@@ -18,10 +18,41 @@ Request body:
 ```
 
 ### `GET /rasters/mosaic`
-List all user's mosaics.
+List all user's mosaics. Not used by the plugin: an account can hold thousands of collections, and one
+response with all of them is too slow and too large for the dock (see the paged listing below).
+
+### `GET /rasters/mosaic/page`
+One page of the user's mosaics.
+
+Query parameters:
+- `offset`, `limit`: the page.
+- `sort`: `created_at` | `name` | `size_in_bytes`; `order`: `asc` | `desc`.
+- `tags` (repeatable): only mosaics with these tags.
+- `name_contains`: case-insensitive substring match against the mosaic's name **or the filename of any
+  image in it**; combined with `tags` as AND. The backend rejects an empty string (`422`): omit the
+  parameter to match all.
+
+Response shape:
+```json
+{"items": [Mosaic, ...], "offset": 0, "limit": 50, "total": 0, "has_next": false}
+```
+Each item is the same mosaic object as the other endpoints return, with `status_summary`
+(`total`, `ready`, `pending`, `in_progress`, `failed`): `status_summary.total` is the number of images.
+
+#### Plugin behaviour
+- Collections are listed **50 at a time, newest first** (`sort=created_at&order=desc`), with
+  "Show more" while `has_next`. Counts shown to the user ("Collections · N") use `total`, not the
+  number loaded.
+- **Search is server-side**: the collection search sends `name_contains`, so it finds collections
+  beyond the loaded pages and by the names of their images. A search is a separate listing with its
+  own pages; clearing it returns to the full listing.
+- A collection the plugin needs but hasn't listed (the imagery of a processing run again, a chosen
+  collection that scrolled off) is fetched by id with `GET /rasters/mosaic/{id}`; a `404` there means it
+  was deleted.
+- The periodic refresh reloads the listing from the first page; collections already loaded beyond it stay.
 
 ### `GET /rasters/mosaic/{id}`
-Get mosaic details.
+Get mosaic details (the same mosaic object as in the listings).
 
 ### `PUT /rasters/mosaic/{id}`
 Update mosaic name/tags.

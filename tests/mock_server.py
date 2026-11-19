@@ -38,12 +38,14 @@ class State:
         self.extra_mosaics = []            # collections added while the test runs (an empty one)
         self.created_projects = []         # POST /projects
         self.no_mosaics = False            # an account without collections
+        self.many_mosaics = 0              # this many more collections, listed after the fixtures' (for paging)
         self.uploads = []                  # (what, mosaic, detail) for each upload request
         self.list_uploads = False          # a one-file upload is listed afterwards as a collection with one image
         self.extra_images = {}             # …and its image: mosaic id → image names
         self.created_tags = {}             # collection id → the tags it was created with
         self.added_names = {}              # collection id → file names uploaded into it during the run
         self.deleted_mosaics = set()       # DELETE rasters/mosaic/{id}
+        self.created_mosaics = 0           # POST rasters/mosaic so far: numbers the new collections' ids
         self.deleted_images = set()        # DELETE rasters/image/{id}
         self.codes = {}                 # code → (code_challenge, redirect_uri)
         self.access_tokens = set()
@@ -63,6 +65,21 @@ class Handler(BaseHTTPRequestHandler):
         with self.state.lock:
             created = list(self.state.created_projects)
         return created + [fixtures.PROJECT, fixtures.PROJECT_2] + fixtures.MORE_PROJECTS
+
+    def _mosaics(self):
+        """Every collection of the account, newest first, as the data catalog lists them."""
+        if self.state.no_mosaics:
+            return []
+        many = [{"id": f"m-many-{n:03d}", "name": f"Survey tile {n:03d}", "created_at": f"2025-01-01T00:{n // 60:02d}:"
+                 f"{n % 60:02d}Z", "sizeInBytes": 1000, "footprint": None, "tags": [],
+                 "rasterLayer": {"tileUrl": "", "tileJsonUrl": ""}, "status_summary": {"total": 1}}
+                for n in range(self.state.many_mosaics)]
+        every = [m for m in fixtures.MOSAICS + self.state.extra_mosaics + many
+                 if m["id"] not in self.state.deleted_mosaics]
+        return sorted(every, key=lambda m: m.get("created_at") or "", reverse=True)
+
+    def _image_names(self, mosaic_id):
+        return fixtures.MOSAIC_IMAGES.get(mosaic_id) or self.state.extra_images.get(mosaic_id, [])
 
     def _send(self, status, body, content_type="application/json"):
         data = body if isinstance(body, bytes) else (body if isinstance(body, str) else json.dumps(body)).encode()
@@ -289,7 +306,12 @@ class Handler(BaseHTTPRequestHandler):
             body = body if isinstance(body, dict) else {}
             if not body.get("name") or not isinstance(body.get("tags"), list):     # MosaicCreateRequestSchema
                 return self._send(422, {"detail": [{"loc": ["body"], "msg": "Field required", "type": "missing"}]})
-            mosaic = {"id": f"m-new-{len(self.state.uploads) + 1}", "name": body["name"],
+            # A new id every time, as Mapflow gives: tests clear `uploads` between scenarios, so an id counted from
+            # it repeated, and a second new collection "already had" the first one's files (409, and a dialog)
+            with self.state.lock:
+                self.state.created_mosaics += 1
+                number = self.state.created_mosaics
+            mosaic = {"id": f"m-new-{number}", "name": body["name"],
                       "created_at": "2026-11-13T21:00:00Z", "tags": body["tags"], "sizeInBytes": 0,
                       "footprint": None, "rasterLayer": {"tileUrl": "", "tileJsonUrl": ""}}
             with self.state.lock:
@@ -330,12 +352,28 @@ class Handler(BaseHTTPRequestHandler):
                     self.state.extra_images[mosaic_id] = ["centre.tif"]     # a footprint the fixtures know
                     return self._send(200, {"id": "img-new", "mosaic_id": mosaic_id})
             return self._send(200, {"id": "img-new", "mosaic_id": "m-new"})
-        if method == "GET" and path == "/rasters/mosaic":
-            if self.state.no_mosaics:
-                return self._send(200, [])
-            return self._send(200, [m for m in fixtures.MOSAICS + self.state.extra_mosaics
-                                    if m["id"] not in self.state.deleted_mosaics])
+        if method == "GET" and path == "/rasters/mosaic/page":
+            # As the data catalog pages them: newest first, name_contains matched against the collection's
+            # name and its images' file names, and an empty name_contains refused
+            query = {k: v[0] for k, v in parse_qs(urlsplit(self.path).query, keep_blank_values=True).items()}
+            if query.get("name_contains", None) == "":
+                return self._send(422, {"detail": [{"loc": ["query", "name_contains"], "msg": "too short"}]})
+            every = self._mosaics()
+            needle = (query.get("name_contains") or "").lower()
+            if needle:
+                every = [m for m in every if needle in m["name"].lower()
+                         or any(needle in n.lower() for n in self._image_names(m["id"]))]
+            offset, limit = int(query.get("offset") or 0), int(query.get("limit") or 50)
+            with self.state.lock:
+                self.state.mosaic_pages = getattr(self.state, "mosaic_pages", []) + [query]
+            page = every[offset:offset + limit]
+            return self._send(200, {"items": page, "offset": offset, "limit": limit, "total": len(every),
+                                    "has_next": offset + limit < len(every)})
         match = re.fullmatch(r"/rasters/mosaic/([\w-]+)", path)
+        if method == "GET" and match:
+            found = next((m for m in self._mosaics() if m["id"] == match.group(1)), None)
+            return self._send(200, found) if found else \
+                self._send(404, {"detail": {"code": "ItemNotFound", "message": "mosaicId not found"}})
         if method == "DELETE" and match:
             with self.state.lock:
                 self.state.deleted_mosaics.add(match.group(1))

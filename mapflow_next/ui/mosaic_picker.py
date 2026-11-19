@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Callable, Dict, List, Optional, Tuple
 
-from qgis.PyQt.QtCore import Qt, pyqtSignal
+from qgis.PyQt.QtCore import Qt, QTimer, pyqtSignal
 from qgis.PyQt.QtGui import QIcon, QPixmap
 from qgis.PyQt.QtWidgets import (QDialog, QFrame, QHBoxLayout, QLabel, QLineEdit, QMenu, QProgressBar, QScrollArea,
                                  QVBoxLayout, QWidget)
@@ -14,8 +14,8 @@ from ..core.models import Mosaic, MosaicImage
 from . import icons
 from .layer_picker import pick_layers
 from .theme import stylesheet, tokens
-from .widgets import (Callout, Card, DropTarget, ElidedLabel, OptionRow, button, clear_layout, label, link, menu_action,
-                      placeholder, rounded, tool)
+from .widgets import (Callout, Card, DropTarget, ElidedLabel, OptionRow, button, clear_layout, label, link,
+                      menu_action, placeholder, rounded, tool)
 
 THUMB = 72
 
@@ -36,6 +36,8 @@ class MosaicPicker(QDialog):
     createRequested = pyqtSignal()              # "Create collection"
     deleteCollectionRequested = pyqtSignal(str)   # mosaic id
     deleteImageRequested = pyqtSignal(str, str)   # mosaic id, image id
+    queryChanged = pyqtSignal(str)              # the search box, once typing pauses ("" = the listing again)
+    moreRequested = pyqtSignal(str)             # "Show more": the next page of the search (or of the listing, "")
 
     def __init__(self, parent=None, my_data_url: str = config.WEB_URL + config.MY_DATA_PATH):
         super().__init__(parent)
@@ -43,7 +45,19 @@ class MosaicPicker(QDialog):
         self.setWindowTitle("My imagery")
         self.setStyleSheet(stylesheet())
         self.resize(820, 560)
-        self.mosaics: List[Mosaic] = []
+        self.mosaics: List[Mosaic] = []              # the listing, loaded so far
+        self.total = 0                               # collections in the account
+        self.loading = False
+        self.found: List[Mosaic] = []                # the server's answer to the search box, so far
+        self.found_total = 0
+        self.found_loading = False
+        self.more_collections = None                 # "Show more", under the rows
+        self.list_empty = None                       # "No collections yet." and the like, when there are no rows
+        self._drawn: List[tuple] = []                # (id, name) of the rows drawn, in order
+        self._drawn_mode = False                     # whether they are the search's
+        self._list_tail = False                      # the note, "Show more" and the stretch are in the list
+        # A collection by id that is neither listed nor found (the chosen one); the controller sets it
+        self.lookup: Callable[[str], Optional[Mosaic]] = lambda mosaic_id: None
         self.current: Optional[str] = None           # collection shown on the right
         self.chosen_mosaic: Optional[str] = None
         self.chosen_image: Optional[str] = None
@@ -99,7 +113,12 @@ class MosaicPicker(QDialog):
         self.search.setPlaceholderText("Find a collection")
         self.search.setClearButtonEnabled(True)
         self.search.addAction(icons.icon("search", tokens()["text2"], 16), QLineEdit.ActionPosition.LeadingPosition)
-        self.search.textChanged.connect(lambda *_: self._render_collections())
+        # Searched on the server (names of collections and of their images), once typing pauses
+        self._debounce = QTimer(self)
+        self._debounce.setSingleShot(True)
+        self._debounce.setInterval(300)
+        self._debounce.timeout.connect(lambda: self.queryChanged.emit(self.search.text().strip()))
+        self.search.textChanged.connect(lambda *_: self._query_typed())
         left.addWidget(self.search)
         self.list_scroll, self.list_box = self._scroll_box(6)
         left.addWidget(self.list_scroll, 1)
@@ -155,31 +174,78 @@ class MosaicPicker(QDialog):
 
     # ---------- collections ----------
 
-    def set_collections(self, mosaics: List[Mosaic], chosen_mosaic: Optional[str], chosen_image: Optional[str]) -> None:
+    def set_collections(self, mosaics: List[Mosaic], chosen_mosaic: Optional[str], chosen_image: Optional[str],
+                        total: Optional[int] = None, loading: bool = False) -> None:
+        """The listing: the collections loaded so far, of `total` in the account."""
         self.mosaics = list(mosaics)
+        self.total = len(self.mosaics) if total is None else max(total, len(self.mosaics))
+        self.loading = loading
         self.chosen_mosaic, self.chosen_image = chosen_mosaic, chosen_image
         self._render_collections()
 
+    def set_found(self, query: str, found: List[Mosaic], total: int, loading: bool = False) -> None:
+        """The server's answer to the search: shown while the search box still says `query`."""
+        if query != self.search.text().strip():
+            return                                  # typed on since: a newer search is on its way
+        self.found, self.found_total, self.found_loading = list(found), max(total, len(found)), loading
+        self._render_collections()
+
+    def _searching(self) -> bool:
+        return bool(self.search.text().strip())
+
+    def _shown(self) -> List[Mosaic]:
+        return self.found if self._searching() else self.mosaics
+
+    def _lookup(self, mosaic_id: Optional[str]) -> Optional[Mosaic]:
+        """A collection by id: listed, found, or known to the controller (chosen but on no loaded page)."""
+        if not mosaic_id:
+            return None
+        return next((m for m in self.mosaics + self.found if m.id == mosaic_id), None) or self.lookup(mosaic_id)
+
+    def _query_typed(self) -> None:
+        """A search goes to the server once typing pauses; meanwhile the list says it's searching."""
+        query = self.search.text().strip()
+        self.found, self.found_total, self.found_loading = [], 0, bool(query)
+        self._render_collections()
+        self._debounce.start()
+
     def _render_collections(self) -> None:
-        clear_layout(self.list_box)
-        self._rows = {}
-        needle = self.search.text().strip().lower()
-        for mosaic in self.mosaics:
-            if needle and needle not in mosaic.name.lower():
-                continue
+        """The rows drawn stay while the list only grows (a new page): its rows are added after them. Drawn
+        again only when the list changes otherwise (a search, a deletion), as redrawing hundreds of rows on
+        every page made the window stutter."""
+        shown, searching = self._shown(), self._searching()
+        ids = [(m.id, m.name) for m in shown]
+        drawn = self._drawn
+        if self._drawn_mode != searching or ids[:len(drawn)] != drawn or not self._list_tail:
+            clear_layout(self.list_box)
+            self._rows, drawn = {}, []
+            self.list_empty = label("", "meta")
+            self.more_collections = button("Show more", "outline", size="sm")
+            self.more_collections.clicked.connect(lambda *_: self.moreRequested.emit(self.search.text().strip()))
+            self.list_box.addWidget(self.list_empty)
+            self.list_box.addWidget(self.more_collections)
+            self.list_box.addStretch(1)
+            self._list_tail = True
+        for mosaic in shown[len(drawn):]:
             meta = " · ".join(t for t in (image_count_text(mosaic), formatting.size(mosaic.size_bytes)
                                           if mosaic.size_bytes else "") if t)
             row = OptionRow(mosaic.name, meta)
             row.set_selected(mosaic.id == self.current)
             row.clicked.connect(lambda *_, mid=mosaic.id: self._row_clicked(mid))
-            self.list_box.addWidget(row)
+            self.list_box.insertWidget(len(self._rows), row)      # before the note, "Show more" and the stretch
             self._rows[mosaic.id] = row
-        if not self._rows:
-            self.list_box.addWidget(label("No collections match." if needle else "No collections yet.", "meta"))
-        self.list_box.addStretch(1)
+        self._drawn, self._drawn_mode = ids, searching
+        total = self.found_total if searching else self.total
+        loading = self.found_loading if searching else self.loading
+        self.list_empty.setText(("Searching…" if searching else "Loading collections…") if loading else
+                                ("No collections match." if searching else "No collections yet."))
+        self.list_empty.setVisible(not self._rows)
+        self.more_collections.setVisible(bool(shown) and len(shown) < total)
+        self.more_collections.setText("Loading…" if loading else f"Show more · {len(shown):,} of {total:,}")
+        self.more_collections.setEnabled(not loading)
 
     def update_counts(self) -> None:
-        for mosaic in self.mosaics:
+        for mosaic in self._shown():
             row = self._rows.get(mosaic.id)
             if row is not None:
                 meta = " · ".join(t for t in (image_count_text(mosaic), formatting.size(mosaic.size_bytes)
@@ -196,7 +262,7 @@ class MosaicPicker(QDialog):
             self.open_collection(mosaic_id)
 
     def open_collection(self, mosaic_id: Optional[str]) -> None:
-        mosaic = next((m for m in self.mosaics if m.id == mosaic_id), None)
+        mosaic = self._lookup(mosaic_id)
         self.current = mosaic.id if mosaic else None
         for mid, row in self._rows.items():
             row.set_selected(mid == self.current)
@@ -246,7 +312,7 @@ class MosaicPicker(QDialog):
     # ---------- adding imagery ----------
 
     def _show_target(self) -> None:
-        mosaic = next((m for m in self.mosaics if m.id == self.current), None)
+        mosaic = self._lookup(self.current)
         if mosaic is not None:
             self.target.setText(f"GeoTIFFs are added to “{mosaic.name}”. Click it again to upload into a new "
                                 f"collection instead. You can drag GeoTIFF layers or files onto this window.")

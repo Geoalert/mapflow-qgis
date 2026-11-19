@@ -6,7 +6,7 @@ processings/templates, custom XYZ providers, review workflow actions).
 from __future__ import annotations
 
 from typing import Callable, List, Optional
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 
 from ..config import PROCESSINGS_PAGE_SIZE, PROJECTS_PAGE_SIZE, RESULT_TIMEOUT_S, SEARCH_PAGE_SIZE
 from ..core.models import CatalogImage, Mosaic, MosaicImage, Processing, Project, UserStatus, aois_geojson
@@ -134,9 +134,26 @@ class MapflowApi:
                        on_success=lambda d: on_done([CatalogImage.from_api(i) for i in (d or {}).get("images") or []],
                                                     int((d or {}).get("total") or 0)))
 
-    def mosaics(self, on_done: Callable[[List[Mosaic]], None], on_error: OnError = None) -> None:
-        self.http.get("rasters/mosaic", on_error=on_error,
-                      on_success=lambda d: on_done([Mosaic.from_api(m) for m in (d or [])]))
+    def mosaic_page(self, offset: int, limit: int, query: str, on_done: Callable[[List[Mosaic], int, bool], None],
+                    on_error: OnError = None) -> None:
+        """One page of the user's collections, newest first (GET rasters/mosaic/page). `query` searches the
+        collections' and their images' names on the server; empty matches all (an empty name_contains is
+        refused with 422, so it isn't sent). `on_done` gets (collections, total, has_next)."""
+        params = {"offset": offset, "limit": limit, "sort": "created_at", "order": "desc"}
+        if query.strip():
+            params["name_contains"] = query.strip()
+
+        def done(data) -> None:
+            data = data if isinstance(data, dict) else {}
+            items = [Mosaic.from_api(m) for m in data.get("items") or [] if isinstance(m, dict)]
+            total = data.get("total")
+            on_done(items, int(total) if isinstance(total, (int, float)) else len(items), bool(data.get("has_next")))
+        self.http.get(f"rasters/mosaic/page?{urlencode(params)}", on_success=done, on_error=on_error)
+
+    def mosaic(self, mosaic_id: str, on_done: Callable[[Mosaic], None], on_error: OnError = None) -> None:
+        """One collection by id (GET rasters/mosaic/{id}); a 404 means it was deleted."""
+        self.http.get(f"rasters/mosaic/{mosaic_id}", on_error=on_error,
+                      on_success=lambda d: on_done(Mosaic.from_api(d if isinstance(d, dict) else {})))
 
     def mosaic_images(self, mosaic_id: str, on_done: Callable[[List[MosaicImage]], None],
                       on_error: OnError = None) -> None:

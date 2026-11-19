@@ -13,7 +13,7 @@ from ..core import formatting
 from ..core.models import Project, Role
 from . import icons
 from .theme import stylesheet, tokens
-from .widgets import Callout, ElidedLabel, Pill, button, clear_layout, event_pos, label, link, tool
+from .widgets import Callout, ElidedLabel, FocusRing, Pill, button, clear_layout, event_pos, label, link, tool
 
 GAP = 14
 MIN_TILE = 250
@@ -31,7 +31,7 @@ def _stat(icon_name: str, text: str, ink: str) -> QHBoxLayout:
     return row
 
 
-class ProjectTile(QFrame):
+class ProjectTile(FocusRing, QFrame):
     """One project: name, description, numbers, sharing; pin and share buttons. Click to open."""
     clicked = pyqtSignal(str)
     pinToggled = pyqtSignal(str, bool)

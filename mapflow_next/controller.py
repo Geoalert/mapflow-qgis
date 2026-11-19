@@ -183,6 +183,7 @@ class Controller(QObject):
         imagery_page.showImage.connect(self.show_image)
         imagery_page.useMosaic.connect(self.use_mosaic)
         imagery_page.showMosaic.connect(self.show_mosaic)
+        imagery_page.moreMosaics.connect(self.imagery.load_more_mosaics)
         imagery_page.uploadRequested.connect(lambda *_: self.upload())
         imagery_page.layerUploadRequested.connect(self.upload_layers)
         imagery_page.geotiff_layers = lambda: [(layer.id(), layer.name()) for layer in rasters.geotiff_layers()]
@@ -206,6 +207,9 @@ class Controller(QObject):
         self.imagery.moreDone.connect(self.on_more_results)
         self.imagery.searchFailed.connect(self.on_search_failed)
         self.imagery.mosaicsChanged.connect(self.on_mosaics)
+        self.imagery.mosaicSearchChanged.connect(
+            lambda query, found: self.mosaic_picker is not None and self.mosaic_picker.set_found(
+                query, found, self.imagery.found_total, self.imagery.found_loading))
         self.imagery.mosaicImagesChanged.connect(self.on_mosaic_images)
         self.imagery.uploadProgress.connect(self._upload_progress)
         self.imagery.on_duplicate = lambda file, collection: self._ask_duplicate([file], collection)
@@ -283,6 +287,7 @@ class Controller(QObject):
             # …nor do a start or an upload in flight: their busy flags would stay up after signing back in
             self.starting = False
             self.imagery.reset_busy()
+            self.imagery.forget_mosaics()
             self._choose_uploaded = self._use_pending = None
             self._extent_pending = False
             self._restoring += 1
@@ -1261,7 +1266,7 @@ class Controller(QObject):
         project = self.session.project
         in_map = self.results.in_map()
         busy = {p.id for p in self.processings.items if self.results.is_busy(p.id)}
-        self.content.processings.mosaic_names = {m.id: m.name for m in self.imagery.mosaics}
+        self.content.processings.mosaic_names = self.imagery.mosaic_names()
         self.content.processings.ratings = {**{p.id: p.rating for p in self.processings.items if p.rating},
                                             **self._ratings()}
         self.content.processings.set_items(self.processings.items, in_map, busy,
@@ -1461,7 +1466,9 @@ class Controller(QObject):
             gone.append("its imagery can't be chosen again here")
         self._imagery_to_choose = self.draft.imagery is None
         if gone:
-            self.notify(f"Run again “{processing.name}”: " + "; ".join(gone) + ". Choose what's missing in the form.",
+            # My imagery is restored later (its collection may need looking up) and says so itself
+            what = "the imagery" if self.draft.imagery is None and source.kind != "my_imagery" else "what's missing"
+            self.notify(f"Run again “{processing.name}”: " + "; ".join(gone) + f". Choose {what} in the form.",
                         Qgis.MessageLevel.Warning, duration=10)
         self.draft.name, self.draft.name_edited = processing.name, True
 
@@ -1516,12 +1523,22 @@ class Controller(QObject):
         if image is not None:
             mosaic_id = image.mosaic_id or mosaic_id
         mosaic = self.imagery.get_mosaic(mosaic_id)
-        if mosaic is None and image is None and self.imagery.mosaics_loaded:
-            # Deleted since: chosen anyway, the cost check and the run would fail on Mapflow's side
-            self.notify("The My imagery collection of that processing is no longer there. Choose the imagery.",
-                        Qgis.MessageLevel.Warning, duration=10)
-            self._imagery_to_choose = True
-            self.refresh_run()
+        if mosaic is None and mosaic_id:
+            # Not on the loaded pages: asked for by id. Gone (404), it isn't chosen: the cost check and the run
+            # would fail on Mapflow's side
+            def found(_mosaic) -> None:
+                self._restore_my_imagery(mosaic_id, image_id, restoring, image)
+
+            def missing() -> None:
+                if restoring == self._restoring:
+                    self.notify("The My imagery collection of that processing is no longer there. Choose the "
+                                "imagery.", Qgis.MessageLevel.Warning, duration=10)
+                    self._imagery_to_choose = True
+                    self.refresh_run()
+            self.imagery.fetch_mosaic(mosaic_id, found, missing,
+                                      lambda text: restoring == self._restoring and self.notify(
+                                          f"The collection of that processing didn't load: {text}",
+                                          Qgis.MessageLevel.Warning))
             return
         self.draft.imagery = ImageryChoice.from_mosaic(mosaic_id, mosaic.name if mosaic else "My imagery",
                                                        image_id, image.filename if image else "")
@@ -1754,23 +1771,30 @@ class Controller(QObject):
                 self._choose_uploaded = None
                 self.use_mosaic(max(uploaded, key=lambda m: str(m.created or "")).id)
 
+    def _show_mosaics(self, chosen: Optional[str]) -> None:
+        """The My imagery tab's collections: the pages loaded, of all there are."""
+        self.content.imagery.set_mosaics(self.imagery.mosaics, chosen, self.imagery.mosaics_total,
+                                         self.imagery.loading_mosaics)
+
     def _render_mosaics(self) -> None:
         choice = self.draft.imagery
-        self.content.imagery.set_mosaics(self.imagery.mosaics,
-                                         choice.mosaic_id if choice and choice.kind == "my_imagery" else None)
+        self._show_mosaics(choice.mosaic_id if choice and choice.kind == "my_imagery" else None)
         picker = self.mosaic_picker
         if picker is not None:
             listed = {m.id for m in picker.mosaics}
             select = self._select_in_picker
             new = next((m for m in self.imagery.mosaics if m.id == select or (m.id not in listed and m.name == select)),
                        None) if select else None
-            if {m.id for m in self.imagery.mosaics} != listed or new is not None:
-                picker.set_collections(self.imagery.mosaics, picker.chosen_mosaic, picker.chosen_image)
+            changed = ({m.id for m in self.imagery.mosaics} != listed or picker.total != self.imagery.mosaics_total
+                       or picker.loading != self.imagery.loading_mosaics)
+            if changed or new is not None:
+                picker.set_collections(self.imagery.mosaics, picker.chosen_mosaic, picker.chosen_image,
+                                       self.imagery.mosaics_total, self.imagery.loading_mosaics)
                 if new is not None:
                     self._select_in_picker = None
                     picker.open_collection(new.id)
-                elif picker.current not in {m.id for m in self.imagery.mosaics}:
-                    picker.open_collection(None)
+                elif picker.current and self.imagery.get_mosaic(picker.current) is None:
+                    picker.open_collection(None)            # deleted (it may be on no loaded page otherwise)
             picker.update_counts()
         self.refresh_run(keep_name=True)
 
@@ -1824,11 +1848,16 @@ class Controller(QObject):
             picker.geotiff_layers = lambda: [(layer.id(), layer.name()) for layer in rasters.geotiff_layers()]
             picker.parse_drop = rasters.dropped_geotiffs
             picker.filesDropped.connect(lambda items, target: self.upload_dropped(items, target or None))
+            picker.lookup = self.imagery.get_mosaic
+            picker.queryChanged.connect(self.imagery.search_mosaics)
+            picker.moreRequested.connect(lambda query: self.imagery.search_mosaics(query, more=True) if query
+                                         else self.imagery.load_more_mosaics())
             self.mosaic_picker = picker
         choice = self.draft.imagery
         chosen_mosaic = choice.mosaic_id if choice and choice.kind == "my_imagery" else None
         chosen_image = choice.image_ids[0] if chosen_mosaic and choice.image_ids else None
-        self.mosaic_picker.set_collections(self.imagery.mosaics, chosen_mosaic, chosen_image)
+        self.mosaic_picker.set_collections(self.imagery.mosaics, chosen_mosaic, chosen_image,
+                                           self.imagery.mosaics_total, self.imagery.loading_mosaics)
         # Nothing selected unless asked for: a selection is also where uploads go
         self.mosaic_picker.open_collection(mosaic_id or chosen_mosaic)
         self.mosaic_picker.set_upload(self.uploading)
@@ -1849,7 +1878,7 @@ class Controller(QObject):
                                                        image.filename if image else "")
         if self.mosaic_picker is not None:
             self.mosaic_picker.accept()
-        self.content.imagery.set_mosaics(self.imagery.mosaics, mosaic.id)
+        self._show_mosaics(mosaic.id)
         self.content.open_run()
         self.use_imagery_extent()
         self._preview_my_imagery()
@@ -1917,7 +1946,7 @@ class Controller(QObject):
             return
         if mosaic:
             self.draft.imagery = ImageryChoice.from_mosaic(mosaic.id, mosaic.name)
-            self.content.imagery.set_mosaics(self.imagery.mosaics, mosaic.id)
+            self._show_mosaics(mosaic.id)
             self.content.open_run()
             self.use_imagery_extent()
             self._preview_my_imagery()

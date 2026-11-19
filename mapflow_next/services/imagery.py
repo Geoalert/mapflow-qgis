@@ -10,14 +10,19 @@ from qgis.PyQt.QtCore import QObject, pyqtSignal
 
 from ..api.client import MapflowApi
 from ..api.http import ApiError
+from ..config import MOSAICS_PAGE_SIZE
 from ..core.models import CatalogImage, Mosaic, MosaicImage
+
+# A refresh reloads the listing in one request up to this many; collections loaded beyond stay as they are
+MAX_RELOAD = 200
 
 
 class Imagery(QObject):
     searchDone = pyqtSignal(list, int)        # [CatalogImage], total
     moreDone = pyqtSignal(list, int)          # the next page's new images, total
     searchFailed = pyqtSignal(str)
-    mosaicsChanged = pyqtSignal(list)         # [Mosaic]
+    mosaicsChanged = pyqtSignal(list)         # the listing: [Mosaic] loaded so far
+    mosaicSearchChanged = pyqtSignal(str, list)   # query, [Mosaic] found so far ("" when the search ended)
     mosaicImagesChanged = pyqtSignal(str, list)   # mosaic id, [MosaicImage]
     uploadProgress = pyqtSignal(int)          # percent
     uploadDone = pyqtSignal(str)              # collection name
@@ -40,7 +45,15 @@ class Imagery(QObject):
         self.on_duplicate: Optional[Callable[[str, str], str]] = None
         self._mosaics_at = 0.0                  # when the collections were last asked for (monotonic)
         self._mosaics_loading = False
-        self._mosaics_loaded = False
+        self.mosaics_total = 0                  # collections in the account, listed or not
+        self._listing_id = 0                    # the listing's requests: a late answer to an older one is dropped
+        self._known: Dict[str, Mosaic] = {}     # every collection seen, by id: listings, searches, lookups
+        # The collection search (server-side): its query, the collections found so far, how many match
+        self.found: List[Mosaic] = []
+        self.found_query = ""
+        self.found_total = 0
+        self.found_loading = False
+        self._found_id = 0
 
     def search(self, geometry: dict, date_from: date, date_to: date, max_cloud: Optional[float],
                max_off_nadir: Optional[float], product_types: Optional[List[str]] = None,
@@ -107,36 +120,142 @@ class Imagery(QObject):
         """A search result by its key (CatalogImage.key)."""
         return next((i for i in self.results if i.key == key), None)
 
+    # ---------- My imagery collections: listed a page at a time, searched on the server ----------
+
     def load_mosaics(self) -> None:
+        """The listing again from its first page, as many as are loaded (up to MAX_RELOAD); the ones loaded
+        beyond that stay, so a refresh never takes away what "Show more" brought."""
         self._mosaics_at = time.monotonic()
         self._mosaics_loading = True
+        self._listing_id += 1
+        listing = self._listing_id
+        loaded = len(self.mosaics)
+        limit = min(MAX_RELOAD, max(MOSAICS_PAGE_SIZE, -(-loaded // MOSAICS_PAGE_SIZE) * MOSAICS_PAGE_SIZE))
 
-        def failed(_error):
+        def done(items: List[Mosaic], total: int, _has_next: bool) -> None:
+            if listing != self._listing_id:
+                return                              # a newer load or "Show more" went out
             self._mosaics_loading = False
-        self.api.mosaics(self._on_mosaics, on_error=failed)
+            fresh = self._remember(items)
+            seen = {m.id for m in fresh}
+            for gone in [m for m in self.mosaics[:limit] if m.id not in seen]:
+                self._known.pop(gone.id, None)      # deleted elsewhere (Mapflow Web) since the last load
+            self.mosaics = fresh + [m for m in self.mosaics[limit:] if m.id not in seen]
+            self.mosaics_total = max(total, len(self.mosaics))
+            self.mosaicsChanged.emit(self.mosaics)
+
+        def failed(_error) -> None:
+            if listing == self._listing_id:
+                self._mosaics_loading = False
+        self.api.mosaic_page(0, limit, "", done, failed)
+
+    def load_more_mosaics(self) -> None:
+        """The listing's next page."""
+        if self._mosaics_loading or not self.has_more_mosaics:
+            return
+        self._mosaics_loading = True
+        self._listing_id += 1
+        listing = self._listing_id
+        self.mosaicsChanged.emit(self.mosaics)      # "Show more" says it's loading
+
+        def done(items: List[Mosaic], total: int, _has_next: bool) -> None:
+            if listing != self._listing_id:
+                return
+            self._mosaics_loading = False
+            known = {m.id for m in self.mosaics}
+            fresh = [m for m in self._remember(items) if m.id not in known]
+            self.mosaics += fresh
+            # A page that brings nothing new ends the list, whatever the total says
+            self.mosaics_total = max(total, len(self.mosaics)) if fresh else len(self.mosaics)
+            self.mosaicsChanged.emit(self.mosaics)
+
+        def failed(_error) -> None:
+            if listing == self._listing_id:
+                self._mosaics_loading = False
+                self.mosaicsChanged.emit(self.mosaics)      # the button comes back
+        self.api.mosaic_page(len(self.mosaics), MOSAICS_PAGE_SIZE, "", done, failed)
+
+    @property
+    def has_more_mosaics(self) -> bool:
+        return len(self.mosaics) < self.mosaics_total
+
+    @property
+    def loading_mosaics(self) -> bool:
+        return self._mosaics_loading
+
+    def search_mosaics(self, query: str, more: bool = False) -> None:
+        """Collections whose name, or one of whose images' names, contains `query`: asked of the server, so
+        it finds collections beyond the loaded pages. `more`: its next page. An empty query ends the search."""
+        query = query.strip()
+        self._found_id += 1
+        search = self._found_id
+        if not query:
+            self.found, self.found_query, self.found_total, self.found_loading = [], "", 0, False
+            self.mosaicSearchChanged.emit("", [])
+            return
+        offset = len(self.found) if more and query == self.found_query else 0
+        if not offset:
+            self.found = []
+        self.found_query, self.found_loading = query, True
+        if offset:
+            self.mosaicSearchChanged.emit(query, self.found)    # "Show more" says it's loading
+
+        def done(items: List[Mosaic], total: int, _has_next: bool) -> None:
+            if search != self._found_id:
+                return                              # typed on since
+            self.found_loading = False
+            known = {m.id for m in self.found}
+            fresh = [m for m in self._remember(items) if m.id not in known]
+            self.found += fresh
+            self.found_total = max(total, len(self.found)) if fresh or not offset else len(self.found)
+            self.mosaicSearchChanged.emit(query, self.found)
+
+        def failed(_error) -> None:
+            if search == self._found_id:
+                self.found_loading = False
+                self.mosaicSearchChanged.emit(query, self.found)
+        self.api.mosaic_page(offset, MOSAICS_PAGE_SIZE, query, done, failed)
+
+    @property
+    def has_more_found(self) -> bool:
+        return bool(self.found_query) and len(self.found) < self.found_total
+
+    def fetch_mosaic(self, mosaic_id: str, on_done: Callable[[Mosaic], None],
+                     on_missing: Callable[[], None], on_error: Optional[Callable[[str], None]] = None) -> None:
+        """A collection not on the loaded pages (the imagery of a processing run again), asked for by id.
+        `on_missing` when Mapflow says it isn't there (deleted)."""
+        known = self._known.get(mosaic_id)
+        if known is not None:
+            on_done(known)
+            return
+
+        def failed(error: ApiError) -> None:
+            if error.status == 404 or error.kind == "not_found":
+                on_missing()
+            elif on_error is not None:
+                on_error(error.message)
+        self.api.mosaic(mosaic_id, lambda mosaic: on_done(self._remember([mosaic])[0]), failed)
+
+    def _remember(self, items: List[Mosaic]) -> List[Mosaic]:
+        """Collections as listed, kept by id (the same object everywhere they show), with the image counts the
+        listing doesn't carry filled in from their image lists."""
+        kept = []
+        for mosaic in items:
+            if not mosaic.id:
+                continue
+            if mosaic.image_count is None and mosaic.id in self.images:
+                mosaic.image_count = len(self.images[mosaic.id])
+            self._known[mosaic.id] = mosaic
+            kept.append(mosaic)
+        for mosaic in kept:
+            if mosaic.image_count is None:          # older deployments: the list has no status_summary
+                self.load_images(mosaic.id)
+        return kept
 
     def refresh_mosaics(self, max_age: float = 10.0) -> None:
         """Collections made elsewhere (Mapflow Web) show up: ask again if the list is older than `max_age`."""
         if not self._mosaics_loading and time.monotonic() - self._mosaics_at >= max_age:
             self.load_mosaics()
-
-    @property
-    def mosaics_loaded(self) -> bool:
-        """The collection list has come at least once: a collection missing from it is gone, not unknown yet."""
-        return self._mosaics_loaded
-
-    def _on_mosaics(self, mosaics: List[Mosaic]) -> None:
-        self._mosaics_loading = False
-        self._mosaics_loaded = True
-        self.mosaics = sorted(mosaics or [], key=lambda m: (m.created is not None, m.created or 0), reverse=True)
-        for mosaic in self.mosaics:
-            if mosaic.id in self.images:
-                mosaic.image_count = len(self.images[mosaic.id])
-        self.mosaicsChanged.emit(self.mosaics)
-        # The list doesn't always say how many images a collection has: their image lists do
-        for mosaic in self.mosaics:
-            if mosaic.image_count is None:
-                self.load_images(mosaic.id)
 
     def reset_busy(self) -> None:
         """After sign-out: requests in flight were aborted and won't call back, so nothing is loading."""
@@ -144,7 +263,17 @@ class Imagery(QObject):
         self.loading_more = False
         self._images_loading.clear()
         self._mosaics_loading = False
+        self.found_loading = False
         self._search_id += 1
+        self._listing_id += 1
+        self._found_id += 1
+
+    def forget_mosaics(self) -> None:
+        """After sign-out: the next account's collections are listed afresh, none of these kept."""
+        self.mosaics, self.mosaics_total, self._mosaics_at = [], 0, 0.0
+        self.found, self.found_query, self.found_total = [], "", 0
+        self._known.clear()
+        self.images.clear()
 
     def load_images(self, mosaic_id: str, force: bool = False) -> None:
         if mosaic_id in self._images_loading or (mosaic_id in self.images and not force):
@@ -170,7 +299,12 @@ class Imagery(QObject):
         return next((i for i in self.images.get(mosaic_id, []) if i.id == image_id), None)
 
     def get_mosaic(self, mosaic_id: Optional[str]) -> Optional[Mosaic]:
-        return next((m for m in self.mosaics if m.id == mosaic_id), None)
+        """A collection seen in any listing, search or lookup; None if it hasn't been (see fetch_mosaic)."""
+        return self._known.get(mosaic_id or "")
+
+    def mosaic_names(self) -> Dict[str, str]:
+        """Id → name of every collection seen so far (what processings' sources are named by)."""
+        return {mosaic_id: mosaic.name for mosaic_id, mosaic in self._known.items()}
 
     def upload(self, file_path: str, name: str) -> None:
         if self.uploading:
@@ -274,8 +408,15 @@ class Imagery(QObject):
 
     def delete_mosaic(self, mosaic_id: str, on_done: Callable[[], None], on_error: Callable[[str], None]) -> None:
         def done(_data):
+            if any(m.id == mosaic_id for m in self.mosaics):
+                self.mosaics_total = max(0, self.mosaics_total - 1)
             self.mosaics = [m for m in self.mosaics if m.id != mosaic_id]
+            if any(m.id == mosaic_id for m in self.found):
+                self.found = [m for m in self.found if m.id != mosaic_id]
+                self.found_total = max(0, self.found_total - 1)
+                self.mosaicSearchChanged.emit(self.found_query, self.found)
             self.images.pop(mosaic_id, None)
+            self._known.pop(mosaic_id, None)
             self.mosaicsChanged.emit(self.mosaics)
             on_done()
             self.load_mosaics()

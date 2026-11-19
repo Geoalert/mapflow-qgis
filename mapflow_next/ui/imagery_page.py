@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Callable, Dict, List, Optional, Tuple
 
-from qgis.PyQt.QtCore import QDate, QSize, Qt, pyqtSignal
+from qgis.PyQt.QtCore import QDate, QSize, Qt, QTimer, pyqtSignal
 from qgis.PyQt.QtGui import QPixmap
 from qgis.PyQt.QtWidgets import (QComboBox, QDateEdit, QGridLayout, QHBoxLayout, QLabel, QProgressBar,
                                  QPushButton, QScrollArea, QSlider, QToolButton, QVBoxLayout, QWidget)
@@ -30,6 +30,7 @@ class ImageryPage(QWidget):
     moreResults = pyqtSignal()
     useMosaic = pyqtSignal(str)
     showMosaic = pyqtSignal(str)
+    moreMosaics = pyqtSignal()                # "Show more" under the collections: their next page
     uploadRequested = pyqtSignal()
     layerUploadRequested = pyqtSignal(list)   # GeoTIFF layers of the project, by layer id
     areaAction = pyqtSignal(str)              # draw | extent: the same actions as the run form's
@@ -44,6 +45,9 @@ class ImageryPage(QWidget):
         self._eyes: Dict[str, QToolButton] = {}
         self._uses: List[QPushButton] = []        # the results' Use buttons
         self.more_button: Optional[QPushButton] = None
+        self._mosaic_keys: List[tuple] = []           # what each drawn collection card shows, in order
+        self._mosaic_uses: List[QPushButton] = []     # their Use / Chosen / Choose… buttons
+        self._use_width = 0                           # the width those buttons share
         # (layer id, name) of the project's GeoTIFF layers, asked for when the menu opens; the controller sets it
         self.geotiff_layers: Callable[[], List[Tuple[str, str]]] = lambda: []
         # (file, name) of the GeoTIFFs a drag carries; the controller sets it
@@ -342,10 +346,15 @@ class ImageryPage(QWidget):
         self.drop = DropTarget(upload, lambda mime: self.parse_drop(mime))
         self.upload_button = button("Upload a GeoTIFF", "outline", "upload")
         self.upload_button.clicked.connect(lambda *_: self.uploadRequested.emit())
-        upload.add(self.upload_button)
         self.layer_button = button("Choose from raster layers", "outline", "layers")
         self.layer_button.clicked.connect(lambda *_: self._choose_layers())
-        upload.add(self.layer_button)
+        # The two ways in, side by side and sharing the width
+        buttons = hbox(self.upload_button, self.layer_button, spacing=8)
+        buttons.setStretch(0, 1)
+        buttons.setStretch(1, 1)
+        for item in (self.upload_button, self.layer_button):
+            item.setMinimumWidth(1)                 # a narrow dock squeezes them instead of widening the page
+        upload.add(buttons)
         self.upload_bar = QProgressBar()
         self.upload_bar.setTextVisible(False)
         self.upload_bar.setVisible(False)
@@ -358,39 +367,95 @@ class ImageryPage(QWidget):
         self.mosaic_list = QVBoxLayout()
         self.mosaic_list.setSpacing(8)
         layout.addLayout(self.mosaic_list)
+        # One "Show more", kept under the list and only changed: the cards above are added to, not redrawn
+        self.more_mosaics = button("Show more", "outline", size="sm")
+        self.more_mosaics.clicked.connect(lambda *_: self.moreMosaics.emit())
+        self.more_mosaics.setVisible(False)
+        layout.addWidget(self.more_mosaics)
         layout.addWidget(link("Manage collections in Mapflow Web", lambda: self.my_data_url))
         layout.addStretch(1)
         return page
 
-    def set_mosaics(self, mosaics: List[Mosaic], chosen: Optional[str]) -> None:
-        self._clear(self.mosaic_list)
-        self.mosaics_title.setText(f"Collections · {len(mosaics)}" if mosaics else "No collections yet")
-        uses = []                                   # Use, Chosen and Choose…: one width
-        for mosaic in mosaics:
-            card = Card(margins=(12, 10, 10, 10))
-            row = QHBoxLayout()
-            row.setSpacing(10)
-            badge = QLabel(card)
-            badge.setPixmap(icons.pixmap("image", tokens()["text"], 18))
-            row.addWidget(badge)
-            count = "" if mosaic.image_count is None else \
-                f"{mosaic.image_count} image" + ("" if mosaic.image_count == 1 else "s")
-            meta = " · ".join(t for t in (count, formatting.size(mosaic.size_bytes) if mosaic.size_bytes else "",
-                                          formatting.when(mosaic.created)) if t)
-            row.addLayout(vbox(ElidedLabel(mosaic.name, "title"), label(meta, "meta"), spacing=2), 1)
-            show = tool("eye", "Show on the map", "plain")
-            show.clicked.connect(lambda *_, mid=mosaic.id: self.showMosaic.emit(mid))
-            several = (mosaic.image_count or 0) > 1
-            use = button("Chosen" if mosaic.id == chosen else ("Choose…" if several else "Use"),
-                         "outline" if mosaic.id == chosen else "primary", size="sm")
-            use.setToolTip("Pick the whole collection or one of its images" if several else "Process this collection")
-            uses.append(use)
-            use.clicked.connect(lambda *_, mid=mosaic.id: self.useMosaic.emit(mid))
-            row.addWidget(show)
-            row.addWidget(use)
-            card.add(row)
+    def set_mosaics(self, mosaics: List[Mosaic], chosen: Optional[str], total: Optional[int] = None,
+                    loading: bool = False) -> None:
+        """The collections loaded so far, of `total` in the account: "Show more" brings the next page.
+        Cards already drawn stay: a new page only adds its own, and nothing is redrawn while it loads.
+        Redrawing hundreds of cards on every page (and on every refresh) made the list stutter."""
+        total = len(mosaics) if total is None else max(total, len(mosaics))
+        self.mosaics_title.setText(f"Collections · {total:,}" if mosaics else "No collections yet")
+        keys = [_mosaic_key(m, chosen) for m in mosaics]
+        drawn = self._mosaic_keys
+        if [k[0] for k in keys[:len(drawn)]] != [k[0] for k in drawn]:
+            self._clear(self.mosaic_list)           # removed or reordered: draw them again
+            self._mosaic_uses, drawn = [], []
+        new_uses = []
+        for index, (old, new) in enumerate(zip(drawn, keys)):
+            if old != new:                          # the same collection, showing something else: that card only
+                card, use = self._mosaic_card(mosaics[index], chosen)
+                stale = self.mosaic_list.itemAt(index).widget()
+                self.mosaic_list.insertWidget(index, card)
+                self.mosaic_list.removeWidget(stale)
+                stale.hide()
+                stale.deleteLater()
+                self._mosaic_uses[index] = use
+                new_uses.append(use)
+        for mosaic in mosaics[len(drawn):]:
+            card, use = self._mosaic_card(mosaic, chosen)
+            new_uses.append(use)
+            self._mosaic_uses.append(use)
             self.mosaic_list.addWidget(card)
-        same_width(uses)
+        self._mosaic_keys = keys
+        if new_uses:
+            self._match_use_widths(new_uses)
+        more = self.more_mosaics
+        more.setVisible(bool(mosaics) and len(mosaics) < total)
+        more.setText("Loading…" if loading else f"Show more · {len(mosaics):,} of {total:,}")
+        more.setEnabled(not loading)
+
+    def _mosaic_card(self, mosaic: Mosaic, chosen: Optional[str]):
+        card = Card(margins=(12, 10, 10, 10))
+        row = QHBoxLayout()
+        row.setSpacing(10)
+        badge = QLabel(card)
+        badge.setPixmap(icons.pixmap("image", tokens()["text"], 18))
+        row.addWidget(badge)
+        count = "" if mosaic.image_count is None else \
+            f"{mosaic.image_count} image" + ("" if mosaic.image_count == 1 else "s")
+        meta = " · ".join(t for t in (count, formatting.size(mosaic.size_bytes) if mosaic.size_bytes else "",
+                                      formatting.when(mosaic.created)) if t)
+        row.addLayout(vbox(ElidedLabel(mosaic.name, "title"), label(meta, "meta"), spacing=2), 1)
+        show = tool("eye", "Show on the map", "plain")
+        show.clicked.connect(lambda *_, mid=mosaic.id: self.showMosaic.emit(mid))
+        several = (mosaic.image_count or 0) > 1
+        use = button("Chosen" if mosaic.id == chosen else ("Choose…" if several else "Use"),
+                     "outline" if mosaic.id == chosen else "primary", size="sm")
+        use.setToolTip("Pick the whole collection or one of its images" if several else "Process this collection")
+        use.clicked.connect(lambda *_, mid=mosaic.id: self.useMosaic.emit(mid))
+        row.addWidget(show)
+        row.addWidget(use)
+        card.add(row)
+        return card, use
+
+    def _match_use_widths(self, new_uses: List[QPushButton]) -> None:
+        """Use, Chosen and Choose… are one width. New buttons take the width already found at once, so they
+        don't show narrow and then widen; the width is measured again once they are styled."""
+        if self._use_width:
+            for use in new_uses:
+                use.setMinimumWidth(self._use_width)
+
+        def measure() -> None:
+            try:
+                width = max((u.sizeHint().width() for u in self._mosaic_uses), default=0)
+            except RuntimeError:                    # redrawn meanwhile
+                return
+            if width > self._use_width:
+                self._use_width = width
+                for use in self._mosaic_uses:
+                    use.setMinimumWidth(width)
+            else:
+                for use in new_uses:
+                    use.setMinimumWidth(self._use_width)
+        QTimer.singleShot(0, measure)
 
     def _choose_layers(self) -> None:
         """Only GeoTIFF files: tile layers (XYZ, TMS, WMS) have no file to upload."""
@@ -412,6 +477,11 @@ class ImageryPage(QWidget):
     @staticmethod
     def _clear(layout) -> None:
         clear_layout(layout)
+
+
+def _mosaic_key(mosaic: Mosaic, chosen: Optional[str]) -> tuple:
+    """What a collection card shows: when it changes, the card is drawn again."""
+    return (mosaic.id, mosaic.name, mosaic.image_count, mosaic.size_bytes, str(mosaic.created), mosaic.id == chosen)
 
 
 def _provider_label(name: str) -> str:

@@ -368,7 +368,31 @@ class StepHeader(QWidget):
             self.badge.setText(str(self.number))
 
 
-class Toggle(QAbstractButton):
+KEYBOARD_FOCUS = (Qt.FocusReason.TabFocusReason, Qt.FocusReason.BacktabFocusReason,
+                  Qt.FocusReason.ShortcutFocusReason)
+
+
+class FocusRing:
+    """For widgets that draw a focus ring: shown only when the focus came from the keyboard, as a browser's
+    :focus-visible. A click focuses them too (so it takes the focus from a field being edited), but leaves no
+    ring around what was just clicked. Mixed in before the Qt class; the property `focusring` is for QSS."""
+    _keyboard_focus = False
+
+    def focusInEvent(self, event) -> None:
+        self._keyboard_focus = event.reason() in KEYBOARD_FOCUS
+        set_prop(self, "focusring", self._keyboard_focus)
+        super().focusInEvent(event)
+
+    def focusOutEvent(self, event) -> None:
+        self._keyboard_focus = False
+        set_prop(self, "focusring", False)
+        super().focusOutEvent(event)
+
+    def focus_ring(self) -> bool:
+        return self.hasFocus() and self._keyboard_focus
+
+
+class Toggle(FocusRing, QAbstractButton):
     """A switch. Painted, so it looks the same on every platform."""
 
     def __init__(self, parent: Optional[QWidget] = None):
@@ -394,7 +418,7 @@ class Toggle(QAbstractButton):
         painter.setBrush(color("bg") if self.isEnabled() else color("border"))
         knob_x = rect.x() + (18 if on else 2)
         painter.drawEllipse(QRectF(knob_x, rect.y() + 2, 16, 16))
-        if self.hasFocus():
+        if self.focus_ring():
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.setPen(QPen(color("focus"), 1.5))
             painter.drawRoundedRect(rect.adjusted(-1.5, -1.5, 1.5, 1.5), 11, 11)
@@ -510,7 +534,7 @@ def placeholder(icon_name: str, width: int, height: int, radius: float = 8) -> Q
     return result
 
 
-class ImageTile(QAbstractButton):
+class ImageTile(FocusRing, QAbstractButton):
     """Start-page scenario tile: picture on top, title and one meta line under it."""
 
     def __init__(self, title: str, meta: str, pixmap: QPixmap, model_icon: Optional[str] = None,
@@ -531,7 +555,7 @@ class ImageTile(QAbstractButton):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         rect = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
-        hover = self.underMouse() or self.hasFocus()
+        hover = self.underMouse() or self.focus_ring()
         painter.setPen(QPen(color("stroke" if hover else "border"), 1))
         painter.setBrush(color("bg"))
         painter.drawRoundedRect(rect, 14, 14)
@@ -563,7 +587,7 @@ class ImageTile(QAbstractButton):
         meta_rect = QRectF(x, rect.height() - 25, rect.width() - x - 10, 18)
         painter.drawText(meta_rect, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
                          QFontMetrics(font).elidedText(self.meta, Qt.TextElideMode.ElideRight, int(meta_rect.width())))
-        if self.hasFocus():
+        if self.focus_ring():
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.setPen(QPen(color("focus"), 2))
             painter.drawRoundedRect(rect.adjusted(1, 1, -1, -1), 13, 13)

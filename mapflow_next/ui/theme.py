@@ -92,7 +92,7 @@ QDialog[dropping="true"] { border: 2px dashed $primary; }
 QFrame[card="flat"] { background: $subtle; border: 1px solid $border; border-radius: 12px; }
 QFrame[card="tile"] { background: $bg; border: 1px solid $border; border-radius: 12px; }
 QFrame[card="tile"]:hover { border-color: $primary_soft2; }
-QFrame[card="tile"]:focus { border-color: $focus; }
+QFrame[card="tile"][focusring="true"] { border-color: $focus; }
 QFrame[card="tile"][current="true"] { border: 2px solid $primary; }
 QFrame[callout="info"] { background: $badge; border: 0; border-radius: 8px; }
 QFrame[callout="warn"] { background: $warn_bg; border: 1px solid $warn_line; border-radius: 8px; }

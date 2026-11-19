@@ -409,11 +409,12 @@ def main():
     check(mapbox.recommended_zoom == 19 and mapbox.zoom == 19, "the scenario's zoom (z19 for heights) is recommended "
                                                                "and preselected")
     check(mapbox.note == "" and "★" not in mapbox.meta, "at the recommended zoom there is no warning line")
-    controller.provider_zoom["mapbox"] = 18
-    other = next(r for r in controller._imagery_rows(session.status, True)[0] if r.key == "provider:mapbox")
-    check(other.note == "z19 recommended" and "★" not in other.meta,
-          f"at another zoom a warning line names the recommended one ({other.note!r})")
-    controller.provider_zoom.pop("mapbox")
+    # A source not chosen shows the zoom it would run at: set to another one, its row names the recommended zoom
+    controller.provider_zoom["arcgis"] = 18
+    other = next(r for r in controller._imagery_rows(session.status, True)[0] if r.key == "provider:arcgis")
+    check(other.zoom == 18 and other.note == "z19 recommended" and "★" not in other.meta,
+          f"at another zoom a warning line names the recommended one ({other.zoom}, {other.note!r})")
+    controller.provider_zoom.pop("arcgis")
     zoom_combo = next(w for w in run._rows[[r.key for r in rows].index("provider:mapbox")].findChildren(QComboBox))
     zooms = [zoom_combo.itemText(i) for i in range(zoom_combo.count())]
     marks = [zoom_combo.itemIcon(i).pixmap(12, 12).toImage() for i in range(zoom_combo.count())]
@@ -505,6 +506,16 @@ def main():
     run.set_issues([])
     check(run.issues.isHidden() and run.issues.action.isHidden(), "…gone once the run can go")
     controller.refresh_run()                        # the form's own issues back
+    from qgis.PyQt.QtCore import QEvent as _QEvent
+    from qgis.PyQt.QtGui import QFocusEvent as _QFocusEvent
+    tab_button = content.tab_buttons[1]
+    QApplication.sendEvent(tab_button, _QFocusEvent(_QEvent.Type.FocusIn, Qt.FocusReason.MouseFocusReason))
+    clicked = tab_button.property("focusring")
+    QApplication.sendEvent(tab_button, _QFocusEvent(_QEvent.Type.FocusIn, Qt.FocusReason.TabFocusReason))
+    tabbed = tab_button.property("focusring")
+    QApplication.sendEvent(tab_button, _QFocusEvent(_QEvent.Type.FocusOut, Qt.FocusReason.TabFocusReason))
+    check(clicked is False and tabbed is True and tab_button.property("focusring") is False,
+          "a focus ring shows when the focus comes from the keyboard, not after a click")
     gone = controller._cost_error_text('DataCatalog error mosaicId not found: DC returned status 404: {"detail": '
                                        '{"code": "ItemNotFound"}}')
     check(not gone.startswith("Cost check") and "no longer" in gone
@@ -1102,6 +1113,65 @@ def main():
           "…and the list is asked for every 30 s while the panel is open")
     state.extra_mosaics = []
     imagery_service.load_mosaics()
+    wait_until(lambda: not imagery_service.loading_mosaics, 5)
+
+    # many collections: listed 50 at a time, newest first, and searched on the server
+    def pages():
+        return getattr(state, "mosaic_pages", [])
+    state.many_mosaics = 120
+    imagery_service.load_mosaics()
+    check(wait_until(lambda: len(imagery_service.mosaics) == 50 and imagery_service.mosaics_total > 120, 5)
+          and pages()[-1].get("offset") == "0" and pages()[-1].get("limit") == "50"
+          and pages()[-1].get("sort") == "created_at" and pages()[-1].get("order") == "desc"
+          and "name_contains" not in pages()[-1],
+          f"collections come 50 at a time, newest first, of all there are ({len(imagery_service.mosaics)} of "
+          f"{imagery_service.mosaics_total}; {pages()[-1] if pages() else None})")
+    check("Survey tile 119" in [m.name for m in imagery_service.mosaics]
+          and "Survey tile 000" not in [m.name for m in imagery_service.mosaics],
+          "…the newest first: the oldest isn't on the first page")
+    content.go(2)
+    content.imagery.show_tab(MINE)
+    wait_until(lambda: False, 0.2)
+    more = content.imagery.more_mosaics
+    check(more is not None and f"50 of {imagery_service.mosaics_total}" in more.text()
+          and content.imagery.mosaics_title.text() == f"Collections · {imagery_service.mosaics_total}",
+          f"My imagery says how many there are, and has “Show more” ({more.text() if more else None})")
+    first_card = content.imagery.mosaic_list.itemAt(0).widget()
+    more.click()
+    check(wait_until(lambda: len(imagery_service.mosaics) == 100, 5) and pages()[-1].get("offset") == "50",
+          "“Show more” brings the next 50")
+    wait_until(lambda: False, 0.2)
+    check(content.imagery.mosaic_list.count() == 100 and content.imagery.mosaic_list.itemAt(0).widget() is first_card,
+          "…added under the cards already drawn, which stay as they are (no redraw of the whole list)")
+    imagery_service.load_mosaics()
+    check(wait_until(lambda: not imagery_service.loading_mosaics, 5) and len(imagery_service.mosaics) == 100
+          and pages()[-1].get("limit") == "100", "a refresh keeps what “Show more” brought")
+    controller.open_mosaic_picker()
+    picker = controller.mosaic_picker
+    picker.search.setText("tile 007")
+    check(wait_until(lambda: [m.name for m in picker.found] == ["Survey tile 007"] and not picker.found_loading, 5)
+          and pages()[-1].get("name_contains") == "tile 007",
+          f"the collection search asks Mapflow, so it finds a collection on no loaded page ({picker.found})")
+    image_name = fixtures.MOSAIC_IMAGES["m-1"][0]
+    picker.search.setText(image_name)
+    check(wait_until(lambda: "m-1" in [m.id for m in picker.found], 5),
+          f"…and finds a collection by the name of an image in it ({image_name})")
+    asked = len(pages())
+    picker.search.clear()
+    check(wait_until(lambda: picker._shown() is picker.mosaics and len(picker.mosaics) == 100, 3)
+          and all(p.get("name_contains") for p in pages()[asked:]),
+          "clearing the search shows the listing again, and no empty search is sent (Mapflow refuses it)")
+    picker.close()
+    got = []
+    imagery_service._known.pop("m-many-000", None)
+    imagery_service.fetch_mosaic("m-many-000", lambda m: got.append(m.name), lambda: got.append("missing"))
+    imagery_service.fetch_mosaic("m-gone", lambda m: got.append(m.name), lambda: got.append("missing"))
+    check(wait_until(lambda: len(got) == 2, 5) and sorted(got) == ["Survey tile 000", "missing"],
+          f"a collection on no loaded page is asked for by id, and a 404 says it is gone ({got})")
+    state.many_mosaics = 0
+    imagery_service.load_mosaics()
+    check(wait_until(lambda: not imagery_service.loading_mosaics and imagery_service.mosaics_total < 50, 5)
+          and len(imagery_service.mosaics) == imagery_service.mosaics_total, "…and back to a few collections")
 
     # icons: the single-stripe mark, white on a dark theme; every icon has an exact 1× drawing
     from mapflow_next.ui import icons as icon_module
@@ -1378,17 +1448,18 @@ def main():
     check(0 <= gap <= 12, f"the pencil sits right after the name, not at the row's end ({gap} px)")
     from qgis.PyQt.QtCore import QEvent
     from qgis.PyQt.QtGui import QFocusEvent
-    resting, card_height = run.name.width(), run.name.parentWidget().height()
+    # What the field asks the layout for (the pixels depend on whether the page is laid out at this point)
+    resting = run.name.sizeHint().width()
     QApplication.sendEvent(run.name, QFocusEvent(QEvent.Type.FocusIn))
     wait_until(lambda: False, 0.1)
-    check(not run.rename_button.isVisible() and run.name.width() > resting
-          and run.name.parentWidget().height() == card_height,
-          f"while the name is edited the field takes the row and the pencil steps aside, the form below "
-          f"staying put ({resting} → {run.name.width()} px wide, card {card_height} → "
-          f"{run.name.parentWidget().height()} px high)")
+    check(run.rename_button.isHidden() and run.name.sizeHint().width() > 1000
+          and run.rename_button.sizePolicy().retainSizeWhenHidden(),
+          f"while the name is edited the field asks for the whole row and the pencil steps aside, keeping its "
+          f"place so the form below doesn't move ({resting} → {run.name.sizeHint().width()} px asked)")
     QApplication.sendEvent(run.name, QFocusEvent(QEvent.Type.FocusOut))
     wait_until(lambda: False, 0.1)
-    check(run.rename_button.isVisible() and run.name.width() == resting, "…and comes back right after it")
+    check(not run.rename_button.isHidden() and run.name.sizeHint().width() == resting,
+          "…and comes back right after it")
     close_modal_later(named, name_it)
     check(run.rename_button.isEnabled() and run.rename_button.isVisible(), "the pencil by the name is a button")
     run.rename_button.click()

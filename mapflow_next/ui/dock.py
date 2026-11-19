@@ -20,13 +20,13 @@ from .run_page import RunPage
 from .sign_in import SignInPage
 from .start_page import StartPage
 from .theme import color, is_dark, load_fonts, stylesheet, tokens
-from .widgets import link, menu_action, tool
+from .widgets import FocusRing, link, menu_action, tool
 
 START, PROCESSINGS, IMAGERY = 0, 1, 2
 PAGE_SIGN_IN, PAGE_START, PAGE_RUN, PAGE_PROCESSINGS, PAGE_IMAGERY = range(5)
 
 
-class TabButton(QAbstractButton):
+class TabButton(FocusRing, QAbstractButton):
     def __init__(self, text: str, icon_name: str, parent=None):
         super().__init__(parent)
         self.setText(text)
@@ -95,7 +95,7 @@ class TabButton(QAbstractButton):
             painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, str(self.badge))
         if on:
             painter.fillRect(QRectF(4, self.height() - 2, self.width() - 8, 2), color("primary"))
-        if self.hasFocus():
+        if self.focus_ring():
             painter.setPen(color("focus"))
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawRoundedRect(QRectF(self.rect()).adjusted(2, 4, -2, -4), 4, 4)
