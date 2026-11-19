@@ -23,10 +23,30 @@ reports the filtered `total`:
 - `productTypes` (list)
 - `limit` / `offset`, `sortBy` / `sortOrder`
 
+#### What the plugin sends
+
+| Field | Plugin control | Sent |
+|---|---|---|
+| `aoi` | the Area drop-down, "Use map view", Draw | always |
+| `acquisitionDateFrom` / `acquisitionDateTo` | From / To, the last year by default | always |
+| `maxCloudCover` | slider 0–100 %, 20 by default | always |
+| `minOffNadirAngle` / `maxOffNadirAngle` | one range slider 0–30°, the full range by default | always |
+| `minAoiIntersectionPercent` | "Min area coverage" slider 0–100 %, 20 by default | not at 0 |
+| `hideUnavailable` | "Available for me" switch, off by default | always |
+| `productTypes` | "Type" chips: Mosaics, Scenes | only when exactly one chip is on |
+| `limit` / `offset` | pages of 50 with "Show more" | always |
+| `sortBy` / `sortOrder` | — (newest first) | always |
+
+`minResolution`, `maxResolution` and `dataProviders` are not sent: the plugin has no control for them.
+The controls follow Mapflow Web's search, so the same search gives the same list in both.
+
 ### Response and missing metadata
 
 The response is a paginated list of image footprints with metadata (`acquisitionDate`,
-`cloudCover`, `offNadirAngle`, `resolution`, `providerName`, `productType`, `previewUrl`, …).
+`cloudCover`, `offNadirAngle`, `pixelResolution`, `providerName`, `productType`, `previewUrl`, …).
+
+A scene may come with its preview in several parts: `previews` is then a list of `{url, geometry}`
+(Roscosmos). The plugin fetches every part, lays each on its own geometry and shows them as one layer.
 
 **Metadata may be absent.** Results from the user's own imagery (see the My Imagery providers
 below) carry mostly-empty metadata — `acquisitionDate`, `cloudCover` and angles may be `null`,
@@ -34,18 +54,13 @@ because most user uploads have no catalog metadata. The governing rule, implemen
 is: **a missing (`null`) value matches any condition** — a `null` column satisfies every
 predicate on that column.
 
-### Client-side filtering (local filter)
+### No client-side filtering
 
-The primary search path shows the server's filtered, paginated result as-is. Separately, the
-plugin re-applies the same filters **locally** on the already-fetched page as the user moves the
-filter widgets, so the table reacts without a new request. This local filter **demotes and marks**
-rows (greys them, sorts them to the bottom, hides their footprint) rather than removing them, so
-the page size and pager stay consistent.
-
-The local filter MUST follow the same missing-matches-any rule: a row with a `null`
-`acquisitionDate` or `cloudCover` passes the corresponding filter (it is never demoted for a
-value it does not have). Otherwise the user's own imagery would disappear the moment any filter
-is touched.
+Filters are applied **only by the server**, and only when the user presses "Search imagery". Moving a
+filter control changes nothing on screen until then: the list always shows exactly what the last
+request returned. The 3.x plugin also re-applied the filters locally and greyed the rows that no longer
+matched; Mapflow Next does not, so the list, its count and its pages can never disagree with the
+server's.
 
 ### My Imagery search providers
 
@@ -57,11 +72,11 @@ the server-driven provider list automatically):
 
 Their `previewUrl` points at the data-catalog host (same Mapflow origin, under `/rest/rasters/…`)
 
-Those two names are internal, so the search-results **table** shows **"My Image"** and **"My
-Collection"** instead. The substitution is display-only and happens where the cell is written:
-the GeoJSON properties, the footprint layer attributes and the provider list keep the API's own
-names, and every match on them — the local provider filter, the per-provider minimum-area lookup,
-the processing request — keeps comparing raw names. A provider without a mapping is shown as it
+Those two names are internal, so a search-result **card** shows **"My image"** and **"My
+collection"** instead. The substitution is display-only and happens where the card is drawn:
+the footprint layer attributes and the provider list keep the API's own names, and every match
+on them — the per-provider minimum-area lookup, the processing request — keeps comparing raw
+names. A provider without a mapping is shown as it
 comes, so a new one is never blank.
 
 See also `002_F_plan_processing_api.md` for `POST /processings/template/{templateId}/images`,

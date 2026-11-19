@@ -110,11 +110,11 @@ Use `agent-make` for every build / test / lint invocation in this repo. Raw `mak
 - *"Sub-Makefile '<path>' is not in agent-make.files"* — STOP and ask the user to add it via `agent-repo-init --files …`.
 
 # PROJECT STRUCTURE AND ADDRESSING
-This is a **QGIS plugin for QGIS 3.22+ (Qt 5) and QGIS 4 (Qt 6)** (Python, Qt/PyQGIS). It ships as a zip to the QGIS plugin repository — there is no server, no database, and no deployment image. The previous 3.x plugin (`mapflow/`) is in the history up to tag `v3.6.3`.
+This is a **QGIS plugin for QGIS 3.28+ (Qt 5) and QGIS 4 (Qt 6)** (Python, Qt/PyQGIS). It ships as a zip to the QGIS plugin repository — there is no server, no database, and no deployment image. The previous 3.x plugin (`mapflow/`) is in the history up to tag `v3.6.3`.
 
 - `Dockerfile.tests`: the QGIS test image, built twice from one file: on `qgis/qgis:release-3_28` (QGIS 3) and on `qgis/qgis:4.2` (QGIS 4). Test-only; nothing is deployed from it.
 - `Makefile`: tests on both QGIS versions + lint + packaging. **No docker-compose in this repo** — targets use a plain `docker run` with the repo bind-mounted at `/app`.
-- /spec: contains specifications, ordered by hierarchy: the very foundation in 001, then go the most important architecture details (api, db, stack), all further decisions and rationale are documented in subsequent files. Enter via `/spec/index.md`. **004 (stack), 005 (interactions) and 007 (architecture) still describe the 3.x plugin** — they need a spec session before they can gate work on `mapflow_next/`.
+- /spec: contains specifications, ordered by hierarchy: the very foundation in 001, then go the most important architecture details (api, db, stack), all further decisions and rationale are documented in subsequent files. Enter via `/spec/index.md`. 001–006 describe `mapflow_next/`. **007 (architecture) has two parts**: § Mapflow Next (4.x) gates work on `mapflow_next/`; the rest is the 3.x refactoring analysis, kept as rationale. In 002_F only § Plugin behaviour in Mapflow Next applies; its other client-behaviour sections describe the 3.x plugin.
 - /mapflow_next: plugin source code
   - `plugin.py` (QGIS entry), `controller.py` (connects services to pages and to QGIS), `config.py`, `settings.py`
   - /mapflow_next/core: pure Python, no Qt — models, the run form as data (`draft.py`), scenarios, error texts, OAuth helpers
@@ -324,7 +324,9 @@ Note: `agent-make` does not accept `VAR=val` overrides. Every test target alread
   results. There is no host `venv` step and no `pip install`.
 - Scope differs per tool on purpose: flake8 covers `mapflow_next/`, `tests/` **and** `tools/`; bandit
   covers `mapflow_next/` only (it is the code that ships, and `B101` would otherwise fire on every pytest
-  assertion); detect-secrets runs against the committed `.secrets.baseline`.
+  assertion); detect-secrets scans every file of `mapflow_next/`, `tests/` and `tools/`
+  without `--baseline` (`spec/004_stack.md` § Static analysis says why); `.secrets.baseline` stays committed for the
+  qgis.org scanner.
 - At qgis.org, bandit and detect-secrets are **blocking** and flake8 is advisory. Locally all three
   block — a check that cannot fail the build does not hold a line.
 - `.flake8` has **no debt ledger**: the code passes flake8's default rules. Do not add an

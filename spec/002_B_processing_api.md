@@ -5,14 +5,48 @@ Define the REST API contracts for processing management consumed by this plugin.
 
 ## Endpoints
 
-### `POST /projects/{project_id}/processings`
+The plugin uses the `v2` variant of an endpoint wherever one exists.
+
+### `POST /processings/v2`
 Submit a processing job. Body includes geometry and processing params.
 
-### `GET /projects/{project_id}/processings/v2`
-List processings for a project. Polled approximately every 5 seconds for status updates.
+### `POST /projects/{project_id}/processings/v2/page`
+One page of a project's processings. Body: `limit`, `offset`, `sortBy`, `sortOrder`, and `terms` (a name
+search applied on the server).
 
-### `PUT /processings/{id}`
+### `GET /processings/{id}/v2`
+One processing.
+
+### `PUT /processings/{id}/v2`
 Update processing name/description.
+
+### `POST /processings/{id}/restart/v2`
+Restart the failed and cancelled AOIs of a processing. The backend accepts it for a processing that is
+failed, cancelled, in progress or awaiting, from any user who may run a processing in the project.
+
+### `POST /processing/cost/v2`
+The cost of the processing the form describes, as text.
+
+### `DELETE /processings/{id}`
+Delete a processing.
+
+### `PUT /processings/{id}/rate`
+Rate a result. Body: `rating`, `feedback`.
+
+### `GET /processings/{id}/result`
+The processing's features as GeoJSON. The plugin streams it to disk.
+
+### `GET /processings/{id}/aois`
+The processing's area. "Run again" and "Download the area" read it.
+
+## Plugin behaviour
+
+- The list is asked for **30 at a time, newest first**, with "Show more". There is no other sort order.
+- It is polled **every 6 seconds while a processing on the loaded pages is not final**, and again 6
+  seconds after a refresh that failed for a transient reason (`005_interactions.md` § Failed requests).
+  Not otherwise.
+- **Search** sends `terms`, so it covers the whole project and not only the pages already loaded.
+- **Restart** is offered for a failed or a cancelled processing, to every role that may run one.
 
 ## AOI area measurement
 
@@ -24,7 +58,7 @@ estimates the cost.
 
 The **measurement** must union it, though. The area of a MultiPolygon is the sum of its parts, so
 overlapping polygons would contribute their shared area once per part, and the plugin would show
-(and pre-check limits against) more area than the backend charges for. `calculate_aoi_area`
+(and pre-check limits against) more area than the backend charges for. `measure` in `qgis_bridge/aoi.py`
 therefore measures the union of the parts, which makes the displayed *Area*, the cost estimate
 derived from it, and the client-side limit checks agree with the backend.
 
@@ -37,6 +71,15 @@ two AOIs that nearly coincide that leaves their thin symmetric difference — a 
 area — which is a worse answer than the doubled one. The repair applies to a lone invalid polygon
 too, whose ring area is meaningless on its own (a bowtie's lobes cancel out to zero). If the union
 fails even after the repair, the geometry is measured as-is: an over-counted area beats none.
+
+## AOI and the imagery footprint
+
+When the imagery has a footprint of its own — a My imagery collection or image, or **one image chosen
+from the catalog search** — only the part of the AOI inside that footprint can be processed. The plugin
+intersects the AOI with the footprint and uses the result for everything that follows: the submitted
+geometry, the displayed area, the cost request, the provider's minimum-area check and the area limits
+below. An AOI that doesn't touch the footprint blocks the run. Basemap providers have no footprint, and
+their AOI is submitted whole.
 
 ## AOI area limit
 

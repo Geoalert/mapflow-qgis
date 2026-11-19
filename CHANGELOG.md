@@ -1,13 +1,16 @@
 ## 4.0.0
     - A new plugin, Mapflow Next, replaces the 3.x code base in this repository. It is built around one flow: model, area, imagery, processing, results
-    - Runs in QGIS 3.22 and later and in QGIS 4 (Qt 6)
+    - Runs in QGIS 3.28 and later and in QGIS 4 (Qt 6)
+    - Installs next to the 3.x Mapflow plugin. Its settings are not carried over: sign in again, and set the output folder again if you changed it
     - Its own Mapflow toolbar, and Check for updates in the plugin's menu (Plugins › Mapflow Next)
     - Dock panel with Start, Processings and Imagery sources tabs; a scenario gallery with 16 ready-made setups built on Mapflow models
     - Projects window: search, pin, see what's in each project and who it's shared with
     - Zoom z17–z21 with the scenario's recommended zoom; pick one image from a My imagery collection, whose extent becomes the area
     - Sign in with Mapflow in the browser and stay signed in across restarts; an API token as a fallback; both kept in the QGIS authentication database
     - Live cost estimate before every run; results load as styled GeoPackage layers or vector tiles
-    - Not carried over yet: planned processings (templates), custom XYZ/TMS providers, translations (es, pt, ru, zh)
+    - My imagery window: upload several GeoTIFFs at once from files or layers, or drag them in; create a collection, delete a collection or an image; collections are listed 50 at a time and searched on the server, by their name or by an image's file name
+    - Imagery search: a minimum area coverage filter; previews that come in several parts are shown whole
+    - Not carried over yet: planned processings (templates), custom XYZ/TMS providers, translations (es, pt, ru, zh; planned for 4.1)
 
 ## 3.6.3
     - Fix: downloading an image from My imagery could crash QGIS, or finish without saving anything — mostly for large images, whose download lasts long enough for Python's garbage collector to discard the code waiting for it to finish. The plugin now holds each download until it completes
