@@ -19,7 +19,7 @@ describes the state after the chain; each step makes the code match it, and upda
 [ready-for-review] Failed requests: lists and polls no longer fail silently, nothing stays pending, the poll stops on 403/404 and the default project opens — `spec/005` § Failed requests
 [ready-for-review] Credentials only for the API's own scheme, host and port — `spec/002_api.md` § Authentication
 [ready-for-review] Preview files in a per-session temporary folder, with safe file names — `spec/003` § Temporary Files
-[ ] Uploads have a 1 h timeout; every request has one — `spec/005`, `spec/002_C`
+[ready-for-review] Uploads have a 1 h timeout; every request has one — `spec/005`, `spec/002_C`
 [ ] A result is converted to GeoPackage in a `QgsTask`, off the GUI thread — `spec/005` § QGIS Application
 [ ] `ui/` imports no service, and the controller does not talk to `Http` directly — `spec/007` § Layer rules
 [ ] Unload closes every window the plugin opened; every service has `stop()` — `spec/007` § Unload

@@ -42,6 +42,8 @@ STATUS_IDLE_INTERVAL_MS = 60_000  # …and while it is closed
 COST_DEBOUNCE_MS = 400            # wait for the form to settle before asking /cost
 TIMEOUT_S = 30
 RESULT_TIMEOUT_S = 600
+# An upload may be silent for an hour: the timer restarts while bytes move, so a slow, healthy one is not cut
+UPLOAD_TIMEOUT_S = 3600
 PROCESSINGS_PAGE_SIZE = 30
 PROJECTS_PAGE_SIZE = 50
 SEARCH_PAGE_SIZE = 50

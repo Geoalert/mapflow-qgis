@@ -13,6 +13,7 @@
     - Imagery search: a minimum area coverage filter; previews that come in several parts are shown whole
     - Preview pictures are kept in a private folder, under names that carry no server id; the folder is removed when the plugin unloads
     - A list that fails to load says so instead of looking empty; a refresh that keeps failing tells you once, and the default project opens when the open one is deleted in Mapflow Web
+    - An upload that stalls ends with a message after an hour without progress, and the next upload can start
     - Not carried over yet: planned processings (templates), custom XYZ/TMS providers, translations (es, pt, ru, zh; planned for 4.1)
 
 ## 3.6.3

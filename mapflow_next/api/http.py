@@ -17,7 +17,7 @@ from qgis.PyQt.QtCore import QByteArray, QFile, QIODevice, QObject, QSaveFile, Q
 from qgis.PyQt.QtNetwork import QHttpMultiPart, QHttpPart, QNetworkReply, QNetworkRequest
 from qgis.core import Qgis, QgsApplication, QgsMessageLog, QgsNetworkAccessManager
 
-from ..config import PLUGIN_NAME, TIMEOUT_S
+from ..config import PLUGIN_NAME, TIMEOUT_S, UPLOAD_TIMEOUT_S
 from ..core import guard
 from ..core.guard import guarded
 from ..core.messages import describe
@@ -143,7 +143,8 @@ class _Pending:
     body: Any = None              # the multipart of an upload
     upload: bool = False
     on_progress: Optional[Callback] = None
-    timeout: int = 0              # seconds of inactivity; 0: none
+    timeout: int = 0              # seconds of inactivity; every request has one
+    sent: int = 0                 # bytes of an upload sent so far, as the last progress said
     hops: int = 0                 # redirects followed so far
     redirect_refused: str = ""    # why a redirect was not followed
 
@@ -193,7 +194,7 @@ class Http(QObject):
 
     def upload(self, path: str, file_path: str, on_success: Optional[Callback] = None,
                on_error: Optional[Callback] = None, on_progress: Optional[Callback] = None) -> int:
-        """Multipart upload of one GeoTIFF, streamed from disk."""
+        """Multipart upload of one GeoTIFF, streamed from disk. It ends as a timeout after an hour of silence."""
         multipart = QHttpMultiPart(QHttpMultiPart.ContentType.FormDataType)
         part = QHttpPart()
         part.setHeader(QNetworkRequest.KnownHeaders.ContentTypeHeader, "image/tiff")
@@ -207,7 +208,7 @@ class Http(QObject):
         part.setBodyDevice(source)
         multipart.append(part)
         return self._send("POST", path, body=multipart, on_success=on_success, on_error=on_error,
-                          timeout=0, on_progress=on_progress, upload=True)
+                          timeout=UPLOAD_TIMEOUT_S, on_progress=on_progress, upload=True)
 
     def abort(self, request_id: int) -> None:
         pending = self._pending.get(request_id)
@@ -229,6 +230,9 @@ class Http(QObject):
               upload: bool = False, authorize: bool = True,
               form: Optional[Dict[str, str]] = None) -> int:
         """`authorize` says the request may carry credentials; whether it does depends on its origin (`_dispatch`)."""
+        timeout = TIMEOUT_S if timeout is None else timeout
+        if timeout <= 0:    # 0 used to mean "none": a caller that passes it must fail here, not hang later
+            raise ValueError("a request needs a timeout")
         url = self.url_for(path)
         data = None
         if form is not None:
@@ -241,18 +245,17 @@ class Http(QObject):
         pending = _Pending(None, on_success, on_error, parse, sink=sink, keep=body if upload else None,
                            method=method, url=_without_query(url), allow_credentials=authorize, data=data,
                            body=body, upload=upload, on_progress=on_progress, form=form is not None,
-                           timeout=TIMEOUT_S if timeout is None else timeout)
+                           timeout=timeout)
         self._pending[key] = pending
         try:
             self._dispatch(key, QUrl(url))
         except Exception:
             del self._pending[key]
             raise
-        if pending.timeout:
-            pending.timer = QTimer(self)
-            pending.timer.setSingleShot(True)
-            pending.timer.timeout.connect(partial(self._timeout, key))
-            pending.timer.start(pending.timeout * 1000)
+        pending.timer = QTimer(self)
+        pending.timer.setSingleShot(True)
+        pending.timer.timeout.connect(partial(self._timeout, key))
+        pending.timer.start(pending.timeout * 1000)
         return key
 
     def _dispatch(self, key: int, url: QUrl) -> None:
@@ -294,6 +297,8 @@ class Http(QObject):
         reply.finished.connect(partial(self._finished, key))
         if pending.sink is not None:
             reply.readyRead.connect(partial(self._drain, key))
+        if pending.upload:
+            reply.uploadProgress.connect(partial(self._alive, key))
         if pending.on_progress is not None:
             signal = reply.uploadProgress if pending.upload else reply.downloadProgress
             signal.connect(guarded(lambda done, total, cb=pending.on_progress: cb(done, total)))
@@ -305,6 +310,14 @@ class Http(QObject):
             pending.sink.write(pending.reply.readAll())
             if pending.timer:
                 pending.timer.start()   # data is flowing: restart the inactivity timer
+
+    @guarded
+    def _alive(self, key: int, sent: int, _total: int) -> None:
+        """An upload moves bytes: restart its inactivity timer, so only a stalled upload times out."""
+        pending = self._pending.get(key)
+        if pending and pending.timer and sent > pending.sent:
+            pending.sent = sent
+            pending.timer.start()
 
     @guarded
     def _timeout(self, key: int) -> None:

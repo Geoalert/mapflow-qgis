@@ -837,6 +837,106 @@ def check_failed_requests(iface, plugin, state):
           "the failure checks leave the session as they found it")
 
 
+def check_upload_timeout(iface, plugin, state):
+    """spec/005 § Mapflow Backend API, spec/002_C (upload): every request has a timer, and an upload that stalls
+    ends through `on_error` as a timeout, with the upload flags cleared so the next upload can start.
+    A short value stands for the hour. Everything the function changes is restored."""
+    import mapflow_next.api.http as http_module
+    session, imagery = plugin.services[1], plugin.services[3]
+    http, controller = session.http, plugin.controller
+    page = plugin.dock.content.imagery
+    path = make_geotiff("stalled.tif")
+    saved, saved_hang = http_module.UPLOAD_TIMEOUT_S, state.hang_seconds
+    check(isinstance(config.UPLOAD_TIMEOUT_S, int) and config.UPLOAD_TIMEOUT_S == 3600
+          and config.UPLOAD_TIMEOUT_S > config.RESULT_TIMEOUT_S, "TIMEOUT: an upload has a timeout of one hour")
+    check(http_module.UPLOAD_TIMEOUT_S == config.UPLOAD_TIMEOUT_S, "…and Http uses that constant")
+    state.heal()
+    state.hang_seconds = 3
+    failed = []
+    imagery.uploadFailed.connect(failed.append)
+    try:
+        # every request has a timeout
+        before = dict(http._pending)
+        for bad in (0, -1):
+            try:
+                http.get("projects", timeout=bad)
+                raised = False
+            except ValueError:
+                raised = True
+            check(raised and http._pending == before, f"TIMEOUT: timeout={bad} is refused and nothing is created")
+        state.fail("GET", r"/user/status", "hang", times=1)
+        stopped = []
+        key = http.get("user/status", on_error=stopped.append)
+        pending = http._pending[key]
+        check(pending.timer is not None and pending.timer.isActive() and pending.timeout == config.TIMEOUT_S,
+              "TIMEOUT: a request with no timeout gets the default one, and its timer runs")
+        # the inactivity timer of an upload restarts while bytes move, and only then (the timer runs 1 s here)
+        pending.timer.start(1000)
+        wait_until(lambda: False, 0.6)
+        http._alive(key, 10, 100)
+        wait_until(lambda: False, 0.7)
+        check(key in http._pending and not stopped, "TIMEOUT: an upload whose bytes move is not cut")
+        http._alive(key, 10, 100)
+        check(wait_until(lambda: stopped, 1.5) and stopped[0].kind == "timeout",
+              "…and one whose count stands still ends as a timeout")
+        check(wait_until(lambda: key not in http._pending, 5), "…and leaves nothing pending")
+        state.heal()
+        state.uploads.clear()
+        key = http.upload("rasters/mosaic/image?name=quick&tags=", path, on_error=lambda _e: None)
+        check(http._pending[key].timeout == config.UPLOAD_TIMEOUT_S and http._pending[key].timer.isActive(),
+              "TIMEOUT: an upload's request carries the upload timeout and a running timer")
+        check(wait_until(lambda: not http._pending and state.uploads, 5), "…and an upload that answers ends normally")
+
+        # a short value, the direct request
+        http_module.UPLOAD_TIMEOUT_S = 1
+        errors, done = [], []
+        state.fail("POST", r"/rasters/mosaic/image", "hang", times=1)
+        started = time.time()
+        http.upload("rasters/mosaic/image?name=timeout&tags=", path, on_success=done.append, on_error=errors.append)
+        check(wait_until(lambda: errors, 5), "TIMEOUT: an upload that gets no answer ends through on_error")
+        elapsed = time.time() - started
+        check(len(errors) == 1 and errors[0].kind == "timeout" and not done, f"…once, as a timeout ({errors})")
+        check(elapsed < state.hang_seconds, f"…and the client gives up before the server does ({elapsed:.1f} s)")
+        check(not http._pending, "…and nothing is left pending")
+
+        # through the service: the flags are cleared
+        state.heal()
+        state.uploads.clear()
+        state.fail("POST", r"/rasters/mosaic/image", "hang", times=1)
+        imagery.upload(path, "Stalled")
+        check(imagery.uploading, "TIMEOUT: an upload is under way")
+        check(wait_until(lambda: failed, 5) and "did not answer in time" in failed[0],
+              f"…and a stalled one says so ({failed})")
+        check(not imagery.uploading and controller.uploading is None and page.upload_button.isEnabled()
+              and not page.upload_bar.isVisible(), "…and the upload flags and the page are cleared")
+        state.heal()
+        imagery.upload(path, "Again")
+        check(wait_until(lambda: not imagery.uploading and [u[:2] for u in state.uploads] == [("new", "Again")], 8),
+              f"…and the next upload starts and finishes ({state.uploads})")
+
+        # a file into an existing collection
+        failed.clear()
+        state.fail("POST", r"/rasters/mosaic/m-1/image", "hang", times=1)
+        imagery.upload_into("m-1", [path])
+        check(wait_until(lambda: failed, 5) and "stalled.tif" in failed[0] and "did not answer in time" in failed[0],
+              f"TIMEOUT: a file into a collection that stalls names the file ({failed})")
+        check(not imagery.uploading and controller.uploading is None, "…and clears the flags")
+
+        # a new collection with several files
+        failed.clear()
+        state.fail("POST", r"/rasters/mosaic/m-new-\d+/image", "hang", times=1)
+        imagery.upload_many([path, make_geotiff("second.tif")], "Two files")
+        check(wait_until(lambda: failed, 8) and not imagery.uploading and controller.uploading is None,
+              f"TIMEOUT: a stalled file of several clears the flags ({failed})")
+    finally:
+        imagery.uploadFailed.disconnect(failed.append)
+        http_module.UPLOAD_TIMEOUT_S = saved
+        state.hang_seconds = saved_hang
+        state.heal()
+        http.abort_all()
+        wait_until(lambda: not http._pending, 5)
+
+
 def main():
     server, state, url = mock_server.start()
     links = UrlRecorder()
@@ -2514,6 +2614,7 @@ def main():
     wait_until(lambda: session.project.id == "project-2", 5)
 
     check_failed_requests(iface, plugin, state)
+    check_upload_timeout(iface, plugin, state)
 
     # ---------- account menu: Settings and Sign out ----------
     menu_actions = {a.text(): a for a in content.account_menu.actions()}
