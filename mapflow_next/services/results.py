@@ -49,7 +49,9 @@ class Results(QObject):
 
     def stop(self) -> None:
         """Unload: cancel the conversions and wait, for a bounded time, for their workers, so that no file is left
-        in the output folder and no result reaches the plugin after it is gone. Emits nothing: the dock goes too."""
+        in the output folder and no result reaches the plugin after it is gone. Downloads are aborted first, so none
+        feeds a task that is being cancelled. Emits nothing: the dock goes too."""
+        self.api.abort_all()
         tasks = list(self._tasks.values())
         self._cancel_tasks()
         for task in tasks:

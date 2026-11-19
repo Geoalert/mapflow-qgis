@@ -522,6 +522,35 @@ def test_controller_does_not_call_http():
     assert not problems, "\n".join(problems)
 
 
+def rule_service_has_stop(source, only=None):
+    """The classes of a file that derive from QObject and define no `stop` method. `only` names the one class."""
+    import ast
+    problems = []
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, ast.ClassDef) or (only and node.name != only):
+            continue
+        bases = {base.id if isinstance(base, ast.Name) else getattr(base, "attr", "") for base in node.bases}
+        methods = {item.name for item in node.body if isinstance(item, ast.FunctionDef)}
+        if "QObject" in bases and "stop" not in methods:
+            problems.append((node.lineno, node.name))
+    return sorted(problems)
+
+
+def test_every_service_has_stop():
+    bad = "class X(QObject):\n    def __init__(self):\n        pass\n"
+    good = bad + "    def stop(self):\n        pass\n"
+    _bites(rule_service_has_stop, bad, good)
+    assert not rule_service_has_stop("class X:\n    def __init__(self):\n        pass\n")
+    assert not rule_service_has_stop("@dataclass\nclass X(Base):\n    a: int = 0\n")
+    assert not rule_service_has_stop("class Y(QObject):\n    pass\n", only="X")
+    checked = [(path, None) for path in sorted(PLUGIN.glob("services/*.py"))] + [(PLUGIN / "api" / "http.py", "Http")]
+    problems = []
+    for path, only in checked:
+        problems += [f"{path.relative_to(PLUGIN)}:{name}: no stop()"
+                     for _number, name in rule_service_has_stop(path.read_text(encoding="utf-8"), only)]
+    assert not problems, "\n".join(problems)
+
+
 def test_qt_is_imported_only_through_qgis_pyqt():
     _bites(rule_qgis_pyqt, "from PyQt6.QtCore import Qt\n", "from qgis.PyQt.QtCore import Qt\n")
     _bites(rule_qgis_pyqt, "import PyQt5\n", "import qgis.PyQt\n")

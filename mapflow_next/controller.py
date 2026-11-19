@@ -75,6 +75,7 @@ class Controller(QObject):
         self.uploading: Optional[int] = None         # upload progress in %, None when nothing uploads
         self.mosaic_picker: Optional[MosaicPicker] = None
         self._projects_request = 0
+        self._stopped = False                            # set by `stop`: no entry point opens a window again
         self._area_counter = 0
         self._footprints: Dict[tuple, object] = {}       # My imagery footprints (QgsGeometry), by source
         self._extent_layers: Dict[tuple, str] = {}       # extent layers made from them: source → layer id
@@ -226,9 +227,16 @@ class Controller(QObject):
         project.layersAdded.connect(self.on_layers_changed)
         project.layersRemoved.connect(self.on_layers_removed)
 
-    def disconnect_project(self) -> None:
-        """Unload: let go of QGIS's project signals and stop the timers, which outlive the panel."""
+    def stop(self) -> None:
+        """Unload: stop the timers, abort the request of the Projects window, let go of QGIS's project signals, end
+        drawing, and close and delete the scenario gallery, the Projects window and the My imagery window, which
+        are children of the main window and outlive the dock. Emits nothing."""
+        self._stopped = True
+        self._mosaic_render.stop()
         self._mosaic_refresh.stop()
+        if self._projects_request:
+            self.api.abort(self._projects_request)
+            self._projects_request = 0
         project = QgsProject.instance()
         for signal, slot in ((project.layersAdded, self.on_layers_changed),
                              (project.layersRemoved, self.on_layers_removed)):
@@ -238,8 +246,19 @@ class Controller(QObject):
                 pass
         self._watch_layer(None)
         self.stop_drawing()
-        if self.gallery:
-            self.gallery.close()
+        for name in ("gallery", "projects_dialog", "mosaic_picker"):
+            window = getattr(self, name)
+            setattr(self, name, None)               # a late callback finds no window
+            if window is not None:
+                window.close()
+                window.deleteLater()                # it goes on the next turn of the event loop
+                self._stop_timers(window)
+        self._stop_timers(self.content)             # the dock goes the same way, its timers too
+
+    @staticmethod
+    def _stop_timers(widget) -> None:
+        for timer in widget.findChildren(QTimer):
+            timer.stop()
 
     def notify(self, text: str, level=Qgis.MessageLevel.Info, action: Optional[tuple] = None,
                duration: int = 6) -> None:
@@ -363,6 +382,8 @@ class Controller(QObject):
 
     @guarded
     def open_projects(self) -> None:
+        if self._stopped:
+            return
         if self.projects_dialog is None:
             dialog = ProjectsDialog(self.iface.mainWindow())
             dialog.queryChanged.connect(self._query_projects)
@@ -577,6 +598,8 @@ class Controller(QObject):
 
     @guarded
     def open_gallery(self, query: str = "") -> None:
+        if self._stopped:
+            return
         if self.gallery is None:
             self.gallery = GalleryDialog(self.catalogue, self.iface.mainWindow())
             self.gallery.scenarioChosen.connect(self.apply_scenario)
@@ -1889,6 +1912,8 @@ class Controller(QObject):
     @guarded
     def open_mosaic_picker(self, mosaic_id: Optional[str] = None) -> None:
         """Choose a My imagery collection, or one image of it."""
+        if self._stopped:
+            return
         self._refresh_mosaics()
         if self.mosaic_picker is None:
             picker = MosaicPicker(self.iface.mainWindow(), self.session.config.my_data_url)

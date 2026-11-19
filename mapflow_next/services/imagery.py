@@ -300,6 +300,13 @@ class Imagery(QObject):
         self._found_id += 1
         self._forget_failures()
 
+    def stop(self) -> None:
+        """Unload: abort the requests, clear the flags and drop the answers that still come. Emits nothing: the dock
+        goes too."""
+        self.reset_busy()
+        self.on_duplicate = None
+        self.api.abort_all()
+
     def _forget_failures(self) -> None:
         self.mosaics_loaded = self.mosaics_failed = self.found_failed = False
         self._mosaics_poll.succeeded()

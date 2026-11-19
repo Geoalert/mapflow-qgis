@@ -19,7 +19,7 @@ from .qgis_env import FakeIface, start_qgis, wait_until
 
 APP = start_qgis()
 
-from qgis.PyQt.QtCore import QObject, QSize, Qt, QTimer, QUrl, pyqtSlot  # noqa: E402
+from qgis.PyQt.QtCore import QCoreApplication, QEvent, QObject, QSize, Qt, QTimer, QUrl, pyqtSlot  # noqa: E402
 from qgis.PyQt.QtGui import QDesktopServices  # noqa: E402
 from qgis.PyQt.QtTest import QTest  # noqa: E402
 from qgis.PyQt.QtWidgets import QAction, QSlider, QToolBar, QToolButton  # noqa: E402
@@ -1084,6 +1084,114 @@ def check_upload_timeout(iface, plugin, state):
         state.heal()
         http.abort_all()
         wait_until(lambda: not http._pending, 5)
+
+
+def plugin_timers(roots):
+    """Every QTimer that is a child of a root, the roots included. The services and the controller have no
+    parent, so each is searched on its own."""
+    from qgis.PyQt import sip
+    found = []
+    for root in roots:
+        if root is not None and not sip.isdeleted(root):
+            found += root.findChildren(QTimer)
+    return found
+
+
+def all_deleted(objects):
+    """Whether every object is deleted. The test has no event loop of level 1, which Qt needs to run a
+    `deleteLater` made outside one, so the deferred deletions are sent here."""
+    from qgis.PyQt import sip
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    return all(sip.isdeleted(obj) for obj in objects)
+
+
+def visible_windows(iface):
+    """Every visible top-level widget but the main window: a window or a dialog of the plugin, if one is left."""
+    return [w for w in QApplication.topLevelWidgets() if w.isVisible() and w is not iface.window]
+
+
+def check_unloaded(label, iface, state, parts):
+    """After `unload`: no window or dialog of the plugin is visible, no timer runs, no request is pending, and
+    nothing late reaches plugin code. `parts` is what the plugin held before: `windows`, `dock`, `timers`, `http`,
+    `late` (the callbacks the stopped request would have called) and `named` (timers to name)."""
+    from qgis.PyQt import sip
+    windows, http = parts["windows"], parts["http"]
+    # At once, before the event loop turns: nothing waits for a late signal to end a timer or a request
+    check(not any(w.isVisible() for w in windows + [parts["dock"]]) and not visible_windows(iface),
+          f"{label}: after unload the scenario gallery, the Projects window, the My imagery window and the dock "
+          f"are not visible, and no other window of the plugin is ({visible_windows(iface)})")
+    running = [t for t in parts["timers"] if not sip.isdeleted(t) and t.isActive()]
+    check(not running, f"{label}: no timer of the plugin runs ({len(running)} of {len(parts['timers'])} do: "
+                       f"{[(t.parent(), t.interval()) for t in running]})")
+    check(http._pending == {}, f"{label}: no request is pending ({len(http._pending)} are)")
+    check(wait_until(lambda: all_deleted(windows), 3),
+          f"{label}: the three windows are deleted, not only hidden")
+    check(wait_until(lambda: all_deleted([parts["dock"]]), 3), f"{label}: …and so is the dock")
+    check(parts["late"] == [], f"{label}: the stopped request called nothing back ({parts['late']})")
+    check(http.get("user/status") == 0 and http._pending == {},
+          f"{label}: a request made after unload sends nothing")
+    wait_until(lambda: False, 0.3)
+    shown, seen = len(iface.bar.messages), len(state.requests)
+    wait_until(lambda: False, 0.5)
+    check(len(iface.bar.messages) == shown and len(state.requests) == seen and parts["late"] == [],
+          f"{label}: nothing comes late: no bar message, no new request to the server")
+
+
+def check_unload(iface, classFactory, state):
+    """spec/007 § Mapflow Next (4.x) › Unload: unload closes every window the plugin opened, and every service
+    has `stop()`, which ends its timers and pending requests. A fresh plugin is built, so it proves reload too."""
+    saved_hang = state.hang_seconds
+    fresh = classFactory(iface)
+    fresh.initGui()
+    fresh.toggle(True)
+    session, processings = fresh.services[1], fresh.services[2]
+    http, controller = fresh.services[0], fresh.controller
+    try:
+        fresh.dock.content.sign_in.tokenSubmitted.emit(mock_server.TOKEN)
+        check(wait_until(lambda: session.state == "signed_in" and session.status is not None and processings.items, 5),
+              "unload: a fresh plugin signs in")
+        wait_until(lambda: not http._pending, 5)
+        controller.open_projects()
+        controller.open_mosaic_picker()
+        controller.open_gallery()
+        windows = [controller.gallery, controller.projects_dialog, controller.mosaic_picker]
+        check(all(w.isVisible() for w in windows),
+              "unload: the scenario gallery, the Projects window and the My imagery window are open")
+        state.heal()
+        state.hang_seconds = 3
+        state.fail("GET", r"/user/status", "hang", times=1)
+        late = []
+        http.get("user/status", on_error=late.append)
+        controller.projects_dialog.search.setText("tile")          # starts the debounce timer
+        check(wait_until(lambda: any(r[1] == "/user/status" for r in state.requests[-3:]), 3),
+              "unload: the server has the request that hangs")
+        timers = plugin_timers([fresh.dock, *windows, controller, *fresh.services])
+        check(any(t.isActive() for t in timers) and http._pending,
+              f"unload: timers run and a request is pending before the unload ({len(timers)} timers)")
+        dock = fresh.dock
+        fresh.unload()
+        check_unloaded("unload", iface, state, {"windows": windows, "dock": dock, "timers": timers, "http": http,
+                                                "late": late})
+        # reload
+        again = classFactory(iface)
+        again.initGui()
+        again.toggle(True)
+        again.controller.open_gallery()
+        check(len(iface.window.findChildren(QToolBar, "MapflowToolbar")) == 1 and again.dock is not None
+              and again.controller.gallery.isVisible()
+              and len(iface.window.findChildren(type(again.dock))) == 1,
+              "unload: after a reload there is one toolbar and one dock, and the gallery opens")
+        again_windows = [again.controller.gallery]
+        again_http = again.services[0]
+        again_timers = plugin_timers([again.dock, *again_windows, again.controller, *again.services])
+        again_dock = again.dock
+        again.unload()
+        check_unloaded("reload", iface, state, {"windows": again_windows, "dock": again_dock,
+                                                "timers": again_timers, "http": again_http, "late": []})
+    finally:
+        state.hang_seconds = saved_hang
+        state.heal()
+        wait_until(lambda: False, 0.2)
 
 
 def main():
@@ -2842,6 +2950,7 @@ def main():
     shown = len(iface.bar.messages)
     guard.report(ValueError("late"), "after unload")
     check(len(iface.bar.messages) == shown, "after unload the guard has no reporter: nothing reaches the bar")
+    check_unload(iface, classFactory, state)
     server.shutdown()
     APP.processEvents()                                   # log lines can arrive from another thread
     unexpected = iface.bar.ledger.unexpected()

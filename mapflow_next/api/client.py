@@ -40,6 +40,10 @@ class MapflowApi:
         """Cancel a pending request by the id an endpoint method returned."""
         self.http.abort(request_id)
 
+    def abort_all(self) -> None:
+        """Cancel every pending request."""
+        self.http.abort_all()
+
     def projects_page(self, email: str, on_done: Callable[[List[Project], int], None], on_error: OnError = None,
                       query: str = "", offset: int = 0, limit: int = PROJECTS_PAGE_SIZE) -> int:
         """One page of projects, most recently updated first; `query` filters by name on the server."""

@@ -113,10 +113,11 @@ class Session(QObject):
         self._set_state(SIGNED_OUT)
 
     def stop(self) -> None:
-        """Plugin unload: stop timers and the sign-in listener, keep the saved sign-in."""
+        """Plugin unload: stop timers and the sign-in listener, abort the pending requests, keep the saved sign-in."""
         self._timer.stop()
         self._refresh_timer.stop()
         self.browser.cancel()
+        self.http.abort_all()
 
     def _clear_credentials(self) -> None:
         self._refresh_timer.stop()

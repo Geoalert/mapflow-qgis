@@ -86,14 +86,15 @@ class MapflowNextPlugin:
 
     def unload(self) -> None:
         self._remove_layer_actions()
+        # The controller first (windows, timers), then the services in reverse order of construction
+        steps = [service.stop for service in reversed(self.services)]
         if self.controller:
-            self.controller.disconnect_project()
-        for service in self.services:
-            stop = getattr(service, "stop", None)
-            if callable(stop):
-                stop()
-        if self.services:
-            self.services[0].abort_all()            # Http
+            steps.insert(0, self.controller.stop)
+        for step in steps:
+            try:
+                step()
+            except Exception as exc:  # noqa: BLE001 - one failing stop must not leave the others running; reported here
+                guard.report(exc, "unload")
         if self.layers:
             self.layers.close()                     # after the last download: nothing writes into the folder
         if self.dock:

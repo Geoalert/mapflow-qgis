@@ -99,8 +99,14 @@ class Processings(QObject):
         self.changed.emit([])
 
     def stop(self) -> None:
+        """Unload: stop the timers and abort the pending requests. Emits nothing: the dock goes too."""
         self._poll.stop()
         self._cost_timer.stop()
+        if self._cost_request:
+            self.api.abort(self._cost_request)
+        self._cost_request = 0
+        self._cost_payload = None
+        self.api.abort_all()
 
     def _schedule(self) -> None:
         """The next poll, unless a permanent failure stopped it: that holds until a list loads."""

@@ -164,6 +164,7 @@ class Http(QObject):
         self.bearer: Optional[str] = None             # browser sign-in: the current access token
         self._nam = QgsNetworkAccessManager.instance()
         self._pending: Dict[int, _Pending] = {}
+        self._stopped = False
         self._ids = count(1)
         self._api_origin = _origin_of(QUrl(self.server))
 
@@ -219,6 +220,22 @@ class Http(QObject):
         for pending in list(self._pending.values()):
             pending.reply.abort()
 
+    def stop(self) -> None:
+        """Unload: end every pending request and its timer, and refuse new ones. No callback runs and nothing is
+        reported: the code that waits for an answer is going too."""
+        self._stopped = True
+        pending, self._pending = list(self._pending.values()), {}     # an aborted reply's `finished` finds no key
+        for item in pending:
+            if item.timer:
+                item.timer.stop()
+                item.timer.deleteLater()
+            if item.sink is not None:
+                item.sink.cancelWriting()
+            if item.reply is not None:
+                if not item.reply.isFinished():
+                    item.reply.abort()
+                item.reply.deleteLater()
+
     # ---------- internals ----------
 
     def url_for(self, path: str) -> str:
@@ -230,6 +247,8 @@ class Http(QObject):
               upload: bool = False, authorize: bool = True,
               form: Optional[Dict[str, str]] = None) -> int:
         """`authorize` says the request may carry credentials; whether it does depends on its origin (`_dispatch`)."""
+        if self._stopped:       # silent: the caller is code that outlived the unload, and nobody is left to tell
+            return 0
         timeout = TIMEOUT_S if timeout is None else timeout
         if timeout <= 0:    # 0 used to mean "none": a caller that passes it must fail here, not hang later
             raise ValueError("a request needs a timeout")
