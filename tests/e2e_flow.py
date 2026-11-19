@@ -345,28 +345,162 @@ def check_the_guard(iface, plugin, api_url, settings):
     for layer in results.layers.layers_for(odd.id):
         QgsProject.instance().removeMapLayer(layer.id())
 
-    # an exception that nobody expected, in the code between the answer and the map
-    broken = done_processing("broken-files")
-    saved = results.layers.save_results
-    failures.clear()
-
-    def disk_full(*args, **kwargs):
-        raise RuntimeError("disk")
-    results.layers.save_results = disk_full
-    try:
-        results.add_to_map(broken)
-        check(wait_until(lambda: len(failures) >= 1, 5), "an exception while placing the results reaches the user")
-        wait_until(lambda: False, 0.3)
-    finally:
-        del results.layers.save_results                     # the instance attribute: the class method is back
-    check(saved == results.layers.save_results and not results.is_busy(broken.id) and len(failures) == 1,
-          f"…the processing is not left loading, and it fails once ({failures})")
-    expect_critical(iface, "disk", "the guard's lines of an exception in the results", count=2)
-
     # a timer reaches the reporter that the plugin installed
     QTimer.singleShot(0, guarded(lambda: raiser()))
     wait_until(lambda: False, 0.1)
     expect_critical(iface, "boom", "the guard's lines of a timer callback that raises", count=2)
+
+
+def files_under(folder):
+    """Every file below `folder`, `.downloads/` included, as paths relative to it."""
+    return sorted(str(path.relative_to(folder)) for path in Path(folder).rglob("*") if path.is_file())
+
+
+def processing_done(name):
+    from mapflow_next.core.models import Processing
+    return Processing.from_api(fixtures.processing_json(name, "OK", 100, name=f"Forest · {name}"))
+
+
+def waiting_conversion(started, stopped):
+    """A stand-in for `conversion.convert_geojson` that writes some bytes to the work file and then waits for the
+    cancel, as a long write does. `started` gets the job the moment the worker is inside, `stopped` when it leaves."""
+    def waiting(job, is_canceled, feedback, *rest):
+        job.work.parent.mkdir(parents=True, exist_ok=True)
+        job.work.write_bytes(b"partial")
+        started.append(job)
+        while not is_canceled():
+            time.sleep(0.02)
+        stopped.append(job)
+    return waiting
+
+
+def check_result_conversion(iface, plugin):
+    """spec/005 § QGIS Application and spec/006: a result is converted in a `QgsTask`. The GUI thread keeps turning
+    meanwhile; a failed, cancelled or interrupted conversion shows a message (or, on sign-out and unload, none), clears
+    the processing's "loading" flag and leaves no file in the output folder. `convert_geojson` is replaced for the
+    duration of a scenario and put back in a `finally`."""
+    import errno
+    import mapflow_next.qgis_bridge.conversion as conversion
+    results = plugin.services[4]
+    ledger = iface.bar.ledger
+    out_dir = results.output_dir
+    original = conversion.convert_geojson
+    failures, loaded = [], []
+
+    def on_failed(processing_id, text):
+        failures.append((processing_id, text, threading.current_thread() is threading.main_thread()))
+    results.failed.connect(on_failed)
+    results.loaded.connect(lambda processing_id, _ids: loaded.append(processing_id))
+
+    def scenario(name, seam):
+        """Start the results of a new processing with `seam` in place of the conversion."""
+        processing = processing_done(name)
+        failures.clear()
+        conversion.convert_geojson = seam
+        results.add_to_map(processing)
+        return processing
+
+    # an exception in the worker: reported once, on the GUI thread, through the guard
+    before = files_under(out_dir)
+
+    def disk_error(job, is_canceled, feedback, *rest):
+        job.work.parent.mkdir(parents=True, exist_ok=True)
+        job.work.write_bytes(b"partial")
+        raise RuntimeError("disk")
+    try:
+        broken = scenario("conv-broken", disk_error)
+        check(wait_until(lambda: len(failures) >= 1, 5), "an exception while converting the results reaches the user")
+        wait_until(lambda: False, 0.3)
+    finally:
+        conversion.convert_geojson = original
+    check(conversion.convert_geojson is original and not results.is_busy(broken.id) and len(failures) == 1
+          and failures[0][1] == "The results could not be added to the map. Details are in the Log Messages panel."
+          and failures[0][2],
+          f"…the processing is not left loading, and it fails once, on the GUI thread ({failures})")
+    check(not results.layers.layers_for(broken.id) and files_under(out_dir) == before,
+          f"…no layer, and no file stays in the output folder ({sorted(set(files_under(out_dir)) - set(before))})")
+    expect_critical(iface, "disk", "the guard's lines of an exception while converting", count=2)
+
+    # an error of the disk is expected: a message that names the folder, and no report
+    def disk_full(job, is_canceled, feedback, *rest):
+        job.work.parent.mkdir(parents=True, exist_ok=True)
+        job.work.write_bytes(b"partial")
+        raise OSError(errno.ENOSPC, "No space left on device")
+    seen = len(ledger.unexpected())
+    try:
+        full = scenario("conv-full", disk_full)
+        check(wait_until(lambda: len(failures) >= 1, 5), "a disk error while converting reaches the user")
+        wait_until(lambda: False, 0.3)
+    finally:
+        conversion.convert_geojson = original
+    check(len(failures) == 1 and str(out_dir) in failures[0][1] and "No space left on device" in failures[0][1]
+          and "Settings" in failures[0][1] and not results.is_busy(full.id),
+          f"…the message names the folder and the cause, and the flag is cleared ({failures})")
+    check(len(ledger.unexpected()) == seen and files_under(out_dir) == before,
+          "…nothing is reported as a failure of the plugin, and no file stays")
+
+    # a result without a feature
+    def empty(job, is_canceled, feedback, *rest):
+        return conversion.Converted(job.target, [], "gpkg")
+    try:
+        nothing = scenario("conv-empty", empty)
+        check(wait_until(lambda: len(failures) >= 1, 5), "a result without features reaches the user")
+    finally:
+        conversion.convert_geojson = original
+    check(failures[0][1] == "The processing returned no features." and not results.is_busy(nothing.id)
+          and files_under(out_dir) == before, f"…as “no features”, the flag cleared, no file left ({failures})")
+
+    # the user cancels in the Tasks panel: QGIS keeps answering, and the work file goes
+    started, stopped = [], []
+    try:
+        slow = scenario("conv-cancel", waiting_conversion(started, stopped))
+        check(wait_until(lambda: started, 5), "the conversion runs in a worker")
+        task = results._tasks.get(slow.id)
+        ticks = []
+        timer = QTimer()
+        timer.timeout.connect(lambda: ticks.append(1))
+        timer.start(20)
+        check(task is not None, "…and the task is the processing's")
+        wait_until(lambda: False, 0.3)
+        timer.stop()
+        check(results.is_busy(slow.id) and len(ticks) >= 3 and Path(started[0].work).exists(),
+              f"…while it runs the processing is loading and the GUI loop turns ({len(ticks)} ticks)")
+        task.cancel()
+        check(wait_until(lambda: len(failures) >= 1, 5), "cancelling the task reaches the user")
+    finally:
+        conversion.convert_geojson = original
+    check(failures[0][1] == "Converting “Forest · conv-cancel” was cancelled." and not results.is_busy(slow.id)
+          and slow.id not in results._tasks and stopped, f"…as “was cancelled”, the flag cleared ({failures})")
+    check(files_under(out_dir) == before and not results.layers.layers_for(slow.id),
+          "…and neither the work file nor the download stays, and no layer appears")
+
+    # sign-out: the flag is cleared at once, the task stops, nothing is said, no file stays
+    started.clear()
+    stopped.clear()
+    try:
+        slow = scenario("conv-signout", waiting_conversion(started, stopped))
+        check(wait_until(lambda: started, 5), "a conversion runs when the user signs out")
+        results.reset()                    # what the controller calls when the session ends
+        check(not results.is_busy(slow.id) and not results._tasks, "sign-out clears the flag and forgets the task")
+        check(wait_until(lambda: stopped, 5) and wait_until(lambda: files_under(out_dir) == before, 5),
+              f"…the worker stops and no file stays ({sorted(set(files_under(out_dir)) - set(before))})")
+        wait_until(lambda: False, 0.3)
+        check(not failures and not results.is_busy(slow.id), "…and the stopped task says nothing")
+    finally:
+        conversion.convert_geojson = original
+
+    # the same processing converts again after that: the work file of the old task is not in the way
+    again = processing_done("conv-signout")
+    loaded.clear()
+    results.add_to_map(again)
+    check(wait_until(lambda: again.id in loaded, 10) and not results.is_busy(again.id),
+          "the results of the same processing load after the sign-out")
+    check(sum(f.endswith(".gpkg") for f in files_under(out_dir)) == sum(f.endswith(".gpkg") for f in before) + 1
+          and not [f for f in files_under(out_dir) if f.startswith(".downloads")],
+          "…as one GeoPackage, and nothing stays in .downloads")
+    for layer in results.layers.layers_for(again.id):
+        QgsProject.instance().removeMapLayer(layer.id())
+    results.failed.disconnect(on_failed)
 
 
 def check_failed_requests(iface, plugin, state):
@@ -1088,7 +1222,28 @@ def main():
 
     # QGIS restart: the saved sign-in comes back without opening the browser
     opened = len(browser.opened)
-    plugin.unload()
+    # unload while a result is converting: it returns at once, the task stops, and no file or message follows
+    import mapflow_next.qgis_bridge.conversion as conversion
+    results_now = plugin.services[4]
+    entered, left, told = [], [], []
+    results_now.failed.connect(lambda *args: told.append(args))
+    files_before = files_under(out_dir)
+    saved_convert, shown = conversion.convert_geojson, len(iface.bar.messages)
+    conversion.convert_geojson = waiting_conversion(entered, left)
+    try:
+        converting = processing_done("conv-unload")
+        results_now.add_to_map(converting)
+        check(wait_until(lambda: entered, 5), "a conversion runs when the plugin is unloaded")
+        stopping = time.time()
+        plugin.unload()
+        took = time.time() - stopping
+        check(took < 6 and left, f"unload cancels the conversion and waits for its worker ({took:.1f} s)")
+        check(files_under(out_dir) == files_before, "…and no file stays in the output folder "
+              f"({sorted(set(files_under(out_dir)) - set(files_before))})")
+        wait_until(lambda: False, 0.3)
+        check(not told and len(iface.bar.messages) == shown, "…and nothing is told about it afterwards")
+    finally:
+        conversion.convert_geojson = saved_convert
     plugin = classFactory(iface)
     plugin.initGui()
     check(wait_until(lambda: len(iface.window.findChildren(QToolBar, "MapflowToolbar")) == 1, 3),
@@ -1350,6 +1505,12 @@ def main():
     group = QgsProject.instance().layerTreeRoot().findGroup("Mapflow")
     check(group is not None and group.findLayer(result_layers[0].id()) is not None, "results sit in the Mapflow group")
     check(any("ready" in (m[1] or "") for m in iface.bar.messages), "message bar announces the finished run")
+    check(not plugin.services[4].is_busy(started["id"]) and not plugin.services[4]._tasks,
+          "…and the processing is not loading, with no conversion task left")
+    saved_files = files_under(out_dir)
+    check(sum(f.endswith(".gpkg") for f in saved_files) >= 1 and not [f for f in saved_files
+                                                                      if f.startswith(".downloads")],
+          f"…one GeoPackage is in the output folder and nothing stays in .downloads ({saved_files})")
 
     # rename: name and description
     seen = []
@@ -1459,6 +1620,7 @@ def main():
     wait_until(lambda: False, 0.4)
     shot(content, "05-processings-done", QSize(400, 880))
     check_the_guard(iface, plugin, url, settings)
+    check_result_conversion(iface, plugin)
     check_credentials_origin(iface, plugin, state, url)
 
     # imagery search: the Area drop-down is the run's area

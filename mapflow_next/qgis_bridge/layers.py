@@ -7,12 +7,12 @@ import re
 import shutil
 import tempfile
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Callable, List, Optional, Tuple
 
 from qgis.core import (QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsCsException, QgsJsonUtils,
                        QgsLayerTreeGroup,
                        QgsMapLayer,
-                       QgsProject, QgsRasterLayer, QgsRectangle, QgsVectorFileWriter, QgsVectorLayer,
+                       QgsProject, QgsRasterLayer, QgsRectangle, QgsVectorLayer,
                        QgsVectorTileLayer)
 
 from qgis.PyQt.QtGui import QImage
@@ -21,6 +21,7 @@ from ..config import LAYER_GROUP_NAME, PREVIEW_PROPERTY, PROCESSING_PROPERTY, RE
 from ..core import filenames
 from ..core.models import Mosaic, Processing
 from . import styles
+from .conversion import GPKG, ConvertTask, Converted, Job, work_path
 
 WGS84 = QgsCoordinateReferenceSystem("EPSG:4326")
 WEB_MERCATOR = QgsCoordinateReferenceSystem("EPSG:3857")
@@ -323,44 +324,29 @@ class MapLayers:
         styles.apply(layer, processing.model_name, processing.style_name)
         return layer
 
-    def save_results(self, geojson_path: str, processing: Processing, out_dir: Path) -> List[QgsVectorLayer]:
-        """Write the downloaded GeoJSON to a GeoPackage (one layer per geometry type) and open it.
-        Falls back to the GeoJSON file itself if the GeoPackage can't be written."""
+    def convert_results(self, geojson_path: str, processing: Processing, out_dir: Path,
+                        on_done: Callable[[ConvertTask], None]) -> ConvertTask:
+        """The task that writes the downloaded GeoJSON to a GeoPackage in `out_dir` (see `conversion`). It is not
+        started; `on_done(task)` runs on the GUI thread when it ends. Opening what it made is `open_converted`."""
         out_dir.mkdir(parents=True, exist_ok=True)
-        target = self._unique(out_dir, f"{safe_filename(processing.name)}_{processing.id[:8]}", ".gpkg")
-        _normalise_json_fields(geojson_path)
+        stem = f"{safe_filename(processing.name)}_{processing.id[:8]}"
+        job = Job(geojson=Path(geojson_path), name=processing.name,
+                  work=work_path(Path(geojson_path).parent, processing.id),
+                  target=self._unique(out_dir, stem, ".gpkg"), fallback=self._unique(out_dir, stem, ".geojson"),
+                  transform_context=self.project.transformContext())
+        return ConvertTask(job, on_done)
+
+    @staticmethod
+    def open_converted(converted: Converted, processing: Processing) -> List[QgsVectorLayer]:
+        """The layers of a finished conversion, styled. Runs on the GUI thread: layers are made where they are used."""
         layers: List[QgsVectorLayer] = []
-        options = QgsVectorFileWriter.SaveVectorOptions()
-        options.driverName = "GPKG"
-        first = True
-        for geometry_type in ("Polygon", "LineString", "Point"):
-            source = QgsVectorLayer(f"{geojson_path}|geometrytype={geometry_type}", "source", "ogr")
-            if not source.isValid() or source.featureCount() == 0:
-                continue
-            layer_name = (processing.name if geometry_type == "Polygon"
-                          else f"{processing.name} ({geometry_type.lower()}s)")
-            options.layerName = layer_name
-            options.actionOnExistingFile = (QgsVectorFileWriter.ActionOnExistingFile.CreateOrOverwriteFile if first
-                                            else QgsVectorFileWriter.ActionOnExistingFile.CreateOrOverwriteLayer)
-            error, message, *_ = QgsVectorFileWriter.writeAsVectorFormatV3(
-                source, str(target), self.project.transformContext(), options)
-            if error != QgsVectorFileWriter.WriterError.NoError:
-                return self._open_geojson(geojson_path, processing, out_dir)
-            first = False
-            layer = QgsVectorLayer(f"{target}|layername={layer_name}", layer_name, "ogr")
+        for name in converted.layer_names:
+            source = f"{converted.path}|layername={name}" if converted.kind == GPKG else str(converted.path)
+            layer = QgsVectorLayer(source, name, "ogr")
             if layer.isValid():
                 styles.apply(layer, processing.model_name, processing.style_name)
                 layers.append(layer)
         return layers
-
-    def _open_geojson(self, geojson_path: str, processing: Processing, out_dir: Path) -> List[QgsVectorLayer]:
-        target = self._unique(out_dir, f"{safe_filename(processing.name)}_{processing.id[:8]}", ".geojson")
-        Path(geojson_path).replace(target)
-        layer = QgsVectorLayer(str(target), processing.name, "ogr")
-        if not layer.isValid():
-            return []
-        styles.apply(layer, processing.model_name, processing.style_name)
-        return [layer]
 
     @staticmethod
     def _unique(folder: Path, stem: str, suffix: str) -> Path:
@@ -370,26 +356,3 @@ class MapLayers:
             candidate = folder / f"{stem}_{index}{suffix}"
             index += 1
         return candidate
-
-
-def _normalise_json_fields(path: str) -> None:
-    """Nested objects (e.g. Open Data `bbox`) become strings: GeoPackage has no JSON type.
-    Very large results skip this (they come from models that return flat attributes)."""
-    try:
-        if Path(path).stat().st_size > 200 * 1024 * 1024:
-            return
-
-        with open(path, "r", encoding="utf-8") as handle:
-            data = json.load(handle)
-    except (OSError, ValueError):
-        return
-    changed = False
-    for feature in data.get("features") or []:
-        properties: Dict = feature.get("properties") or {}
-        for key, value in list(properties.items()):
-            if isinstance(value, (dict, list)):
-                properties[key] = json.dumps(value)
-                changed = True
-    if changed:
-        with open(path, "w", encoding="utf-8") as handle:
-            json.dump(data, handle)

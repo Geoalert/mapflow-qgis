@@ -3,17 +3,20 @@ from __future__ import annotations
 
 import functools
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Callable, Dict, Optional
 
 from qgis.PyQt.QtCore import QObject, QStandardPaths, pyqtSignal
-from qgis.core import QgsMapLayer, QgsRectangle
+from qgis.core import QgsApplication, QgsMapLayer, QgsRectangle
 
 from ..api.client import MapflowApi
 from ..core import guard
 from ..core.models import Processing
+from ..qgis_bridge.conversion import ConvertTask
 from ..qgis_bridge.layers import MapLayers, bounds_extent, extent_is_world, features_extent
 
 FILES, TILES = "file", "tiles"
+GENERIC_FAILURE = "The results could not be added to the map. Details are in the Log Messages panel."
+STOP_WAIT_MS = 5000         # how long unload waits for a conversion to notice its cancel
 
 
 def default_output_dir() -> Path:
@@ -30,6 +33,7 @@ class Results(QObject):
         super().__init__(parent)
         self.api, self.layers, self.settings = api, layers, settings
         self._busy = set()
+        self._tasks: Dict[str, ConvertTask] = {}     # the running conversion of each processing
 
     @property
     def mode(self) -> str:
@@ -40,9 +44,30 @@ class Results(QObject):
         return Path(self.settings.value("output_dir", "") or default_output_dir())
 
     def reset(self) -> None:
-        """After sign-out: downloads were aborted, nothing is loading any more."""
+        """After sign-out: downloads were aborted and conversions are cancelled, nothing is loading any more.
+        A cancelled task removes its files itself; its work file is named per task, so a new conversion of the
+        same processing need not wait for it."""
+        self._cancel_tasks()
         for processing_id in list(self._busy):
             self._set_busy(processing_id, False)
+
+    def stop(self) -> None:
+        """Unload: cancel the conversions and wait, for a bounded time, for their workers, so that no file is left
+        in the output folder and no result reaches the plugin after it is gone. Emits nothing: the dock goes too."""
+        tasks = list(self._tasks.values())
+        self._cancel_tasks()
+        for task in tasks:
+            finished = task.waitForFinished(STOP_WAIT_MS)
+            task.discard()                  # `finished` runs on an event loop that no longer comes
+            if finished:
+                task.release()
+        self._busy.clear()
+
+    def _cancel_tasks(self) -> None:
+        tasks, self._tasks = list(self._tasks.values()), {}
+        for task in tasks:
+            task.detach()
+            task.cancel()
 
     def is_busy(self, processing_id: str) -> bool:
         return processing_id in self._busy
@@ -93,17 +118,32 @@ class Results(QObject):
         target = str(downloads / f"{processing.id}.geojson")
 
         @self._continuing(processing)
-        def downloaded(path: str):
-            vectors = self.layers.save_results(path, processing, folder)
-            try:
-                Path(path).unlink(missing_ok=True)
-            except OSError:
-                pass
+        def converted(task: ConvertTask):
+            if self._tasks.get(processing.id) is task:
+                del self._tasks[processing.id]
+            if isinstance(task.error, OSError):
+                self._fail(processing, f"Can't write to {folder}: {task.error.strerror or task.error}. "
+                                       "Pick another folder in Settings.")
+                return
+            if task.error is not None:
+                # Reported here, on the GUI thread: the guard is not for a worker thread
+                guard.report(task.error, f"Results {processing.id}: conversion")
+                self._fail(processing, GENERIC_FAILURE)
+                return
+            if task.result is None:
+                self._fail(processing, f"Converting “{processing.name}” was cancelled.")
+                return
+            vectors = self.layers.open_converted(task.result, processing)
             if not vectors:
-                self._set_busy(processing.id, False)
-                self.failed.emit(processing.id, "The processing returned no features.")
+                self._fail(processing, "The processing returned no features.")
                 return
             self._with_imagery(processing, vectors)
+
+        @self._continuing(processing)
+        def downloaded(path: str):
+            task = self.layers.convert_results(path, processing, folder, converted)
+            self._tasks[processing.id] = task
+            QgsApplication.taskManager().addTask(task)
 
         self.api.download_result(processing.id, target, downloaded,
                                  lambda error: self._fail(processing, f"Results didn't download: {error.message}"))
@@ -168,8 +208,7 @@ class Results(QObject):
                     return step(*args)
                 except Exception as exc:  # noqa: BLE001 - the guard's job, here to clear the flag first
                     guard.report(exc, f"Results {processing.id}: {step.__qualname__}")
-                    self._fail(processing, "The results could not be added to the map. "
-                                           "Details are in the Log Messages panel.")
+                    self._fail(processing, GENERIC_FAILURE)
             return run
         return decorate
 
