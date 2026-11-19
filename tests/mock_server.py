@@ -11,6 +11,7 @@ import hashlib
 import json
 import re
 import threading
+import time
 import uuid
 from urllib.parse import parse_qs, unquote, urlencode, urlsplit
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -56,6 +57,29 @@ class State:
         self.issued = 0
         self.expires_in = 300
         self.pkce_checked = 0
+        self.failures = []                 # rules from fail(): requests that answer an error instead
+        self.hang_seconds = 3              # how long a "hang" holds the request before it closes
+
+    def fail(self, method, pattern, what, times=None):
+        """Requests of `method` whose path (without /rest) matches the regex `pattern` fail. `what`: an HTTP
+        status (503, 403, 404, 400), "drop" (the connection closes with no answer) or "hang" (no answer for
+        `hang_seconds`). `times`: how many requests fail, or None until `heal()`."""
+        with self.lock:
+            self.failures.append({"method": method, "pattern": re.compile(pattern), "what": what, "left": times})
+
+    def heal(self):
+        with self.lock:
+            self.failures = []
+
+    def failure_for(self, method, path):
+        """The rule that fails this request, if any (and one use of it counted)."""
+        with self.lock:
+            for rule in self.failures:
+                if rule["method"] == method and rule["pattern"].search(path) and rule["left"] != 0:
+                    if rule["left"] is not None:
+                        rule["left"] -= 1
+                    return rule["what"]
+        return None
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -91,6 +115,18 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
+
+    def _fail(self, what):
+        """An answer the test asked for: an error status, no answer at all ("drop"), or one that never comes."""
+        if what == "drop":
+            self.close_connection = True
+            return
+        if what == "hang":
+            time.sleep(self.state.hang_seconds)
+            self.close_connection = True
+            return
+        messages = {503: "Service unavailable", 403: "No access", 404: "Not found", 400: "Bad request"}
+        return self._send(what, {"code": f"HTTP_{what}", "message": messages.get(what, "Failure")})
 
     def _authorized(self):
         header = self.headers.get("Authorization", "")
@@ -169,6 +205,9 @@ class Handler(BaseHTTPRequestHandler):
             self.state.requests.append((method, path, body, dict(self.headers)))
         if not self._authorized():
             return
+        failure = self.state.failure_for(method, path)
+        if failure is not None:
+            return self._fail(failure)
         if method == "GET" and path == "/projects/default":
             return self._send(200, fixtures.PROJECT)
         if method == "GET" and path == "/user/status":

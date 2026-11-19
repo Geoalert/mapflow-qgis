@@ -140,6 +140,8 @@ class ProjectsDialog(QDialog):
         self.results: List[Project] = []
         self.total = 0
         self.loading = False
+        self.loaded = False                          # a list answered: only then "No projects yet"
+        self.failed_text = ""                        # why the last list did not load
         self.query = ""
         self.tiles: List[ProjectTile] = []
         self._columns = 0
@@ -205,10 +207,17 @@ class ProjectsDialog(QDialog):
 
     def set_loading(self, loading: bool) -> None:
         self.loading = loading
+        if loading:
+            self.failed_text = ""
+        self._render()
+
+    def set_failed(self, text: str) -> None:
+        """The list did not load: it says so, and does not read as "No projects yet"."""
+        self.loading, self.failed_text = False, text
         self._render()
 
     def set_results(self, projects: List[Project], total: int, append: bool = False) -> None:
-        self.loading = False
+        self.loading, self.loaded, self.failed_text = False, True, ""
         if append:
             known = {p.id for p in self.results}
             self.results += [p for p in projects if p.id not in known]
@@ -261,7 +270,9 @@ class ProjectsDialog(QDialog):
             self._section("Pinned", pinned)
         if rest:
             self._section(f"Matching “{self.search.text().strip()}”" if needle else "All projects", rest)
-        if self.loading and not self.results:
+        if self.failed_text and not self.results:
+            self.body.addWidget(Callout("warn", f"Projects didn't load: {self.failed_text}"))
+        elif (self.loading or not self.loaded) and not self.results:
             self.body.addWidget(label("Loading projects…", "lead"))
         elif not pinned and not rest:
             self.body.addWidget(Callout("info", "No projects match this name." if needle else "No projects yet."))

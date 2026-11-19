@@ -37,7 +37,9 @@ The plugin covers the work that belongs next to the map. Each tab has its scenar
   angle and how much of the area an image covers, look at the footprints on the map, and use an image in
   the run form.
 - **Processings › Follow the work and its history.** Progress updates on its own. Filter, search, load
-  older processings, rename them, run one again with the same settings, or delete it.
+  older processings, rename them, run one again with the same settings, or delete it. A list that fails
+  to load says so instead of looking empty; if the project is deleted in Mapflow Web, the default project
+  opens.
 - **Processings › Get the results into QGIS.** Finished results load as styled layers: GeoPackage files,
   or vector tiles for a quick look. Results can also be saved as GeoJSON.
 - **Projects › Work in a team project.** Create a project, switch projects, search and pin them, and see
@@ -102,6 +104,7 @@ mapflow_next/
     draft.py           the run form as data: issues(), estimate(), payload()
     scenarios.py       scenario catalogue and scenario → model matching
     messages.py        readable texts for Mapflow error codes
+    failures.py        what a failed request means by what triggered it: transient or permanent, the poll's count
     guard.py           the guard: no exception escapes from an entry point Qt calls (no Qt; every layer imports it)
     oauth.py           browser sign-in without Qt: PKCE, the redirect, tokens
   api/
@@ -229,7 +232,7 @@ Tests and lint run in the official `qgis/qgis` Docker images, so only Docker is 
 make test          # both of the two runs below (the gate before review)
 make test-qgis3    # unit + end-to-end tests on QGIS 3 (qgis/qgis:release-3_28)
 make test-qgis4    # the same on QGIS 4 (qgis/qgis:4.2), plus the Qt 6 code check
-make test-core     # pure-Python tests only (52)
+make test-core     # pure-Python tests only (61)
 make lint          # the plugins.qgis.org checks: flake8, bandit, detect-secrets
 make screens       # run the end-to-end flow and rewrite docs/screens/*.png
 ```
@@ -242,7 +245,7 @@ make test-qt6 QT6_PYTHON=…    # the pages, sign-in and HTTP client on PyQt6 (4
 make check-qt6 QT6_PYTHON=…   # Qt enum names and calls that only Qt 5 accepts
 ```
 
-**The end-to-end test** (`tests/e2e_flow.py`, 334 checks) runs a real offscreen QGIS against a mock
+**The end-to-end test** (`tests/e2e_flow.py`, 446 checks) runs a real offscreen QGIS against a mock
 Mapflow API and sign-in server (`tests/mock_server.py`).
 - **Request checks:** the mock rejects request bodies the real API rejects, such as `myImagery` with both
   `mosaicId` and `imageIds`.

@@ -10,6 +10,7 @@ from qgis.PyQt.QtWidgets import (QDialog, QFrame, QHBoxLayout, QLabel, QLineEdit
 
 from .. import config
 from ..core import formatting
+from ..core.failures import empty_list_text
 from ..core.models import Mosaic, MosaicImage
 from . import icons
 from .layer_picker import pick_layers
@@ -49,9 +50,11 @@ class MosaicPicker(QDialog):
         self.mosaics: List[Mosaic] = []              # the listing, loaded so far
         self.total = 0                               # collections in the account
         self.loading = False
+        self.loaded, self.failed = True, False       # a listing answered / the last answer was a failure
         self.found: List[Mosaic] = []                # the server's answer to the search box, so far
         self.found_total = 0
         self.found_loading = False
+        self.found_failed = False
         self.more_collections = None                 # "Show more", under the rows
         self.list_empty = None                       # "No collections yet." and the like, when there are no rows
         self._drawn: List[tuple] = []                # (id, name) of the rows drawn, in order
@@ -176,19 +179,23 @@ class MosaicPicker(QDialog):
     # ---------- collections ----------
 
     def set_collections(self, mosaics: List[Mosaic], chosen_mosaic: Optional[str], chosen_image: Optional[str],
-                        total: Optional[int] = None, loading: bool = False) -> None:
-        """The listing: the collections loaded so far, of `total` in the account."""
+                        total: Optional[int] = None, loading: bool = False, loaded: bool = True,
+                        failed: bool = False) -> None:
+        """The listing: the collections loaded so far, of `total` in the account. "No collections yet" needs a
+        successful answer (`loaded`, not `failed`)."""
         self.mosaics = list(mosaics)
         self.total = len(self.mosaics) if total is None else max(total, len(self.mosaics))
-        self.loading = loading
+        self.loading, self.loaded, self.failed = loading, loaded, failed
         self.chosen_mosaic, self.chosen_image = chosen_mosaic, chosen_image
         self._render_collections()
 
-    def set_found(self, query: str, found: List[Mosaic], total: int, loading: bool = False) -> None:
+    def set_found(self, query: str, found: List[Mosaic], total: int, loading: bool = False,
+                  failed: bool = False) -> None:
         """The server's answer to the search: shown while the search box still says `query`."""
         if query != self.search.text().strip():
             return                                  # typed on since: a newer search is on its way
         self.found, self.found_total, self.found_loading = list(found), max(total, len(found)), loading
+        self.found_failed = failed
         self._render_collections()
 
     def _searching(self) -> bool:
@@ -206,7 +213,7 @@ class MosaicPicker(QDialog):
     def _query_typed(self) -> None:
         """A search goes to the server once typing pauses; meanwhile the list says it's searching."""
         query = self.search.text().strip()
-        self.found, self.found_total, self.found_loading = [], 0, bool(query)
+        self.found, self.found_total, self.found_loading, self.found_failed = [], 0, bool(query), False
         self._render_collections()
         self._debounce.start()
 
@@ -239,8 +246,12 @@ class MosaicPicker(QDialog):
         self._drawn, self._drawn_mode = ids, searching
         total = self.found_total if searching else self.total
         loading = self.found_loading if searching else self.loading
-        self.list_empty.setText(("Searching…" if searching else "Loading collections…") if loading else
-                                ("No collections match." if searching else "No collections yet."))
+        if searching:
+            self.list_empty.setText("Searching…" if loading else "The search didn't work." if self.found_failed
+                                    else "No collections match.")
+        else:
+            self.list_empty.setText(empty_list_text("collections", "No collections yet.", self.loaded, loading,
+                                                    self.failed))
         self.list_empty.setVisible(not self._rows)
         self.more_collections.setVisible(bool(shown) and len(shown) < total)
         self.more_collections.setText("Loading…" if loading else f"Show more · {len(shown):,} of {total:,}")
@@ -352,6 +363,15 @@ class MosaicPicker(QDialog):
                                                       "processed. Upload a GeoTIFF into it above."))
         for image in images:
             self.images_box.addWidget(self._image_card(mosaic_id, image))
+        self.images_box.addStretch(1)
+
+    def set_images_failed(self, mosaic_id: str, text: str) -> None:
+        """The images did not load: the box says so, and does not read as an empty collection."""
+        if mosaic_id != self.current:
+            return
+        clear_layout(self.images_box)
+        self._thumbs = {}
+        self.images_box.addWidget(Callout("warn", f"The images didn't load: {text}"))
         self.images_box.addStretch(1)
 
     def _image_card(self, mosaic_id: str, image: MosaicImage) -> Card:

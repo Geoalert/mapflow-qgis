@@ -28,6 +28,7 @@ from qgis.core import (Qgis, QgsFeature, QgsGeometry, QgsPointXY, QgsProject, Qg
 
 from . import fixtures, mock_server  # noqa: E402
 from mapflow_next import config  # noqa: E402
+from mapflow_next.core.failures import LOAD  # noqa: E402
 from mapflow_next.ui.imagery_page import MINE  # noqa: E402
 
 SHOTS = Path(sys.argv[1]) if len(sys.argv) > 1 else None
@@ -266,6 +267,474 @@ def check_the_guard(iface, plugin, api_url, settings):
     QTimer.singleShot(0, guarded(lambda: raiser()))
     wait_until(lambda: False, 0.1)
     expect_critical(iface, "boom", "the guard's lines of a timer callback that raises", count=2)
+
+
+def check_failed_requests(iface, plugin, state):
+    """spec/005 § Failed requests: the rule follows what triggered the request. A user's request shows its failure
+    at once; a one-off load tells once and clears what it marked as pending; a timer's request drops a transient
+    failure (logged) until POLL_FAILURES_BEFORE_ALERT in a row, and stops on a permanent one; a list that failed
+    never reads as empty; a project that answers 403 or 404 is gone; nothing that changes state is sent again.
+    Everything the function changes is restored, so the rest of the flow runs as before."""
+    import re
+    import mapflow_next.api.http as http_module
+    from datetime import date
+    from mapflow_next.core.draft import ImageryChoice
+    from mapflow_next.core.failures import POLL, USER, is_transient
+    from mapflow_next.ui.projects_dialog import ProjectsDialog
+    from qgis.core import QgsApplication
+    session, processings, imagery = plugin.services[1], plugin.services[2], plugin.services[3]
+    controller, content = plugin.controller, plugin.dock.content
+    threshold = config.POLL_FAILURES_BEFORE_ALERT
+    warn = Qgis.MessageLevel.Warning
+    page = r"/projects/project-2/processings/v2/page"
+    saved_project = session.project.id
+
+    def lines(since):
+        return [text for level, text in iface.bar.messages[since:] if level == warn]
+
+    def requests(method, pattern):
+        return len([r for r in state.requests if r[0] == method and re.search(pattern, r[1])])
+
+    def settle(seconds=0.4):
+        wait_until(lambda: False, seconds)
+
+    logged = []
+    log = QgsApplication.messageLog()
+    if hasattr(log, "messageReceivedWithFormat"):
+        log.messageReceivedWithFormat.connect(lambda message, tag, level, _format: logged.append(message))
+    else:
+        log.messageReceived.connect(lambda message, tag, level: logged.append(message))
+
+    def ready():
+        """The project's list answered, nothing in flight, no failure left over."""
+        state.heal()
+        processings.refresh(USER)
+        return wait_until(lambda: processings.loaded and not processings.load_failed and not processings._loading, 5)
+
+    check(ready() and processings._poll_failures.count == 0, "the failure checks start from a loaded project list")
+    processings._poll.setInterval(50)
+    session._timer.setInterval(50)
+    session._timer.stop()                               # started again by the checks that need it
+
+    # ---------- USER: shown at once ----------
+    for what in (503, 400):
+        state.heal()
+        state.fail("POST", "/catalog/meta", what)
+        before, asked = len(iface.bar.messages), requests("POST", "/catalog/meta")
+        imagery.search({"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 0]]]},
+                       date(2026, 1, 1), date(2026, 2, 1), None, None)
+        check(wait_until(lambda: content.imagery.search_message.text.text() != "", 5),
+              f"USER: a failed catalog search ({what}) shows its error next to the search")
+        settle(0.5)
+        check(requests("POST", "/catalog/meta") == asked + 1, f"…and the search is not sent again ({what})")
+        content.imagery.show_search_message("")
+    state.heal()
+    for what in (503, 400):
+        state.fail("POST", page, what, times=1)
+        before, asked = len(iface.bar.messages), requests("POST", page)
+        content.processings.refresh_button.click()
+        check(wait_until(lambda: len(lines(before)) == 1, 5) and processings.load_failed,
+              f"USER: Refresh on a list that fails ({what}) says so at once, once ({lines(before)})")
+        check(wait_until(lambda: not content.processings.refreshing, 3), "…and the Refresh button comes back")
+        settle(0.5)
+        check(requests("POST", page) == asked + (2 if what == 503 else 1) and len(lines(before)) == 1,
+              f"…a transient failure is asked again by the poll, a permanent one is not ({what})")
+        ready()
+    state.many_mosaics = 60
+    imagery.forget_mosaics()
+    imagery.load_mosaics()
+    check(wait_until(lambda: imagery.mosaics_loaded and imagery.has_more_mosaics, 5), "a long listing has “Show more”")
+    state.fail("GET", r"/rasters/mosaic/page", 503, times=1)
+    before = len(iface.bar.messages)
+    imagery.load_more_mosaics()
+    check(wait_until(lambda: lines(before) and not imagery.loading_mosaics, 5)
+          and "More collections didn't load" in lines(before)[0] and len(lines(before)) == 1
+          and content.imagery.more_mosaics.isEnabled(),
+          "USER: “Show more” of collections that fails says so and comes back")
+    state.heal()
+    state.many_mosaics = 0
+    imagery.forget_mosaics()
+    imagery.load_mosaics()
+    wait_until(lambda: imagery.mosaics_loaded, 5)
+
+    # ---------- LOAD: once, and nothing is left pending ----------
+    for what in (503, 403):
+        state.heal()
+        state.fail("GET", r"/rasters/mosaic/page", what)
+        imagery.forget_mosaics()
+        controller._choose_uploaded, controller._select_in_picker = "an upload", "a new collection"
+        before = len(iface.bar.messages)
+        imagery.load_mosaics()
+        check(wait_until(lambda: imagery.mosaics_failed and not imagery.loading_mosaics, 5),
+              f"LOAD: the listing fails ({what})")
+        settle()
+        check(len(lines(before)) == 1 and "Collections didn't load" in lines(before)[0],
+              f"…and the message bar says so once ({lines(before)})")
+        check(controller._choose_uploaded is None and controller._select_in_picker is None,
+              "…and what waited for the listing is cleared")
+        title = content.imagery.mosaics_title.text()
+        check("No collections yet" not in title and "didn't load" in title,
+              f"…and the page does not look empty ({title!r})")
+    state.heal()
+    imagery.load_mosaics()
+    check(wait_until(lambda: imagery.mosaics_loaded and not imagery.mosaics_failed and imagery.mosaics, 5)
+          and content.imagery.mosaics_title.text().startswith("Collections ·"),
+          "…and the next good answer brings it back")
+
+    mosaic = imagery.mosaics[0]
+    mosaic.image_count = None
+    imagery.images.pop(mosaic.id, None)
+    state.fail("GET", rf"/rasters/mosaic/{mosaic.id}/image", 503)
+    before, asked = len(iface.bar.messages), requests("GET", rf"/rasters/mosaic/{mosaic.id}/image")
+    controller.use_mosaic(mosaic.id)
+    check(controller._use_pending == mosaic.id, "a click that needs an image list waits for it")
+    check(wait_until(lambda: controller._use_pending is None and not imagery._images_loading, 5)
+          and len(lines(before)) == 1 and "images didn't load" in lines(before)[0],
+          f"LOAD: …the list fails: nothing waits for it any more, and one line says so ({lines(before)})")
+    choice_before = controller.draft.imagery
+    controller.draft.imagery = ImageryChoice.from_mosaic(mosaic.id, mosaic.name)
+    before = len(iface.bar.messages)
+    sent, footprint = requests("GET", rf"/rasters/mosaic/{mosaic.id}/image"), mosaic.footprint_wkt
+    mosaic.footprint_wkt = None                                 # its outline comes with the image list
+    controller.use_imagery_extent()
+    wait_until(lambda: not controller._extent_pending and not imagery._images_loading, 5)
+    settle()
+    check(requests("GET", rf"/rasters/mosaic/{mosaic.id}/image") > sent and not controller._extent_pending
+          and not imagery._images_loading,
+          "…and a click that waited for the footprints (use the extent) is not left waiting either "
+          f"({requests('GET', rf'/rasters/mosaic/{mosaic.id}/image') - sent} requests)")
+    controller.draft.imagery, mosaic.footprint_wkt = choice_before, footprint
+    state.heal()
+    imagery.load_images(mosaic.id, force=True)                  # a list that loads ends the outage's one line
+    wait_until(lambda: mosaic.id in imagery.images, 5)
+    # the counts of a listing: many lists fail together, and one line says so
+    state.extra_mosaics = [{"id": f"m-nc-{n}", "name": f"No count {n}", "created_at": f"2025-02-01T00:00:0{n}Z",
+                            "sizeInBytes": 1, "footprint": None, "tags": [],
+                            "rasterLayer": {"tileUrl": "", "tileJsonUrl": ""}} for n in range(5)]
+    state.fail("GET", r"/rasters/mosaic/m-nc-\d/image", 503)
+    before = len(iface.bar.messages)
+    imagery.load_mosaics()
+    check(wait_until(lambda: requests("GET", r"/rasters/mosaic/m-nc-\d/image") >= 5 and not imagery._images_loading, 5),
+          "background image lists for the counts are asked")
+    settle()
+    check(len(lines(before)) == 1, f"LOAD: five failing image lists for a listing give one line ({lines(before)})")
+    state.heal()
+    state.extra_mosaics = []
+    imagery.load_mosaics()
+    wait_until(lambda: imagery.mosaics_loaded and not imagery._mosaics_loading, 5)
+
+    state.fail("POST", "/projects/page", 503)
+    before = len(iface.bar.messages)
+    session.load_projects()
+    check(wait_until(lambda: len(lines(before)) == 1, 5) and "Projects didn't load" in lines(before)[0],
+          "LOAD: the project list after sign-in that fails says so once")
+    state.heal()
+    state.fail("POST", "/projects/page", 503)
+    controller.open_projects()
+    window = controller.projects_dialog
+    check(wait_until(lambda: window.failed_text != "", 5),
+          "USER: the projects window keeps the list it had and records that the new one did not load")
+    check(not any(w.text() == "No projects yet." for w in window.findChildren(QLabel)),
+          "…and does not call it “No projects yet.”")
+    window.hide()
+    state.heal()
+
+    # ---------- POLL, transient: dropped and logged, then said once ----------
+    def poll_requests():
+        return requests("POST", page)
+
+    state.heal()
+    state.fail("POST", page, 503)
+    before, asked, log_start = len(iface.bar.messages), poll_requests(), len(logged)
+    processings.refresh(POLL)
+    check(wait_until(lambda: poll_requests() >= asked + threshold - 1, 5), "POLL: the processings poll keeps asking")
+    check(not lines(before), f"POLL: {threshold - 1} failures in a row are dropped without a word")
+    check(wait_until(lambda: len(lines(before)) == 1, 5), f"POLL: failure number {threshold} is said, once")
+    check(any("server 503" in line and "processings/v2/page" in line for line in logged[log_start:]),
+          "…and the dropped failures are logged (Http writes every failure to the log at Warning)")
+    check("Mapflow is not answering" in lines(before)[0] and "processings list" in lines(before)[0],
+          f"…in plain words ({lines(before)[0]!r})")
+    seen = poll_requests()
+    wait_until(lambda: poll_requests() >= seen + 3, 5)
+    check(len(lines(before)) == 1, "POLL: further failures of the same outage say nothing more")
+    state.heal()
+    check(wait_until(lambda: processings._poll_failures.count == 0 and not processings.load_failed, 5),
+          "POLL: the poll recovers by itself and the count starts again")
+    before = len(iface.bar.messages)
+    for _ in range(2):                                      # fail, fail, success, fail, fail: never in a row
+        asked = poll_requests()
+        state.fail("POST", page, 503, times=threshold - 1)
+        processings.refresh(POLL)
+        check(wait_until(lambda: poll_requests() >= asked + threshold and not processings.load_failed
+                         and not processings._loading, 5), "POLL: failures, then a success")
+    settle()
+    check(not lines(before), f"POLL: a success between failures resets the count: no line ({lines(before)})")
+    # a request that times out is transient too
+    saved_timeout = http_module.TIMEOUT_S
+    http_module.TIMEOUT_S, state.hang_seconds = 1, 3
+    kinds, original = [], processings._poll_failures.failed
+
+    def record(kind, status=None):
+        kinds.append(kind)
+        return original(kind, status)
+    processings._poll_failures.failed = record
+    try:
+        state.fail("POST", page, "hang", times=1)
+        state.fail("POST", page, 503, times=threshold - 2)
+        processings.refresh(POLL)
+        check(wait_until(lambda: len(kinds) == threshold - 1 and not processings._loading, 8)
+              and kinds[0] == "timeout" and not lines(before),
+              f"POLL: a request that timed out is a transient failure, dropped without a line ({kinds})")
+        check(wait_until(lambda: processings._poll_failures.count == 0 and processings.loaded
+                         and not processings.load_failed, 6), "…and the next good answer resets the count")
+    finally:
+        http_module.TIMEOUT_S = saved_timeout
+        del processings._poll_failures.failed
+    # the account status
+    state.heal()
+    state.fail("GET", "/user/status", 503)
+    before, asked = len(iface.bar.messages), requests("GET", "/user/status")
+    session._timer.start()
+    check(wait_until(lambda: requests("GET", "/user/status") >= asked + threshold, 5)
+          and wait_until(lambda: len(lines(before)) == 1, 3),
+          "POLL: the account status says it once, after the same count")
+    check("account status" in lines(before)[0], f"…naming what failed ({lines(before)[0]!r})")
+    seen = requests("GET", "/user/status")
+    wait_until(lambda: requests("GET", "/user/status") >= seen + 3, 5)
+    check(len(lines(before)) == 1, "…and does not say it again")
+    state.heal()
+    check(wait_until(lambda: session._status_poll.count == 0, 5), "…and a success resets its count")
+    before = len(iface.bar.messages)
+    for _ in range(2):
+        asked = requests("GET", "/user/status")
+        state.fail("GET", "/user/status", 503, times=threshold - 1)
+        wait_until(lambda: requests("GET", "/user/status") >= asked + threshold, 5)
+        settle(0.2)
+    check(not lines(before), "…a success between failures: no line")
+    session._timer.stop()
+    # the collections refresh, by the controller's timer
+    state.heal()
+    state.fail("GET", r"/rasters/mosaic/page", 503)
+    before, asked = len(iface.bar.messages), requests("GET", r"/rasters/mosaic/page")
+
+    def mosaic_tick():
+        imagery._mosaics_at = 0.0
+        controller._mosaic_refresh.timeout.emit()
+        return wait_until(lambda: not imagery.loading_mosaics, 5)
+
+    check(content.isVisible() and session.state == "signed_in", "the panel is open, so the collections refresh runs")
+    for _ in range(threshold - 1):
+        mosaic_tick()
+    check(requests("GET", r"/rasters/mosaic/page") == asked + threshold - 1 and not lines(before),
+          "POLL: the collections refresh drops its first failures")
+    mosaic_tick()
+    check(len(lines(before)) == 1 and "collections list" in lines(before)[0], "…and says so once at the count")
+    mosaic_tick()
+    mosaic_tick()
+    check(len(lines(before)) == 1, "…and not again")
+    state.heal()
+    mosaic_tick()
+    check(imagery._mosaics_poll.count == 0 and imagery.mosaics_loaded and not imagery.mosaics_failed,
+          "…and a success resets it")
+
+    # ---------- POLL, permanent: stops, and says why ----------
+    state.heal()
+    state.fail("GET", "/user/status", 403)
+    before, asked = len(iface.bar.messages), requests("GET", "/user/status")
+    session._timer.start()
+    check(wait_until(lambda: not session._timer.isActive() and len(lines(before)) == 1, 5),
+          "POLL: a permanent failure of the account status stops its timer and says so once")
+    check("account status" in lines(before)[0], f"…naming it ({lines(before)[0]!r})")
+    settle(0.5)
+    session.refresh_status()
+    settle(0.3)
+    check(requests("GET", "/user/status") == asked + 1, "…and nothing asks again, not even a panel opening")
+    state.heal()
+    session.api.default_project(session._signed_in, None)           # what a sign-in runs
+    check(wait_until(lambda: session._timer.isActive() and not session._status_poll.stopped, 5)
+          and wait_until(lambda: requests("GET", "/user/status") > asked + 1, 5),
+          "…until the next sign-in, which starts it again")
+    session._timer.stop()
+    wait_until(lambda: session.project is not None and session.project.id == saved_project, 5)
+    # the collections refresh
+    state.fail("GET", r"/rasters/mosaic/page", 403)
+    before, asked = len(iface.bar.messages), requests("GET", r"/rasters/mosaic/page")
+    mosaic_tick()
+    check(len(lines(before)) == 1 and imagery._mosaics_poll.stopped and "no longer refreshed" in lines(before)[0],
+          f"POLL: a permanent failure of the collections refresh stops it and says why ({lines(before)})")
+    mosaic_tick()
+    mosaic_tick()
+    check(requests("GET", r"/rasters/mosaic/page") == asked + 1, "…and the timer's next ticks send nothing")
+    state.heal()
+    imagery.load_mosaics()
+    check(wait_until(lambda: imagery.mosaics_loaded and not imagery._mosaics_poll.stopped, 5),
+          "…until a load succeeds, which clears the stop")
+    mosaic_tick()
+    check(requests("GET", r"/rasters/mosaic/page") > asked + 1, "…and then the refresh asks again")
+    # the processings poll
+    with state.lock:
+        state.processings.append(dict(fixtures.processing_json("poll-run", "IN_PROGRESS", 0, name="Poll run"),
+                                      projectId="project-2"))
+    state.fail("POST", page, 400)
+    before, asked = len(iface.bar.messages), poll_requests()
+    processings.refresh(POLL)
+    check(wait_until(lambda: len(lines(before)) == 1 and processings._poll_failures.stopped, 5)
+          and "no longer refreshed" in lines(before)[0],
+          f"POLL: a permanent failure of the processings poll stops it and says why ({lines(before)})")
+    settle(0.5)
+    check(poll_requests() == asked + 1 and not processings._poll.isActive(), "…and no more list requests go out")
+    state.heal()
+    processings.refresh(USER)
+    check(wait_until(lambda: not processings._poll_failures.stopped and processings.loaded, 5)
+          and wait_until(lambda: poll_requests() >= asked + 3, 5),
+          "…until a list loads: the poll then starts again by itself")
+    ready()
+    with state.lock:
+        state.processings[:] = [p for p in state.processings if p["id"] != "poll-run"]
+
+    # ---------- the open project is gone ----------
+    default_id = session.default_project.id
+    for what in (404, 403):
+        state.heal()
+        state.fail("POST", page, what)
+        before, asked, projects_asked = len(iface.bar.messages), poll_requests(), requests("POST", "/projects/page")
+        processings.refresh(POLL)
+        check(wait_until(lambda: session.project.id == default_id and processings.loaded, 5)
+              and len(lines(before)) == 1 and "Harbor" in lines(before)[0],
+              f"the open project answers {what}: the default project opens and one line names the gone one "
+              f"({lines(before)})")
+        settle(0.5)
+        check(poll_requests() == asked + 1 and requests("POST", "/projects/page") > projects_asked,
+              "…the gone project's list is not asked again, and the project list is loaded again")
+        state.heal()
+        session.select_project("project-2")
+        check(wait_until(lambda: session.project.id == "project-2" and processings.loaded, 5), "…(the project is back)")
+    default_page = r"/projects/project-1/processings/v2/page"
+    state.fail("POST", default_page, 404)
+    before, asked = len(iface.bar.messages), requests("POST", default_page)
+    session.select_project(default_id)
+    wait_until(lambda: session.project.id == default_id, 5)
+    settle(0.6)
+    check(session.project.id == default_id and len(lines(before)) == 1 and "no other project" in lines(before)[0],
+          f"the default project itself is gone: the user is told and nothing else opens ({lines(before)})")
+    check(requests("POST", default_page) == asked + 1 and not processings._poll.isActive(),
+          "…with no loop of requests")
+    state.heal()
+    session.select_project("project-2")
+    check(wait_until(lambda: session.project.id == "project-2" and processings.loaded, 5), "…(the project is back)")
+    ready()
+
+    # ---------- a failed list does not look empty ----------
+    state.fail("POST", page, 503)
+    processings.set_project(None)
+    processings.set_project(session.project)
+    check(wait_until(lambda: processings.load_failed, 5), "a project whose list fails")
+    text = content.processings.empty_text.text()
+    check(text == "Processings didn't load." and not content.processings.start_button.isVisibleTo(content.processings),
+          f"…says that the list did not load, not “No processings in this project yet” ({text!r})")
+    state.heal()
+    session.select_project("project-new-1")                 # a project with no processings
+    check(wait_until(lambda: session.project.id == "project-new-1" and processings.loaded
+                     and not processings.load_failed, 5), "a project with no processings answers")
+    check(content.processings.empty_text.text() == "No processings in this project yet."
+          and content.processings.start_button.isVisibleTo(content.processings),
+          "…and only then the page says “No processings in this project yet.”")
+    session.select_project("project-2")
+    wait_until(lambda: session.project.id == "project-2" and processings.loaded, 5)
+    state.no_mosaics = True
+    imagery.forget_mosaics()
+    imagery.load_mosaics()
+    check(wait_until(lambda: imagery.mosaics_loaded, 5)
+          and content.imagery.mosaics_title.text() == "No collections yet",
+          "an account without collections says so after a successful answer")
+    state.no_mosaics = False
+    state.fail("GET", r"/rasters/mosaic/page", 503)
+    imagery.forget_mosaics()
+    imagery.load_mosaics()
+    wait_until(lambda: imagery.mosaics_failed, 5)
+    controller.open_mosaic_picker()
+    picker = controller.mosaic_picker
+    check(picker.list_empty.text() == "Collections didn't load.",
+          f"the picker says so too ({picker.list_empty.text()!r})")
+    picker.hide()
+    state.heal()
+    imagery.load_mosaics()
+    wait_until(lambda: imagery.mosaics_loaded and not imagery.mosaics_failed, 5)
+    fresh = ProjectsDialog()
+    fresh.set_state(None, [])
+    texts = lambda: [w.text() for w in fresh.findChildren(QLabel)]  # noqa: E731
+    check("Loading projects…" in texts() and "No projects yet." not in texts(),
+          "the projects window says “Loading projects…” before any answer")
+    fresh.set_failed("Mapflow is not responding.")
+    check(any("didn't load" in t for t in texts()) and "No projects yet." not in texts(),
+          "…“Projects didn't load” after a failure")
+    fresh.set_results([], 0)
+    check("No projects yet." in texts(), "…and “No projects yet.” only after a successful empty answer")
+    fresh.deleteLater()
+
+    # ---------- nothing that changes state is sent again ----------
+    state.heal()
+    session._timer.stop()
+    target, other = processings.items[0], processings.items[1]
+    http = session.http
+    sent, real_send = [], http._send
+
+    def counting_send(method, path, *args, **kwargs):
+        sent.append((method, "/" + path.lstrip("/")))
+        return real_send(method, path, *args, **kwargs)
+    http._send = counting_send
+    # What the plugin sends is counted at Http. A dropped connection is also counted at the server for reads
+    # only: Qt itself reconnects and sends a request again when the server closes the connection with no answer
+    # (up to three more times, on QGIS 3.28's Qt 5.15), and the plugin cannot tell it not to.
+    for what in (503, "drop"):
+        errors = []
+        cases = (
+            ("POST", r"/processings/v2$",
+             lambda: processings.api.start({"name": "no resend"}, lambda _p: None, errors.append)),
+            ("PUT", rf"/processings/{target.id}/v2$", lambda: processings.rename(target, "Renamed", "")),
+            ("DELETE", rf"/processings/{other.id}$", lambda: processings.delete(other)),
+            ("POST", r"/rasters/mosaic$",
+             lambda: imagery.create_collection("No resend", [], lambda _i: None, errors.append)),
+        )
+        for method, pattern, send in cases:
+            state.heal()
+            state.fail(method, pattern, what)
+            before, asked = len(iface.bar.messages), requests(method, pattern)
+            sent.clear()
+            send()
+            check(wait_until(lambda: requests(method, pattern) >= asked + 1, 5), f"{method} {pattern}: sent ({what})")
+            settle(0.5)
+            mine = [m for m, p in sent if m == method and re.search(pattern, p)]
+            check(len(mine) == 1, f"{method} {pattern} that failed ({what}) is not sent again by the plugin ({mine})")
+            if what != "drop":
+                check(requests(method, pattern) == asked + 1, "…and exactly one request reached the server")
+            check(errors or lines(before), f"…and the failure reaches the user or the caller ({what})")
+            errors.clear()
+    del http._send
+    state.heal()
+    state.fail("DELETE", r"/rasters/mosaic/probe$", "drop")
+    answers = []
+    session.http.delete("rasters/mosaic/probe", on_error=answers.append)
+    check(wait_until(lambda: answers, 5) and is_transient(answers[0].kind, answers[0].status),
+          f"a connection the server drops is a transient failure ({answers[0].kind} {answers[0].status})")
+    state.heal()
+    state.fail("GET", "/user/status", 503, times=1)
+    asked = requests("GET", "/user/status")
+    session._timer.start()
+    check(wait_until(lambda: requests("GET", "/user/status") >= asked + 2, 5),
+          "a read that failed is asked again by its timer")
+    session._timer.stop()
+
+    # ---------- restore ----------
+    state.heal()
+    state.no_mosaics, state.many_mosaics, state.extra_mosaics = False, 0, []
+    processings._poll.setInterval(150)
+    session._timer.setInterval(config.STATUS_INTERVAL_MS)
+    session._timer.start()
+    session.select_project(saved_project)
+    ready()
+    check(session.project.id == saved_project and not processings._poll_failures.stopped,
+          "the failure checks leave the session as they found it")
 
 
 def main():
@@ -1856,14 +2325,14 @@ def main():
     saved_question = controller_module.QMessageBox.question
     controller_module.QMessageBox.question = staticmethod(lambda *a, **k: QMessageBox.StandardButton.Yes)
     try:
-        processings.refresh()                     # a list request in flight, sent before the deletion
+        processings.refresh(LOAD)                     # a list request in flight, sent before the deletion
         content.processings.delete.emit("h-05")
         check(wait_until(lambda: processings.get("h-05") is None and processings.total == 69, 5)
               and not any(card.processing.id == "h-05"
                           for card in content.processings.findChildren(QWidget) if hasattr(card, "processing")
                           and card.isVisibleTo(content.processings)),
               "a deleted processing leaves the list at once")
-        processings.refresh()
+        processings.refresh(LOAD)
         wait_until(lambda: False, 0.8)
         check(processings.get("h-05") is None and chips["all"].text() == "All 69",
               "…and doesn't come back with the next refresh")
@@ -1871,7 +2340,7 @@ def main():
         controller_module.QMessageBox.question = saved_question
     check(len({p.id for p in processings.items}) == len(processings.items) == 69, "no processing is listed twice")
     shot(content, "15-processings-paged", QSize(400, 880))
-    processings.refresh()
+    processings.refresh(LOAD)
     check(wait_until(lambda: not processings._loading, 5) and len(processings.items) == 69,
           "polling keeps the older pages in the list")
 
@@ -1898,6 +2367,8 @@ def main():
           "the projects window closes on the new project")
     session.select_project("project-2")
     wait_until(lambda: session.project.id == "project-2", 5)
+
+    check_failed_requests(iface, plugin, state)
 
     # ---------- account menu: Settings and Sign out ----------
     menu_actions = {a.text(): a for a in content.account_menu.actions()}

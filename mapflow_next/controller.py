@@ -18,6 +18,7 @@ from . import config
 from .api.client import MapflowApi
 from .core import formatting
 from .core.draft import Coverage, ImageryChoice, Issue, RunDraft
+from .core.failures import USER, project_gone_text
 from .core.guard import guarded
 from .core.models import BillingType, CatalogImage, Processing, UserStatus
 from .core.scenarios import Catalogue, recommended_zoom, resolve, scenario_for_model
@@ -99,7 +100,7 @@ class Controller(QObject):
         self._mosaic_refresh = QTimer(self)
         self._mosaic_refresh.setInterval(config.MOSAICS_REFRESH_MS)
         self._mosaic_refresh.timeout.connect(
-            guarded(lambda: self._refresh_mosaics(config.MOSAICS_REFRESH_MS / 1000 - 1)))
+            guarded(lambda: self._refresh_mosaics(config.MOSAICS_REFRESH_MS / 1000 - 1, poll=True)))
         self._mosaic_refresh.start()
         self.content.imagery.my_data_url = session.config.my_data_url
         self._connect()
@@ -159,7 +160,7 @@ class Controller(QObject):
         page.rate.connect(self.rate)
         page.downloadAoi.connect(self.download_aoi)
         page.startRequested.connect(guarded(c.open_start))
-        page.refreshRequested.connect(guarded(lambda: p.refresh() or page.set_refreshing(False)))
+        page.refreshRequested.connect(guarded(lambda: p.refresh(USER) or page.set_refreshing(False)))
         p.refreshed.connect(guarded(lambda: page.set_refreshing(False)))
         p.rated.connect(self.on_rated)
         page.moreRequested.connect(guarded(p.load_more))
@@ -189,14 +190,20 @@ class Controller(QObject):
         p.failed.connect(self.on_failed)
         p.costReady.connect(self.on_cost)
         p.actionFailed.connect(guarded(lambda text: self.notify(text, Qgis.MessageLevel.Warning)))
+        p.listFailed.connect(guarded(lambda text: self.notify(text, Qgis.MessageLevel.Warning)))
+        p.projectGone.connect(self.on_project_gone)
 
         self.imagery.searchDone.connect(self.on_search_done)
         self.imagery.moreDone.connect(self.on_more_results)
         self.imagery.searchFailed.connect(self.on_search_failed)
         self.imagery.mosaicsChanged.connect(self.on_mosaics)
+        self.imagery.mosaicsFailed.connect(self.on_mosaics_failed)
+        self.imagery.imagesFailed.connect(self.on_images_failed)
+        self.imagery.notice.connect(guarded(lambda text: self.notify(text, Qgis.MessageLevel.Warning)))
         self.imagery.mosaicSearchChanged.connect(
             guarded(lambda query, found: self.mosaic_picker is not None and self.mosaic_picker.set_found(
-                query, found, self.imagery.found_total, self.imagery.found_loading)))
+                query, found, self.imagery.found_total, self.imagery.found_loading,
+                failed=self.imagery.found_failed)))
         self.imagery.mosaicImagesChanged.connect(self.on_mosaic_images)
         self.imagery.uploadProgress.connect(self._upload_progress)
         self.imagery.on_duplicate = lambda file, collection: self._ask_duplicate([file], collection)
@@ -372,9 +379,16 @@ class Controller(QObject):
         dialog.query = ""
         dialog.set_state(self.session.project.id if self.session.project else None, self.pinned_projects())
         self._query_projects("")
+        told = []                       # the pins and the starred list fail together: one line
+
+        def pins_failed(error) -> None:
+            if not told and error.kind != "auth":
+                told.append(True)
+                self.notify(f"Pinned projects didn't load: {error.message}", Qgis.MessageLevel.Warning)
+
         for project_id in self.pinned_projects():
-            self.api.project(project_id, self.session.email, self._pinned_loaded, lambda _e: None)
-        self.api.starred_projects(self.session.email, self._starred_loaded, lambda _e: None)
+            self.api.project(project_id, self.session.email, self._pinned_loaded, pins_failed)
+        self.api.starred_projects(self.session.email, self._starred_loaded, pins_failed)
         dialog.show()
         dialog.raise_()
         dialog.activateWindow()
@@ -426,7 +440,7 @@ class Controller(QObject):
         def failed(error):
             self._projects_request = 0
             if self.projects_dialog is not None:
-                self.projects_dialog.set_loading(False)
+                self.projects_dialog.set_failed(error.message)
             self.notify(f"Projects didn't load: {error.message}", Qgis.MessageLevel.Warning)
 
         self._projects_request = self.api.projects_page(self.session.email, done, failed, query=query, offset=offset,
@@ -493,9 +507,10 @@ class Controller(QObject):
 
         self.api.star_project(project_id, pinned, lambda _answer: None, failed)
 
-    def _refresh_mosaics(self, max_age: float = 5.0) -> None:
+    def _refresh_mosaics(self, max_age: float = 5.0, poll: bool = False) -> None:
+        """`poll`: the timer asks (its failures are counted); a tab or a picker opening is a one-off load."""
         if self.session.state == "signed_in" and self.content.isVisible():
-            self.imagery.refresh_mosaics(max_age)
+            self.imagery.refresh_mosaics(max_age, poll)
 
     @guarded
     def on_tab(self, tab: int) -> None:
@@ -504,7 +519,7 @@ class Controller(QObject):
             if self.content.imagery.current_tab() == imagery_tabs.MINE:
                 self._refresh_mosaics()
         if tab == PROCESSINGS:
-            self.processings.refresh()
+            self.processings.refresh(USER)      # the user opened the tab and waits for the list
 
     # ---------- scenarios ----------
 
@@ -902,7 +917,7 @@ class Controller(QObject):
             if choice and choice.kind == "my_imagery" and choice.mosaic_id \
                     and choice.mosaic_id not in self.imagery.images:
                 self._extent_pending = True
-                self.imagery.load_images(choice.mosaic_id)
+                self.imagery.load_images(choice.mosaic_id, waiting=True)
             else:
                 if self._extent_pending or choice is not None:
                     self.notify("Mapflow has no outline for this imagery yet, so its extent can't be the area. "
@@ -1267,7 +1282,8 @@ class Controller(QObject):
         self.content.processings.set_items(self.processings.items, in_map, busy,
                                            project.role.can_manage if project else False,
                                            loading=self.processings.loading, total=self.processings.total,
-                                           loading_more=self.processings.loading_more)
+                                           loading_more=self.processings.loading_more,
+                                           loaded=self.processings.loaded, failed=self.processings.load_failed)
         self.content.start.set_recent(project.name if project else "", self.processings.items, in_map)
 
     @guarded
@@ -1627,6 +1643,8 @@ class Controller(QObject):
             if not image.preview_url or self.content.imagery.has_thumbnail(image.key):
                 continue
             if self._picture_preview(image):
+                # Silent on purpose: a missing picture leaves the card's placeholder, and a line for each card of
+                # the list would bury the list's own message. Http logs the failure.
                 self.api.preview(image.preview_url,
                                  lambda data, key=image.key: self._set_thumb(key, data), lambda _e: None)
             elif image.preview_type in ("xyz", "tms"):
@@ -1773,10 +1791,42 @@ class Controller(QObject):
                 self._choose_uploaded = None
                 self.use_mosaic(max(uploaded, key=lambda m: str(m.created or "")).id)
 
+    @guarded
+    def on_mosaics_failed(self, text: str) -> None:
+        """A listing nobody waited on failed: what was marked as waiting for it is cleared, so the control that
+        set it works again."""
+        self._choose_uploaded = self._select_in_picker = None
+        if text:
+            self.notify(text, Qgis.MessageLevel.Warning)
+
+    @guarded
+    def on_images_failed(self, mosaic_id: str, text: str, tell: bool) -> None:
+        """An image list did not load. A click that waited for it is cleared; the picker says so in its box."""
+        if self._use_pending == mosaic_id:
+            self._use_pending = None
+        choice = self.draft.imagery
+        if self._extent_pending and choice and choice.kind == "my_imagery" and choice.mosaic_id == mosaic_id:
+            self._extent_pending = False
+        picker = self.mosaic_picker
+        if picker is not None and picker.current == mosaic_id:
+            picker.set_images_failed(mosaic_id, text)
+        if tell:
+            self.notify(f"The images didn't load: {text}", Qgis.MessageLevel.Warning)
+        self._mosaic_render.start()
+
+    @guarded
+    def on_project_gone(self, project_id: str, error) -> None:
+        """The open project answered 403 or 404 (deleted or unshared): open the default one and say so."""
+        project = self.processings.project
+        name = project.name if project is not None and project.id == project_id else ""
+        opened = self.session.open_default_project(project_id)
+        self.notify(project_gone_text(name, opened), Qgis.MessageLevel.Warning, duration=10)
+
     def _show_mosaics(self, chosen: Optional[str]) -> None:
         """The My imagery tab's collections: the pages loaded, of all there are."""
         self.content.imagery.set_mosaics(self.imagery.mosaics, chosen, self.imagery.mosaics_total,
-                                         self.imagery.loading_mosaics)
+                                         self.imagery.loading_mosaics, loaded=self.imagery.mosaics_loaded,
+                                         failed=self.imagery.mosaics_failed)
 
     @guarded
     def _render_mosaics(self) -> None:
@@ -1789,10 +1839,12 @@ class Controller(QObject):
             new = next((m for m in self.imagery.mosaics if m.id == select or (m.id not in listed and m.name == select)),
                        None) if select else None
             changed = ({m.id for m in self.imagery.mosaics} != listed or picker.total != self.imagery.mosaics_total
-                       or picker.loading != self.imagery.loading_mosaics)
+                       or picker.loading != self.imagery.loading_mosaics
+                       or picker.loaded != self.imagery.mosaics_loaded or picker.failed != self.imagery.mosaics_failed)
             if changed or new is not None:
                 picker.set_collections(self.imagery.mosaics, picker.chosen_mosaic, picker.chosen_image,
-                                       self.imagery.mosaics_total, self.imagery.loading_mosaics)
+                                       self.imagery.mosaics_total, self.imagery.loading_mosaics,
+                                       loaded=self.imagery.mosaics_loaded, failed=self.imagery.mosaics_failed)
                 if new is not None:
                     self._select_in_picker = None
                     picker.open_collection(new.id)
@@ -1815,6 +1867,7 @@ class Controller(QObject):
             picker.set_images(mosaic_id, images)
             for image in images:
                 if image.preview_s:
+                    # Silent on purpose: a missing thumbnail leaves the placeholder; Http logs the failure
                     self.api.preview(image.preview_s, lambda data, iid=image.id: self._set_picker_thumb(iid, data),
                                      lambda _e: None)
 
@@ -1840,7 +1893,7 @@ class Controller(QObject):
         self._refresh_mosaics()
         if self.mosaic_picker is None:
             picker = MosaicPicker(self.iface.mainWindow(), self.session.config.my_data_url)
-            picker.collectionOpened.connect(guarded(lambda mid: self.imagery.load_images(mid)))
+            picker.collectionOpened.connect(guarded(lambda mid: self.imagery.load_images(mid, waiting=True)))
             picker.chosen.connect(self._mosaic_chosen)
             picker.showRequested.connect(self.show_mosaic)
             picker.uploadRequested.connect(guarded(lambda target: self.upload(target or None)))
@@ -1861,7 +1914,8 @@ class Controller(QObject):
         chosen_mosaic = choice.mosaic_id if choice and choice.kind == "my_imagery" else None
         chosen_image = choice.image_ids[0] if chosen_mosaic and choice.image_ids else None
         self.mosaic_picker.set_collections(self.imagery.mosaics, chosen_mosaic, chosen_image,
-                                           self.imagery.mosaics_total, self.imagery.loading_mosaics)
+                                           self.imagery.mosaics_total, self.imagery.loading_mosaics,
+                                           loaded=self.imagery.mosaics_loaded, failed=self.imagery.mosaics_failed)
         # Nothing selected unless asked for: a selection is also where uploads go
         self.mosaic_picker.open_collection(mosaic_id or chosen_mosaic)
         self.mosaic_picker.set_upload(self.uploading)
@@ -1941,7 +1995,7 @@ class Controller(QObject):
         empty = self._empty_collection(mosaic)
         if empty is None:                               # decided once its image list arrives
             self._use_pending = mosaic.id
-            self.imagery.load_images(mosaic.id)
+            self.imagery.load_images(mosaic.id, waiting=True)
             return
         if empty:
             self._refuse_empty(mosaic)

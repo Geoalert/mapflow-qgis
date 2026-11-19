@@ -10,7 +10,8 @@ from qgis.PyQt.QtCore import QObject, pyqtSignal
 
 from ..api.client import MapflowApi
 from ..api.http import ApiError
-from ..config import MOSAICS_PAGE_SIZE
+from ..config import MOSAICS_PAGE_SIZE, POLL_FAILURES_BEFORE_ALERT
+from ..core.failures import ALERT, STOP, PollFailures, poll_notice
 from ..core.models import CatalogImage, Mosaic, MosaicImage
 
 # A refresh reloads the listing in one request up to this many; collections loaded beyond stay as they are
@@ -27,6 +28,9 @@ class Imagery(QObject):
     uploadProgress = pyqtSignal(int)          # percent
     uploadDone = pyqtSignal(str)              # collection name
     uploadFailed = pyqtSignal(str)
+    mosaicsFailed = pyqtSignal(str)           # a listing nobody waited on failed: the line to show ("": none)
+    notice = pyqtSignal(str)                  # a line for the message bar: a request failed
+    imagesFailed = pyqtSignal(str, str, bool)   # mosaic id, the reason, whether to tell the user (once per outage)
 
     def __init__(self, api: MapflowApi, parent=None):
         super().__init__(parent)
@@ -46,6 +50,10 @@ class Imagery(QObject):
         self._mosaics_at = 0.0                  # when the collections were last asked for (monotonic)
         self._mosaics_loading = False
         self.mosaics_total = 0                  # collections in the account, listed or not
+        self.mosaics_loaded = False             # a listing answered
+        self.mosaics_failed = False             # the last answer to a listing was a failure
+        self._mosaics_poll = PollFailures(POLL_FAILURES_BEFORE_ALERT)
+        self._images_alerted = False            # an image list failed and the user was told; a success clears it
         self._listing_id = 0                    # the listing's requests: a late answer to an older one is dropped
         self._known: Dict[str, Mosaic] = {}     # every collection seen, by id: listings, searches, lookups
         # The collection search (server-side): its query, the collections found so far, how many match
@@ -53,6 +61,7 @@ class Imagery(QObject):
         self.found_query = ""
         self.found_total = 0
         self.found_loading = False
+        self.found_failed = False
         self._found_id = 0
 
     def search(self, geometry: dict, date_from: date, date_to: date, max_cloud: Optional[float],
@@ -122,9 +131,13 @@ class Imagery(QObject):
 
     # ---------- My imagery collections: listed a page at a time, searched on the server ----------
 
-    def load_mosaics(self) -> None:
+    def load_mosaics(self, poll: bool = False) -> None:
         """The listing again from its first page, as many as are loaded (up to MAX_RELOAD); the ones loaded
-        beyond that stay, so a refresh never takes away what "Show more" brought."""
+        beyond that stay, so a refresh never takes away what "Show more" brought. `poll`: a timer asks. Its
+        failures are counted (`_mosaics_poll`); any other caller's failure is told at once through
+        `mosaicsFailed`, and the controller clears what it marked as waiting for the listing."""
+        if poll and self._mosaics_poll.stopped:
+            return
         self._mosaics_at = time.monotonic()
         self._mosaics_loading = True
         self._listing_id += 1
@@ -136,6 +149,8 @@ class Imagery(QObject):
             if listing != self._listing_id:
                 return                              # a newer load or "Show more" went out
             self._mosaics_loading = False
+            self.mosaics_loaded, self.mosaics_failed = True, False
+            self._mosaics_poll.succeeded()
             fresh = self._remember(items)
             seen = {m.id for m in fresh}
             for gone in [m for m in self.mosaics[:limit] if m.id not in seen]:
@@ -144,9 +159,20 @@ class Imagery(QObject):
             self.mosaics_total = max(total, len(self.mosaics))
             self.mosaicsChanged.emit(self.mosaics)
 
-        def failed(_error) -> None:
-            if listing == self._listing_id:
-                self._mosaics_loading = False
+        def failed(error: ApiError) -> None:
+            if listing != self._listing_id:
+                return                              # a newer request owns the flag
+            self._mosaics_loading = False           # before anything that can raise
+            self.mosaics_failed = True
+            if poll:
+                outcome = self._mosaics_poll.failed(error.kind, error.status)
+                text = poll_notice(outcome, "collections list", error.message, error.kind) \
+                    if outcome in (ALERT, STOP) else ""
+                if text:
+                    self.notice.emit(text)
+            else:                                   # "auth" is the session's: it says so, so no line here
+                self.mosaicsFailed.emit("" if error.kind == "auth" else f"Collections didn't load: {error.message}")
+            self.mosaicsChanged.emit(self.mosaics)  # the page leaves "Loading"
         self.api.mosaic_page(0, limit, "", done, failed)
 
     def load_more_mosaics(self) -> None:
@@ -169,10 +195,12 @@ class Imagery(QObject):
             self.mosaics_total = max(total, len(self.mosaics)) if fresh else len(self.mosaics)
             self.mosaicsChanged.emit(self.mosaics)
 
-        def failed(_error) -> None:
+        def failed(error: ApiError) -> None:
             if listing == self._listing_id:
                 self._mosaics_loading = False
                 self.mosaicsChanged.emit(self.mosaics)      # the button comes back
+                if error.kind != "auth":
+                    self.notice.emit(f"More collections didn't load: {error.message}")
         self.api.mosaic_page(len(self.mosaics), MOSAICS_PAGE_SIZE, "", done, failed)
 
     @property
@@ -191,29 +219,32 @@ class Imagery(QObject):
         search = self._found_id
         if not query:
             self.found, self.found_query, self.found_total, self.found_loading = [], "", 0, False
+            self.found_failed = False
             self.mosaicSearchChanged.emit("", [])
             return
         offset = len(self.found) if more and query == self.found_query else 0
         if not offset:
             self.found = []
-        self.found_query, self.found_loading = query, True
+        self.found_query, self.found_loading, self.found_failed = query, True, False
         if offset:
             self.mosaicSearchChanged.emit(query, self.found)    # "Show more" says it's loading
 
         def done(items: List[Mosaic], total: int, _has_next: bool) -> None:
             if search != self._found_id:
                 return                              # typed on since
-            self.found_loading = False
+            self.found_loading, self.found_failed = False, False
             known = {m.id for m in self.found}
             fresh = [m for m in self._remember(items) if m.id not in known]
             self.found += fresh
             self.found_total = max(total, len(self.found)) if fresh or not offset else len(self.found)
             self.mosaicSearchChanged.emit(query, self.found)
 
-        def failed(_error) -> None:
+        def failed(error: ApiError) -> None:
             if search == self._found_id:
-                self.found_loading = False
+                self.found_loading, self.found_failed = False, True
                 self.mosaicSearchChanged.emit(query, self.found)
+                if error.kind != "auth":
+                    self.notice.emit(f"The search didn't work: {error.message}")
         self.api.mosaic_page(offset, MOSAICS_PAGE_SIZE, query, done, failed)
 
     @property
@@ -252,10 +283,10 @@ class Imagery(QObject):
                 self.load_images(mosaic.id)
         return kept
 
-    def refresh_mosaics(self, max_age: float = 10.0) -> None:
+    def refresh_mosaics(self, max_age: float = 10.0, poll: bool = False) -> None:
         """Collections made elsewhere (Mapflow Web) show up: ask again if the list is older than `max_age`."""
         if not self._mosaics_loading and time.monotonic() - self._mosaics_at >= max_age:
-            self.load_mosaics()
+            self.load_mosaics(poll)
 
     def reset_busy(self) -> None:
         """After sign-out: requests in flight were aborted and won't call back, so nothing is loading."""
@@ -267,6 +298,12 @@ class Imagery(QObject):
         self._search_id += 1
         self._listing_id += 1
         self._found_id += 1
+        self._forget_failures()
+
+    def _forget_failures(self) -> None:
+        self.mosaics_loaded = self.mosaics_failed = self.found_failed = False
+        self._mosaics_poll.succeeded()
+        self._images_alerted = False
 
     def forget_mosaics(self) -> None:
         """After sign-out: the next account's collections are listed afresh, none of these kept."""
@@ -274,8 +311,11 @@ class Imagery(QObject):
         self.found, self.found_query, self.found_total = [], "", 0
         self._known.clear()
         self.images.clear()
+        self._forget_failures()
 
-    def load_images(self, mosaic_id: str, force: bool = False) -> None:
+    def load_images(self, mosaic_id: str, force: bool = False, waiting: bool = False) -> None:
+        """A collection's images. `waiting`: a click waits for the answer, so a failure is told at once. Without
+        it, the lists of a listing (for the counts) tell one failure, not one per collection."""
         if mosaic_id in self._images_loading or (mosaic_id in self.images and not force):
             if mosaic_id in self.images:
                 self.mosaicImagesChanged.emit(mosaic_id, self.images[mosaic_id])
@@ -284,14 +324,18 @@ class Imagery(QObject):
 
         def done(images: List[MosaicImage]):
             self._images_loading.discard(mosaic_id)
+            self._images_alerted = False
             self.images[mosaic_id] = sorted(images, key=lambda i: (i.filename or "").lower())
             mosaic = self.get_mosaic(mosaic_id)
             if mosaic:
                 mosaic.image_count = len(images)
             self.mosaicImagesChanged.emit(mosaic_id, self.images[mosaic_id])
 
-        def failed(_error):
+        def failed(error: ApiError):
             self._images_loading.discard(mosaic_id)
+            tell = (waiting or not self._images_alerted) and error.kind != "auth"
+            self._images_alerted = self._images_alerted or tell
+            self.imagesFailed.emit(mosaic_id, error.message, tell)
 
         self.api.mosaic_images(mosaic_id, done, failed)
 

@@ -35,6 +35,8 @@ CUSTOM_MODELS_URL = "https://mapflow.ai/custom-models"
 RELEASES_URL = "https://github.com/Geoalert/mapflow-qgis/releases"
 
 POLL_INTERVAL_MS = 6_000          # processings list while something runs
+# Failures of a timer's request in a row before the user is told, once. A first guess: live use moves it.
+POLL_FAILURES_BEFORE_ALERT = 3
 STATUS_INTERVAL_MS = 5_000        # balance and limits, while the Mapflow panel is open
 STATUS_IDLE_INTERVAL_MS = 60_000  # …and while it is closed
 COST_DEBOUNCE_MS = 400            # wait for the form to settle before asking /cost

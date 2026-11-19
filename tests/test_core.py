@@ -779,6 +779,94 @@ def test_guard_works_on_partials_and_other_objects_methods(reporter):
     assert guarded([].append)(1) is None and reporter == []      # a builtin: no signature to read, all arguments
 
 
+def test_transient_and_permanent_failures():
+    from mapflow_next.core.failures import is_transient
+    for kind in ("offline", "proxy", "timeout", "server"):
+        assert is_transient(kind, None), kind
+    assert is_transient("server", 503)
+    # Another 4xx asks the same question again: permanent
+    for status in (400, 422, 429):
+        assert not is_transient("client", status)
+    assert not is_transient("forbidden", 403) and not is_transient("not_found", 404)
+    # A Qt connection error `classify` has no name for carries no status: the connection, not the request
+    assert is_transient("client", None)
+    # Handled elsewhere: the session's (auth), the guard's (plugin), nobody's (cancelled)
+    assert not any(is_transient(kind, None) for kind in ("auth", "plugin", "cancelled"))
+
+
+def test_strongest_trigger_wins():
+    from mapflow_next.core.failures import LOAD, POLL, USER, stronger
+    assert stronger(POLL, LOAD) == LOAD and stronger(LOAD, USER) == USER and stronger(USER, POLL) == USER
+    assert stronger(None, POLL) == POLL and stronger(None, None) is None
+
+
+def test_poll_failures_are_told_once_per_run():
+    from mapflow_next.core.failures import ALERT, DROP, PollFailures
+    poll = PollFailures(3)
+    assert [poll.failed("server", 503), poll.failed("timeout"), poll.failed("offline")] == [DROP, DROP, ALERT]
+    assert [poll.failed("server", 503), poll.failed("server", 503)] == [DROP, DROP]     # said once
+    poll.succeeded()
+    assert poll.count == 0
+    assert [poll.failed("server", 503), poll.failed("server", 503), poll.failed("server", 503)] == [DROP, DROP, ALERT]
+    assert not poll.stopped
+
+
+def test_a_success_between_failures_resets_the_count():
+    from mapflow_next.core.failures import DROP, PollFailures
+    poll = PollFailures(3)
+    results = [poll.failed("server"), poll.failed("server")]
+    poll.succeeded()
+    results += [poll.failed("server"), poll.failed("server")]
+    assert results == [DROP] * 4
+
+
+def test_a_permanent_poll_failure_stops_until_a_success():
+    from mapflow_next.core.failures import STOP, PollFailures
+    poll = PollFailures(3)
+    assert poll.failed("forbidden", 403) == STOP and poll.stopped
+    poll.succeeded()
+    assert not poll.stopped
+    assert poll.failed("client", 400) == STOP and poll.stopped
+    # A bug in a callback repeats on every tick: stop, and the guard's line is the user's notice
+    poll.succeeded()
+    assert poll.failed("plugin", 200) == STOP and poll.stopped
+
+
+def test_auth_is_not_counted_as_a_poll_failure():
+    from mapflow_next.core.failures import ALERT, DROP, PollFailures
+    poll = PollFailures(3)
+    assert [poll.failed("server"), poll.failed("server"), poll.failed("auth", 401), poll.failed("server")] == \
+        [DROP, DROP, DROP, ALERT]
+
+
+def test_poll_notice_names_what_stopped_and_why():
+    from mapflow_next.core.failures import ALERT, DROP, STOP, poll_notice
+    assert poll_notice(DROP, "account status", "x") == ""
+    assert poll_notice(STOP, "account status", "x", "plugin") == ""
+    alert = poll_notice(ALERT, "processings list", "Mapflow is down.", "server")
+    assert "processings list" in alert and "Mapflow is down." in alert
+    stop = poll_notice(STOP, "account status", "Not available for your account.", "forbidden")
+    assert "account status" in stop and "Not available for your account." in stop
+
+
+def test_an_empty_list_text_comes_only_after_a_successful_answer():
+    from mapflow_next.core.failures import empty_list_text
+    none = "No processings in this project yet."
+    assert empty_list_text("processings", none, loaded=False, loading=False, failed=False) == "Loading processings…"
+    assert empty_list_text("processings", none, loaded=False, loading=True, failed=False) == "Loading processings…"
+    assert empty_list_text("processings", none, loaded=False, loading=False, failed=True) == \
+        "Processings didn't load."
+    assert empty_list_text("processings", none, loaded=True, loading=True, failed=False) == "Loading processings…"
+    assert empty_list_text("processings", none, loaded=True, loading=False, failed=False) == none
+
+
+def test_project_gone_text_says_what_opened():
+    from mapflow_next.core.failures import project_gone_text
+    assert "Roads" in project_gone_text("Roads", True) and "default" in project_gone_text("Roads", True)
+    assert "no other project" in project_gone_text("Roads", False)
+    assert project_gone_text("", True).startswith("The project")
+
+
 def test_core_imports_no_qt():
     """`core/` is the one package every layer may import (spec/007 layer rules), and it is pure Python."""
     import ast

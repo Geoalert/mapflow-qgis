@@ -11,6 +11,7 @@ from qgis.PyQt.QtWidgets import (QComboBox, QDateEdit, QGridLayout, QHBoxLayout,
 
 from .. import config
 from ..core import formatting
+from ..core.failures import empty_list_text
 from ..core.models import CatalogImage, Mosaic
 from . import icons
 from .layer_picker import pick_layers
@@ -380,12 +381,14 @@ class ImageryPage(QWidget):
         return page
 
     def set_mosaics(self, mosaics: List[Mosaic], chosen: Optional[str], total: Optional[int] = None,
-                    loading: bool = False) -> None:
+                    loading: bool = False, loaded: bool = True, failed: bool = False) -> None:
         """The collections loaded so far, of `total` in the account: "Show more" brings the next page.
+        With none, the title says why: still loading, didn't load, or (only after a successful answer) none yet.
         Cards already drawn stay: a new page only adds its own, and nothing is redrawn while it loads.
         Redrawing hundreds of cards on every page (and on every refresh) made the list stutter."""
         total = len(mosaics) if total is None else max(total, len(mosaics))
-        self.mosaics_title.setText(f"Collections · {total:,}" if mosaics else "No collections yet")
+        self.mosaics_title.setText(f"Collections · {total:,}" if mosaics else
+                                   empty_list_text("collections", "No collections yet", loaded, loading, failed))
         keys = [_mosaic_key(m, chosen) for m in mosaics]
         drawn = self._mosaic_keys
         if [k[0] for k in keys[:len(drawn)]] != [k[0] for k in drawn]:

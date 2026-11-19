@@ -16,7 +16,7 @@ describes the state after the chain; each step makes the code match it, and upda
 [ready-for-review] `on_status` must not raise when the imagery is empty after Run again (`controller.py`, the `elif` after `_imagery_to_choose`). Goes first: the next step makes the end-to-end flow fail on it
 [ready-for-review] The end-to-end flow fails on a Critical message it did not ask for; a missing `qgis.core` fails in the test images; CI runs `test-qt6`; every Qt 5/6 rule of the README has a check — `spec/004` § Test runtime, `spec/006` § The tests must see what the guard hides
 [ready-for-review] One guard for every Qt entry point and for the callbacks `Http` runs; a callback's exception is never "Unexpected response from Mapflow", and a result whose bounds can't be transformed leaves no "loading" flag set — `spec/006` § The guard
-[ ] Failed requests: lists and polls no longer fail silently, nothing stays pending, the poll stops on 403/404 and the default project opens — `spec/005` § Failed requests
+[ready-for-review] Failed requests: lists and polls no longer fail silently, nothing stays pending, the poll stops on 403/404 and the default project opens — `spec/005` § Failed requests
 [ ] Credentials only for the API's own scheme, host and port — `spec/002_api.md` § Authentication
 [ ] Preview files in a per-session temporary folder, with safe file names — `spec/003` § Temporary Files
 [ ] Uploads have a 1 h timeout; every request has one — `spec/005`, `spec/002_C`

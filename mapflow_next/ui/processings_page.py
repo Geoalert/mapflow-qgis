@@ -11,6 +11,7 @@ from qgis.PyQt.QtWidgets import (QButtonGroup, QHBoxLayout, QLineEdit, QMenu, QP
 
 from .. import config
 from ..core import formatting
+from ..core.failures import empty_list_text
 from ..core.messages import describe
 from ..core.models import Processing, Status
 from . import icons
@@ -169,6 +170,7 @@ class ProcessingsPage(QWidget):
         self.busy: set = set()
         self.can_manage = True
         self.loading = False
+        self.loaded, self.failed = True, False
         self.loading_more = False
         self.total = 0
         self.provider_names: Dict[str, str] = {}
@@ -230,7 +232,7 @@ class ProcessingsPage(QWidget):
         empty_layout = QVBoxLayout(self.empty)
         empty_layout.setContentsMargins(0, 24, 0, 0)
         empty_layout.setSpacing(10)
-        self.empty_text = label("No processings in this project yet.", "lead", wrap=True)
+        self.empty_text = label("Loading processings…", "lead", wrap=True)
         self.empty_text.setAlignment(Qt.AlignmentFlag.AlignCenter)
         start = button("Start mapping", "primary", "play")
         start.clicked.connect(guarded(lambda *_: self.startRequested.emit()))
@@ -290,9 +292,12 @@ class ProcessingsPage(QWidget):
                 "attention": sum(1 for p in self.items if p.status is Status.failed or p.needs_review)}
 
     def set_items(self, items: List[Processing], in_map: set, busy: set, can_manage: bool, loading: bool = False,
-                  total: int = 0, loading_more: bool = False) -> None:
+                  total: int = 0, loading_more: bool = False, loaded: bool = True, failed: bool = False) -> None:
+        """`loaded`: a list of this project came back. `failed`: the last answer was a failure. The "no
+        processings" text needs a successful answer with no items."""
         self.items, self.in_map, self.busy, self.can_manage = items, in_map, busy, can_manage
         self.loading, self.total, self.loading_more = loading, max(total, len(items)), loading_more
+        self.loaded, self.failed = loaded, failed
         if self.expanded is None and items:
             self.expanded = items[0].id
         self._render()
@@ -344,16 +349,15 @@ class ProcessingsPage(QWidget):
             card.clicked.connect(self._toggle)
             self.list.addWidget(card)
         partial = len(self.items) < self.total
-        if self.loading:
-            self.empty_text.setText("Loading processings…")
-        elif not self.items:
-            self.empty_text.setText("No processings in this project yet.")
+        if not self.items:
+            self.empty_text.setText(empty_list_text("processings", "No processings in this project yet.",
+                                                    self.loaded, self.loading, self.failed))
         elif partial:
             self.empty_text.setText(f"Nothing matches this filter among the latest {len(self.items):,} of "
                                     f"{self.total:,} processings.")
         else:
             self.empty_text.setText("Nothing matches this filter.")
-        self.start_button.setVisible(not self.loading and not self.items)
+        self.start_button.setVisible(self.loaded and not self.failed and not self.loading and not self.items)
         self.list.addWidget(self.empty)
         self.empty.setVisible(not visible)
         if visible and partial:

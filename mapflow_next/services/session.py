@@ -10,14 +10,14 @@ from ..api import auth
 from ..api.client import MapflowApi
 from ..api.http import ApiError, Http
 from ..api.oauth import BrowserSignIn, refresh_tokens
-from ..config import STATUS_IDLE_INTERVAL_MS, STATUS_INTERVAL_MS, Config
+from ..config import POLL_FAILURES_BEFORE_ALERT, STATUS_IDLE_INTERVAL_MS, STATUS_INTERVAL_MS, Config
+from ..core.failures import ALERT, STOP, TRANSIENT_KINDS, PollFailures, poll_notice
 from ..core.models import Project, UserStatus
 from ..core.oauth import Tokens
 from ..core.guard import guarded
 
 SIGNED_OUT, SIGNING_IN, SIGNED_IN = "signed_out", "signing_in", "signed_in"
 BROWSER, TOKEN = "browser", "token"
-_TRANSIENT = ("offline", "proxy", "timeout", "server")
 RETRY_REFRESH_MS = 30_000
 
 
@@ -37,11 +37,13 @@ class Session(QObject):
         self.status: Optional[UserStatus] = None
         self.projects: List[Project] = []
         self.project: Optional[Project] = None
+        self.default_project: Optional[Project] = None    # what Mapflow answered for projects/default at sign-in
         self.tokens: Optional[Tokens] = None
         self._silent = False
         self._refreshing = False
         self._forced_refresh_at = 0.0
         self._status_pending = False
+        self._status_poll = PollFailures(POLL_FAILURES_BEFORE_ALERT)
         self._timer = QTimer(self)
         self._timer.setInterval(STATUS_INTERVAL_MS)
         self._timer.timeout.connect(self.refresh_status)
@@ -107,6 +109,7 @@ class Session(QObject):
         for key in ("auth_config_id", "auth_method"):
             self.settings.remove(key)
         self.status, self.project, self.projects, self.method, self.email = None, None, [], None, ""
+        self.default_project = None
         self._set_state(SIGNED_OUT)
 
     def stop(self) -> None:
@@ -119,6 +122,8 @@ class Session(QObject):
         self._refresh_timer.stop()
         self._refreshing = False
         self.status, self._status_pending = None, False
+        self._status_poll.succeeded()
+        self.default_project = None
         self.tokens = None
         self.http.bearer = None
         self.http.auth_config_id = None
@@ -156,7 +161,7 @@ class Session(QObject):
 
     def _refresh_failed(self, error: ApiError) -> None:
         self._refreshing = False
-        if error.kind in _TRANSIENT:
+        if error.kind in TRANSIENT_KINDS:
             if self.state == SIGNED_IN:
                 self._refresh_timer.start(RETRY_REFRESH_MS)  # keep the session through a network hiccup
             elif self.state == SIGNING_IN:
@@ -191,6 +196,8 @@ class Session(QObject):
             self.settings.remove("auth_config_id")
         default = Project.from_api(data, self.email)
         self.projects = [default]
+        self.default_project = default
+        self._status_poll.succeeded()
         self._set_state(SIGNED_IN)
         self.refresh_status()
         self._timer.start()
@@ -246,24 +253,38 @@ class Session(QObject):
 
     @guarded
     def refresh_status(self) -> None:
-        if self.state != SIGNED_IN or self._status_pending:
+        """The account status is a timer's request wherever it is called from: one count of failures for it. A
+        transient failure is dropped (Http logs it) until the count reaches the alert; a permanent one stops it."""
+        if self.state != SIGNED_IN or self._status_pending or self._status_poll.stopped:
             return
         self._status_pending = True
 
-        def failed(_error) -> None:                     # periodic: stay quiet on errors
-            self._status_pending = False
+        def failed(error: ApiError) -> None:
+            self._status_pending = False                # before anything that can raise
+            outcome = self._status_poll.failed(error.kind, error.status)
+            if outcome == STOP:
+                self._timer.stop()
+            if outcome in (ALERT, STOP):
+                text = poll_notice(outcome, "account status", error.message, error.kind)
+                if text:
+                    self.error.emit(text)
 
         self.api.user_status(self._on_status, on_error=failed)
 
     def _on_status(self, status: UserStatus) -> None:
         self._status_pending = False
+        self._status_poll.succeeded()
         if status == self.status:                       # polled every few seconds: only changes count
             return
         self.status = status
         self.statusChanged.emit(status)
 
     def load_projects(self) -> None:
-        self.api.projects(self.email, self._on_projects, on_error=lambda e: None)
+        """The project list, once, after sign-in. A failure is told once; the list the sign-in holds stays."""
+        def failed(error: ApiError) -> None:
+            if error.kind != "auth":                    # the session's: it renews or signs out, and says so
+                self.error.emit(f"Projects didn't load: {error.message}")
+        self.api.projects(self.email, self._on_projects, on_error=failed)
 
     def _on_projects(self, projects: List[Project]) -> None:
         if projects:
@@ -272,13 +293,23 @@ class Session(QObject):
 
     def select_project(self, project_id: str, fallback: Optional[Project] = None) -> None:
         def failed(error: ApiError):
+            if error.kind != "auth":
+                self.error.emit(error.message)
             if fallback is not None:
                 self._set_project(fallback)
-            else:
-                self.error.emit(error.message)
         self.api.project(project_id, self.email, self._set_project, failed)
 
     def _set_project(self, project: Project) -> None:
         self.project = project
         self.settings.setValue("project_id", project.id)
         self.projectChanged.emit(project)
+
+    def open_default_project(self, gone_id: str) -> bool:
+        """The project `gone_id` is gone: open the default one. False when there is none to open (no default, or
+        the default is the gone one): nothing opens, so nothing loops."""
+        default = self.default_project
+        if default is None or default.id == gone_id:
+            return False
+        self._set_project(default)
+        self.load_projects()
+        return True
