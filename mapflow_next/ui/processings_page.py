@@ -296,10 +296,20 @@ class ProcessingsPage(QWidget):
         self._render()
 
     def expand(self, processing_id: str) -> None:
+        """Open one processing: shown, expanded and scrolled to."""
         self.expanded = processing_id
         self.filter = "all"
         self.chip_buttons["all"].setChecked(True)
+        if self.search.text():
+            self.search.clear()                 # or the search may hide it
         self._render()
+        QTimer.singleShot(0, lambda: self._scroll_to(processing_id))    # after _render restores the scroll
+
+    def _scroll_to(self, processing_id: str) -> None:
+        cards = (self.list.itemAt(i).widget() for i in range(self.list.count()))
+        card = next((w for w in cards if isinstance(w, ProcessingCard) and w.processing.id == processing_id), None)
+        if card is not None:
+            self.scroll.ensureWidgetVisible(card, 0, 40)
 
     def _visible(self) -> List[Processing]:
         needle = self.search.text().strip().lower()

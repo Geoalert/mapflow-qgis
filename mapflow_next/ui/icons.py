@@ -6,10 +6,10 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Optional
 
-from qgis.PyQt.QtCore import QByteArray, QRectF, Qt
-from qgis.PyQt.QtGui import QColor, QGuiApplication, QIcon, QPainter, QPixmap
+from qgis.PyQt.QtCore import QByteArray, QPointF, QRectF, Qt
+from qgis.PyQt.QtGui import QColor, QGuiApplication, QIcon, QImage, QPainter, QPen, QPixmap
 from qgis.PyQt.QtSvg import QSvgRenderer
-from qgis.PyQt.QtWidgets import QWidget
+from qgis.PyQt.QtWidgets import QLabel, QWidget
 
 try:
     from qgis.PyQt.QtSvg import QSvgWidget                # Qt 5 (QGIS 3)
@@ -60,6 +60,9 @@ FEATHER = {
     "x": '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
     "star": '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 '
             '8.26 12 2"/>',
+    "star-filled": '<polygon fill="#000" points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 '
+                   '7 14.14 2 9.27 8.91 8.26 12 2"/>',
+    "blank": '',
     "refresh": '<polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>',
     "play": '<polygon points="5 3 19 12 5 21 5 3"/>',
     "home": '<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>',
@@ -181,6 +184,27 @@ def svg_markup(name: str, color: str) -> str:
             f'stroke="{color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">{body}</svg>')
 
 
+def gift_pixmap(color: str) -> QPixmap:
+    """A 13×14 gift drawn on the pixel grid, 1 px lines: a Feather icon at this size, its 24-grid lines between
+    pixels, comes out blurred."""
+    scale = screen_scale()
+    pixmap = QPixmap(round(13 * scale), round(14 * scale))
+    pixmap.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pixmap)
+    painter.scale(scale, scale)
+    pen = QPen(QColor(color), 1)
+    painter.setPen(pen)
+    painter.drawRect(QRectF(0.5, 4.5, 12, 3))            # the lid
+    painter.drawRect(QRectF(1.5, 7.5, 10, 6))            # the box
+    painter.drawLine(QPointF(6.5, 4.5), QPointF(6.5, 13.5))   # the ribbon
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)   # the bow's two loops are round
+    painter.drawEllipse(QRectF(3, 1.5, 3.5, 3))
+    painter.drawEllipse(QRectF(6.5, 1.5, 3.5, 3))
+    painter.end()
+    pixmap.setDevicePixelRatio(scale)
+    return pixmap
+
+
 def icon_file(name: str, color: str) -> str:
     """The icon as an SVG file, for stylesheet rules that need an image path (the arrow of a combo box)."""
     folder = Path(tempfile.gettempdir()) / "mapflow_next_icons"
@@ -204,11 +228,27 @@ def _svg_widget(data: bytes, width: int, height: int, parent: Optional[QWidget])
     return widget
 
 
-def logo_widget(dark: bool, height: int = 26, parent: Optional[QWidget] = None) -> QSvgWidget:
-    """The Mapflow logo (mark and wordmark)."""
-    data = (RESOURCES / "icons" / ("logo-dark.svg" if dark else "logo-light.svg")).read_bytes()
-    size = QSvgRenderer(QByteArray(data)).defaultSize()
-    return _svg_widget(data, round(height * size.width() / max(1, size.height())), height, parent)
+def logo_widget(dark: bool, height: int = 26, parent: Optional[QWidget] = None) -> QLabel:
+    """The Mapflow logo (mark and wordmark). Drawn 4× larger and scaled down smoothly: the mark's waves are
+    thinner than a pixel, and drawn at size they come out broken, like dashes."""
+    renderer = QSvgRenderer(QByteArray((RESOURCES / "icons" / ("logo-dark.svg" if dark else "logo-light.svg"))
+                                       .read_bytes()))
+    width = round(height * renderer.defaultSize().width() / max(1, renderer.defaultSize().height()))
+    scale = screen_scale()
+    big = QImage(round(width * scale * 4), round(height * scale * 4), QImage.Format.Format_ARGB32_Premultiplied)
+    big.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(big)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    renderer.render(painter, QRectF(0, 0, big.width(), big.height()))
+    painter.end()
+    pixmap = QPixmap.fromImage(big.scaled(round(width * scale), round(height * scale),
+                                          Qt.AspectRatioMode.IgnoreAspectRatio,
+                                          Qt.TransformationMode.SmoothTransformation))
+    pixmap.setDevicePixelRatio(scale)
+    label = QLabel(parent)
+    label.setPixmap(pixmap)
+    label.setFixedSize(width, height)
+    return label
 
 
 def mark_widget(dark: bool, size: int = 26, parent: Optional[QWidget] = None) -> QSvgWidget:

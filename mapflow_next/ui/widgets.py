@@ -1,12 +1,13 @@
 """Small building blocks shared by the dock pages. Styling comes from theme.QSS via properties."""
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import Callable, List, Optional
 
-from qgis.PyQt.QtCore import QEvent, QPointF, QRectF, QSize, Qt, QUrl, pyqtSignal
-from qgis.PyQt.QtGui import QDesktopServices, QFont, QFontMetrics, QPainter, QPainterPath, QPen, QPixmap
+from qgis.PyQt.QtCore import QEvent, QObject, QPointF, QRectF, QSize, Qt, QTimer, QUrl, pyqtSignal
+from qgis.PyQt.QtGui import QCursor, QDesktopServices, QFont, QFontMetrics, QPainter, QPainterPath, QPen, QPixmap
 from qgis.PyQt.QtWidgets import (QAbstractButton, QAction, QApplication, QButtonGroup, QComboBox, QFrame, QHBoxLayout,
-                                 QLabel, QPushButton, QSizePolicy, QToolButton, QVBoxLayout, QWidget)
+                                 QLabel, QLineEdit, QPushButton, QSizePolicy, QToolButton, QToolTip, QVBoxLayout,
+                                 QWidget)
 
 from . import icons
 from .theme import color, set_prop, tokens
@@ -76,6 +77,20 @@ def tool(icon_name: str, tooltip: str, variant: str = "icon", size: int = 16,
     widget.setCursor(Qt.CursorShape.PointingHandCursor)
     widget.setAutoRaise(True)
     return widget
+
+
+def same_width(buttons: List[QWidget]) -> None:
+    """Buttons stacked in a list (Use, Chosen, Choose…), made one width: the widest's. Measured once they are
+    shown and styled, so the theme's font and padding count."""
+    def apply() -> None:
+        try:
+            width = max((b.sizeHint().width() for b in buttons), default=0)
+            for b in buttons:
+                b.setMinimumWidth(width)
+        except RuntimeError:                    # the list was redrawn meanwhile: these are gone
+            pass
+    if buttons:
+        QTimer.singleShot(0, apply)
 
 
 def release_focus(widget: QWidget) -> None:
@@ -154,6 +169,63 @@ def vbox(*items, spacing: int = 8, margins=(0, 0, 0, 0)) -> QVBoxLayout:
     return layout
 
 
+class DropTarget(QObject):
+    """Drops onto `widget`: `parse(mime data)` says what a drag carries, and a drag that carries nothing is
+    refused. While something it takes is over it, the widget has dropping=true, which the theme outlines."""
+    dropped = pyqtSignal(list)
+
+    def __init__(self, widget: QWidget, parse: Callable[[object], list]):
+        super().__init__(widget)
+        self.widget, self.parse = widget, parse
+        widget.setAcceptDrops(True)
+        widget.installEventFilter(self)
+
+    def eventFilter(self, obj, event) -> bool:
+        kind = event.type()
+        if kind in (QEvent.Type.DragEnter, QEvent.Type.DragMove, QEvent.Type.Drop):
+            items = self.parse(event.mimeData())
+            set_prop(self.widget, "dropping", bool(items) and kind != QEvent.Type.Drop)
+            if not items:
+                event.ignore()
+                return True
+            event.acceptProposedAction()
+            if kind == QEvent.Type.Drop:
+                self.dropped.emit(items)
+            return True
+        if kind == QEvent.Type.DragLeave:
+            set_prop(self.widget, "dropping", False)
+        return False
+
+
+class HoverTip(QObject):
+    """One tooltip for a whole area: shown after a pause, every time, and kept while the mouse is anywhere
+    in the area. Qt's own reopens over each child widget and shows the next ones at once."""
+
+    def __init__(self, widget: QWidget, text: str, delay: int = 800):
+        super().__init__(widget)
+        self.widget, self.text = widget, text
+        self.timer = QTimer(self)
+        self.timer.setSingleShot(True)
+        self.timer.setInterval(delay)
+        self.timer.timeout.connect(self._show)
+        widget.installEventFilter(self)
+
+    def eventFilter(self, obj, event) -> bool:
+        kind = event.type()
+        if kind == QEvent.Type.ToolTip:             # the children's come up here too: ours instead
+            return True
+        if kind == QEvent.Type.Enter:
+            self.timer.start()
+        elif kind == QEvent.Type.Leave:
+            self.timer.stop()
+            QToolTip.hideText()
+        return False
+
+    def _show(self) -> None:
+        if self.widget.underMouse():
+            QToolTip.showText(QCursor.pos(), self.text, self.widget, self.widget.rect())
+
+
 class Combo(QComboBox):
     """A drop-down for scrolling pages: the mouse wheel over it scrolls the page instead of changing the
     value. Its list, once opened, takes the wheel as usual (the list gets those events, not the combo)."""
@@ -175,6 +247,40 @@ class Card(QFrame):
             self.body.addWidget(item)
         else:
             self.body.addLayout(item)
+
+
+class DropCard(Card):
+    """A card things can be dropped on (with a DropTarget), styled as Mapflow Web's drop zones: a grey dashed
+    outline always says so; on hover, and while something droppable is over it, the outline turns blue and
+    the background a quiet grey. Drawn here: QSS dashes are long and break on rounded corners."""
+    WIDTH, DASH, GAP, RADIUS = 1.5, 5.0, 4.0, 15.0
+
+    def __init__(self, parent: Optional[QWidget] = None, **kwargs):
+        super().__init__(parent, kind="drop", **kwargs)
+        self.setAttribute(Qt.WidgetAttribute.WA_Hover)
+
+    def event(self, event) -> bool:
+        if event.type() in (QEvent.Type.HoverEnter, QEvent.Type.HoverLeave):
+            set_prop(self, "hover", event.type() == QEvent.Type.HoverEnter)
+        return super().event(event)
+
+    def paintEvent(self, event) -> None:
+        super().paintEvent(event)
+        half = self.WIDTH / 2
+        path = QPainterPath()
+        path.addRoundedRect(QRectF(self.rect()).adjusted(half, half, -half, -half), self.RADIUS, self.RADIUS)
+        # A whole number of dashes around the outline: no short dash or double gap where it closes
+        period = self.DASH + self.GAP
+        stretch = path.length() / max(1, round(path.length() / period)) / period
+        active = self.property("dropping") is True or self.property("hover") is True
+        pen = QPen(color("primary" if active else "dash"), self.WIDTH)
+        pen.setDashPattern([self.DASH * stretch / self.WIDTH, self.GAP * stretch / self.WIDTH])
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(pen)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawPath(path)
+        painter.end()
 
 
 class Pill(QLabel):
@@ -199,13 +305,26 @@ class Callout(QFrame):
         layout.setContentsMargins(10, 8, 10, 8)
         layout.setSpacing(8)
         self.icon = QLabel(self)
-        self.icon.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.text = label(text, f"callout-{kind}", wrap=True, parent=self)
         self.text.setTextInteractionFlags(Qt.TextInteractionFlag.TextBrowserInteraction)
         self.text.setOpenExternalLinks(True)
-        layout.addWidget(self.icon)
+        layout.addWidget(self.icon, 0, Qt.AlignmentFlag.AlignVCenter)     # centred on the text, any length
         layout.addWidget(self.text, 1)
+        # A way out (Top up), as a button on the right; set_action shows it
+        self.action = button("", "outline", size="sm", parent=self)
+        self.action.setProperty("callout_action", True)     # small, in the callout's own colours (theme)
+        self.action.setVisible(False)
+        self._action_url = ""
+        self.action.clicked.connect(lambda *_: self._action_url and QDesktopServices.openUrl(QUrl(self._action_url)))
+        layout.addWidget(self.action, 0, Qt.AlignmentFlag.AlignVCenter)
         self.set(kind, text)
+
+    def set_action(self, text: str = "", url: str = "") -> None:
+        """A button on the right that opens `url` in the browser; no text hides it."""
+        self.action.setText(f"{text}  ↗" if text else "")
+        self._action_url = url
+        self.action.setVisible(bool(text and url))
 
     def set(self, kind: str, text: str) -> None:
         set_prop(self, "callout", kind)
@@ -214,7 +333,10 @@ class Callout(QFrame):
         tone = {"info": "primary_ink", "warn": "warn_fg", "error": "err_fg"}[kind]
         self.icon.setPixmap(icons.pixmap(name, tokens()[tone], 16))
         self.text.setText(text)
-        self.setVisible(bool(text))
+        # Shown only once it has a parent: a parentless widget shown is a window of its own, and one flashed up
+        # empty, titled "QGIS3", before the projects window took it in. With text, it shows when it is added.
+        if self.parentWidget() is not None or not text:
+            self.setVisible(bool(text))
 
 
 class StepHeader(QWidget):
@@ -452,7 +574,8 @@ class OptionRow(QFrame):
     """A selectable row (radio-like) with a title, a meta line and free space on the right."""
     clicked = pyqtSignal()
 
-    def __init__(self, title: str, meta: str = "", parent: Optional[QWidget] = None):
+    def __init__(self, title: str, meta: str = "", parent: Optional[QWidget] = None,
+                 *, title_detail: str = ""):
         super().__init__(parent)
         self.setProperty("option", True)
         self.setProperty("selected", False)
@@ -469,14 +592,35 @@ class OptionRow(QFrame):
         self.title = label(title, "title", wrap=True, parent=self)
         self.meta = label(meta, "meta", wrap=True, parent=self)
         self.meta.setVisible(bool(meta))
-        texts.addWidget(self.title)
+        if title_detail:
+            texts.addLayout(hbox(self.title, label(title_detail, "meta"), None))
+        else:
+            texts.addWidget(self.title)
         texts.addWidget(self.meta)
+        self.texts = texts
         layout.addWidget(self.dot)
         layout.addLayout(texts, 1)
         self.right = QHBoxLayout()
         self.right.setSpacing(6)
         layout.addLayout(self.right)
         self._paint_dot(False)
+
+    def add_note(self, text: str, icon_name: str = "alert", tone: str = "muted") -> None:
+        """A warning after the meta: "≈ 0.15 m per pixel · ⚠ z19 recommended", or on the next line, whole."""
+        picture = QLabel()
+        picture.setPixmap(icons.pixmap(icon_name, tokens()[tone], NOTE_ICON))
+        picture.setAlignment(Qt.AlignmentFlag.AlignTop)
+        words = label(text, "meta")
+        block = QWidget()
+        block.picture, block.words = picture, words     # MetaWithNote lines the icon up with the letters
+        line = hbox(picture, words, spacing=4)
+        line.setAlignment(picture, Qt.AlignmentFlag.AlignTop)
+        line.setAlignment(words, Qt.AlignmentFlag.AlignTop)
+        block.setLayout(line)
+        at = self.texts.indexOf(self.meta)
+        self.texts.removeWidget(self.meta)
+        self.meta.setVisible(True)
+        self.texts.insertWidget(at, MetaWithNote(self.meta, block, self))
 
     def set_selected(self, selected: bool) -> None:
         set_prop(self, "selected", selected)
@@ -511,6 +655,125 @@ class OptionRow(QFrame):
             self.clicked.emit()
             return
         super().keyPressEvent(event)
+
+
+NOTE_ICON = 13                                  # the warning icon's size in an option row's meta line
+
+
+class MetaWithNote(QWidget):
+    """A wrapping meta label and a block after it (the warning) that never splits: on the meta's line, after a
+    "·", when it fits there, else on a line of its own. Qt's rich text can't keep an inline icon with the words
+    after it, so the block is a widget, placed here by hand."""
+    GAP = 4
+
+    def __init__(self, meta: QLabel, block: QWidget, parent: Optional[QWidget] = None):
+        super().__init__(parent)
+        self.meta, self.block = meta, block
+        self.text = meta.text()
+        meta.setParent(self)
+        block.setParent(self)
+        size = QSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
+        size.setHeightForWidth(True)
+        self.setSizePolicy(size)
+
+    def _joined(self) -> str:
+        return f"{self.text} · " if self.text else ""
+
+    def _one_line(self, width: int) -> bool:
+        return self.meta.fontMetrics().horizontalAdvance(self._joined()) + self.block.sizeHint().width() <= width
+
+    def hasHeightForWidth(self) -> bool:
+        return True
+
+    def _line_height(self) -> int:
+        """One line of the meta label as it lays itself out (theme margins included): what a plain meta line
+        takes, so a row with a warning spaces its texts as one without."""
+        return self.meta.heightForWidth(10_000) if self.text else self.meta.fontMetrics().height()
+
+    def heightForWidth(self, width: int) -> int:
+        block = self.block.sizeHint().height()
+        if self._one_line(width):
+            return max(self._line_height(), block)
+        return (self.meta.heightForWidth(width) + self.GAP if self.text else 0) + block
+
+    def sizeHint(self) -> QSize:
+        width = self.meta.fontMetrics().horizontalAdvance(self._joined()) + self.block.sizeHint().width()
+        return QSize(width, self.heightForWidth(width))
+
+    def minimumSizeHint(self) -> QSize:
+        width = self.block.sizeHint().width()
+        return QSize(width, self.heightForWidth(width))
+
+    def _line_up_icon(self) -> None:
+        """The icon centred on the letters (between the baseline and the cap height), not on the label's box:
+        the box keeps room for descenders under the text, so a box-centred icon sits visibly higher. Measured
+        here, once shown, when the theme's font is on the label."""
+        picture, words = getattr(self.block, "picture", None), getattr(self.block, "words", None)
+        if picture is None or words is None:
+            return
+        metrics = words.fontMetrics()
+        top = max(0, round(metrics.ascent() - metrics.capHeight() / 2 - NOTE_ICON / 2))
+        if picture.contentsMargins().top() != top:
+            picture.setContentsMargins(0, top, 0, 0)
+            self.updateGeometry()                   # the block may be a pixel taller now
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self._line_up_icon()
+        width, block, text_height = self.width(), self.block.sizeHint(), self._line_height()
+        # Centred in the height it is given, as a plain meta label centres its text: a row with a zoom box and a
+        # price is taller than its texts, and the layout shares the extra height out between them
+        offset = max(0, (self.height() - self.heightForWidth(width)) // 2)
+        if self._one_line(width):
+            self.meta.setText(self._joined())
+            text_width = self.meta.fontMetrics().horizontalAdvance(self._joined())
+            # Both from the same top: the warning's words are a label like the meta, so their lines line up
+            self.meta.setGeometry(0, offset, text_width, text_height)
+            self.block.setGeometry(text_width, offset, block.width(), block.height())
+        else:
+            self.meta.setText(self.text)         # no "·": the warning is on its own line
+            meta_height = self.meta.heightForWidth(width) if self.text else 0
+            self.meta.setGeometry(0, offset, width, meta_height)
+            top = offset + (meta_height + self.GAP if self.text else 0)
+            self.block.setGeometry(0, top, block.width(), block.height())
+
+
+class FitLineEdit(QLineEdit):
+    """A one-line field as wide as its text (as narrow as the space it has, when the text is longer), so what
+    follows it, a pencil, sits right after the text instead of at the far end of the row. While it is being
+    edited it takes the whole row instead, and says so (`editing`): nothing next to it moves as you type."""
+    editing = pyqtSignal(bool)
+
+    def __init__(self, parent: Optional[QWidget] = None):
+        super().__init__(parent)
+        self._editing = False
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        self.textChanged.connect(lambda *_: self._editing or self.updateGeometry())
+
+    def focusInEvent(self, event) -> None:
+        super().focusInEvent(event)
+        self._set_editing(True)
+
+    def focusOutEvent(self, event) -> None:
+        super().focusOutEvent(event)
+        self.setCursorPosition(0)                   # a long name shows from its start again
+        self._set_editing(False)
+
+    def _set_editing(self, on: bool) -> None:
+        if on != self._editing:
+            self._editing = on
+            self.updateGeometry()
+            self.editing.emit(on)
+
+    def sizeHint(self) -> QSize:
+        if self._editing:                           # wider than any row: it gets all the space there is
+            return QSize(10_000, super().sizeHint().height())
+        text = self.text() or self.placeholderText()
+        # + the field's own 2 px margins on each side and the cursor
+        return QSize(self.fontMetrics().horizontalAdvance(text) + 8, super().sizeHint().height())
+
+    def minimumSizeHint(self) -> QSize:
+        return QSize(40, super().minimumSizeHint().height())
 
 
 class ElidedLabel(QLabel):

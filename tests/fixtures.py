@@ -2,14 +2,21 @@
 import copy
 
 
-def block(name, display, price, optional):
-    return {"name": name, "displayName": display, "price": price, "optional": optional, "extra": "ignored"}
+def block(name, display, price, optional, description=None):
+    return {"name": name, "displayName": display, "price": price, "optional": optional, "description": description,
+            "extra": "ignored"}
+
+
+def blankly_described(model):
+    """A model as the project's workflowDefs send it: its blocks' descriptions empty."""
+    return dict(model, blocks=[dict(b, description="") for b in model["blocks"]])
 
 
 # As Mapflow sends them: the model's price in pricePerSqKm, its required blocks at 0
 BUILDINGS = {"id": "wd-buildings", "name": "🏠 Buildings", "description": "Roofs of buildings", "pricePerSqKm": 10,
-             "blocks": [block("buildings", "Buildings", 0, False), block("classification", "Classification", 0, True),
-                        block("heights", "Building heights", 10, True),
+             "blocks": [block("buildings", "Buildings", 0, False),
+                        block("classification", "Classification", 0, True, "Sorts buildings into classes by use"),
+                        block("heights", "Building heights", 10, True, "Estimates the height of each building"),
                         block("simplification", "Simplification", 0, True)]}
 FOREST = {"id": "wd-forest", "name": "🌲 Forest and trees", "description": "", "pricePerSqKm": 8,
           "blocks": [block("forest", "Forest", 0, False), block("heights", "Forest heights", 10, True),
@@ -27,12 +34,15 @@ MAPBOX = {"id": "dp-1", "name": "mapbox", "displayName": "Mapbox Satellite",
 ARCGIS = {"id": "dp-2", "name": "arcgis", "displayName": "ArcGIS World Imagery",
           "price": [{"zoom": 18, "priceSqKm": 2.1309329194574795}, {"zoom": 19, "priceSqKm": 8.523731677829918}]}
 
+# The options' descriptions come here, in models[].blocks[]: the project's workflowDefs have them empty
 STATUS = {"billingType": "CREDITS", "remainingCredits": 1240, "remainingArea": 0, "dataProviders": [MAPBOX, ARCGIS],
-          "searchDataProviders": [{"name": "maxar"}], "reviewWorkflowEnabled": False, "maxAoisPerProcessing": 10}
+          "searchDataProviders": [{"name": "maxar"}], "reviewWorkflowEnabled": False, "maxAoisPerProcessing": 10,
+          "models": [BUILDINGS, FOREST, ROADS]}
 
 USER = {"id": "u-1", "email": "me@example.com", "role": "USER", "aoiAreaLimit": 100e6}
 PROJECT = {"id": "project-1", "name": "Downtown survey", "isDefault": True, "description": None,
-           "workflowDefs": [BUILDINGS, FOREST, ROADS, MULTI, OPEN_DATA], "shareProject": None, "user": USER}
+           "workflowDefs": [blankly_described(m) for m in (BUILDINGS, FOREST, ROADS, MULTI, OPEN_DATA)],
+           "shareProject": None, "user": USER}
 PROJECT_2 = dict(copy.deepcopy(PROJECT), id="project-2", name="Harbor", isDefault=False,
                  description="Port and storage yards, quarterly updates",
                  processingCounts={"succeeded": 12, "failed": 1}, updated="2026-11-05T09:00:00Z",

@@ -3,6 +3,7 @@ results on the map, plus imagery search, the gallery and sign-out. Saves screens
 
     python3 -m tests.e2e_flow [screenshot-folder]
 """
+import json
 import os
 import sys
 import tempfile
@@ -27,6 +28,7 @@ from qgis.core import (Qgis, QgsFeature, QgsGeometry, QgsPointXY, QgsProject, Qg
 
 from . import fixtures, mock_server  # noqa: E402
 from mapflow_next import config  # noqa: E402
+from mapflow_next.ui.imagery_page import MINE  # noqa: E402
 
 SHOTS = Path(sys.argv[1]) if len(sys.argv) > 1 else None
 CHECKS = []
@@ -406,11 +408,26 @@ def main():
     mapbox = next(r for r in rows if r.key == "provider:mapbox")
     check(mapbox.recommended_zoom == 19 and mapbox.zoom == 19, "the scenario's zoom (z19 for heights) is recommended "
                                                                "and preselected")
+    check(mapbox.note == "" and "★" not in mapbox.meta, "at the recommended zoom there is no warning line")
+    controller.provider_zoom["mapbox"] = 18
+    other = next(r for r in controller._imagery_rows(session.status, True)[0] if r.key == "provider:mapbox")
+    check(other.note == "z19 recommended" and "★" not in other.meta,
+          f"at another zoom a warning line names the recommended one ({other.note!r})")
+    controller.provider_zoom.pop("mapbox")
     zoom_combo = next(w for w in run._rows[[r.key for r in rows].index("provider:mapbox")].findChildren(QComboBox))
-    check("z19 ★" in [zoom_combo.itemText(i) for i in range(zoom_combo.count())], "the recommended zoom is marked ★")
+    zooms = [zoom_combo.itemText(i) for i in range(zoom_combo.count())]
+    marks = [zoom_combo.itemIcon(i).pixmap(12, 12).toImage() for i in range(zoom_combo.count())]
+    check("z19" in zooms and len(zooms) > 1
+          and all(mark != marks[zooms.index("z19")] for z, mark in zip(zooms, marks) if z != "z19"),
+          f"the recommended zoom is marked with a star icon, the others aren't ({zooms})")
     eyes = [b for row in run._rows for b in row.findChildren(QToolButton) if b.toolTip() == "Preview on the map"]
     check(len(eyes) == 1 and eyes[0].parentWidget() is run._rows[[r.key for r in rows].index(selected)],
           "the preview is an eye on the selected source only")
+    wait_until(lambda: False, 0.1)
+    picker_control = next(w for w in eyes[0].parentWidget().findChildren(QComboBox))
+    check(abs(eyes[0].geometry().center().y() - picker_control.geometry().center().y()) <= 2,
+          f"the eye is level with the source's control ({eyes[0].geometry().center().y()} vs "
+          f"{picker_control.geometry().center().y()})")
     eyes[0].click()
     check(wait_until(lambda: QgsProject.instance().mapLayersByName("Mapbox Satellite · preview")),
           "the eye adds the source's preview to the map")
@@ -477,6 +494,28 @@ def main():
     QTest.mouseClick(switch, Qt.MouseButton.LeftButton)
     wait_until(lambda: "classification" not in controller.draft.options, 2)
     bar.setValue(0)
+    from mapflow_next.ui.widgets import Callout
+    loose = Callout("info", "No projects yet.")
+    check(not loose.isVisible(), "a callout made before it is put in a window doesn't flash up as a window of its own")
+    loose.deleteLater()
+    from mapflow_next.core.draft import Issue
+    run.set_issues([Issue("account", "This run needs 9 credits; you have 1.", (("Top up", "top_up"),))])
+    check(not run.issues.action.isHidden() and run.issues.action.text().startswith("Top up")
+          and "Top up" not in run.issues.text.text(), "not enough credits: Top up is a button on the right")
+    run.set_issues([])
+    check(run.issues.isHidden() and run.issues.action.isHidden(), "…gone once the run can go")
+    controller.refresh_run()                        # the form's own issues back
+    gone = controller._cost_error_text('DataCatalog error mosaicId not found: DC returned status 404: {"detail": '
+                                       '{"code": "ItemNotFound"}}')
+    check(not gone.startswith("Cost check") and "no longer" in gone
+          and controller._cost_error_text("Area too large").startswith("Cost check"),
+          f"imagery gone since is said in words, other cost errors as Mapflow sends them ({gone!r})")
+    tips = {name: getattr(getattr(s.parentWidget(), "tip", None), "text", "") for name, s in run._switches.items()}
+    check("Sorts buildings into classes by use" in tips.get("classification", "")
+          and "Estimates the height of each building" in tips.get("heights", "") and tips.get("simplification") == ""
+          and not any(s.toolTip() for s in run._switches.values()),
+          f"an option's hover text, from /user/status, covers the whole option; one without a description has "
+          f"none ({tips})")
 
     # a selection in the area's layer: "2 polygons · 1 polygon selected"
     blocks = blocks_layer()
@@ -533,6 +572,23 @@ def main():
           "Rename asks for a name and a description and saves both")
     check(wait_until(lambda: processings.get(started["id"]).name == "Old town heights", 5),
           "the renamed processing shows its new name")
+
+    # Start's Recent: a long project name is cut with "…", and a processing there opens in Processings
+    from mapflow_next.ui.start_page import _MiniCard
+    content.start.set_recent("A" * 300, processings.items[:2], set())
+    title = content.start.recent_title
+    content.go(0)
+    wait_until(lambda: False, 0.1)
+    see_all = next(b for b in content.start.findChildren(QPushButton) if b.text() == "See all")
+    gap = see_all.geometry().left() - title.geometry().right()
+    check(title.full_text() == "Recent in " + "A" * 300 and title.text().endswith("…") and gap >= 12,
+          f"a long project name is cut short of “See all” ({gap} px between them)")
+    mini = next(w for w in content.start.findChildren(_MiniCard) if w.isVisibleTo(content.start))
+    content.go(0)
+    content.processings.expanded = None
+    QTest.mouseClick(mini, Qt.MouseButton.LeftButton)
+    check(wait_until(lambda: content.current_tab() == 1, 3) and content.processings.expanded == mini.processing_id,
+          "a recent processing opens in Processings, expanded")
 
     # rate: a star opens the feedback form; only "Send feedback" sends, and the rating stays shown
     seen = []
@@ -609,7 +665,7 @@ def main():
     shot(content, "05-processings-done", QSize(400, 880))
 
     # imagery search: the Area drop-down is the run's area
-    content.go(2)
+    run.searchImageryRequested.emit()
     imagery_page = content.imagery
     combo = imagery_page.layer_combo
     check(combo.isVisible() and combo.currentText() == "Old town" and combo.findText("Blocks") >= 0,
@@ -630,6 +686,9 @@ def main():
     meta = [r for r in state.requests if r[1] == "/catalog/meta"][-1][2]
     check(meta["aoi"]["type"] in ("Polygon", "MultiPolygon") and meta["maxCloudCover"] == 20,
           "search sends the area and the filters")
+    check(meta.get("minAoiIntersectionPercent") == 20, f"min area coverage is 20 % by default ({meta})")
+    gap = imagery_page.cloud.geometry().top() - imagery_page.cloud_value.geometry().bottom()
+    check(0 <= gap <= 4, f"a slider's title sits right on its slider ({gap} px)")
     check(QgsProject.instance().mapLayersByName("Mapflow · search results"), "footprints are drawn on the map")
     check(imagery_page.date_from.calendarPopup() and "calendar" in content.styleSheet(),
           "dates have a calendar picker with a visible calendar icon")
@@ -678,6 +737,131 @@ def main():
     check([r for r in state.requests if r[1] == "/catalog/meta"][-1][2]["maxCloudCover"] == 35,
           "the cloud cover slider sets the filter")
     imagery_page.type_image.setChecked(True)
+    imagery_page.coverage.setValue(60)
+    wait_until(lambda: imagery_page.search_button.isEnabled(), 5)     # the search before is done
+    imagery_page.search_button.click()
+    check(wait_until(lambda: [r for r in state.requests if r[1] == "/catalog/meta"][-1][2]
+                     .get("minAoiIntersectionPercent") == 60 and imagery_page.search_button.isEnabled(), 5),
+          "the min area coverage slider sends minAoiIntersectionPercent")
+    imagery_page.coverage.setValue(0)
+    imagery_page.search_button.click()
+    check(wait_until(lambda: imagery_page.search_button.isEnabled(), 5)
+          and "minAoiIntersectionPercent" not in [r for r in state.requests if r[1] == "/catalog/meta"][-1][2],
+          "…and at 0 it is no filter: it isn't sent")
+    imagery_page.coverage.setValue(20)
+
+    # a multi-part preview (Roscosmos): every part is fetched, and they make one preview layer
+    from mapflow_next.core.models import CatalogImage
+    base = plugin.services[3].results[0].preview_url.rsplit("/", 1)[0]
+
+    def box(west):
+        return {"type": "Polygon", "coordinates": [[[west, 55.74], [west + 0.01, 55.74], [west + 0.01, 55.75],
+                                                    [west, 55.75], [west, 55.74]]]}
+    roscosmos = CatalogImage.from_api({
+        "id": "ros-1", "providerName": "roscosmos", "productType": "Image", "previewType": "png",
+        "previewUrl": f"{base}/ros-1-a", "footprint": box(37.60),
+        "previews": [{"url": f"{base}/ros-1-a", "geometry": box(37.60)},
+                     json.dumps({"url": f"{base}/ros-1-b", "geometry": box(37.61)})]})
+    check(len(roscosmos.parts) == 2, f"both parts of the preview are read, dicts or JSON strings ({roscosmos.parts})")
+    plugin.services[3].results.append(roscosmos)
+    controller.show_image("ros-1")
+
+    def ros_previews():
+        return [x for x in QgsProject.instance().mapLayers().values()
+                if x.customProperty("mapflow_next/preview") == "catalog:ros-1"]
+    check(wait_until(lambda: len(ros_previews()) == 1, 5)
+          and {r[1] for r in state.requests} >= {"/catalog/preview/ros-1-a", "/catalog/preview/ros-1-b"}
+          and abs(ros_previews()[0].extent().width() - 0.02) < 0.001,
+          "a preview in two parts loads both, as one layer over both footprints")
+    controller.show_image("ros-1")
+    check(wait_until(lambda: not ros_previews(), 3), "…and the eye takes it off again")
+    plugin.services[3].results.remove(roscosmos)
+
+    # a turned scene (Orbview): the picture is laid on the footprint's corners, not on its bounding box
+    from mapflow_next.qgis_bridge.layers import footprint_corners
+    nw, ne, se, sw = (37.600, 55.752), (37.612, 55.750), (37.610, 55.740), (37.598, 55.742)
+    turned = {"type": "Polygon", "coordinates": [[list(se), list(sw), list(nw), list(ne), list(se)]]}
+    check(footprint_corners(turned) == [nw, ne, se, sw] and footprint_corners(box(37.60)) is not None
+          and footprint_corners({"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0.5, 1.5], [0, 1],
+                                                                       [0, 0]]]}) is None,
+          "a quadrilateral footprint's corners are read as NW, NE, SE, SW, whatever order they come in")
+    orbview = CatalogImage.from_api({"id": "orb-1", "providerName": "orbview", "productType": "Image",
+                                     "previewType": "png", "previewUrl": f"{base}/orb-1", "footprint": turned})
+    plugin.services[3].results.append(orbview)
+    controller.show_image("orb-1")
+
+    def orb_previews():
+        return [x for x in QgsProject.instance().mapLayers().values()
+                if x.customProperty("mapflow_next/preview") == "catalog:orb-1"]
+    check(wait_until(lambda: len(orb_previews()) == 1, 5)
+          and orb_previews()[0].extent().toRectF().adjusted(-1e-4, -1e-4, 1e-4, 1e-4).contains(
+              QgsRectangle(37.5985, 55.7405, 37.6115, 55.7515).toRectF())
+          and orb_previews()[0].bandCount() == 4,
+          f"a turned scene's preview is warped onto its footprint, clear outside it "
+          f"({orb_previews()[0].extent().toString(4) if orb_previews() else 'no layer'})")
+    controller.show_image("orb-1")
+    wait_until(lambda: not orb_previews(), 3)
+    plugin.services[3].results.remove(orbview)
+
+    # a tiled preview (ArcGIS): the card shows its whole-world tile
+    arcgis = CatalogImage.from_api({"id": "arc-1", "providerName": "arcgis", "productType": "Mosaic",
+                                    "previewType": "xyz", "previewUrl": f"{base}/tile-{{z}}-{{x}}-{{y}}"})
+    controller._load_thumbnails([arcgis])
+    check(wait_until(lambda: imagery_page.has_thumbnail("arc-1"), 5)
+          and ("GET", "/catalog/preview/tile-0-0-0") in {r[:2] for r in state.requests},
+          "a tiled preview's card shows its tile 0/0/0")
+
+    # one tiled mosaic at two zooms, under one id (as the catalog lists ArcGIS): two results, told apart by zoom
+    twins = [CatalogImage.from_api({"id": "arc-2", "providerName": "arcgis", "productType": "Mosaic",
+                                    "previewType": "xyz", "previewUrl": f"{base}/tile-{{z}}-{{x}}-{{y}}",
+                                    "zoom": zoom, "pixelResolution": resolution, "footprint": box(37.60)})
+             for zoom, resolution in ((17, 1.19), (18, 0.6))]
+    check(len({t.key for t in twins}) == 2 and {t.id for t in twins} == {"arc-2"},
+          f"the same mosaic at two zooms is two results ({[t.key for t in twins]})")
+    plugin.services[3].results.extend(twins)
+    controller.render_search_results()
+    controller._world_tiles.clear()                 # both cards ask while the tile is still on its way
+
+    def tile_requests():
+        return sum(1 for r in state.requests if r[:2] == ("GET", "/catalog/preview/tile-0-0-0"))
+    asked = tile_requests()
+    controller._load_thumbnails(twins)
+    check(wait_until(lambda: all(imagery_page.has_thumbnail(t.key) for t in twins)
+                     and all(imagery_page._thumbs[t.key].pixmap() is not None for t in twins), 5)
+          and tile_requests() == asked + 1,
+          f"…each with its own thumbnail, from one request for their shared tile ({tile_requests() - asked})")
+    controller._load_thumbnails([arcgis, *twins])
+    check(tile_requests() == asked + 1, "…and a tile once loaded isn't asked for again")
+    check(any(w.text().startswith("0.60 m/px (z18)") for w in imagery_page.findChildren(QLabel)),
+          "a result shows its zoom next to its resolution")
+    controller.show_image(twins[1].key)
+    check(wait_until(lambda: controller._search_previewing() == {twins[1].key}
+                     and imagery_page._eyes[twins[1].key].property("on") is True
+                     and imagery_page._eyes[twins[0].key].property("on") is not True, 3),
+          "the eye that lights up is the one of the zoom whose preview is on")
+    controller.show_image(twins[1].key)
+    wait_until(lambda: not controller._search_previewing(), 3)
+    controller.use_image(twins[0].key)
+    check(controller.draft.payload("project-1")["params"]["sourceParams"]["imagerySearch"]["imageIds"] == ["arc-2"]
+          and controller.draft.imagery.zoom == 17, "Use on one of them runs on the image id, at its zoom")
+    content.go(2)
+    controller.render_search_results()
+    check(wait_until(lambda: len({b.width() for b in imagery_page._uses}) == 1, 3)
+          and {b.text() for b in imagery_page._uses} == {"Use", "Chosen"},
+          f"Use and Chosen are one width ({[(b.text(), b.width()) for b in imagery_page._uses]})")
+    for twin in twins:
+        plugin.services[3].results.remove(twin)
+    controller.render_search_results()
+
+    # Draw, as on Start: the drawn polygon is the area here and there
+    imagery_page.draw_button.click()
+    check(iface.canvas.mapTool() is controller.draw_tool and imagery_page.draw_button.text() == "Drawing…"
+          and run.area_buttons["draw"].isChecked(), "Draw in Search starts drawing on the map")
+    controller.on_drawn(QgsGeometry.fromRect(QgsRectangle(37.60, 55.74, 37.61, 55.75)))
+    check(imagery_page.draw_button.text() == "Draw" and controller.draft.aoi.name.startswith("Mapflow area")
+          and combo.currentText() == controller.draft.aoi.name and "1 polygon" in imagery_page.area_text.text(),
+          f"…and the drawn polygon becomes the area, in Search too ({combo.currentText()})")
+    run.layerChosen.emit(layer.id())
     shot(content, "06-imagery", QSize(400, 880))
     content.imagery.useImage.emit("img-1")
     check(controller.draft.imagery.kind == "catalog", "Use sets the search image as the imagery")
@@ -703,24 +887,23 @@ def main():
     controller.refresh_run()
     rows, _selected = controller._imagery_rows(session.status, True)
     mine = next((r for r in rows if r.key == "mosaic"), None)
-    check(mine is not None and mine.pick == "Add imagery…" and "No collections yet" in mine.meta,
+    check(mine is not None and mine.pick == "Add imagery…"
+          and mine.meta == "Upload a GeoTIFF to process your own imagery",
           "without collections, My imagery is still listed, with Add imagery…")
     content.go(0)
     content.open_run()
     wait_until(lambda: False, 0.3)
     add = [b for row in content.run._rows for b in row.findChildren(QPushButton) if b.text() == "Add imagery…"]
     add and add[0].click()
-    picker = controller.mosaic_picker
-    check(picker is not None and picker.isVisible() and picker.current is None
-          and picker.upload_button.isVisible() and picker.create_button.isVisible()
-          and "new collection" in picker.target.text(),
-          "…and the button opens My imagery, ready to upload into a new collection or create one")
-    picker.close()
+    check(content.current_tab() == 2 and content.imagery.current_tab() == MINE
+          and not (controller.mosaic_picker and controller.mosaic_picker.isVisible()),
+          "…and with nothing to pick, the button goes to the My imagery tab, where uploads are")
+    content.open_run()
     before = controller.draft.imagery
-    controller.on_imagery("mosaic")
-    check(controller.mosaic_picker.isVisible() and controller.draft.imagery is before,
-          "choosing the row opens it too, and changes nothing else")
-    controller.mosaic_picker.close()
+    QTest.mouseClick(content.run._rows[0], Qt.MouseButton.LeftButton)
+    check(content.current_tab() == 2 and content.imagery.current_tab() == MINE
+          and controller.draft.imagery is before,
+          "choosing the row goes there too, and changes nothing else")
     state.no_mosaics = False
     imagery_service.load_mosaics()
 
@@ -785,6 +968,7 @@ def main():
     from mapflow_next.qgis_bridge import aoi as aoi_module
     project = QgsProject.instance()
     pier = QgsRasterLayer(make_geotiff("pier.tif"), "Pier 7")
+    dock = QgsRasterLayer(make_geotiff("dock.tif"), "Dock 2")
     xyz = QgsRasterLayer("type=xyz&url=https://tile.example.com/%7Bz%7D/%7Bx%7D/%7By%7D.png&zmax=19&zmin=0",
                          "Street tiles", "wms")
     wells = QgsVectorLayer("Point?crs=EPSG:4326", "Wells", "memory")
@@ -792,16 +976,82 @@ def main():
     feature = QgsFeature()
     feature.setGeometry(QgsGeometry.fromRect(QgsRectangle(37.60, 55.74, 37.62, 55.75)))
     harbour.dataProvider().addFeatures([feature])
-    project.addMapLayers([pier, xyz, wells, harbour])
+    project.addMapLayers([pier, dock, xyz, wells, harbour])
     page = content.imagery
-    page._fill_layer_menu()
-    check([a.text() for a in page.layer_menu.actions()] == ["Pier 7"],
-          f"Choose from raster layer lists only GeoTIFF file layers ({[a.text() for a in page.layer_menu.actions()]})")
+    listed = []
+
+    def pick(names):
+        def fill(dialog):
+            items = [dialog.list.item(row) for row in range(dialog.list.count())]
+            listed.append([item.text() for item in items])
+            for item in items:
+                item.setSelected(item.text() in names)
+        return fill
+    seen = []
+    close_modal_later(seen, pick({"Pier 7"}))
     state.uploads.clear()
-    page.layer_menu.actions()[0].trigger()
+    page.layer_button.click()
+    check(seen == ["LayerPicker"] and sorted(listed[-1]) == ["Dock 2", "Pier 7"],
+          f"Choose from raster layers lists only GeoTIFF file layers ({listed})")
     check(wait_until(lambda: [u[:2] for u in state.uploads] == [("new", "Pier 7")] and controller.uploading is None
                      and not imagery_service.uploading, 5),
           f"…and picking one uploads its file as a collection named after the layer ({state.uploads})")
+    close_modal_later(seen, pick({"Pier 7", "Dock 2"}))
+    state.uploads.clear()
+    page.layer_button.click()
+    check(wait_until(lambda: [u[0] for u in state.uploads] == ["create", "image", "image"]
+                     and controller.uploading is None and not imagery_service.uploading, 5),
+          f"…and picking several uploads them all into one new collection ({state.uploads})")
+
+    # drag and drop: layers from the Layers panel (several at once) or .tif files onto My imagery
+    from qgis.core import QgsMimeDataUtils
+    from qgis.PyQt.QtCore import QMimeData, QPoint, QPointF
+    from qgis.PyQt.QtGui import QDragEnterEvent, QDropEvent
+    from mapflow_next.qgis_bridge import rasters as rasters_module
+
+    def drag(layers=(), files=()):
+        mime = QgsMimeDataUtils.encodeUriList([QgsMimeDataUtils.Uri(x) for x in layers]) if layers else QMimeData()
+        if files:
+            mime.setUrls([QUrl.fromLocalFile(f) for f in files])
+        return mime
+    def dropped(mime):          # (file, name), the file as the OS writes it
+        return [(os.path.normcase(os.path.normpath(p)), n) for p, n in rasters_module.dropped_geotiffs(mime)]
+    pier_file, dock_file, loose = (os.path.normcase(os.path.normpath(p)) for p in (
+        rasters_module.geotiff_path(pier), rasters_module.geotiff_path(dock), make_geotiff("loose.tif")))
+    found = [dropped(drag([pier, dock, xyz, wells])), dropped(drag(files=[loose, pier_file])),
+             dropped(drag([xyz, wells]))]
+    check(found == [[(pier_file, "Pier 7"), (dock_file, "Dock 2")], [(loose, "loose"), (pier_file, "pier")], []],
+          f"a drag carries the GeoTIFF layers and files in it, and nothing else ({found})")
+    card = page.drop.widget
+    tiles, two = drag([xyz]), drag([pier, dock])        # kept: an event doesn't own its mime data
+    refused = QDragEnterEvent(QPoint(10, 10), Qt.DropAction.CopyAction, tiles, Qt.MouseButton.LeftButton,
+                              Qt.KeyboardModifier.NoModifier)
+    QApplication.sendEvent(card, refused)
+    taken = QDragEnterEvent(QPoint(10, 10), Qt.DropAction.CopyAction, two, Qt.MouseButton.LeftButton,
+                            Qt.KeyboardModifier.NoModifier)
+    QApplication.sendEvent(card, taken)
+    check(not refused.isAccepted() and taken.isAccepted() and card.property("dropping") is True,
+          "My imagery takes a drag of GeoTIFF layers, outlined, and refuses tile layers")
+    state.uploads.clear()
+    drop = QDropEvent(QPointF(10, 10), Qt.DropAction.CopyAction, two, Qt.MouseButton.LeftButton,
+                      Qt.KeyboardModifier.NoModifier)
+    QApplication.sendEvent(card, drop)
+    check(wait_until(lambda: [u[0] for u in state.uploads] == ["create", "image", "image"]
+                     and controller.uploading is None and not imagery_service.uploading, 5)
+          and card.property("dropping") is False,
+          f"…and dropping two layers uploads both into one new collection ({state.uploads})")
+    content.go(2)
+    page.show_tab(MINE)
+    QApplication.setActiveWindow(iface.window)
+    page.upload_button.setFocus()
+    wait_until(lambda: False, 0.1)
+    top = page.scroll.verticalScrollBar().value()
+    page.set_upload(0, "Checking…")
+    wait_until(lambda: False, 0.2)
+    check(page.scroll.verticalScrollBar().value() == top and QApplication.focusWidget() is not page.upload_button,
+          f"starting an upload doesn't scroll My imagery down to the collections "
+          f"({top} → {page.scroll.verticalScrollBar().value()})")
+    page.set_upload(None)
     menus = {layer.name(): iface.layer_menu(layer) for layer in (pier, xyz, wells, harbour)}
     check(menus == {"Pier 7": ["Use as imagery in Mapflow"], "Street tiles": [], "Wells": [],
                     "Harbour area": ["Use as AOI in Mapflow"]},
@@ -832,7 +1082,7 @@ def main():
     controller.draft.imagery = imagery_before
     if area_before is not None:
         controller.set_aoi_layer(area_before)
-    project.removeMapLayers([pier.id(), xyz.id(), wells.id(), harbour.id()])
+    project.removeMapLayers([pier.id(), dock.id(), xyz.id(), wells.id(), harbour.id()])
     check(aoi_module.is_polygon_layer(controller.aoi_layer) or area_before is None, "…and the area is put back")
     imagery_service.load_mosaics()
     wait_until(lambda: not imagery_service._mosaics_loading, 5)    # or the check below would ride on this load
@@ -844,8 +1094,8 @@ def main():
                             "tags": []}]
     imagery_service._mosaics_at = 0
     content.go(2)
-    content.imagery.show_tab(1)
-    content.imagery.tabs.changed.emit(1)
+    content.imagery.show_tab(MINE)
+    content.imagery.tabs.changed.emit(MINE)
     check(wait_until(lambda: imagery_service.get_mosaic("m-web") is not None, 5),
           "opening My imagery asks Mapflow again, so a collection made in Mapflow Web appears")
     check(controller._mosaic_refresh.isActive() and controller._mosaic_refresh.interval() == 30_000,
@@ -868,7 +1118,7 @@ def main():
 
     # My imagery: image counts, no empty space, the collection picker
     content.go(2)
-    content.imagery.show_tab(1)
+    content.imagery.show_tab(MINE)
     check(wait_until(lambda: imagery_service.get_mosaic("m-1").image_count == 3
                      and imagery_service.get_mosaic("m-2").image_count == 1, 5),
           "collections know how many images they have")
@@ -1124,6 +1374,21 @@ def main():
         named.append((dialog.windowTitle(), dialog.name.text()))
         dialog.name.setText("Centre roofs")
         dialog.description.setPlainText("Roofs inside the drone survey")
+    gap = run.rename_button.geometry().left() - run.name.geometry().right()
+    check(0 <= gap <= 12, f"the pencil sits right after the name, not at the row's end ({gap} px)")
+    from qgis.PyQt.QtCore import QEvent
+    from qgis.PyQt.QtGui import QFocusEvent
+    resting, card_height = run.name.width(), run.name.parentWidget().height()
+    QApplication.sendEvent(run.name, QFocusEvent(QEvent.Type.FocusIn))
+    wait_until(lambda: False, 0.1)
+    check(not run.rename_button.isVisible() and run.name.width() > resting
+          and run.name.parentWidget().height() == card_height,
+          f"while the name is edited the field takes the row and the pencil steps aside, the form below "
+          f"staying put ({resting} → {run.name.width()} px wide, card {card_height} → "
+          f"{run.name.parentWidget().height()} px high)")
+    QApplication.sendEvent(run.name, QFocusEvent(QEvent.Type.FocusOut))
+    wait_until(lambda: False, 0.1)
+    check(run.rename_button.isVisible() and run.name.width() == resting, "…and comes back right after it")
     close_modal_later(named, name_it)
     check(run.rename_button.isEnabled() and run.rename_button.isVisible(), "the pencil by the name is a button")
     run.rename_button.click()
@@ -1149,7 +1414,7 @@ def main():
     check(starts[-1][2]["meta"] == {"source-app": "qgis", "source": "my imagery", "version": "4.0.0"},
           "processings carry the plugin's meta, as the current plugin sends it")
     content.go(2)
-    content.imagery.show_tab(1)
+    content.imagery.show_tab(MINE)
     check(not picker.isVisible() and "centre.tif" in content.run._rows[0].meta.text(),
           "the run form shows the chosen image")
     pick_button = next(b for b in content.run._rows[0].findChildren(QPushButton) if b.text() == "Choose…")

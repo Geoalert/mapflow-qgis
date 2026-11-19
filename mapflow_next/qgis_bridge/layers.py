@@ -5,7 +5,7 @@ import json
 import re
 import tempfile
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 from qgis.core import (QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsCsException, QgsJsonUtils,
                        QgsLayerTreeGroup,
@@ -49,6 +49,26 @@ def geojson_bounds(geometry: Optional[dict]):
     if not xs or max(xs) <= min(xs) or max(ys) <= min(ys):
         return None
     return min(xs), min(ys), max(xs), max(ys)
+
+
+def footprint_corners(geometry: Optional[dict]) -> Optional[List[Tuple[float, float]]]:
+    """A quadrilateral footprint's corners as NW, NE, SE, SW; None for any other shape. Scenes are turned
+    by less than 45°, so the two northernmost corners are the picture's top ones, whatever order they
+    come in."""
+    geometry = geometry or {}
+    rings = geometry.get("coordinates") or []
+    if geometry.get("type") == "MultiPolygon":
+        rings = rings[0] if len(rings) == 1 else []
+    elif geometry.get("type") != "Polygon":
+        return None
+    ring = [(float(p[0]), float(p[1])) for p in (rings[0] if rings else [])]
+    if len(ring) == 5 and ring[0] == ring[-1]:
+        ring = ring[:4]
+    if len(ring) != 4 or len(set(ring)) != 4:
+        return None
+    by_north = sorted(ring, key=lambda p: -p[1])
+    (nw, ne), (sw, se) = sorted(by_north[:2]), sorted(by_north[2:])
+    return [nw, ne, se, sw]
 
 
 def bounds_extent(bounds) -> Optional[QgsRectangle]:
@@ -172,8 +192,9 @@ class MapLayers:
 
     def picture_on_footprint(self, data: bytes, footprint: Optional[dict], name: str,
                              file_stem: str) -> Optional[QgsRasterLayer]:
-        """A catalog image's picture preview (PNG or JPEG) stretched over its footprint's bounding box. A
-        preview, not a georeferenced image: close enough to judge the scene against the area."""
+        """A catalog image's picture preview (PNG or JPEG) stretched over its footprint: its four corners
+        when the footprint is a quadrilateral (a turned scene, Orbview), else its bounding box. A preview,
+        not a georeferenced image: close enough to judge the scene against the area."""
         box = geojson_bounds(footprint)
         image = QImage.fromData(data)
         if box is None or image.isNull():
@@ -183,11 +204,50 @@ class MapLayers:
         folder.mkdir(parents=True, exist_ok=True)
         path = folder / f"{file_stem}.{'jpg' if jpeg else 'png'}"
         path.write_bytes(data)
+        corners = footprint_corners(footprint)
+        if corners:
+            return self._picture_on_corners(path, image.width(), image.height(), corners, name)
         west, south, east, north = box
         dx, dy = (east - west) / image.width(), (north - south) / image.height()
         # World file: pixel size, rotations, the upper-left pixel's centre
         path.with_suffix(".jgw" if jpeg else ".pgw").write_text(
             f"{dx}\n0\n0\n{-dy}\n{west + dx / 2}\n{north - dy / 2}\n", encoding="ascii")
+        layer = QgsRasterLayer(str(path), name, "gdal")
+        if not layer.isValid():
+            return None
+        layer.setCrs(WGS84)
+        return layer
+
+    @staticmethod
+    def _picture_on_corners(path: Path, width: int, height: int, corners: List[Tuple[float, float]],
+                            name: str) -> Optional[QgsRasterLayer]:
+        """The picture warped so its corners land on the footprint's (NW, NE, SE, SW); outside it is clear."""
+        from osgeo import gdal
+        pixels = ((0, 0), (width, 0), (width, height), (0, height))
+        gcps = [gdal.GCP(x, y, 0, px, py) for (x, y), (px, py) in zip(corners, pixels)]
+        placed = gdal.Translate(str(path.with_suffix(".vrt")), str(path), format="VRT", GCPs=gcps,
+                                outputSRS="EPSG:4326")
+        if placed is None:
+            return None
+        warped = gdal.Warp(str(path.with_suffix(".tif")), placed, format="GTiff", dstSRS="EPSG:4326", dstAlpha=True)
+        ok = warped is not None
+        del placed, warped                          # closing them writes the files
+        layer = QgsRasterLayer(str(path.with_suffix(".tif")), name, "gdal") if ok else None
+        return layer if layer is not None and layer.isValid() else None
+
+    def pictures_on_footprints(self, parts: List[Tuple[bytes, Optional[dict]]], name: str,
+                               file_stem: str) -> Optional[QgsRasterLayer]:
+        """A preview in several pictures (Roscosmos), each on its own footprint, joined into one layer."""
+        from osgeo import gdal
+        placed = [self.picture_on_footprint(data, footprint, name, f"{file_stem}_{index}")
+                  for index, (data, footprint) in enumerate(parts)]
+        if not placed or not all(placed):
+            return None
+        path = Path(tempfile.gettempdir()) / "mapflow_next" / f"{file_stem}.vrt"
+        vrt = gdal.BuildVRT(str(path), [layer.source() for layer in placed])
+        if vrt is None:
+            return None
+        del vrt                                     # closing it writes the file
         layer = QgsRasterLayer(str(path), name, "gdal")
         if not layer.isValid():
             return None

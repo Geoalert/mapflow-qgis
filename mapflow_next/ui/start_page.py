@@ -14,7 +14,8 @@ from ..core.models import Processing
 from ..core.scenarios import Catalogue, Scenario
 from . import icons
 from .theme import tokens
-from .widgets import Card, ElidedLabel, ImageTile, Pill, button, clear_layout, label, link, placeholder, vbox
+from .widgets import (Card, ElidedLabel, ImageTile, Pill, button, clear_layout, event_pos, label, link, placeholder,
+                      vbox)
 
 
 def scenario_pixmap(catalogue: Catalogue, scenario: Scenario, width: int = 170, height: int = 88) -> QPixmap:
@@ -60,6 +61,7 @@ class StartPage(QWidget):
     galleryRequested = pyqtSignal(str)        # search text to start with
     customRequested = pyqtSignal()
     processingsRequested = pyqtSignal()
+    processingOpened = pyqtSignal(str)        # a recent processing, by id: open it in Processings
 
     def __init__(self, catalogue: Catalogue, parent=None):
         super().__init__(parent)
@@ -109,10 +111,11 @@ class StartPage(QWidget):
         layout.addWidget(agent)
 
         header = QHBoxLayout()
-        self.recent_title = label("Recent", "label")
+        self.recent_title = ElidedLabel("Recent", "label")    # a long project name ends in “…”, not off the edge
         see_all = link("See all", external=False)
         see_all.clicked.connect(self.processingsRequested.emit)
         header.addWidget(self.recent_title, 1)
+        header.addSpacing(16)                   # a cut project name stops short of "See all"
         header.addWidget(see_all)
         self.recent_box = QVBoxLayout()
         self.recent_box.setSpacing(8)
@@ -152,13 +155,21 @@ class StartPage(QWidget):
         self.recent_title.setText(f"Recent in {project_name}" if project_name else "Recent")
         clear_layout(self.recent_box)
         for processing in processings[:2]:
-            self.recent_box.addWidget(_MiniCard(processing, processing.id in in_map))
+            card = _MiniCard(processing, processing.id in in_map)
+            card.clicked.connect(self.processingOpened.emit)
+            self.recent_box.addWidget(card)
         self.recent.setVisible(bool(processings))
 
 
 class _MiniCard(Card):
+    """A recent processing; a click opens it in Processings, where its results and actions are."""
+    clicked = pyqtSignal(str)
+
     def __init__(self, processing: Processing, in_map: bool):
-        super().__init__(margins=(12, 10, 12, 10), spacing=6)
+        super().__init__(margins=(12, 10, 12, 10), spacing=6, kind="tile")
+        self.processing_id = processing.id
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setToolTip("Open in Processings")
         row = QHBoxLayout()
         row.setSpacing(10)
         badge = QLabel(self)
@@ -188,3 +199,8 @@ class _MiniCard(Card):
             texts.addWidget(label(" · ".join(m for m in meta if m), "meta"))
         row.addLayout(texts, 1)
         self.add(row)
+
+    def mouseReleaseEvent(self, event) -> None:
+        if event.button() == Qt.MouseButton.LeftButton and self.rect().contains(event_pos(event)):
+            self.clicked.emit(self.processing_id)
+        super().mouseReleaseEvent(event)

@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import List, Optional, Tuple
 
 from qgis.core import (QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsDistanceArea, QgsMapLayer,
-                       QgsPointXY, QgsProject, QgsRasterLayer)
+                       QgsMimeDataUtils, QgsPointXY, QgsProject, QgsRasterLayer)
 
 GEOTIFF = (".tif", ".tiff")
 UPLOAD_LIMIT_GB = 2               # as Mapflow's upload accepts (3.x checked the same limits)
@@ -24,6 +24,28 @@ def geotiff_path(layer: Optional[QgsMapLayer]) -> str:
         return ""
     path = layer.source().split("|")[0]
     return path if path.lower().endswith(GEOTIFF) and Path(path).is_file() else ""
+
+
+def dropped_geotiffs(mime) -> List[Tuple[str, str]]:
+    """The GeoTIFFs a drag carries, as (file, name): layers dragged from the Layers panel (or the Browser)
+    and .tif files from the file manager. Anything else (tile layers, vectors, other files) is left out."""
+    found: List[Tuple[str, str]] = []
+    if QgsMimeDataUtils.isUriList(mime):
+        for uri in QgsMimeDataUtils.decodeUriList(mime):
+            layer = QgsProject.instance().mapLayer(getattr(uri, "layerId", "") or "")
+            path = geotiff_path(layer) if layer else ""
+            if not path and uri.layerType == "raster" and uri.providerKey == "gdal":
+                path = uri.uri.split("|")[0]
+            if path.lower().endswith(GEOTIFF) and Path(path).is_file():
+                found.append((path, layer.name() if layer else Path(path).stem))
+    for url in mime.urls() if mime.hasUrls() else []:
+        path = url.toLocalFile()
+        if path.lower().endswith(GEOTIFF) and Path(path).is_file():
+            found.append((path, Path(path).stem))
+    unique: dict = {}
+    for path, name in found:                    # a layer may come both as a layer and as its file
+        unique.setdefault(path, name)
+    return list(unique.items())
 
 
 def geotiff_layers(project: Optional[QgsProject] = None) -> List[QgsRasterLayer]:

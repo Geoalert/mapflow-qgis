@@ -3,12 +3,12 @@ from __future__ import annotations
 
 import html
 from contextlib import contextmanager
-from dataclasses import astuple, dataclass, field
+from dataclasses import astuple, dataclass, field, replace
 from typing import Dict, List, Optional, Tuple
 
-from qgis.PyQt.QtCore import QSignalBlocker, Qt, QTimer, pyqtSignal
+from qgis.PyQt.QtCore import QSignalBlocker, QSize, Qt, QTimer, pyqtSignal
 from qgis.PyQt.QtGui import QPixmap
-from qgis.PyQt.QtWidgets import (QComboBox, QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
+from qgis.PyQt.QtWidgets import (QComboBox, QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton,
                                  QScrollArea, QSizePolicy, QToolButton, QVBoxLayout, QWidget)
 
 from .. import config
@@ -17,10 +17,11 @@ from ..core.draft import Issue
 from ..core.models import Block, Model
 from . import icons
 from .theme import set_prop, tokens
-from .widgets import (Callout, Card, Combo, ElidedLabel, OptionRow, Pill, StepHeader, Toggle, button, clear_layout,
-                      label, link, rounded, tool, vbox)
+from .widgets import (Callout, Card, Combo, ElidedLabel, FitLineEdit, HoverTip, OptionRow, Pill, StepHeader, Toggle,
+                      button, clear_layout, label, link, rounded, tool, vbox)
 
 
+STAR = "#d69e2e"            # the recommended zoom's star: amber, seen on white, hover grey, the selected row, dark
 ISSUE_LINKS = {"top_up": config.TOP_UP_URL, "pricing": config.PRICING_URL,
                "support": f"mailto:{config.SUPPORT_EMAIL}"}
 
@@ -43,6 +44,7 @@ class ImageryRow:
     recommended_zoom: Optional[int] = None    # marked ★ in the zoom list
     pick: str = ""                    # My imagery: text of the button that opens the collection picker
     recommended: bool = False
+    note: str = ""                    # a warning line under the meta: "z19 recommended"
     removable: bool = False
     previewable: bool = False         # an eye shows it on the map (on the selected row)
     previewing: Optional[bool] = None  # its preview is on the map; None: the eye only zooms to it
@@ -121,15 +123,20 @@ class RunPage(QWidget):
         name_row = QHBoxLayout()
         name_row.setSpacing(4)
         name_row.addWidget(label("Name:", "meta"))
-        self.name = QLineEdit(card)
+        self.name = FitLineEdit(card)
         self.name.setProperty("flat", True)
         self.name.setToolTip("Processing name: edit to rename")
         self.name.textEdited.connect(self.nameEdited.emit)
         edit = tool("edit", "Name and description of this processing", "plain", 14)
         edit.clicked.connect(lambda *_: self.renameRequested.emit())
         self.rename_button = edit
-        name_row.addWidget(self.name, 1)
+        self.name.editing.connect(lambda on: edit.setVisible(not on))     # no pencil to push along while typing
+        policy = edit.sizePolicy()
+        policy.setRetainSizeWhenHidden(True)        # hidden, it keeps its place: the row's height doesn't jump
+        edit.setSizePolicy(policy)
+        name_row.addWidget(self.name)               # as wide as the name: the pencil right after it
         name_row.addWidget(edit)
+        name_row.addStretch(1)
         texts.addWidget(self.scenario_title)
         texts.addLayout(name_row)
         change = tool("grid", "Change the scenario: open the scenario gallery", "icon", 18)
@@ -314,12 +321,14 @@ class RunPage(QWidget):
             bar.setValue(value)
             QTimer.singleShot(0, lambda: bar.setValue(value))
 
-    def set_options(self, model: Optional[Model], enabled: set, base_price: str, note: str = "") -> None:
+    def set_options(self, model: Optional[Model], enabled: set, base_price: str, note: str = "",
+                    tips: Optional[Dict[str, str]] = None) -> None:
+        """`tips`: block name → what the option does, shown on hover."""
         self.model_price.setText(base_price)
         self.model_note.setText(note or (model.description if model else ""))
         self.model_note.setVisible(bool(self.model_note.text()))
         blocks = model.options if model else []
-        key = (model.id if model else None, tuple(b.name for b in blocks))
+        key = (model.id if model else None, tuple(b.name for b in blocks), tuple(sorted((tips or {}).items())))
         if key == self._options_key:
             # Same model and options: only the switches change. Rebuilding them would move the focus
             for name, switch in self._switches.items():
@@ -332,21 +341,26 @@ class RunPage(QWidget):
         clear_layout(self.options_box)
         self._switches = {}
         for block in blocks:
-            self.options_box.addLayout(self._option_row(block, block.name in enabled))
+            self.options_box.addWidget(self._option_row(block, block.name in enabled, (tips or {}).get(block.name, "")))
 
-    def _option_row(self, block: Block, checked: bool) -> QHBoxLayout:
-        row = QHBoxLayout()
+    def _option_row(self, block: Block, checked: bool, tip: str = "") -> QWidget:
+        """`tip`: what the option does, shown on hover anywhere over the option."""
+        holder = QWidget()
+        row = QHBoxLayout(holder)
+        row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(10)
         price = "no extra cost" if not block.price else f"+{formatting.per_km2(block.price)}"
         texts = vbox(label(block.display_name, "title", wrap=True), label(price, "meta"), spacing=1)
         switch = Toggle()
+        if tip:
+            holder.tip = HoverTip(holder, f"<p>{html.escape(tip)}</p>")    # rich text: Qt wraps it
         switch.setChecked(checked)
         switch.setAccessibleName(block.display_name)
         switch.toggled.connect(lambda on, name=block.name: self.optionToggled.emit(name, bool(on)))
         self._switches[block.name] = switch
         row.addLayout(texts, 1)
         row.addWidget(switch)
-        return row
+        return holder
 
     def set_layers(self, layers: List[Tuple[str, str]], selected: Optional[str]) -> None:
         blocker = QSignalBlocker(self.layer_combo)
@@ -401,38 +415,38 @@ class RunPage(QWidget):
         self._rows_key = key
         clear_layout(self.rows_box)
         self._rows = []
+        mosaic_row = basemap_row = None
         for spec in rows:
-            row = OptionRow(spec.title, spec.meta)
+            inline_price = spec.key == "mosaic"
+            row = OptionRow(spec.title, spec.meta, title_detail=spec.price if inline_price else "")
             chosen = spec.key == selected
             row.set_selected(chosen)
+            if spec.note:
+                row.add_note(spec.note)
             row.clicked.connect(lambda *_, key=spec.key: self.imageryChosen.emit(key))
             if spec.recommended:
                 row.right.addWidget(Pill("Recommended", "ok"))
-            # The control (zoom or picker) with the price under it: one narrow column
-            column = QVBoxLayout()
-            column.setSpacing(2)
+            controls = QHBoxLayout()
+            controls.setSpacing(4)
             if spec.zooms:
                 zoom = Combo(row)
-                for value in spec.zooms:
-                    zoom.addItem(f"z{value} ★" if value == spec.recommended_zoom else f"z{value}", value)
+                star, blank = icons.icon("star-filled", STAR, 11), icons.icon("blank", STAR, 11)
+                zoom.setIconSize(QSize(11, 11))
+                for value in spec.zooms:     # every item has an icon, so the texts line up
+                    zoom.addItem(star if value == spec.recommended_zoom else blank, f"z{value}", value)
                 zoom.setCurrentIndex(spec.zooms.index(spec.zoom) if spec.zoom in spec.zooms else len(spec.zooms) - 1)
-                zoom.setToolTip("Zoom level: higher is sharper and costs more. ★ recommended for this scenario")
+                zoom.setToolTip("Zoom level: higher is sharper and costs more. The starred one is recommended for "
+                                "this scenario")
                 zoom.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
                 zoom.setMinimumContentsLength(4)
                 zoom.activated.connect(lambda i, key=spec.key, combo=zoom: self.zoomChosen.emit(key, combo.itemData(i)))
-                column.addWidget(zoom)
+                controls.addWidget(zoom)
             if spec.pick:
                 pick = button(spec.pick, "outline", size="sm")
-                pick.setToolTip("Upload a GeoTIFF to My imagery" if spec.pick.startswith("Upload")
+                pick.setToolTip("Upload a GeoTIFF to My imagery" if spec.pick == "Add imagery…"
                                 else "Choose a collection, or one image of it")
                 pick.clicked.connect(lambda *_: self.mosaicPickRequested.emit())
-                column.addWidget(pick)
-            if spec.price:
-                price = label(spec.price, "meta")
-                price.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-                column.addWidget(price)
-            if column.count():
-                row.right.addLayout(column)
+                controls.addWidget(pick, 0, Qt.AlignmentFlag.AlignVCenter)
             if chosen and spec.previewable:
                 on = bool(spec.previewing)
                 eye = tool("eye", "Hide the preview" if on else "Preview on the map", "plain", 16)
@@ -440,13 +454,32 @@ class RunPage(QWidget):
                     eye.setIcon(icons.icon("eye", tokens()["primary_ink"], 16))
                     eye.setProperty("on", True)
                 eye.clicked.connect(lambda *_: self.previewRequested.emit())
-                row.right.addWidget(eye)
+                controls.insertWidget(0, eye)       # the eye first, the control by the row's edge
             if spec.removable:
                 remove = tool("x", "Remove this image", "plain", 14)
                 remove.clicked.connect(lambda *_: self.catalogRemoved.emit())
-                row.right.addWidget(remove)
+                controls.addWidget(remove)
+            if spec.price and not inline_price:
+                column = QVBoxLayout()
+                column.setSpacing(2)
+                if controls.count():
+                    column.addLayout(controls)
+                price = label(spec.price, "meta")
+                price.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+                column.addWidget(price)
+                row.right.addLayout(column)
+            elif controls.count():
+                row.right.addLayout(controls)
             self.rows_box.addWidget(row)
             self._rows.append(row)
+            if inline_price:
+                mosaic_row = row
+            elif spec.zooms and basemap_row is None:
+                basemap_row = row
+
+        if mosaic_row is not None and basemap_row is not None:
+            basemap_row.ensurePolished()
+            mosaic_row.setMinimumHeight(basemap_row.minimumSizeHint().height())
 
     def set_steps(self, model_done: bool, area_done: bool, imagery_done: bool) -> None:
         states = []
@@ -475,7 +508,11 @@ class RunPage(QWidget):
 
     def set_issues(self, issues: List[Issue], busy: bool = False) -> None:
         blocking = [i for i in issues if i.field in ("account",)]
-        # Steps show their own hints; the bar only repeats what no step can show
-        self.issues.set("warn", issue_html(blocking[0]) if blocking else "")
+        # Steps show their own hints; the bar only repeats what no step can show. Its first way out (Top up) is
+        # a button on the right, any others links in the text
+        issue = blocking[0] if blocking else None
+        ways = [(text, where) for text, where in issue.links if where in ISSUE_LINKS] if issue else []
+        self.issues.set("warn", issue_html(replace(issue, links=tuple(ways[1:]))) if issue else "")
+        self.issues.set_action(*((ways[0][0], ISSUE_LINKS[ways[0][1]]) if ways else ()))
         self.run_button.setEnabled(not issues and not busy)
         self.run_button.setText("Starting…" if busy else "Run processing")

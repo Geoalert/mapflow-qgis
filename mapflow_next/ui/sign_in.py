@@ -7,7 +7,7 @@ from qgis.PyQt.QtWidgets import QHBoxLayout, QLabel, QLineEdit, QScrollArea, QVB
 from .. import config
 from . import icons
 from .theme import is_dark, tokens
-from .widgets import Callout, button, label, link, rule, vbox
+from .widgets import Callout, button, hbox, label, link, rule, vbox
 
 
 class SignInPage(QWidget):
@@ -35,7 +35,7 @@ class SignInPage(QWidget):
         layout.setContentsMargins(24, 28, 24, 20)
         layout.setSpacing(20)
 
-        layout.addWidget(icons.logo_widget(is_dark(), 34, body), 0, Qt.AlignmentFlag.AlignLeft)
+        layout.addWidget(icons.logo_widget(is_dark(), 44, body), 0, Qt.AlignmentFlag.AlignLeft)    # the waves show
         layout.addLayout(vbox(label("AI mapping, right inside QGIS", "h1", wrap=True),
                               label("Get buildings, roads and forest from imagery as editable layers "
                                     "in your project.", "lead", wrap=True), spacing=6))
@@ -49,7 +49,7 @@ class SignInPage(QWidget):
             badge = QLabel(body)
             badge.setFixedSize(40, 40)
             badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            badge.setStyleSheet(f"background: {tokens()['primary_soft']}; border-radius: 10px;")
+            badge.setStyleSheet(f"background: {tokens()['badge']}; border-radius: 10px;")   # seen on the grey page
             badge.setPixmap(icons.pixmap(icon_name, tokens()["primary_hover"], 20))
             row.addWidget(badge, 0, Qt.AlignmentFlag.AlignTop)
             row.addLayout(vbox(label(title, "title"), label(text, "meta", wrap=True), spacing=2), 1)
@@ -71,8 +71,9 @@ class SignInPage(QWidget):
         create = button("Create a free account", "outline", external=True, size="lg")
         create.setToolTip(config.SIGN_UP_URL)
         create.clicked.connect(lambda: _open(config.SIGN_UP_URL))
-        credits = label("250 free credits to start", "meta")
-        credits.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        gift = QLabel(body)
+        gift.setPixmap(icons.gift_pixmap(tokens()["muted"]))
+        credits = hbox(None, gift, label("250 free credits to start", "meta"), None, spacing=5)
         layout.addLayout(vbox(create, credits, spacing=6))
 
         self.more = button("Other ways to sign in", "ghost", size="sm")

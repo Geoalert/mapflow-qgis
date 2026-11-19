@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import Callable, Dict, List, Optional, Tuple
 
 from qgis.PyQt.QtCore import Qt, pyqtSignal
-from qgis.PyQt.QtGui import QPixmap
+from qgis.PyQt.QtGui import QIcon, QPixmap
 from qgis.PyQt.QtWidgets import (QDialog, QFrame, QHBoxLayout, QLabel, QLineEdit, QMenu, QProgressBar, QScrollArea,
                                  QVBoxLayout, QWidget)
 
@@ -12,8 +12,9 @@ from .. import config
 from ..core import formatting
 from ..core.models import Mosaic, MosaicImage
 from . import icons
+from .layer_picker import pick_layers
 from .theme import stylesheet, tokens
-from .widgets import (Callout, Card, ElidedLabel, OptionRow, button, clear_layout, label, link, menu_action,
+from .widgets import (Callout, Card, DropTarget, ElidedLabel, OptionRow, button, clear_layout, label, link, menu_action,
                       placeholder, rounded, tool)
 
 THUMB = 72
@@ -30,7 +31,8 @@ class MosaicPicker(QDialog):
     chosen = pyqtSignal(str, str)               # mosaic id, image id ("" = the whole collection)
     showRequested = pyqtSignal(str)             # mosaic id: show it on the map
     uploadRequested = pyqtSignal(str)           # into this collection ("" = a new one)
-    layerUploadRequested = pyqtSignal(str, str)  # a GeoTIFF layer's id, into this collection ("" = a new one)
+    layerUploadRequested = pyqtSignal(list, str)  # GeoTIFF layers' ids, into this collection ("" = a new one)
+    filesDropped = pyqtSignal(list, str)        # [(file, name)] dragged in, into this collection ("" = a new one)
     createRequested = pyqtSignal()              # "Create collection"
     deleteCollectionRequested = pyqtSignal(str)   # mosaic id
     deleteImageRequested = pyqtSignal(str, str)   # mosaic id, image id
@@ -50,6 +52,10 @@ class MosaicPicker(QDialog):
         self._rows: Dict[str, OptionRow] = {}
         # (layer id, name) of the project's GeoTIFF layers, asked for when the menu opens; the controller sets it
         self.geotiff_layers: Callable[[], List[Tuple[str, str]]] = lambda: []
+        # (file, name) of the GeoTIFFs a drag carries; the controller sets it. Dropped, they go where uploads go
+        self.parse_drop: Callable[[object], List[Tuple[str, str]]] = lambda mime: []
+        self.drop = DropTarget(self, lambda mime: self.parse_drop(mime))
+        self.drop.dropped.connect(lambda items: self.filesDropped.emit(items, self.current or ""))
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(20, 18, 20, 14)
@@ -66,11 +72,8 @@ class MosaicPicker(QDialog):
         self.upload_button = button("Upload a GeoTIFF", "outline", "upload")
         self.upload_button.clicked.connect(lambda *_: self.uploadRequested.emit(self.current or ""))
         actions.addWidget(self.upload_button)
-        self.layer_button = button("Choose from raster layer", "outline", "layers")
-        self.layer_menu = QMenu(self.layer_button)
-        self.layer_menu.aboutToShow.connect(self._fill_layer_menu)
-        self.layer_button.clicked.connect(
-            lambda *_: self.layer_menu.exec(self.layer_button.mapToGlobal(self.layer_button.rect().bottomLeft())))
+        self.layer_button = button("Choose from raster layers", "outline", "layers")
+        self.layer_button.clicked.connect(lambda *_: self._choose_layers())
         actions.addWidget(self.layer_button)
         actions.addStretch(1)
         self.create_button = button("Create collection", "ghost", "plus")
@@ -121,6 +124,7 @@ class MosaicPicker(QDialog):
         self.meta = label("", "meta", wrap=True)
         right.addWidget(self.meta)
         self.use_all = button("Use the whole collection", "primary", "layers")
+        self._use_all_icon = self.use_all.icon()
         self.use_all.clicked.connect(lambda *_: self.current and self.chosen.emit(self.current, ""))
         right.addWidget(self.use_all, 0, Qt.AlignmentFlag.AlignLeft)
         self.images_scroll, self.images_box = self._scroll_box(8)
@@ -211,6 +215,7 @@ class MosaicPicker(QDialog):
                                                  if mosaic.size_bytes else "", formatting.when(mosaic.created)) if t))
         whole = mosaic_id == self.chosen_mosaic and not self.chosen_image
         self.use_all.setText("Chosen: the whole collection" if whole else "Use the whole collection")
+        self.use_all.setIcon(QIcon() if whole else self._use_all_icon)
         self.use_all.setEnabled(not whole)
         clear_layout(self.images_box)
         self._thumbs = {}
@@ -244,19 +249,16 @@ class MosaicPicker(QDialog):
         mosaic = next((m for m in self.mosaics if m.id == self.current), None)
         if mosaic is not None:
             self.target.setText(f"GeoTIFFs are added to “{mosaic.name}”. Click it again to upload into a new "
-                                f"collection instead.")
+                                f"collection instead. You can drag GeoTIFF layers or files onto this window.")
         else:
-            self.target.setText("GeoTIFFs go into a new collection. Select a collection to add them to it.")
+            self.target.setText("GeoTIFFs go into a new collection. Select a collection to add them to it. You can "
+                                "drag GeoTIFF layers or files onto this window.")
 
-    def _fill_layer_menu(self) -> None:
+    def _choose_layers(self) -> None:
         """Only GeoTIFF files: tile layers (XYZ, TMS, WMS) have no file to upload."""
-        self.layer_menu.clear()
-        layers = self.geotiff_layers()
-        for layer_id, name in layers:
-            menu_action(self.layer_menu, "image", name,
-                        lambda lid=layer_id: self.layerUploadRequested.emit(lid, self.current or ""))
-        if not layers:
-            self.layer_menu.addAction("No GeoTIFF layers in the project").setEnabled(False)
+        chosen = pick_layers(self.geotiff_layers(), self)
+        if chosen:
+            self.layerUploadRequested.emit(chosen, self.current or "")
 
     def set_upload(self, percent: Optional[int], message: str = "", kind: str = "info") -> None:
         uploading = percent is not None

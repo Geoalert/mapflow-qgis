@@ -4,18 +4,23 @@ from __future__ import annotations
 from datetime import date
 from typing import Callable, Dict, List, Optional, Tuple
 
-from qgis.PyQt.QtCore import QDate, Qt, pyqtSignal
+from qgis.PyQt.QtCore import QDate, QSize, Qt, pyqtSignal
 from qgis.PyQt.QtGui import QPixmap
-from qgis.PyQt.QtWidgets import (QComboBox, QDateEdit, QGridLayout, QHBoxLayout, QLabel, QMenu, QProgressBar,
+from qgis.PyQt.QtWidgets import (QComboBox, QDateEdit, QGridLayout, QHBoxLayout, QLabel, QProgressBar,
                                  QPushButton, QScrollArea, QSlider, QToolButton, QVBoxLayout, QWidget)
 
 from .. import config
 from ..core import formatting
 from ..core.models import CatalogImage, Mosaic
 from . import icons
+from .layer_picker import pick_layers
 from .theme import set_prop, tokens
-from .widgets import (Callout, Card, Combo, ElidedLabel, Pill, Segmented, button, clear_layout, label, link,
-                      menu_action, placeholder, rounded, tool, vbox)
+from .widgets import (Callout, Card, Combo, DropCard, DropTarget, ElidedLabel, Pill, Segmented, button,
+                      clear_layout, hbox, label, link, placeholder, release_focus, rounded, same_width, tool,
+                      vbox)
+
+
+MINE, SEARCH = 0, 1                             # the tabs: My imagery, Search the catalog
 
 
 class ImageryPage(QWidget):
@@ -26,8 +31,8 @@ class ImageryPage(QWidget):
     useMosaic = pyqtSignal(str)
     showMosaic = pyqtSignal(str)
     uploadRequested = pyqtSignal()
-    layerUploadRequested = pyqtSignal(str)    # a GeoTIFF layer of the project, by layer id
-    useMapExtent = pyqtSignal()
+    layerUploadRequested = pyqtSignal(list)   # GeoTIFF layers of the project, by layer id
+    areaAction = pyqtSignal(str)              # draw | extent: the same actions as the run form's
     layerChosen = pyqtSignal(str)
     clearRequested = pyqtSignal()
 
@@ -37,9 +42,12 @@ class ImageryPage(QWidget):
         self._thumbs: Dict[str, QLabel] = {}
         self._pixmaps: Dict[str, QPixmap] = {}      # loaded thumbnails, kept while the results are
         self._eyes: Dict[str, QToolButton] = {}
+        self._uses: List[QPushButton] = []        # the results' Use buttons
         self.more_button: Optional[QPushButton] = None
         # (layer id, name) of the project's GeoTIFF layers, asked for when the menu opens; the controller sets it
         self.geotiff_layers: Callable[[], List[Tuple[str, str]]] = lambda: []
+        # (file, name) of the GeoTIFFs a drag carries; the controller sets it
+        self.parse_drop: Callable[[object], List[Tuple[str, str]]] = lambda mime: []
         self.my_data_url = config.WEB_URL + config.MY_DATA_PATH     # the controller sets the environment's
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -53,17 +61,17 @@ class ImageryPage(QWidget):
         layout = QVBoxLayout(body)
         layout.setContentsMargins(16, 12, 16, 16)
         layout.setSpacing(12)
-        self.tabs = Segmented(["Search the catalog", "My imagery"])
+        self.tabs = Segmented(["My imagery", "Search the catalog"])
         layout.addWidget(self.tabs)
-        # Two panes shown one at a time. Not a stacked widget: that is as tall as its tallest page, which
-        # left a long empty space under a short list
-        self.panes = [self._build_search(), self._build_mine()]
+        # Two panes shown one at a time (MINE, SEARCH). Not a stacked widget: that is as tall as its tallest
+        # page, which left a long empty space under a short list
+        self.panes = [self._build_mine(), self._build_search()]
         for pane in self.panes:
             layout.addWidget(pane)
         self.tabs.changed.connect(self.show_tab)
         layout.addStretch(1)
         self.scroll = scroll
-        self.show_tab(0)
+        self.show_tab(MINE)                         # your own imagery first
 
     def show_tab(self, index: int) -> None:
         if self.tabs.index() != index:
@@ -87,9 +95,15 @@ class ImageryPage(QWidget):
         area_row = QHBoxLayout()
         area_row.addWidget(label("Area", "label"))
         area_row.addStretch(1)
-        self.extent_button = button("Use map view", "ghost", "maximize", size="sm")
-        self.extent_button.clicked.connect(lambda *_: self.useMapExtent.emit())
-        area_row.addWidget(self.extent_button)
+        self.draw_button = button("Draw", "ghost", "pen")
+        self.draw_button.setToolTip("Draw a polygon on the map: click corners, double-click to finish")
+        self.draw_button.clicked.connect(lambda *_: self.areaAction.emit("draw"))
+        self.extent_button = button("Use map view", "ghost", "maximize")
+        self.extent_button.clicked.connect(lambda *_: self.areaAction.emit("extent"))
+        for item in (self.draw_button, self.extent_button):
+            item.setProperty("compact", True)
+            item.setIconSize(QSize(13, 13))
+            area_row.addWidget(item)
         form.add(area_row)
         # The same area as the run form: choosing a layer here sets it there too
         self.layer_combo = Combo(form)
@@ -121,6 +135,8 @@ class ImageryPage(QWidget):
         form.add(grid)
         self.cloud, self.cloud_value = self._slider(form, "Max cloud cover", 0, 100, 20, 5, "{} %")
         self.nadir, self.nadir_value = self._slider(form, "Max off-nadir angle", 0, 50, 30, 5, "{}°")
+        self.coverage, self.coverage_value = self._slider(form, "Min area coverage", 0, 100, 20, 10, "{} %")
+        self.coverage.setToolTip("Only images that cover at least this share of the area. 0: any overlap")
 
         types = QHBoxLayout()
         types.setSpacing(6)
@@ -168,7 +184,6 @@ class ImageryPage(QWidget):
         head.addStretch(1)
         shown = label(unit.format(value), "value")
         head.addWidget(shown)
-        form.add(head)
         slider = QSlider(Qt.Orientation.Horizontal)
         slider.setRange(low, high)
         slider.setSingleStep(1)
@@ -176,7 +191,7 @@ class ImageryPage(QWidget):
         slider.setValue(value)
         slider.setAccessibleName(title)
         slider.valueChanged.connect(lambda v: shown.setText(unit.format(v)))
-        form.add(slider)
+        form.add(vbox(head, slider, spacing=0))     # the title sits right on its slider
         return slider, shown
 
     def _emit_search(self) -> None:
@@ -185,8 +200,12 @@ class ImageryPage(QWidget):
         self.searchRequested.emit({
             "date_from": self.date_from.date().toPyDate(), "date_to": self.date_to.date().toPyDate(),
             "max_cloud": float(self.cloud.value()), "max_off_nadir": float(self.nadir.value()),
+            "min_coverage": float(self.coverage.value()) or None,
             "product_types": types if len(types) == 1 else None,
         })
+
+    def set_drawing(self, active: bool) -> None:
+        self.draw_button.setText("Drawing…" if active else "Draw")
 
     def set_area(self, text: str, has_area: bool) -> None:
         self.area_text.setText(text)
@@ -225,8 +244,10 @@ class ImageryPage(QWidget):
         self.results_title.setText(f"{total:,} images over your area" if total else "")
         self.results_title.setVisible(bool(total))
         self.clear_button.setVisible(bool(images))
+        self._uses = []                             # Use and Chosen: one width
         for image in images:
-            self.results.addWidget(self._result_card(image, image.id == chosen))
+            self.results.addWidget(self._result_card(image, image.key == chosen))
+        same_width(self._uses)
         self.set_previewing(previewing or set())
         if images and len(images) < total:
             more = button("Loading…" if loading_more else f"Show more · {len(images):,} of {total:,}", "outline",
@@ -252,17 +273,13 @@ class ImageryPage(QWidget):
         row.setSpacing(10)
         thumb = QLabel(card)
         thumb.setFixedSize(56, 56)
-        cached = self._pixmaps.get(image.id)
+        cached = self._pixmaps.get(image.key)
         thumb.setPixmap(rounded(cached, 56, 56, 8) if cached is not None else placeholder("image", 56, 56, 8))
-        self._thumbs[image.id] = thumb
+        self._thumbs[image.key] = thumb
         row.addWidget(thumb)
         texts = QVBoxLayout()
         texts.setSpacing(3)
-        top = QHBoxLayout()
-        top.setSpacing(6)
-        top.addWidget(ElidedLabel(_provider_label(image.provider), "title"), 1)
-        top.addWidget(Pill("Mosaic" if image.is_mosaic else "Scene", "gray"))
-        texts.addLayout(top)
+        texts.addWidget(ElidedLabel(_provider_label(image.provider), "title"))
         first = [f"{image.acquired.day} {image.acquired:%b %Y}" if image.acquired else "Date varies"]
         if image.cloud is not None:
             first.append(f"cloud {image.cloud:.0f}%")
@@ -270,24 +287,29 @@ class ImageryPage(QWidget):
             first.append(f"off-nadir {image.off_nadir:.0f}°")
         second = []
         if image.resolution:
-            second.append(f"{image.resolution:.2f} m/px")
+            second.append(f"{image.resolution:.2f} m/px" + (f" (z{image.zoom})" if image.zoom else ""))
+        elif image.zoom:
+            second.append(f"z{image.zoom}")
         if image.coverage is not None:
             second.append(f"covers {image.coverage:.0f}%")
         texts.addWidget(label(" · ".join(first), "meta"))
         if second:
             texts.addWidget(label(" · ".join(second), "meta"))
         row.addLayout(texts, 1)
-        actions = QVBoxLayout()
-        actions.setSpacing(4)
         show = tool("eye", "Show the preview and the footprint on the map", "plain")
-        show.clicked.connect(lambda *_: self.showImage.emit(image.id))
-        self._eyes[image.id] = show
+        show.clicked.connect(lambda *_: self.showImage.emit(image.key))
+        self._eyes[image.key] = show
         use = button("Chosen" if chosen else "Use", "outline" if chosen else "primary", size="sm")
         use.setEnabled(not chosen)
-        use.clicked.connect(lambda *_: self.useImage.emit(image.id))
-        actions.addWidget(show, 0, Qt.AlignmentFlag.AlignRight)
-        actions.addWidget(use)
+        self._uses.append(use)
+        use.clicked.connect(lambda *_: self.useImage.emit(image.key))
+        # The kind, the eye and Use on one line, centred in the card
+        pill = Pill("Mosaic" if image.is_mosaic else "Scene", "gray")
+        actions = hbox(pill, show, use, spacing=8)
+        for widget in (pill, show, use):
+            actions.setAlignment(widget, Qt.AlignmentFlag.AlignVCenter)
         row.addLayout(actions)
+        row.setAlignment(actions, Qt.AlignmentFlag.AlignVCenter)
         card.add(row)
         return card
 
@@ -313,18 +335,16 @@ class ImageryPage(QWidget):
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(12)
-        upload = Card(spacing=8)
-        upload.add(label("Your own imagery", "h2"))
-        upload.add(label("Upload RGB GeoTIFFs (up to 2 GB each) as a new collection, from files or from the "
-                         "project's raster layers. It costs no imagery credits to process.", "meta", wrap=True))
+        upload = DropCard(margins=(20, 17, 20, 17), spacing=8)     # room inside the dashed line
+        upload.add(hbox(label("Your own imagery", "h2"), None, label("Drag GeoTIFF layers or files here", "meta")))
+        upload.add(vbox(4, label("Upload RGB GeoTIFFs, up to 2 GB each, as a new collection.", "meta", wrap=True),
+                        label("It costs no imagery credits to process.", "meta", wrap=True), 4, spacing=0))
+        self.drop = DropTarget(upload, lambda mime: self.parse_drop(mime))
         self.upload_button = button("Upload a GeoTIFF", "outline", "upload")
         self.upload_button.clicked.connect(lambda *_: self.uploadRequested.emit())
         upload.add(self.upload_button)
-        self.layer_button = button("Choose from raster layer", "outline", "layers")
-        self.layer_menu = QMenu(self.layer_button)
-        self.layer_menu.aboutToShow.connect(self._fill_layer_menu)
-        self.layer_button.clicked.connect(
-            lambda *_: self.layer_menu.exec(self.layer_button.mapToGlobal(self.layer_button.rect().bottomLeft())))
+        self.layer_button = button("Choose from raster layers", "outline", "layers")
+        self.layer_button.clicked.connect(lambda *_: self._choose_layers())
         upload.add(self.layer_button)
         self.upload_bar = QProgressBar()
         self.upload_bar.setTextVisible(False)
@@ -345,6 +365,7 @@ class ImageryPage(QWidget):
     def set_mosaics(self, mosaics: List[Mosaic], chosen: Optional[str]) -> None:
         self._clear(self.mosaic_list)
         self.mosaics_title.setText(f"Collections · {len(mosaics)}" if mosaics else "No collections yet")
+        uses = []                                   # Use, Chosen and Choose…: one width
         for mosaic in mosaics:
             card = Card(margins=(12, 10, 10, 10))
             row = QHBoxLayout()
@@ -363,28 +384,28 @@ class ImageryPage(QWidget):
             use = button("Chosen" if mosaic.id == chosen else ("Choose…" if several else "Use"),
                          "outline" if mosaic.id == chosen else "primary", size="sm")
             use.setToolTip("Pick the whole collection or one of its images" if several else "Process this collection")
+            uses.append(use)
             use.clicked.connect(lambda *_, mid=mosaic.id: self.useMosaic.emit(mid))
             row.addWidget(show)
             row.addWidget(use)
             card.add(row)
             self.mosaic_list.addWidget(card)
+        same_width(uses)
 
-    def _fill_layer_menu(self) -> None:
+    def _choose_layers(self) -> None:
         """Only GeoTIFF files: tile layers (XYZ, TMS, WMS) have no file to upload."""
-        self.layer_menu.clear()
-        layers = self.geotiff_layers()
-        for layer_id, name in layers:
-            menu_action(self.layer_menu, "image", name, lambda lid=layer_id: self.layerUploadRequested.emit(lid))
-        if not layers:
-            empty = self.layer_menu.addAction("No GeoTIFF layers in the project")
-            empty.setEnabled(False)
+        chosen = pick_layers(self.geotiff_layers(), self)
+        if chosen:
+            self.layerUploadRequested.emit(chosen)
 
     def set_upload(self, percent: Optional[int], message: str = "", kind: str = "info") -> None:
         uploading = percent is not None
         self.upload_bar.setVisible(uploading)
         self.upload_bar.setValue(percent or 0)
-        self.upload_button.setEnabled(not uploading)
-        self.layer_button.setEnabled(not uploading)
+        for widget in (self.upload_button, self.layer_button):
+            if uploading:
+                release_focus(widget)   # or Qt moves the focus to a Use button below, and the page scrolls there
+            widget.setEnabled(not uploading)
         self.upload_button.setText(f"Uploading… {percent}%" if uploading else "Upload a GeoTIFF")
         self.upload_message.set(kind, message)
 

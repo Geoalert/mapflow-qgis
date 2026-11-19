@@ -40,16 +40,19 @@ class Imagery(QObject):
         self.on_duplicate: Optional[Callable[[str, str], str]] = None
         self._mosaics_at = 0.0                  # when the collections were last asked for (monotonic)
         self._mosaics_loading = False
+        self._mosaics_loaded = False
 
     def search(self, geometry: dict, date_from: date, date_to: date, max_cloud: Optional[float],
-               max_off_nadir: Optional[float], product_types: Optional[List[str]] = None) -> None:
+               max_off_nadir: Optional[float], product_types: Optional[List[str]] = None,
+               min_coverage: Optional[float] = None) -> None:
+        """`min_coverage`: the least share of the area, in %, an image must cover (None: any overlap)."""
         request = {
             "aoi": geometry,
             "acquisitionDateFrom": f"{date_from.isoformat()}T00:00:00Z",
             "acquisitionDateTo": f"{date_to.isoformat()}T23:59:59Z",
             "maxCloudCover": max_cloud,
             "maxOffNadirAngle": max_off_nadir,
-            "minAoiIntersectionPercent": 0,
+            "minAoiIntersectionPercent": min_coverage,
             "productTypes": product_types or None,
             "sortBy": "ACQUISITION_DATE",
             "sortOrder": "DESC",
@@ -83,11 +86,11 @@ class Imagery(QObject):
             if search_id != self._search_id:
                 return
             self.loading_more = False
-            known = {i.id for i in self.results}
-            self.results += [i for i in images if i.id not in known]
+            known = {i.key for i in self.results}
+            self.results += [i for i in images if i.key not in known]
             # A page that brings nothing new ends the list, whatever the total says
-            self.total = max(total, len(self.results)) if any(i.id not in known for i in images) else len(self.results)
-            self.moreDone.emit([i for i in images if i.id not in known], self.total)
+            self.total = max(total, len(self.results)) if any(i.key not in known for i in images) else len(self.results)
+            self.moreDone.emit([i for i in images if i.key not in known], self.total)
 
         def failed(error) -> None:
             if search_id == self._search_id:
@@ -100,8 +103,9 @@ class Imagery(QObject):
         self._search_id += 1
         self.results, self.total, self._request, self.loading_more = [], 0, None, False
 
-    def get_result(self, image_id: str) -> Optional[CatalogImage]:
-        return next((i for i in self.results if i.id == image_id), None)
+    def get_result(self, key: str) -> Optional[CatalogImage]:
+        """A search result by its key (CatalogImage.key)."""
+        return next((i for i in self.results if i.key == key), None)
 
     def load_mosaics(self) -> None:
         self._mosaics_at = time.monotonic()
@@ -116,8 +120,14 @@ class Imagery(QObject):
         if not self._mosaics_loading and time.monotonic() - self._mosaics_at >= max_age:
             self.load_mosaics()
 
+    @property
+    def mosaics_loaded(self) -> bool:
+        """The collection list has come at least once: a collection missing from it is gone, not unknown yet."""
+        return self._mosaics_loaded
+
     def _on_mosaics(self, mosaics: List[Mosaic]) -> None:
         self._mosaics_loading = False
+        self._mosaics_loaded = True
         self.mosaics = sorted(mosaics or [], key=lambda m: (m.created is not None, m.created or 0), reverse=True)
         for mosaic in self.mosaics:
             if mosaic.id in self.images:

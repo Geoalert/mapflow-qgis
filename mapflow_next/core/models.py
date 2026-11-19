@@ -4,10 +4,11 @@ Every parser tolerates missing and extra keys, so a non-breaking API change neve
 """
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 
 def parse_datetime(value: Any) -> Optional[datetime]:
@@ -27,6 +28,20 @@ def _num(value: Any, default: float = 0.0) -> float:
         return float(value)
     except (TypeError, ValueError):
         return default
+
+
+def _preview_parts(value: Any) -> List[Tuple[str, dict]]:
+    """A catalog image's `previews`: [{url, geometry}], each item possibly a JSON string."""
+    parts = []
+    for item in value if isinstance(value, list) else []:
+        if isinstance(item, str):
+            try:
+                item = json.loads(item)
+            except ValueError:
+                continue
+        if isinstance(item, dict) and item.get("url") and isinstance(item.get("geometry"), dict):
+            parts.append((str(item["url"]), item["geometry"]))
+    return parts
 
 
 class BillingType(str, Enum):
@@ -179,6 +194,9 @@ class UserStatus:
     max_aois: int = 10
     # Lowercased provider name and display name → the smallest order area it sells (km²)
     min_areas: Dict[str, float] = field(default_factory=dict)
+    # Model id and name → its options' descriptions (block name → text), the options' hover texts. From here:
+    # the project's models (workflowDefs) come with these descriptions empty
+    option_descriptions: Dict[str, Dict[str, str]] = field(default_factory=dict)
 
     @classmethod
     def from_api(cls, data: dict) -> "UserStatus":
@@ -197,6 +215,15 @@ class UserStatus:
             for key in (item.get("name"), item.get("displayName")) if minimum else ():
                 if key:
                     min_areas[str(key).lower()] = minimum
+        descriptions: Dict[str, Dict[str, str]] = {}
+        for model in data.get("models") or []:
+            if not isinstance(model, dict):
+                continue
+            texts = {str(b["name"]): (b.get("description") or "").strip() for b in model.get("blocks") or []
+                     if isinstance(b, dict) and b.get("name")}
+            for key in (model.get("id"), model.get("name")):
+                if key:
+                    descriptions[str(key)] = texts
         return cls(billing=BillingType.parse(data.get("billingType")),
                    remaining_credits=int(_num(data.get("remainingCredits"))),
                    remaining_area_km2=_num(data.get("remainingArea")) / 1e6,
@@ -204,7 +231,7 @@ class UserStatus:
                    search_providers=search,
                    review_enabled=bool(data.get("reviewWorkflowEnabled")),
                    max_aois=int(_num(data.get("maxAoisPerProcessing"), 10)) or 10,
-                   min_areas=min_areas)
+                   min_areas=min_areas, option_descriptions=descriptions)
 
     def can_search(self, provider: Optional[str]) -> bool:
         """Whether the plan includes a catalog provider (searchDataProviders, by name or display name).
@@ -465,6 +492,8 @@ class CatalogImage:
     footprint: Optional[dict] = None
     coverage: Optional[float] = None
     min_area_km2: float = 0.0
+    # A preview in several pictures, each with its own footprint (Roscosmos): [(url, GeoJSON geometry)]
+    parts: List[Tuple[str, dict]] = field(default_factory=list)
 
     @classmethod
     def from_api(cls, data: dict) -> "CatalogImage":
@@ -482,11 +511,19 @@ class CatalogImage:
                    cloud=opt("cloudCover"), off_nadir=opt("offNadirAngle"), resolution=opt("pixelResolution"),
                    zoom=zoom, preview_type=(data.get("previewType") or "").lower(),
                    preview_url=data.get("previewUrl") or "", footprint=data.get("footprint"),
-                   coverage=opt("aoiIntersectionPercent"), min_area_km2=_num(data.get("minAreaSqkm")))
+                   coverage=opt("aoiIntersectionPercent"), min_area_km2=_num(data.get("minAreaSqkm")),
+                   parts=_preview_parts(data.get("previews")))
 
     @property
     def is_mosaic(self) -> bool:
         return self.product_type.lower() == "mosaic"
+
+    @property
+    def key(self) -> str:
+        """Tells search results apart. The catalog lists a tiled mosaic (ArcGIS) once per zoom, under the same
+        id, so the zoom is part of its key, as in Mapflow Web. Requests still send `id`."""
+        return f"{self.id}@z{self.zoom}" if self.preview_type in ("xyz", "tms") and self.zoom is not None \
+            else self.id
 
 
 @dataclass

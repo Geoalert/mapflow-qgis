@@ -22,7 +22,8 @@ LIGHT: Dict[str, str] = {
     "focus": "#4299e1",
     "ok_bg": "#e0f4e8", "ok_fg": "#276749", "warn_bg": "#fffaf0", "warn_fg": "#9c4221", "warn_line": "#feebc8",
     "err_bg": "#fff5f5", "err_fg": "#c53030", "err_line": "#fed7d7", "progress": "#27b263",
-    "track": "#e2e6ec", "navy": "#292946", "check": "#2f855a",
+    "track": "#e2e6ec", "navy": "#292946", "check": "#2f855a", "dash": "#a0aec0",
+    "drop_hover": "#f5f9fe", "badge": "#ddf0fc",
 }
 
 DARK: Dict[str, str] = {
@@ -34,7 +35,8 @@ DARK: Dict[str, str] = {
     "focus": "#63b3ed",
     "ok_bg": "#1c4532", "ok_fg": "#9ae6b4", "warn_bg": "#3b2a17", "warn_fg": "#fbd38d", "warn_line": "#5c3d1a",
     "err_bg": "#3f1d1d", "err_fg": "#feb2b2", "err_line": "#63171b", "progress": "#48bb78",
-    "track": "#3a4556", "navy": "#e9edf2", "check": "#68d391",
+    "track": "#3a4556", "navy": "#e9edf2", "check": "#68d391", "dash": "#5b6678",
+    "drop_hover": "#232d3c", "badge": "#234264",
 }
 
 _FONT_FAMILY = None
@@ -83,14 +85,26 @@ QFrame#mfBottomBar { border-top: 1px solid $border; }
 QFrame[card="true"] { background: $bg; border: 1px solid $border; border-radius: 15px; }
 QFrame[card="true"][active="true"] { border: 1px solid $primary_soft2; }
 QFrame[card="true"][tone="error"] { border: 1px solid $err_line; }
+QFrame[card="drop"] { background: $bg; border: 0; border-radius: 15px; }
+QFrame[card="drop"][hover="true"], QFrame[card="drop"][dropping="true"] { background: $drop_hover; }
+QFrame[card="drop"] QPushButton[variant="outline"]:hover { background: $tile; }
+QDialog[dropping="true"] { border: 2px dashed $primary; }
 QFrame[card="flat"] { background: $subtle; border: 1px solid $border; border-radius: 12px; }
 QFrame[card="tile"] { background: $bg; border: 1px solid $border; border-radius: 12px; }
 QFrame[card="tile"]:hover { border-color: $primary_soft2; }
 QFrame[card="tile"]:focus { border-color: $focus; }
 QFrame[card="tile"][current="true"] { border: 2px solid $primary; }
-QFrame[callout="info"] { background: $primary_soft; border: 0; border-radius: 8px; }
+QFrame[callout="info"] { background: $badge; border: 0; border-radius: 8px; }
 QFrame[callout="warn"] { background: $warn_bg; border: 1px solid $warn_line; border-radius: 8px; }
 QFrame[callout="error"] { background: $err_bg; border: 1px solid $err_line; border-radius: 8px; }
+QFrame[callout] QPushButton[callout_action="true"] { min-height: 22px; padding: 0 8px; font-size: 11px;
+    border-radius: 5px; background: transparent; }
+QFrame[callout="info"] QPushButton[callout_action="true"] { color: $primary_ink; border: 1px solid $primary_soft2; }
+QFrame[callout="warn"] QPushButton[callout_action="true"] { color: $warn_fg; border: 1px solid $warn_fg; }
+QFrame[callout="error"] QPushButton[callout_action="true"] { color: $err_fg; border: 1px solid $err_fg; }
+QFrame[callout="info"] QPushButton[callout_action="true"]:hover { background: $primary_soft2; }
+QFrame[callout="warn"] QPushButton[callout_action="true"]:hover { background: $warn_line; }
+QFrame[callout="error"] QPushButton[callout_action="true"]:hover { background: $err_line; }
 QFrame[rule="true"] { background: $border; border: 0; max-height: 1px; min-height: 1px; }
 
 QLabel { background: transparent; }
@@ -135,6 +149,7 @@ QPushButton[variant="ghost"]:disabled { color: $disabled; }
 QPushButton[variant="link"] { background: transparent; color: $link; border: 0; padding: 0; min-height: 18px;
                               text-align: left; }
 QPushButton[variant="link"]:hover { text-decoration: underline; }
+QPushButton[compact="true"] { min-height: 26px; padding: 0 7px; font-size: 12px; }
 QPushButton[size="sm"] { min-height: 28px; padding: 0 10px; font-size: 12px; }
 QPushButton[size="lg"] { min-height: 40px; font-size: 14px; }
 QPushButton:focus { outline: none; }
@@ -186,8 +201,10 @@ QLineEdit, QComboBox, QDateEdit, QSpinBox, QDoubleSpinBox, QPlainTextEdit {
     selection-background-color: $primary_soft2; selection-color: $ink; }
 QPlainTextEdit { padding: 6px 8px; }
 QLineEdit:focus, QComboBox:focus, QDateEdit:focus, QSpinBox:focus, QPlainTextEdit:focus { border: 1px solid $focus; }
-QLineEdit[flat="true"] { border: 0; background: transparent; padding: 0; min-height: 18px; font-size: 12px;
+QLineEdit[flat="true"] { border: 0; border-bottom: 1px solid transparent; background: transparent; padding: 0;
+                         min-height: 18px; font-size: 12px;
                          color: $text2; }
+QLineEdit[flat="true"]:hover { border-bottom: 1px solid $stroke; }
 QLineEdit[flat="true"]:focus { border-bottom: 1px solid $focus; }
 QComboBox::drop-down, QDateEdit::drop-down { border: 0; width: 24px; subcontrol-origin: padding;
                                              subcontrol-position: center right; }
@@ -211,8 +228,11 @@ QComboBox QAbstractItemView { background: $bg; color: $text; border: 1px solid $
 QProgressBar { background: $track; border: 0; border-radius: 3px; max-height: 6px; min-height: 6px; }
 QProgressBar::chunk { background: $progress; border-radius: 3px; }
 
-QScrollBar:vertical { background: transparent; width: 8px; margin: 2px; }
-QScrollBar::handle:vertical { background: $stroke; border-radius: 3px; min-height: 30px; }
+QScrollBar:vertical { background: transparent; width: 10px; margin: 2px 0; }
+/* Thin to the eye, the whole bar's width to click: a transparent border is part of the handle, a margin
+   (as before) was dead space no click reached */
+QScrollBar::handle:vertical { background: $stroke; background-clip: padding; border: 2px solid transparent;
+                              border-radius: 5px; min-height: 30px; }
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
 QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }
 

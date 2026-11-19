@@ -236,9 +236,13 @@ def _rename():
 
 @step("imagery search and My imagery")
 def _imagery():
+    from mapflow_next.ui.imagery_page import MINE, SEARCH
+
     content = state["content"]
     content.go(2)
     page = content.imagery
+    check(page.current_tab() == MINE, "My imagery is the default tab")
+    page.show_tab(SEARCH)
     page.set_layers([("layer-1", "Old town"), ("layer-2", "Blocks")], "layer-1")
     page.set_area("1 polygon · 1.40 km²", True)
     searched = recorder(page.searchRequested)
@@ -264,7 +268,7 @@ def _imagery():
     check(chosen, "the Area drop-down chooses a layer")
     page.date_from.setDate(page.date_from.date().addDays(-10))
     check(page.date_from.calendarPopup(), "dates have a calendar")
-    page.show_tab(1)
+    page.show_tab(MINE)
     mosaics = [Mosaic.from_api(item) for item in fixtures.MOSAICS]
     page.set_mosaics(mosaics, None)
     spin()
