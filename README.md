@@ -97,8 +97,8 @@ installed QGIS, `tools/run_in_qgis.py` runs the end-to-end tests with that QGIS'
 mapflow_next/
   plugin.py          QGIS entry: the Mapflow toolbar, the plugin menu, the dock, wiring of the parts below
   controller.py      the flow: connects services (state) to pages (views) and to QGIS
-  config.py          environments, URLs, timings
-  settings.py        QgsSettings under mapflow_next/ (never credentials)
+  config.py          environments, URLs, timings, the result modes
+  settings.py        QgsSettings under mapflow_next/ (never credentials), the default output folder
   core/              pure Python, no Qt: testable without QGIS
     models.py          API responses → Project, Model (workflow def), DataProvider, Processing, …
     draft.py           the run form as data: issues(), estimate(), payload()

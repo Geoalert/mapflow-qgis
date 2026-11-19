@@ -5,23 +5,19 @@ import functools
 from pathlib import Path
 from typing import Callable, Dict, Optional
 
-from qgis.PyQt.QtCore import QObject, QStandardPaths, pyqtSignal
+from qgis.PyQt.QtCore import QObject, pyqtSignal
 from qgis.core import QgsApplication, QgsMapLayer, QgsRectangle
 
 from ..api.client import MapflowApi
+from ..config import FILES, TILES
 from ..core import guard
 from ..core.models import Processing
 from ..qgis_bridge.conversion import ConvertTask
 from ..qgis_bridge.layers import MapLayers, bounds_extent, extent_is_world, features_extent
+from ..settings import default_output_dir
 
-FILES, TILES = "file", "tiles"
 GENERIC_FAILURE = "The results could not be added to the map. Details are in the Log Messages panel."
 STOP_WAIT_MS = 5000         # how long unload waits for a conversion to notice its cancel
-
-
-def default_output_dir() -> Path:
-    documents = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.DocumentsLocation) or str(Path.home())
-    return Path(documents) / "Mapflow"
 
 
 class Results(QObject):

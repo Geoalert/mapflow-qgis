@@ -424,7 +424,7 @@ class Controller(QObject):
             return
         dialog.query = query
         if self._projects_request:
-            self.api.http.abort(self._projects_request)
+            self.api.abort(self._projects_request)
         dialog.set_loading(True)
 
         def done(projects, total, q=query, append=offset > 0):

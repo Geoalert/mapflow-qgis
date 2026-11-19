@@ -36,6 +36,10 @@ class MapflowApi:
     def projects(self, email: str, on_done: Callable[[List[Project]], None], on_error: OnError = None) -> None:
         self.projects_page(email, lambda projects, _total: on_done(projects), on_error=on_error)
 
+    def abort(self, request_id: int) -> None:
+        """Cancel a pending request by the id an endpoint method returned."""
+        self.http.abort(request_id)
+
     def projects_page(self, email: str, on_done: Callable[[List[Project], int], None], on_error: OnError = None,
                       query: str = "", offset: int = 0, limit: int = PROJECTS_PAGE_SIZE) -> int:
         """One page of projects, most recently updated first; `query` filters by name on the server."""

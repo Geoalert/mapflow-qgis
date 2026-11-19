@@ -1,11 +1,18 @@
 """Plugin settings in the QGIS profile, under the `mapflow_next/` group. Credentials are never stored here."""
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
+from qgis.PyQt.QtCore import QStandardPaths
 from qgis.core import QgsSettings
 
 from .config import SETTINGS_GROUP
+
+
+def default_output_dir() -> Path:
+    documents = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.DocumentsLocation) or str(Path.home())
+    return Path(documents) / "Mapflow"
 
 
 class Settings:

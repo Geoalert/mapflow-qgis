@@ -460,6 +460,68 @@ def _bites(rule, bad, good):
     assert not rule(good), f"{rule.__name__} reports: {good}"
 
 
+def imported_modules(source, module):
+    """The absolute dotted names a file imports, as (line, name). `module` is the dotted name of the file."""
+    import ast
+    package = module.rsplit(".", 1)[0]
+    names = []
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.Import):
+            names += [(node.lineno, alias.name) for alias in node.names]
+        elif isinstance(node, ast.ImportFrom):
+            base = node.module or ""
+            if node.level:
+                parent = package.split(".")[:len(package.split(".")) - (node.level - 1)]
+                base = ".".join(parent + ([node.module] if node.module else []))
+            names.append((node.lineno, base))
+            names += [(node.lineno, f"{base}.{alias.name}") for alias in node.names]
+    return names
+
+
+def rule_ui_imports_no_service(source, module="mapflow_next.ui.page"):
+    return sorted({(number, "ui/ must not import services/: a page renders what it is given")
+                   for number, name in imported_modules(source, module)
+                   if name == "mapflow_next.services" or name.startswith("mapflow_next.services.")})
+
+
+def rule_controller_no_http(source, module="mapflow_next.controller"):
+    import ast
+    problems = [(number, "the controller reaches requests through api/client.py, not Http")
+                for number, name in imported_modules(source, module)
+                if name == "mapflow_next.api.http" or name.startswith("mapflow_next.api.http.")]
+    problems += [(node.lineno, "the controller reaches requests through api/client.py, not `.http`")
+                 for node in ast.walk(ast.parse(source)) if isinstance(node, ast.Attribute) and node.attr == "http"]
+    return sorted(set(problems))
+
+
+def test_ui_imports_no_service():
+    ui = "mapflow_next.ui.page"
+    for bad in ("from ..services.results import FILES\n", "from .. import services\n",
+                "import mapflow_next.services.results\n", "from mapflow_next.services import results\n"):
+        _bites(lambda source: rule_ui_imports_no_service(source, ui), bad, "from .. import config\n")
+    for good in ("from .. import config\n", "from ..core.guard import guarded\n", "from . import theme\n",
+                 "from ..settings import default_output_dir\n"):
+        assert not rule_ui_imports_no_service(good, ui), good
+    problems = []
+    for path in sorted((PLUGIN / "ui").rglob("*.py")):
+        module = ".".join(("mapflow_next",) + path.relative_to(PLUGIN).with_suffix("").parts)
+        problems += [f"{path.relative_to(PLUGIN)}:{number}: {why}"
+                     for number, why in rule_ui_imports_no_service(path.read_text(encoding="utf-8"), module)]
+    assert not problems, "\n".join(problems)
+
+
+def test_controller_does_not_call_http():
+    for bad in ("self.api.http.abort(1)\n", "x = api.http\n", "from .api.http import Http\n",
+                "from .api import http\n"):
+        _bites(rule_controller_no_http, bad, "self.api.abort(1)\n")
+    for good in ("self.api.abort(1)\n", "from .api.client import MapflowApi\n",
+                 "# Http logs the failure\nx = 'Http'\n"):
+        assert not rule_controller_no_http(good), good
+    source = (PLUGIN / "controller.py").read_text(encoding="utf-8")
+    problems = [f"controller.py:{number}: {why}" for number, why in rule_controller_no_http(source)]
+    assert not problems, "\n".join(problems)
+
+
 def test_qt_is_imported_only_through_qgis_pyqt():
     _bites(rule_qgis_pyqt, "from PyQt6.QtCore import Qt\n", "from qgis.PyQt.QtCore import Qt\n")
     _bites(rule_qgis_pyqt, "import PyQt5\n", "import qgis.PyQt\n")

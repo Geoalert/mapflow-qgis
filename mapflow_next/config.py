@@ -10,6 +10,7 @@ PLUGIN_DIR = Path(__file__).parent
 RESOURCES = PLUGIN_DIR / "resources"
 SETTINGS_GROUP = "mapflow_next"
 LAYER_GROUP_NAME = "Mapflow"
+FILES, TILES = "file", "tiles"        # how results arrive: GeoPackage files or vector tiles (Settings, Results)
 # Custom property set on every layer the plugin adds, so a processing's layers can be found again
 PROCESSING_PROPERTY = "mapflow_next/processing_id"
 # Set on an imagery preview layer: which source it shows ("mosaic:<id>", "provider:<name>", "catalog:<id>")

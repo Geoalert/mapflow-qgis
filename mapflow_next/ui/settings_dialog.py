@@ -5,7 +5,8 @@ from qgis.PyQt.QtWidgets import (QButtonGroup, QCheckBox, QDialog, QFileDialog, 
                                  QVBoxLayout)
 
 from .. import config
-from ..services.results import FILES, TILES, default_output_dir
+from ..config import FILES, TILES
+from ..settings import default_output_dir
 from .theme import stylesheet
 from .widgets import Card, button, label, link
 from ..core.guard import guarded

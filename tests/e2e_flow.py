@@ -266,7 +266,7 @@ def check_the_guard(iface, plugin, api_url, settings):
     in one outcome, a result that cannot be placed leaves no "loading" flag, and a timer reaches the reporter."""
     from mapflow_next.core.guard import guarded
     from mapflow_next.core.models import Processing
-    from mapflow_next.services.results import FILES, TILES
+    from mapflow_next.config import FILES, TILES
     http, results = plugin.services[0], plugin.services[4]
     ledger = iface.bar.ledger
     unhandled = []                                  # what `Http` reports when no caller took the error
@@ -670,6 +670,21 @@ def check_failed_requests(iface, plugin, state):
           "USER: the projects window keeps the list it had and records that the new one did not load")
     check(not any(w.text() == "No projects yet." for w in window.findChildren(QLabel)),
           "…and does not call it “No projects yet.”")
+    window.hide()
+    state.heal()
+    # a query that a newer one supersedes is aborted: its answer never reaches the window, and no line is said
+    before = len(iface.bar.messages)
+    controller.open_projects()                                       # its first query is pending until the loop runs
+    window = controller.projects_dialog
+    check(controller._projects_request != 0 and window.loading, "USER: a projects query is pending")
+    controller._query_projects("Downtown")
+    check(wait_until(lambda: [p.name for p in window.results] == ["Downtown survey"] and not window.loading
+                     and controller._projects_request == 0, 8),
+          f"USER: the newer query answers, and the window shows its results ({[p.name for p in window.results]})")
+    settle()
+    check(window.query == "Downtown" and [p.name for p in window.results] == ["Downtown survey"]
+          and not lines(before) and not window.failed_text,
+          f"…and the aborted query adds nothing and says nothing ({lines(before)}, {window.failed_text!r})")
     window.hide()
     state.heal()
 
@@ -1593,7 +1608,7 @@ def main():
     check(wait_until(lambda: not content.processings.refreshing, 5), "…and stops once it's back")
 
     # results as vector tiles: the map goes to the results, not to the whole world
-    from mapflow_next.services.results import FILES, TILES
+    from mapflow_next.config import FILES, TILES
     results = plugin.services[4]
     settings.setValue("mapflow_next/results_mode", TILES)      # as the Settings dialog does
     for item in results.layers.layers_for(started["id"]):
