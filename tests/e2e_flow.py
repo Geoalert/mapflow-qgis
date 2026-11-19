@@ -1591,6 +1591,19 @@ def main():
     check(controller.draft.imagery is None
           and any("Choose the imagery" in (m or "") for _l, m in iface.bar.messages),
           "…imagery it can't restore stays empty, with a message, and no default fills it in")
+    # …and a change of the account status in that state is not an error
+    before = len(iface.bar.messages)
+    with state.lock:
+        state.status = dict(fixtures.STATUS, remainingCredits=900)
+    check(wait_until(lambda: (session.refresh_status(), session.status.remaining_credits == 900)[1], 5),
+          "a changed balance is polled while the form has no imagery")
+    check(controller.draft.imagery is None and controller._imagery_to_choose
+          and not any(level == Qgis.MessageLevel.Critical for level, _m in iface.bar.messages[before:]),
+          "…and it raises nothing, shows no Critical message, and no default imagery fills the form")
+    with state.lock:
+        state.status = None
+    check(wait_until(lambda: (session.refresh_status(), session.status.remaining_credits == 1240)[1], 5),
+          "…the original balance is restored for the next checks")
     processings.items = [p for p in processings.items if p.id not in ("cat-1", "custom-1")]
 
     # duplicate → run again: the area comes from Mapflow (GET /processings/{id}/aois answers a list)

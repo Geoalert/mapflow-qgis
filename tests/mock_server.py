@@ -38,6 +38,7 @@ class State:
         self.extra_mosaics = []            # collections added while the test runs (an empty one)
         self.created_projects = []         # POST /projects
         self.no_mosaics = False            # an account without collections
+        self.status = None                 # GET /user/status answers this, not fixtures.STATUS (a changed balance)
         self.many_mosaics = 0              # this many more collections, listed after the fixtures' (for paging)
         self.uploads = []                  # (what, mosaic, detail) for each upload request
         self.list_uploads = False          # a one-file upload is listed afterwards as a collection with one image
@@ -169,7 +170,7 @@ class Handler(BaseHTTPRequestHandler):
         if method == "GET" and path == "/projects/default":
             return self._send(200, fixtures.PROJECT)
         if method == "GET" and path == "/user/status":
-            return self._send(200, fixtures.STATUS)
+            return self._send(200, self.state.status or fixtures.STATUS)
         if method == "POST" and path == "/projects":
             name = (body or {}).get("name", "").strip()
             if not name:

@@ -323,8 +323,9 @@ class Controller(QObject):
         else:
             self.content.set_credits("", "")
         self.content.processings.provider_names = {p.name: p.display_name for p in status.data_providers}
-        if self.draft.imagery is None and not self._imagery_to_choose:
-            self._choose_default_imagery()
+        if self.draft.imagery is None:
+            if not self._imagery_to_choose:             # after "Run again" the user chooses: no default fills it in
+                self._choose_default_imagery()
         elif self.draft.imagery.kind == "provider":
             # providers may have been updated: re-attach the fresh object
             provider = next((p for p in status.data_providers if p.name == self.draft.imagery.provider.name), None)
