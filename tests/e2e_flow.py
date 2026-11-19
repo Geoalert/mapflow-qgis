@@ -7,7 +7,9 @@ import json
 import os
 import sys
 import tempfile
+import re
 import threading
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -33,6 +35,7 @@ from mapflow_next.ui.imagery_page import MINE  # noqa: E402
 
 SHOTS = Path(sys.argv[1]) if len(sys.argv) > 1 else None
 CHECKS = []
+RUN_STARTED = time.time()
 
 
 def check(condition, text):
@@ -1503,6 +1506,50 @@ def main():
     wait_until(lambda: not orb_previews(), 3)
     plugin.services[3].results.remove(orbview)
 
+    # ids as a server could send them: no file name carries them, and every file lands in the session folder
+    from mapflow_next.qgis_bridge.layers import MapLayers
+    session_folder = plugin.layers.temp_folder()
+    legacy = Path(tempfile.gettempdir()) / "mapflow_next"
+    before = set(os.listdir(session_folder.parent))
+    hostile = [
+        CatalogImage.from_api({"id": "../escape-1", "providerName": "orbview", "productType": "Image",
+                               "previewType": "png", "previewUrl": f"{base}/hostile-1", "footprint": box(37.60)}),
+        CatalogImage.from_api({"id": "x/y/escape-2", "providerName": "orbview", "productType": "Image",
+                               "previewType": "png", "previewUrl": f"{base}/hostile-2", "footprint": turned}),
+        CatalogImage.from_api({
+            "id": "../ros-escape", "providerName": "roscosmos", "productType": "Image", "previewType": "png",
+            "previewUrl": f"{base}/hostile-3a", "footprint": box(37.60),
+            "previews": [{"url": f"{base}/hostile-3a", "geometry": box(37.60)},
+                         {"url": f"{base}/hostile-3b", "geometry": box(37.61)}]})]
+    plugin.services[3].results.extend(hostile)
+    hostile_layers = []
+    for image in hostile:
+        controller.show_image(image.key)
+
+        def hostile_previews(key=image.key):
+            return [x for x in QgsProject.instance().mapLayers().values()
+                    if x.customProperty("mapflow_next/preview") == f"catalog:{key}"]
+        check(wait_until(lambda: len(hostile_previews()) == 1, 5), f"the preview of {image.id!r} is on the map")
+        hostile_layers.extend(hostile_previews())
+    in_folder = [Path(x.source()).resolve().parent == session_folder.resolve() for x in hostile_layers]
+    check(len(hostile_layers) == 3 and all(in_folder),
+          f"a preview of an id with ../ or / is a file in the session folder ({[x.source() for x in hostile_layers]})")
+    names = os.listdir(session_folder)
+    check(not any(re.search(r"escape|ros|\.\.", Path(x.source()).name) for x in hostile_layers)
+          and all(re.fullmatch(r"preview_[0-9a-f]{16}(\.\w+)+", name) for name in names),
+          f"no file name carries an id as it was sent ({sorted(names)})")
+    created = set(os.listdir(session_folder.parent)) - before
+    check(not any("escape" in name or name in ("y", "etc") for name in created)
+          and not any(legacy.glob("*escape*")) and not any(p.stat().st_mtime >= RUN_STARTED for p in legacy.glob("*")),
+          f"no file landed beside the session folder or in the old shared one ({sorted(created)})")
+    check(session_folder.is_dir() and session_folder.name.startswith("mapflow_next_")
+          and (os.name == "nt" or session_folder.stat().st_mode & 0o777 == 0o700),
+          f"the session folder is made by mkdtemp: private, and named mapflow_next_… ({session_folder})")
+    for image in hostile:
+        controller.show_image(image.key)                    # the eye off again
+    for image in hostile:
+        plugin.services[3].results.remove(image)
+
     # a tiled preview (ArcGIS): the card shows its whole-world tile
     arcgis = CatalogImage.from_api({"id": "arc-1", "providerName": "arcgis", "productType": "Mosaic",
                                     "previewType": "xyz", "previewUrl": f"{base}/tile-{{z}}-{{x}}-{{y}}"})
@@ -2495,7 +2542,22 @@ def main():
     dark.set_credits("1,240", "")
     shot(dark, "12-dark-start", QSize(400, 880))
 
+    late = plugin.layers.picture_on_footprint(mock_server.PNG, box(37.60), "Preview · before unload", "../escape-3")
+    plugin.layers.add(late, position=0, preview="catalog:escape-3")
+    check(any(str(session_folder) in x.source() for x in QgsProject.instance().mapLayers().values())
+          and session_folder.exists(), "a preview is still on the map and its folder is there before the unload")
     plugin.unload()
+    check(not session_folder.exists() and plugin.layers is None
+          and not any(x.source().startswith(str(session_folder)) for x in QgsProject.instance().mapLayers().values()),
+          "unload removes the session folder and the preview layers that point into it")
+    closed = MapLayers(iface)
+    first = closed.temp_folder()
+    closed.close()
+    closed.close()
+    check(first is not None and not first.exists() and closed.temp_folder() is None
+          and closed.preview_path("img-1", ".png") is None
+          and closed.picture_on_footprint(mock_server.PNG, box(37.60), "late", "img-1") is None,
+          "closing the layers twice is harmless, and a preview that comes after it is not written")
     check(wait_until(lambda: not iface.window.findChildren(QToolBar, "MapflowToolbar"), 3)
           and not any(iface.menu_actions.values()), "unload removes the Mapflow toolbar and the menu")
     from mapflow_next.core import guard

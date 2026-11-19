@@ -108,6 +108,7 @@ mapflow_next/
     guard.py           the guard: no exception escapes from an entry point Qt calls (no Qt; every layer imports it)
     oauth.py           browser sign-in without Qt: PKCE, the redirect, tokens
     origin.py          which requests may carry credentials: the API's own scheme, host and port
+    filenames.py       file names made from server ids: a hash, never the id
   api/
     http.py            async HTTP over QgsNetworkAccessManager, error classification
     auth.py            credentials in the QGIS authentication database

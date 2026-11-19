@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import json
+import os
 import re
+import shutil
 import tempfile
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -16,6 +18,7 @@ from qgis.core import (QgsCoordinateReferenceSystem, QgsCoordinateTransform, Qgs
 from qgis.PyQt.QtGui import QImage
 
 from ..config import LAYER_GROUP_NAME, PREVIEW_PROPERTY, PROCESSING_PROPERTY, RESOURCES
+from ..core import filenames
 from ..core.models import Mosaic, Processing
 from . import styles
 
@@ -119,6 +122,41 @@ class MapLayers:
     def __init__(self, iface, project: Optional[QgsProject] = None):
         self.iface = iface
         self.project = project or QgsProject.instance()
+        self._temp: Optional[Path] = None
+        self._closed = False
+
+    # ---------- session folder ----------
+
+    def temp_folder(self) -> Optional[Path]:
+        """The folder of this session's preview files, made on first use and readable by its owner only.
+        None once the session is closed."""
+        if self._closed:
+            return None
+        if self._temp is None:
+            self._temp = Path(tempfile.mkdtemp(prefix="mapflow_next_"))
+        return self._temp
+
+    def preview_path(self, image_id: str, suffix: str) -> Optional[Path]:
+        """A file of the session folder named after `image_id` (made safe first), or None when there is no
+        folder or the path would not lie directly in it."""
+        folder = self.temp_folder()
+        if folder is None:
+            return None
+        path = folder / f"{filenames.safe_stem(image_id)}{suffix}"
+        return path if path.resolve().parent == folder.resolve() else None
+
+    def close(self) -> None:
+        """End of the session: the preview layers leave the project and the session folder is removed."""
+        self._closed = True
+        folder, self._temp = self._temp, None
+        if folder is None:
+            return
+        prefix = str(folder) + os.sep
+        stale = [layer.id() for layer in list(self.project.mapLayers().values())
+                 if layer.source().startswith(prefix)]
+        for layer_id in stale:
+            self.project.removeMapLayer(layer_id)
+        shutil.rmtree(folder, ignore_errors=True)       # a file still open elsewhere must not break the unload
 
     # ---------- group ----------
 
@@ -194,7 +232,7 @@ class MapLayers:
         return self.tile_raster(mosaic.tile_url, f"My imagery · {mosaic.name}") if mosaic.tile_url else None
 
     def picture_on_footprint(self, data: bytes, footprint: Optional[dict], name: str,
-                             file_stem: str) -> Optional[QgsRasterLayer]:
+                             image_id: str) -> Optional[QgsRasterLayer]:
         """A catalog image's picture preview (PNG or JPEG) stretched over its footprint: its four corners
         when the footprint is a quadrilateral (a turned scene, Orbview), else its bounding box. A preview,
         not a georeferenced image: close enough to judge the scene against the area."""
@@ -203,9 +241,9 @@ class MapLayers:
         if box is None or image.isNull():
             return None
         jpeg = data[:3] == b"\xff\xd8\xff"
-        folder = Path(tempfile.gettempdir()) / "mapflow_next"
-        folder.mkdir(parents=True, exist_ok=True)
-        path = folder / f"{file_stem}.{'jpg' if jpeg else 'png'}"
+        path = self.preview_path(image_id, ".jpg" if jpeg else ".png")
+        if path is None:
+            return None
         path.write_bytes(data)
         corners = footprint_corners(footprint)
         if corners:
@@ -239,14 +277,16 @@ class MapLayers:
         return layer if layer is not None and layer.isValid() else None
 
     def pictures_on_footprints(self, parts: List[Tuple[bytes, Optional[dict]]], name: str,
-                               file_stem: str) -> Optional[QgsRasterLayer]:
+                               image_id: str) -> Optional[QgsRasterLayer]:
         """A preview in several pictures (Roscosmos), each on its own footprint, joined into one layer."""
         from osgeo import gdal
-        placed = [self.picture_on_footprint(data, footprint, name, f"{file_stem}_{index}")
+        placed = [self.picture_on_footprint(data, footprint, name, f"{image_id}_{index}")
                   for index, (data, footprint) in enumerate(parts)]
         if not placed or not all(placed):
             return None
-        path = Path(tempfile.gettempdir()) / "mapflow_next" / f"{file_stem}.vrt"
+        path = self.preview_path(image_id, ".vrt")
+        if path is None:
+            return None
         vrt = gdal.BuildVRT(str(path), [layer.source() for layer in placed])
         if vrt is None:
             return None

@@ -58,6 +58,7 @@ class MapflowNextPlugin:
         self.toolbar: Optional[QToolBar] = None
         self.dock: Optional[MapflowDock] = None
         self.controller: Optional[Controller] = None
+        self.layers: Optional[MapLayers] = None
         self.services = []
 
     # ---------- QGIS hooks ----------
@@ -93,6 +94,8 @@ class MapflowNextPlugin:
                 stop()
         if self.services:
             self.services[0].abort_all()            # Http
+        if self.layers:
+            self.layers.close()                     # after the last download: nothing writes into the folder
         if self.dock:
             self.iface.removeDockWidget(self.dock)
             self.dock.deleteLater()
@@ -102,7 +105,7 @@ class MapflowNextPlugin:
         if self.toolbar:
             self.iface.mainWindow().removeToolBar(self.toolbar)
             self.toolbar.setParent(None)      # Python owns it now, and it goes when the reference does
-        self.dock = self.controller = self.toolbar = None
+        self.dock = self.controller = self.toolbar = self.layers = None
         self.services = []
         guard.clear_reporter(self._report)          # last, so a failure while unloading is still reported
 
@@ -170,7 +173,7 @@ class MapflowNextPlugin:
         session = Session(cfg, http, api, settings)
         processings = Processings(api)
         imagery = Imagery(api)
-        layers = MapLayers(self.iface)
+        layers = self.layers = MapLayers(self.iface)
         results = Results(api, layers, settings)
         self.dock = MapflowDock(catalogue, self.iface.mainWindow())
         self.controller = Controller(self.iface, self.dock.content, session, processings, imagery, results,

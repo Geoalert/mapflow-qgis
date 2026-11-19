@@ -1731,7 +1731,7 @@ class Controller(QObject):
                 self._pictures[image.id] = data
                 if self.layers.previews(key):
                     return
-                picture = self.layers.picture_on_footprint(data, image.footprint, name, f"preview_{image.id[:32]}")
+                picture = self.layers.picture_on_footprint(data, image.footprint, name, image.id)
                 if picture is None:
                     self.notify("This image's preview can't be placed on the map.", Qgis.MessageLevel.Info)
                     return
@@ -1755,8 +1755,7 @@ class Controller(QObject):
             if len(pictures) < len(image.parts) or self.layers.previews(key):
                 return
             layer = self.layers.pictures_on_footprints(
-                [(pictures[i], footprint) for i, (_url, footprint) in enumerate(image.parts)], name,
-                f"preview_{image.id[:32]}")
+                [(pictures[i], footprint) for i, (_url, footprint) in enumerate(image.parts)], name, image.id)
             if layer is None:
                 self.notify("This image's preview can't be placed on the map.", Qgis.MessageLevel.Info)
                 return

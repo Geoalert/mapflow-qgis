@@ -1107,3 +1107,36 @@ def test_origin_is_local_names():
     assert is_local("localhost") and is_local("LOCALHOST") and is_local("127.0.0.1") and is_local("::1")
     assert not is_local("localhost.evil.example") and not is_local("api.example") and not is_local("")
     assert not is_local("10.0.0.1")
+
+
+HOSTILE_IDS = ["../../etc/passwd", "../escape", "a/b/c", "a\\b", "..", "/abs", "", "x" * 5000, "id\x00x", "\ud800"]
+
+
+@pytest.mark.parametrize("image_id", HOSTILE_IDS)
+def test_safe_stem_cannot_leave_the_folder(image_id, tmp_path):
+    import re
+    from mapflow_next.core.filenames import safe_stem
+    stem = safe_stem(image_id)
+    assert re.fullmatch(r"preview_[0-9a-f]{16}", stem)
+    for suffix in (".png", ".jpg", ".vrt", ".tif", ".pgw"):
+        assert (tmp_path / (stem + suffix)).resolve().parent == tmp_path.resolve()
+        assert Path(stem + suffix).name == stem + suffix
+
+
+def test_safe_stem_never_carries_the_id():
+    from mapflow_next.core.filenames import safe_stem
+    uuid = "6f1c2a3e-8b4d-4c5e-9f10-a1b2c3d4e5f6"
+    assert uuid not in safe_stem(uuid) and "6f1c2a3e" not in safe_stem(uuid)
+
+
+def test_safe_stem_is_stable_and_tells_ids_apart():
+    from mapflow_next.core.filenames import safe_stem
+    assert safe_stem("img-1") == safe_stem("img-1")
+    assert safe_stem("a/b") != safe_stem("a_b")
+    assert safe_stem("img-1") != safe_stem("img-1_0")
+
+
+def test_preview_files_have_no_system_temp_folder_of_their_own():
+    root = Path(__file__).resolve().parent.parent / "mapflow_next"
+    assert "gettempdir" not in (root / "qgis_bridge" / "layers.py").read_text(encoding="utf-8")
+    assert "gettempdir" not in (root / "plugin.py").read_text(encoding="utf-8")
