@@ -14,6 +14,9 @@ from qgis.PyQt.QtWidgets import QMainWindow  # noqa: E402
 from qgis.core import Qgis, QgsApplication, QgsSettings  # noqa: E402
 from qgis.gui import QgsMapCanvas, QgsMessageBar  # noqa: E402
 
+from mapflow_next import config  # noqa: E402
+from .ledger import Ledger  # noqa: E402
+
 _APP = None
 
 
@@ -60,15 +63,21 @@ def wait_until(condition, timeout: float = 15.0, step: float = 0.02) -> bool:
 class RecordingBar(QgsMessageBar):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.messages = []
+        self.messages = []                        # the flow clears this list; the ledger is never cleared
         self.widgets = []
+        self.ledger = Ledger()
 
     def pushMessage(self, title, text=None, level=Qgis.MessageLevel.Info, duration=-1):
         self.messages.append((level, text))
+        if level == Qgis.MessageLevel.Critical:
+            self.ledger.record("bar", text)
         return super().pushMessage(title, text, level, duration)
 
     def pushWidget(self, widget, level=Qgis.MessageLevel.Info, duration=0):
-        self.messages.append((level, widget.text() if hasattr(widget, "text") else ""))
+        text = widget.text() if hasattr(widget, "text") else ""
+        self.messages.append((level, text))
+        if level == Qgis.MessageLevel.Critical:
+            self.ledger.record("bar", text)
         self.widgets.append(widget)
         return super().pushWidget(widget, level, duration)
 
@@ -82,10 +91,16 @@ class FakeIface:
         self.canvas = QgsMapCanvas(self.window)
         self.window.setCentralWidget(self.canvas)
         self.bar = RecordingBar(self.canvas)
+        QgsApplication.messageLog().messageReceived.connect(self._log_received)
         self._active = None
         self.toolbar_actions = []                 # the Plugins toolbar
         self.menu_actions = {}
         self.options_opened = None
+
+    def _log_received(self, message, tag, level):
+        """The plugin's Critical log lines, which the guard writes before the bar line."""
+        if tag == config.PLUGIN_NAME and Qgis.MessageLevel(level) == Qgis.MessageLevel.Critical:
+            self.bar.ledger.record("log", message)
 
     def mainWindow(self):
         return self.window

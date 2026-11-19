@@ -353,32 +353,241 @@ def test_no_handlers_that_swallow_qt_arguments():
     assert not problems, "\n".join(problems)
 
 
-def test_code_runs_on_qt5_and_qt6():
-    """QGIS 3 runs Qt 5 and QGIS 4 runs Qt 6. Code both accept: qgis.PyQt imports only, exec() not exec_(),
-    scoped enums for QGIS too, geometry types from qgis_bridge/compat.py, menu items built as QActions.
-    (tools/qt6_check.py checks every Qt enum name; it needs PyQt6.)"""
+PLUGIN = Path(__file__).resolve().parents[1] / "mapflow_next"
+
+# Each README rule of § "QGIS 3 and QGIS 4" is a function that takes the source of one file and returns
+# problems, as (line, text). RULE_ALLOWED lists the files a rule does not apply to.
+EVENT_NAMES = {"event", "e", "ev", "evt"}
+
+
+def _lines(source, pattern, why):
     import re
-    root = Path(__file__).resolve().parents[1] / "mapflow_next"
-    rules = [
-        (re.compile(r"^\s*(from|import) PyQt[56]\b"), "import from qgis.PyQt, not PyQt5/PyQt6 directly"),
-        (re.compile(r"\.exec_\("), "exec_() is gone in PyQt6: use exec()"),
-        (re.compile(r"\bQgis\.(Info|Warning|Critical|Success)\b"), "use Qgis.MessageLevel.<level>"),
-        (re.compile(r"\bQgsWkbTypes\.\w+Geometry\b"), "use the geometry types in qgis_bridge/compat.py"),
-        (re.compile(r"\bmenu\.addAction\(\s*icons\."), "build menu items with widgets.menu_action"),
-        (re.compile(r"\bQRegExp\b|\bQDesktopWidget\b|\.desktop\(\)"), "removed in Qt 6"),
-    ]
-    allowed = {"qgis_bridge/compat.py": {"use the geometry types in qgis_bridge/compat.py"},
-               "ui/icons.py": {"import from qgis.PyQt, not PyQt5/PyQt6 directly"}}   # QSvgWidget fallback
+    return [(number, why) for number, line in enumerate(source.splitlines(), 1) if re.search(pattern, line)]
+
+
+def rule_qgis_pyqt(source):
+    return _lines(source, r"^\s*(from|import) PyQt[56]\b", "import from qgis.PyQt, not PyQt5/PyQt6 directly")
+
+
+def rule_scoped_qgis_enums(source):
+    return _lines(source, r"\bQgis\.(Info|Warning|Critical|Success)\b", "use Qgis.MessageLevel.<level>")
+
+
+def rule_exec(source):
+    return _lines(source, r"\.exec_\(", "exec_() is gone in PyQt6: use exec()")
+
+
+def rule_removed_in_qt6(source):
+    return _lines(source, r"\bQRegExp\b|\bQDesktopWidget\b|\.desktop\(\)", "removed in Qt 6")
+
+
+def _calls(source, method):
+    import ast
+    return [node for node in ast.walk(ast.parse(source))
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == method]
+
+
+def rule_menu_actions(source):
+    """addAction(text, slot) and addAction(icon, text[, slot]) differ between Qt 5 and Qt 6. Allowed: one argument
+    that is not a text literal (a QAction), and QLineEdit.addAction(icon, QLineEdit.ActionPosition.*)."""
+    import ast
     problems = []
-    for path in sorted(root.rglob("*.py")):
-        name = str(path.relative_to(root))
-        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-            for pattern, why in rules:
-                if pattern.search(line) and why not in allowed.get(name, set()):
-                    problems.append(f"{name}:{number}: {why}")
-    assert not problems, "\n".join(problems)
-    metadata = (root / "metadata.txt").read_text(encoding="utf-8")
+    for call in _calls(source, "addAction"):
+        args = call.args
+        if len(args) == 1:
+            fine = not (isinstance(args[0], ast.JoinedStr) or isinstance(args[0], ast.Constant))
+        else:
+            fine = len(args) == 2 and "ActionPosition" in ast.unparse(args[1])
+        if not fine:
+            problems.append((call.lineno, "build menu items as QActions with widgets.menu_action"))
+    return problems
+
+
+def rule_event_pos(source):
+    """pos() is gone from mouse events in Qt 6, as are globalPos(), localPos(), screenPos() and windowPos()."""
+    import ast
+    problems = []
+    for method in ("pos", "globalPos", "localPos", "screenPos", "windowPos"):
+        for call in _calls(source, method):
+            receiver = call.func.value
+            name = receiver.id if isinstance(receiver, ast.Name) else getattr(receiver, "attr", "")
+            if method != "pos" or name in EVENT_NAMES or name.endswith("event"):
+                problems.append((call.lineno, f"read mouse positions through widgets.event_pos, not {method}()"))
+    return problems
+
+
+def rule_geometry_types(source):
+    return _lines(source,
+                  r"\bQgsWkbTypes\.\w+Geometry\b|\bQgis\.GeometryType\b|\bQgsMapLayerType\b|\bQgis\.LayerType\b",
+                  "use the geometry and layer types in qgis_bridge/compat.py")
+
+
+def rule_svg_widget(source):
+    return _lines(source, r"\bQSvgWidget\b", "QSvgWidget belongs in ui/icons.py, which imports it from either place")
+
+
+def svg_imports_of_icons(source):
+    """ui/icons.py: QSvgWidget from QtSvg (Qt 5) and from QtSvgWidgets (Qt 6)."""
+    return [(1, f"ui/icons.py must import QSvgWidget from {module}") for module in ("QtSvg", "QtSvgWidgets")
+            if f"qgis.PyQt.{module} import QSvgWidget" not in source]
+
+
+RULES = {
+    "qgis.PyQt": (rule_qgis_pyqt, {"ui/icons.py"}),          # icons.py: the QSvgWidget fallback
+    "scoped enums": (rule_scoped_qgis_enums, set()),
+    "exec": (rule_exec, set()),
+    "removed": (rule_removed_in_qt6, set()),
+    "menu actions": (rule_menu_actions, {"ui/widgets.py"}),
+    "event_pos": (rule_event_pos, {"ui/widgets.py"}),
+    "compat": (rule_geometry_types, {"qgis_bridge/compat.py"}),
+    "svg": (rule_svg_widget, {"ui/icons.py"}),
+}
+
+
+def _tree_problems(rule_name):
+    rule, allowed = RULES[rule_name]
+    problems = []
+    for path in sorted(PLUGIN.rglob("*.py")):
+        name = str(path.relative_to(PLUGIN))
+        if name not in allowed:
+            problems += [f"{name}:{number}: {why}" for number, why in rule(path.read_text(encoding="utf-8"))]
+    return problems
+
+
+def _bites(rule, bad, good):
+    """The rule reports the bad snippet and accepts the good one."""
+    assert rule(bad), f"{rule.__name__} does not report: {bad}"
+    assert not rule(good), f"{rule.__name__} reports: {good}"
+
+
+def test_qt_is_imported_only_through_qgis_pyqt():
+    _bites(rule_qgis_pyqt, "from PyQt6.QtCore import Qt\n", "from qgis.PyQt.QtCore import Qt\n")
+    _bites(rule_qgis_pyqt, "import PyQt5\n", "import qgis.PyQt\n")
+    assert not _tree_problems("qgis.PyQt")
+
+
+def test_enum_names_are_scoped():
+    """QGIS's own enums; tools/qt6_check.py checks the Qt ones (it needs PyQt6)."""
+    _bites(rule_scoped_qgis_enums, "level = Qgis.Critical\n", "level = Qgis.MessageLevel.Critical\n")
+    assert not _tree_problems("scoped enums")
+
+
+def test_exec_is_not_exec_underscore():
+    _bites(rule_exec, "menu.exec_(pos)\n", "menu.exec(pos)\n")
+    assert not _tree_problems("exec")
+
+
+def test_nothing_removed_in_qt6_is_used():
+    _bites(rule_removed_in_qt6, "x = QRegExp('a')\n", "x = QRegularExpression('a')\n")
+    _bites(rule_removed_in_qt6, "QApplication.desktop()\n", "QApplication.primaryScreen()\n")
+    assert not _tree_problems("removed")
+
+
+def test_menu_items_are_qactions():
+    _bites(rule_menu_actions, "menu.addAction(icon, 'Open', handler)\n", "menu.addAction(action)\n")
+    _bites(rule_menu_actions, "menu.addAction('Open', handler)\n", "toolbar.addAction(self.action)\n")
+    _bites(rule_menu_actions, "menu.addAction('Open')\n", "menu.addAction(action)\n")
+    _bites(rule_menu_actions, "menu.addAction(icons.icon('x'), 'Open')\n",
+           "self.search.addAction(icon, QLineEdit.ActionPosition.LeadingPosition)\n")
+    assert not _tree_problems("menu actions")
+
+
+def test_mouse_positions_come_from_event_pos():
+    _bites(rule_event_pos, "def f(event):\n    return event.pos()\n", "def f(event):\n    return event_pos(event)\n")
+    _bites(rule_event_pos, "x = ev.globalPos()\n", "x = widget.pos()\n")
+    _bites(rule_event_pos, "x = self.mouse_event.pos()\n", "x = QCursor.pos()\n")
+    assert not _tree_problems("event_pos")
+
+
+def test_geometry_and_layer_types_come_from_compat():
+    _bites(rule_geometry_types, "g = QgsWkbTypes.PolygonGeometry\n", "g = POLYGON_GEOMETRY\n")
+    _bites(rule_geometry_types, "g = Qgis.GeometryType.Polygon\n", "g = compat.POLYGON_GEOMETRY\n")
+    _bites(rule_geometry_types, "t = QgsMapLayerType.VectorLayer\n", "t = VECTOR_LAYER\n")
+    _bites(rule_geometry_types, "t = Qgis.LayerType.Raster\n", "t = RASTER_LAYER\n")
+    assert not _tree_problems("compat")
+
+
+def test_qsvgwidget_is_imported_from_either_place_in_icons_only():
+    _bites(rule_svg_widget, "from qgis.PyQt.QtSvg import QSvgWidget\n", "from qgis.PyQt.QtSvg import QSvgRenderer\n")
+    both = ("try:\n    from qgis.PyQt.QtSvg import QSvgWidget\nexcept ImportError:\n"
+            "    from qgis.PyQt.QtSvgWidgets import QSvgWidget\n")
+    _bites(svg_imports_of_icons, "from qgis.PyQt.QtSvg import QSvgWidget\n", both)
+    _bites(svg_imports_of_icons, "from qgis.PyQt.QtSvgWidgets import QSvgWidget\n", both)
+    assert not _tree_problems("svg")
+    assert not svg_imports_of_icons((PLUGIN / "ui" / "icons.py").read_text(encoding="utf-8"))
+
+
+def test_code_runs_on_qt5_and_qt6():
+    """QGIS 3 runs Qt 5 and QGIS 4 runs Qt 6; metadata.txt declares both."""
+    metadata = (PLUGIN / "metadata.txt").read_text(encoding="utf-8")
     assert "qgisMaximumVersion=4.99" in metadata and "qgisMinimumVersion=3.28" in metadata
+
+
+# Each rule of README § "QGIS 3 and QGIS 4": the start of its bullet -> what checks it. A README rule
+# without a key here fails test_every_readme_qt_rule_has_a_check.
+README_RULE_CHECKS = {
+    "Import Qt only through `qgis.PyQt`": "test_qt_is_imported_only_through_qgis_pyqt",
+    "Use scoped enum names": "tools/qt6_check.py",             # Qt enums and enums read from an object
+    "Use `exec()`": "test_exec_is_not_exec_underscore",
+    "Build menu items as `QAction`s": "test_menu_items_are_qactions",
+    "Read mouse positions through `widgets.event_pos`": "test_mouse_positions_come_from_event_pos",
+    "Take geometry types from `qgis_bridge/compat.py`": "test_geometry_and_layer_types_come_from_compat",
+    "`QSvgWidget` moved to `QtSvgWidgets`": "test_qsvgwidget_is_imported_from_either_place_in_icons_only",
+}
+
+
+def readme_qt_rules(text):
+    """The bullets of README § "QGIS 3 and QGIS 4" between "check these rules:" and the --fix line."""
+    section = text.split("check these rules:", 1)[1].split("Run `tools/qt6_check.py --fix`", 1)[0]
+    rules = []
+    for line in section.splitlines():
+        if line.startswith("- "):
+            rules.append(line[2:].strip())
+        elif line.startswith("  ") and rules:
+            rules[-1] += " " + line.strip()
+    return rules
+
+
+def unchecked_readme_rules(text):
+    return [rule for rule in readme_qt_rules(text) if not any(rule.startswith(key) for key in README_RULE_CHECKS)]
+
+
+def test_every_readme_qt_rule_has_a_check():
+    readme = (Path(__file__).resolve().parents[1] / "README.md").read_text(encoding="utf-8")
+    assert len(readme_qt_rules(readme)) == len(README_RULE_CHECKS) == 7
+    assert not unchecked_readme_rules(readme)
+    for check in README_RULE_CHECKS.values():          # a named test exists; the tool is a file
+        assert check in globals() or (Path(__file__).resolve().parents[1] / check).is_file(), check
+    fix_line = "Run `tools/qt6_check.py --fix`"
+    added = readme.replace(fix_line, "- Never do a new thing.\n\n" + fix_line)
+    assert unchecked_readme_rules(added) == ["Never do a new thing."]
+
+
+def test_ledger_of_critical_messages():
+    from tests.ledger import Ledger
+    ledger = Ledger()
+    assert ledger.unexpected() == []
+    ledger.record("bar", "Something went wrong: x")
+    ledger.record("log", "Traceback ... x")
+    ledger.record("bar", "Layer has no images")
+    assert ledger.unexpected() == ["bar: Something went wrong: x", "log: Traceback ... x", "bar: Layer has no images"]
+    assert ledger.expect("has no images") == 1
+    assert ledger.expect("has no images") == 0               # an entry is expected once
+    assert ledger.expect("nothing like it") == 0
+    assert ledger.unexpected() == ["bar: Something went wrong: x", "log: Traceback ... x"]
+    assert ledger.expect("x") == 2 and ledger.unexpected() == []
+    ledger.record("bar", "has no images")                    # a later message is not covered by an earlier declaration
+    assert ledger.unexpected() == ["bar: has no images"]
+
+
+def test_a_missing_qgis_fails_in_the_test_images_and_skips_elsewhere(tmp_path):
+    from tests.image_check import missing_qgis_outcome
+    marker = tmp_path / "dockerenv"
+    marker.write_text("")
+    app = Path("/app")
+    assert missing_qgis_outcome(app, markers=[str(marker)]) == "fail"
+    assert missing_qgis_outcome(app, markers=[str(tmp_path / "absent")]) == "skip"      # a host that has /app
+    assert missing_qgis_outcome(tmp_path, markers=[str(marker)]) == "skip"             # another container
 
 
 def test_update_check_reads_the_plugin_installer_record():

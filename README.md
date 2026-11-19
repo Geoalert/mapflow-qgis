@@ -228,7 +228,7 @@ Tests and lint run in the official `qgis/qgis` Docker images, so only Docker is 
 make test          # both of the two runs below (the gate before review)
 make test-qgis3    # unit + end-to-end tests on QGIS 3 (qgis/qgis:release-3_28)
 make test-qgis4    # the same on QGIS 4 (qgis/qgis:4.2), plus the Qt 6 code check
-make test-core     # pure-Python tests only (30)
+make test-core     # pure-Python tests only (41)
 make lint          # the plugins.qgis.org checks: flake8, bandit, detect-secrets
 make screens       # run the end-to-end flow and rewrite docs/screens/*.png
 ```
@@ -237,11 +237,11 @@ With QGIS or PyQt6 installed, there are local variants:
 
 ```
 make test-local QGIS_PYTHON=/Applications/QGIS-LTR.app/Contents/MacOS/bin/python3
-make test-qt6 QT6_PYTHON=…    # the pages, sign-in and HTTP client on PyQt6 (41 checks)
+make test-qt6 QT6_PYTHON=…    # the pages, sign-in and HTTP client on PyQt6 (42 checks)
 make check-qt6 QT6_PYTHON=…   # Qt enum names and calls that only Qt 5 accepts
 ```
 
-**The end-to-end test** (`tests/e2e_flow.py`, 259 checks) runs a real offscreen QGIS against a mock
+**The end-to-end test** (`tests/e2e_flow.py`, 314 checks) runs a real offscreen QGIS against a mock
 Mapflow API and sign-in server (`tests/mock_server.py`).
 - **Request checks:** the mock rejects request bodies the real API rejects, such as `myImagery` with both
   `mosaicId` and `imageIds`.
@@ -250,11 +250,14 @@ Mapflow API and sign-in server (`tests/mock_server.py`).
 - **The flow:** from there it covers scenarios and the run form, cost and the run itself, and results on
   the map. It also covers imagery search, My imagery, the projects window, processings paging and
   renaming, "Run again", the account menu, unload and dark mode.
+- **Critical messages:** the plugin's guard turns an exception into a Critical line in the message bar and
+  the log. An unexpected Critical message in the bar or the log fails the flow; a check that expects one
+  declares it.
 - **Isolation:** each run gets its own QGIS settings and authentication database in a temporary folder.
 - **Real clicks:** the test clicks the real buttons wherever a bug hid behind a click. For example,
   toggling an option must leave the form's scroll position alone.
 
-CI (`.github/workflows/tests.yml`) runs `test-qgis3`, `test-qgis4` and `lint` on every push to `dev` and
+CI (`.github/workflows/tests.yml`) runs `test-qgis3`, `test-qgis4`, `test-qt6` and `lint` on every push to `dev` and
 `master` and on pull requests. **Releases are made by hand**: `make zip` builds the archive, and a
 maintainer uploads it to the QGIS Plugin Repository. No workflow publishes a release (`.qgis-plugin-ci`
 is kept for the `qgis-plugin-ci` tool, which nothing runs today; `release.yml` in the repository root is

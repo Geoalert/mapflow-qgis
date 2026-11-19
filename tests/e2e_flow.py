@@ -40,6 +40,13 @@ def check(condition, text):
     return condition
 
 
+def expect_critical(iface, fragment, text, count=None):
+    """Declare that the check before this call caused Critical messages containing `fragment`: `count` of them,
+    or any number but at least one. A declaration that matches too few messages fails, so it can't go stale."""
+    marked = iface.bar.ledger.expect(fragment)
+    return check(marked == count if count is not None else marked > 0, f"{text} ({marked} messages)")
+
+
 def shot(widget, name, size=None):
     if not SHOTS:
         return
@@ -1527,6 +1534,8 @@ def main():
     check(any(level == Qgis.MessageLevel.Critical for level, m in iface.bar.messages if "has no images" in (m or ""))
           and iface.bar.widgets and iface.bar.widgets[-1].findChildren(QPushButton)[-1].text() == "Mapflow Web",
           "…the message bar shows it as an error, with a button to Mapflow Web")
+    expect_critical(iface, "has no images", "…the test expects these error messages (an empty collection is refused)",
+                    count=len(refused))
     # chosen another way (a scenario's default, Run again): the run form says it, and so does the message bar, once
     controller.draft.imagery = controller_module.ImageryChoice.from_mosaic("m-empty", "Empty upload")
     controller.refresh_run()
@@ -1534,6 +1543,8 @@ def main():
     again = [m for _l, m in iface.bar.messages if "has no images" in (m or "")]
     check(len(again) == len(refused) + 1, f"an empty collection in the run form is named in the message bar once "
                                           f"({len(again) - len(refused)} messages)")
+    expect_critical(iface, "has no images", "…the test expects that error message too (the run form's collection)",
+                    count=1)
     controller.draft.imagery = before
     controller.refresh_run()
     state.extra_mosaics = []
@@ -1809,6 +1820,11 @@ def main():
     check(wait_until(lambda: not iface.window.findChildren(QToolBar, "MapflowToolbar"), 3)
           and not any(iface.menu_actions.values()), "unload removes the Mapflow toolbar and the menu")
     server.shutdown()
+    APP.processEvents()                                   # log lines can arrive from another thread
+    unexpected = iface.bar.ledger.unexpected()
+    check(not unexpected, f"no Critical message the test did not expect ({len(unexpected)})")
+    for line in unexpected:
+        print("FAIL unexpected Critical message " + line.replace("\n", " | "), flush=True)
     failed = [text for ok, text in CHECKS if not ok]
     print(f"\n{len(CHECKS) - len(failed)}/{len(CHECKS)} checks passed")
     return 1 if failed else 0
