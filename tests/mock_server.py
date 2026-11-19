@@ -23,6 +23,8 @@ OIDC = "/auth/realms/mapflow/protocol/openid-connect"
 PNG = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAACXBIWXMAAA9hAAAPYQGoP6dpAAAAFElEQVQImWOM"
                        "6vdjwAaYsIoOWgkA954BR71+LSAAAAAASUVORK5CYII=")  # pragma: allowlist secret (a PNG)
 REDIRECT_URI = "http://127.0.0.1:7070/qgis"
+ODD_BOUNDS_ID = "odd-bounds"          # a processing whose tilejson bounds cannot be transformed
+ODD_BOUNDS = [37.595, 91.0, 37.615, 92.0]
 
 
 class State:
@@ -244,8 +246,11 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, "70", "text/plain")
         match = re.fullmatch(r"/tiles/([\w-]+)\.json", path)
         if method == "GET" and match:     # a processing's vector tilejson: where its results are
-            return self._send(200, {"tilejson": "2.2.0", "minzoom": 0, "maxzoom": 18,
-                                    "bounds": [37.595, 55.745, 37.615, 55.755]})
+            # Latitudes beyond 90°: QgsCoordinateTransform.transformBoundingBox raises QgsCsException (QGIS 3 and 4)
+            bounds = ODD_BOUNDS if match.group(1) == ODD_BOUNDS_ID else [37.595, 55.745, 37.615, 55.755]
+            return self._send(200, {"tilejson": "2.2.0", "minzoom": 0, "maxzoom": 18, "bounds": bounds})
+        if method == "GET" and path == "/not-json":     # a maintenance page where JSON is promised
+            return self._send(200, "<html>maintenance</html>", "text/html")
         if method == "POST" and path == "/processings/v2":
             new = fixtures.processing_json(str(uuid.uuid4()), "IN_PROGRESS", 0, name=body["name"])
             new["vectorLayer"]["tileJsonUrl"] = \

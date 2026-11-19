@@ -1,6 +1,7 @@
 """Processing results onto the map: GeoPackage files (default) or streamed vector tiles."""
 from __future__ import annotations
 
+import functools
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -8,6 +9,7 @@ from qgis.PyQt.QtCore import QObject, QStandardPaths, pyqtSignal
 from qgis.core import QgsMapLayer, QgsRectangle
 
 from ..api.client import MapflowApi
+from ..core import guard
 from ..core.models import Processing
 from ..qgis_bridge.layers import MapLayers, bounds_extent, extent_is_world, features_extent
 
@@ -61,11 +63,13 @@ class Results(QObject):
             # extent (its tilejson bounds, as the current plugin does, else the processing's area)
             # so the map shows the results, not the planet
 
+            @self._continuing(processing)
             def with_extent(extent):
                 if extent is not None:
                     vector.setExtent(extent)
                 self._with_imagery(processing, [vector])
 
+            @self._continuing(processing)
             def from_tilejson(tilejson):
                 extent = bounds_extent((tilejson or {}).get("bounds"))
                 if extent is None or extent_is_world(extent):
@@ -88,6 +92,7 @@ class Results(QObject):
             return
         target = str(downloads / f"{processing.id}.geojson")
 
+        @self._continuing(processing)
         def downloaded(path: str):
             vectors = self.layers.save_results(path, processing, folder)
             try:
@@ -105,6 +110,7 @@ class Results(QObject):
 
     def _with_imagery(self, processing: Processing, vectors: list) -> None:
         """Add the source imagery under the results (its extent comes from the tilejson), then zoom."""
+        @self._continuing(processing)
         def finish(raster: Optional[QgsMapLayer]):
             added = []
             if raster is not None:
@@ -120,6 +126,7 @@ class Results(QObject):
             return
         name = f"{processing.name} · imagery"
 
+        @self._continuing(processing)
         def with_extent(tilejson: dict):
             finish(self.layers.tile_raster(processing.raster_tile_url, name,
                                            bounds_extent((tilejson or {}).get("bounds")),
@@ -133,6 +140,7 @@ class Results(QObject):
 
     def _area_extent(self, processing: Processing, then: Callable[[Optional[QgsRectangle]], None]) -> None:
         """The bounding box of the processing's area (EPSG:3857), from Mapflow; None if it can't be had."""
+        @self._continuing(processing)
         def done(collection: dict):
             then(features_extent(collection))
         self.api.processing_aois(processing.id, done, lambda _error: then(None))
@@ -140,12 +148,30 @@ class Results(QObject):
     def save_geojson(self, processing: Processing, path: str, done: Callable[[str], None]) -> None:
         self._set_busy(processing.id, True)
 
+        @self._continuing(processing)
         def ok(saved: str):
             self._set_busy(processing.id, False)
             done(saved)
 
         self.api.download_result(processing.id, path, ok,
                                  lambda error: self._fail(processing, f"Results didn't download: {error.message}"))
+
+    def _continuing(self, processing: Processing):
+        """Decorator for a step that an HTTP callback hands on to. `_busy` is set from `add_to_map` until the
+        last step ends, so an exception in any step must clear it, or the processing stays "loading" until
+        sign-out. The exception is reported through the guard and not raised again: `Http` would otherwise run
+        the request's `on_error`, a fallback that continues the load after the flag was cleared."""
+        def decorate(step):
+            @functools.wraps(step)
+            def run(*args):
+                try:
+                    return step(*args)
+                except Exception as exc:  # noqa: BLE001 - the guard's job, here to clear the flag first
+                    guard.report(exc, f"Results {processing.id}: {step.__qualname__}")
+                    self._fail(processing, "The results could not be added to the map. "
+                                           "Details are in the Log Messages panel.")
+            return run
+        return decorate
 
     def _fail(self, processing: Processing, message: str) -> None:
         self._set_busy(processing.id, False)

@@ -635,3 +635,327 @@ def test_my_imagery_coverage():
     assert any(i.field == "area" and "doesn't overlap “centre.tif”" in i.text for i in draft.issues(None, None))
     draft.coverage = None
     assert not any("overlap" in i.text for i in draft.issues(None, None))
+
+
+# ---------- the guard (spec/006 § The guard) ----------
+
+@pytest.fixture
+def reporter():
+    """Install a reporter that records its calls; the previous one comes back after the test."""
+    from mapflow_next.core import guard
+    saved, calls = guard._reporter, []
+    guard.set_reporter(lambda exc, details: calls.append((exc, details)))
+    yield calls
+    guard._reporter = saved
+
+
+def test_guard_returns_the_value_and_swallows_an_exception(reporter):
+    from mapflow_next.core.guard import guarded
+
+    def divide(a, b):
+        return a / b
+
+    assert guarded(divide)(6, 3) == 2
+    assert reporter == []
+    assert guarded(divide)(1, 0) is None
+    assert len(reporter) == 1
+    exc, details = reporter[0]
+    assert isinstance(exc, ZeroDivisionError)
+    assert "ZeroDivisionError" in details and "divide" in details and "Traceback" in details
+
+
+def test_guard_does_not_swallow_a_system_exit(reporter):
+    from mapflow_next.core.guard import guarded
+
+    def stop():
+        raise KeyboardInterrupt
+
+    with pytest.raises(KeyboardInterrupt):
+        guarded(stop)()
+    assert reporter == []
+
+
+def test_guard_without_a_reporter_writes_to_stderr(capsys):
+    from mapflow_next.core import guard
+    saved = guard._reporter
+    guard._reporter = None
+    try:
+        assert guard.guarded(lambda: 1 / 0)() is None
+    finally:
+        guard._reporter = saved
+    assert "ZeroDivisionError" in capsys.readouterr().err
+
+
+def test_guard_survives_a_reporter_that_raises(capsys):
+    from mapflow_next.core import guard
+    saved = guard._reporter
+
+    def broken(exc, details):
+        raise RuntimeError("reporter is broken")
+
+    guard.set_reporter(broken)
+    try:
+        assert guard.guarded(lambda: 1 / 0)() is None
+    finally:
+        guard._reporter = saved
+    assert "ZeroDivisionError" in capsys.readouterr().err
+
+
+def test_clear_reporter_leaves_another_reporter_alone(reporter):
+    from mapflow_next.core import guard
+    installed = guard._reporter
+    guard.clear_reporter(lambda exc, details: None)
+    assert guard._reporter is installed
+    guard.clear_reporter(installed)
+    assert guard._reporter is None
+
+
+def test_a_bound_method_is_cleared_by_an_equal_bound_method():
+    from mapflow_next.core import guard
+
+    class Owner:
+        def report(self, exc, details):
+            pass
+
+    saved, owner = guard._reporter, Owner()
+    try:
+        guard.set_reporter(owner.report)
+        guard.clear_reporter(owner.report)           # a new bound-method object each time
+        assert guard._reporter is None
+    finally:
+        guard._reporter = saved
+
+
+def test_guard_drops_the_arguments_the_slot_does_not_take(reporter):
+    """`clicked(bool)` reaches `lambda: ...` in PyQt because PyQt retries with fewer arguments; the wrapper must
+    not hide that."""
+    from mapflow_next.core.guard import guarded
+    calls = []
+    guarded(lambda: calls.append("none"))(False)
+    guarded(lambda *args: calls.append(args))(False, 1)
+    guarded(lambda one: calls.append(one))(7, "extra")
+    guarded(lambda one, two=2: calls.append((one, two)))(1)
+    guarded(lambda one, **kw: calls.append((one, kw)))(1, other=3)
+    assert calls == ["none", (False, 1), 7, (1, 2), (1, {"other": 3})]
+    assert reporter == []
+
+
+def test_a_guarded_method_stays_a_bound_method(reporter):
+    from mapflow_next.core.guard import guarded
+
+    class Page:
+        def __init__(self):
+            self.seen = []
+
+        @guarded
+        def slot(self):
+            self.seen.append("slot")
+
+        @guarded
+        def one(self, value):
+            self.seen.append(value)
+
+        @guarded
+        def boom(self, *_):
+            raise ValueError("boom")
+
+    page = Page()
+    assert page.slot.__self__ is page and page.slot.__name__ == "slot"
+    page.slot(True)                  # the `checked` that the slot does not take
+    page.one(5, 6)
+    assert page.seen == ["slot", 5]
+    page.boom(1)
+    assert [str(exc) for exc, _ in reporter] == ["boom"] and "Page.boom" in reporter[0][1]
+
+
+def test_guard_works_on_partials_and_other_objects_methods(reporter):
+    from functools import partial
+    from mapflow_next.core.guard import guarded
+
+    def add(key, value):
+        return key + value
+
+    assert guarded(partial(add, 1))(2, "extra") == 3
+    assert guarded([].append)(1) is None and reporter == []      # a builtin: no signature to read, all arguments
+
+
+def test_core_imports_no_qt():
+    """`core/` is the one package every layer may import (spec/007 layer rules), and it is pure Python."""
+    import ast
+    problems = []
+    for path in sorted((PLUGIN / "core").glob("*.py")):
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            names = ([alias.name for alias in node.names] if isinstance(node, ast.Import)
+                     else [node.module or ""] if isinstance(node, ast.ImportFrom) and not node.level else [])
+            problems += [f"{path.name}:{node.lineno}: imports {name}" for name in names
+                         if name.split(".")[0] in ("qgis", "PyQt5", "PyQt6", "sip")]
+    assert not problems, "\n".join(problems)
+
+
+# ---------- the source check: every entry point Qt calls is guarded ----------
+
+# Qt C++ slots: nothing of the plugin runs, so there is nothing to guard. A new entry needs a comment.
+QT_SLOTS = {
+    "setChecked",      # plugin.py: the dock's visibility moves the toolbar button
+    "reject",          # ui/settings_dialog.py: a button closes its own dialog
+}
+
+
+def _is_guarded_decorator(node):
+    import ast
+    return (isinstance(node, ast.Name) and node.id == "guarded") or \
+        (isinstance(node, ast.Attribute) and node.attr == "guarded")
+
+
+def _is_guarded_def(node):
+    return any(_is_guarded_decorator(decorator) for decorator in node.decorator_list)
+
+
+def _entry_point(call):
+    """The callable that Qt will run for `x.connect(f)` or `QTimer.singleShot(ms, f)`, or None."""
+    import ast
+    func = call.func
+    if not isinstance(func, ast.Attribute):
+        return None
+    if func.attr == "connect" and call.args:
+        return call.args[0]
+    if func.attr == "singleShot" and len(call.args) >= 2:
+        return call.args[1]
+    return None
+
+
+def rule_entry_points(source):
+    """Every callable that Qt runs is guarded: `guarded(...)` at the connection site, a `self.method` that is
+    decorated with `@guarded` in the same class, a local function decorated with it, a `partial` of those,
+    or `signal.emit` (nothing of the plugin runs there; the receiving slots are guarded themselves)."""
+    import ast
+    tree = ast.parse(source)
+    problems = []
+
+    def defs(scope, name):
+        return [n for n in ast.iter_child_nodes(scope) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+                and n.name == name]
+
+    def fine(arg, stack):
+        if isinstance(arg, ast.Call):
+            func = arg.func
+            if isinstance(func, ast.Name) and func.id == "guarded" or \
+                    isinstance(func, ast.Attribute) and func.attr == "guarded":
+                return True
+            name = func.id if isinstance(func, ast.Name) else getattr(func, "attr", "")
+            return name == "partial" and bool(arg.args) and fine(arg.args[0], stack)
+        if isinstance(arg, ast.Attribute):
+            if arg.attr == "emit":
+                return True
+            if isinstance(arg.value, ast.Name) and arg.value.id == "self":
+                classes = [s for s in stack if isinstance(s, ast.ClassDef)]
+                found = defs(classes[-1], arg.attr) if classes else []
+                if found:
+                    return all(_is_guarded_def(n) for n in found)
+            return arg.attr in QT_SLOTS
+        if isinstance(arg, ast.Name):
+            for scope in reversed(stack):
+                if isinstance(scope, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    found = defs(scope, arg.id)
+                    if found:
+                        return all(_is_guarded_def(n) for n in found)
+        return False
+
+    def visit(node, stack):
+        if isinstance(node, ast.Call):
+            arg = _entry_point(node)
+            if arg is not None and not fine(arg, stack):
+                problems.append((node.lineno, f"`{ast.unparse(arg)[:60]}` is an entry point that is not guarded: "
+                                              "decorate the method with @guarded, or wrap it: guarded(...)"))
+        scoped = isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))
+        for child in ast.iter_child_nodes(node):
+            visit(child, stack + [node] if scoped else stack)
+
+    visit(tree, [])
+    return problems
+
+
+def _src(text):
+    import textwrap
+    return textwrap.dedent(text).lstrip("\n")
+
+
+def test_every_entry_point_is_guarded():
+    _bites(rule_entry_points, "button.clicked.connect(lambda: run())\n",
+           "button.clicked.connect(guarded(lambda: run()))\n")
+    _bites(rule_entry_points, "QTimer.singleShot(0, lambda: run())\n",
+           "QTimer.singleShot(0, guarded(lambda: run()))\n")
+    _bites(rule_entry_points, "dock.visibilityChanged.connect(session.set_active)\n",
+           "dock.visibilityChanged.connect(self.action.setChecked)\n")
+    _bites(rule_entry_points, "a.changed.connect(b.run)\n", "a.changed.connect(b.changed.emit)\n")
+    _bites(rule_entry_points, _src("""
+        class A:
+            def go(self): pass
+            def f(self):
+                b.clicked.connect(self.go)
+        """), _src("""
+        class A:
+            @guarded
+            def go(self): pass
+            def f(self):
+                b.clicked.connect(self.go)
+        """))
+    _bites(rule_entry_points, _src("""
+        class A:
+            def f(self):
+                b.clicked.connect(self.missing)
+        """), _src("""
+        class A:
+            def f(self):
+                b.clicked.connect(guarded(self.missing))
+        """))
+    _bites(rule_entry_points, _src("""
+        class A:
+            def go(self, key): pass
+            def f(self):
+                s.connect(partial(self.go, 1))
+        """), _src("""
+        class A:
+            @guarded
+            def go(self, key): pass
+            def f(self):
+                s.connect(partial(self.go, 1))
+        """))
+    _bites(rule_entry_points, _src("""
+        def f():
+            def apply(): pass
+            s.connect(apply)
+        """), _src("""
+        def f():
+            @guarded
+            def apply(): pass
+            s.connect(apply)
+        """))
+    # the same method name in two classes: each class is judged by its own def
+    _bites(rule_entry_points, _src("""
+        class A:
+            @guarded
+            def go(self): pass
+        class B:
+            def go(self): pass
+            def f(self):
+                s.connect(self.go)
+        """), _src("""
+        class A:
+            def go(self): pass
+        class B:
+            @guarded
+            def go(self): pass
+            def f(self):
+                s.connect(self.go)
+        """))
+    problems = _tree_problems_of(rule_entry_points)
+    assert not problems, "\n".join(problems)
+
+
+def _tree_problems_of(rule):
+    problems = []
+    for path in sorted(PLUGIN.rglob("*.py")):
+        name = str(path.relative_to(PLUGIN))
+        problems += [f"{name}:{number}: {why}" for number, why in rule(path.read_text(encoding="utf-8"))]
+    return problems

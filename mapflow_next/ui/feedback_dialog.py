@@ -7,6 +7,7 @@ from qgis.PyQt.QtWidgets import QDialog, QHBoxLayout, QPlainTextEdit, QVBoxLayou
 
 from .theme import stylesheet
 from .widgets import Stars, button, label
+from ..core.guard import guarded
 
 
 class FeedbackDialog(QDialog):
@@ -32,12 +33,12 @@ class FeedbackDialog(QDialog):
         buttons = QHBoxLayout()
         buttons.addStretch(1)
         cancel = button("Cancel", "ghost")
-        cancel.clicked.connect(lambda *_: self.reject())
+        cancel.clicked.connect(guarded(lambda *_: self.reject()))
         self.send = button("Send feedback", "primary")
-        self.send.clicked.connect(lambda *_: self.accept())
+        self.send.clicked.connect(guarded(lambda *_: self.accept()))
         self.send.setDefault(True)
         self.send.setEnabled(rating > 0)
-        self.stars.rated.connect(lambda value: self.send.setEnabled(value > 0))
+        self.stars.rated.connect(guarded(lambda value: self.send.setEnabled(value > 0)))
         buttons.addWidget(cancel)
         buttons.addWidget(self.send)
         layout.addSpacing(6)

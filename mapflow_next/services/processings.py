@@ -11,6 +11,7 @@ from ..api.http import ApiError
 from ..config import COST_DEBOUNCE_MS, POLL_INTERVAL_MS, PROCESSINGS_PAGE_SIZE
 from ..core.draft import RunDraft
 from ..core.models import Processing, Project, Status
+from ..core.guard import guarded
 
 
 MAX_PAGE = 100
@@ -91,6 +92,7 @@ class Processings(QObject):
         self._poll.stop()
         self._cost_timer.stop()
 
+    @guarded
     def refresh(self) -> bool:
         """Ask for the newest page. False if there is nothing to ask (no project). While a request is in
         flight, another follows it: what changed in between (a deletion) must show."""
@@ -186,6 +188,7 @@ class Processings(QObject):
             return
         self._cost_timer.start()
 
+    @guarded
     def _ask_cost(self) -> None:
         if not self._cost_payload:
             return

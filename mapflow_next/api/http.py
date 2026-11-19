@@ -10,7 +10,7 @@ import json
 from dataclasses import dataclass, field
 from functools import partial
 from itertools import count
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, Optional, Tuple
 from urllib.parse import urlencode, urlparse
 
 from qgis.PyQt.QtCore import QByteArray, QFile, QIODevice, QObject, QSaveFile, QTimer, QUrl, pyqtSignal
@@ -18,14 +18,25 @@ from qgis.PyQt.QtNetwork import QHttpMultiPart, QHttpPart, QNetworkReply, QNetwo
 from qgis.core import Qgis, QgsApplication, QgsMessageLog, QgsNetworkAccessManager
 
 from ..config import PLUGIN_NAME, TIMEOUT_S
+from ..core import guard
+from ..core.guard import guarded
 from ..core.messages import describe
 
 Callback = Callable[..., None]
 
+PLUGIN_FAILED_TEXT = ("Mapflow answered, but the plugin could not process the answer. "
+                      "Details are in the Log Messages panel.")
+
+
+def _without_query(url: str) -> str:
+    """The query string can carry a token (a presigned URL): it never goes to a log or a report."""
+    return url.split("?", 1)[0]
+
 
 @dataclass
 class ApiError:
-    # auth | forbidden | not_found | client | server | offline | proxy | timeout | cancelled
+    # auth | forbidden | not_found | client | server | offline | proxy | timeout | cancelled | plugin
+    # (plugin: the answer was fine, the caller's code failed on it)
     kind: str
     message: str                  # ready to show
     status: Optional[int] = None
@@ -105,6 +116,8 @@ class _Pending:
     keep: Any = None              # objects that must live as long as the request (multipart body)
     authorized: bool = False      # carried Mapflow credentials: a 401 means the sign-in has ended
     bearer: Optional[str] = None  # …the access token it carried, if any
+    method: str = ""
+    url: str = ""                 # without the query string: it names the request in reports
 
 
 class Http(QObject):
@@ -227,14 +240,15 @@ class Http(QObject):
 
         key = next(self._ids)
         pending = _Pending(reply, on_success, on_error, parse, sink=sink, keep=body if upload else None,
-                           authorized=authorize, bearer=self.bearer if authorize else None)
+                           authorized=authorize, bearer=self.bearer if authorize else None,
+                           method=method, url=_without_query(url))
         self._pending[key] = pending
         reply.finished.connect(partial(self._finished, key))
         if sink is not None:
             reply.readyRead.connect(partial(self._drain, key))
         if on_progress is not None:
             signal = reply.uploadProgress if upload else reply.downloadProgress
-            signal.connect(lambda done, total, cb=on_progress: cb(done, total))
+            signal.connect(guarded(lambda done, total, cb=on_progress: cb(done, total)))
         seconds = TIMEOUT_S if timeout is None else timeout
         if seconds:
             pending.timer = QTimer(self)
@@ -243,6 +257,7 @@ class Http(QObject):
             pending.timer.start(seconds * 1000)
         return key
 
+    @guarded
     def _drain(self, key: int) -> None:
         pending = self._pending.get(key)
         if pending and pending.sink is not None:
@@ -250,12 +265,14 @@ class Http(QObject):
             if pending.timer:
                 pending.timer.start()   # data is flowing: restart the inactivity timer
 
+    @guarded
     def _timeout(self, key: int) -> None:
         pending = self._pending.get(key)
         if pending and not pending.reply.isFinished():
             pending.timed_out = True
             pending.reply.abort()
 
+    @guarded
     def _finished(self, key: int) -> None:
         pending = self._pending.pop(key, None)
         if pending is None:
@@ -265,46 +282,71 @@ class Http(QObject):
             pending.timer.stop()
             pending.timer.deleteLater()
         status = reply.attribute(QNetworkRequest.Attribute.HttpStatusCodeAttribute)
+        reported = False
         try:
-            if reply.error() != QNetworkReply.NetworkError.NoError or pending.timed_out:
-                body = "" if pending.sink is not None else bytes(reply.readAll()).decode("utf-8", "replace")
-                if pending.sink is not None:
-                    pending.sink.cancelWriting()
-                error = classify(reply.error(), status, body, reply.url().toString(), pending.timed_out)
-                QgsMessageLog.logMessage(f"{error.kind} {status} {error.url}: {error.code} {error.body[:500]}",
-                                         PLUGIN_NAME, Qgis.MessageLevel.Warning)
-                # A request sent with an access token renewed since says nothing about the current sign-in
-                if error.kind == "auth" and pending.authorized and pending.bearer == self.bearer:
-                    self.unauthorized.emit()
-                self._fail(pending.on_error, error)
-                return
-            if pending.sink is not None:
-                pending.sink.write(reply.readAll())
-                if not pending.sink.commit():
-                    self._fail(pending.on_error,
-                               ApiError("client", f"Can't save the file: {pending.sink.errorString()}"))
-                    return
-                result: Any = pending.sink.fileName()
-            else:
-                raw = bytes(reply.readAll())
-                if pending.parse == "bytes":
-                    result = raw
-                elif pending.parse == "text":
-                    result = raw.decode("utf-8", "replace")
-                else:
-                    result = json.loads(raw.decode("utf-8")) if raw.strip() else None
-            if pending.on_success:
-                pending.on_success(result)
-        except ValueError as exc:
-            self._fail(pending.on_error, ApiError("server", f"Unexpected response from Mapflow: {exc}",
-                                                  status, url=reply.url().toString()))
+            ok, outcome = self._read(pending, reply, status)
+        except Exception as exc:  # noqa: BLE001 - plugin code failed while reading; the caller still gets an outcome
+            guard.report(exc, f"{pending.method} {pending.url}: reading the answer")
+            ok, outcome, reported = False, ApiError("plugin", PLUGIN_FAILED_TEXT, status, url=pending.url), True
         finally:
             reply.deleteLater()
+        if ok:
+            self._succeed(pending, outcome, status)
+        else:
+            self._fail(pending.on_error, outcome, reported)
 
-    def _fail(self, on_error: Optional[Callback], error: ApiError) -> None:
+    def _read(self, pending: _Pending, reply: QNetworkReply, status: Optional[int]) -> Tuple[bool, Any]:
+        """(True, the result) or (False, the ApiError). Reading is the only place that turns a bad body into
+        "Unexpected response from Mapflow": the caller's callbacks run elsewhere (`_succeed`)."""
+        if reply.error() != QNetworkReply.NetworkError.NoError or pending.timed_out:
+            body = "" if pending.sink is not None else bytes(reply.readAll()).decode("utf-8", "replace")
+            if pending.sink is not None:
+                pending.sink.cancelWriting()
+            error = classify(reply.error(), status, body, reply.url().toString(), pending.timed_out)
+            QgsMessageLog.logMessage(f"{error.kind} {status} {error.url}: {error.code} {error.body[:500]}",
+                                     PLUGIN_NAME, Qgis.MessageLevel.Warning)
+            # A request sent with an access token renewed since says nothing about the current sign-in
+            if error.kind == "auth" and pending.authorized and pending.bearer == self.bearer:
+                self.unauthorized.emit()
+            return False, error
+        if pending.sink is not None:
+            pending.sink.write(reply.readAll())
+            if not pending.sink.commit():
+                return False, ApiError("client", f"Can't save the file: {pending.sink.errorString()}")
+            return True, pending.sink.fileName()
+        raw = bytes(reply.readAll())
+        if pending.parse == "bytes":
+            return True, raw
+        if pending.parse == "text":
+            return True, raw.decode("utf-8", "replace")
+        try:
+            return True, (json.loads(raw.decode("utf-8")) if raw.strip() else None)
+        except ValueError as exc:       # JSONDecodeError and UnicodeDecodeError: the body is not the promised JSON
+            error = ApiError("server", f"Unexpected response from Mapflow: {exc}", status,
+                             url=reply.url().toString(), body=raw[:500].decode("utf-8", "replace"))
+            QgsMessageLog.logMessage(f"{error.kind} {status} {pending.url}: not JSON: {exc}",
+                                     PLUGIN_NAME, Qgis.MessageLevel.Warning)
+            return False, error
+
+    def _succeed(self, pending: _Pending, result: Any, status: Optional[int]) -> None:
+        if not pending.on_success:
+            return
+        try:
+            pending.on_success(result)
+        except Exception as exc:  # noqa: BLE001 - a failure of the caller's code, not of the answer
+            guard.report(exc, f"{pending.method} {pending.url}: on_success")
+            # The user has been told: the caller's on_error still runs, so its cleanup happens, once
+            self._fail(pending.on_error, ApiError("plugin", PLUGIN_FAILED_TEXT, status, url=pending.url),
+                       reported=True)
+
+    def _fail(self, on_error: Optional[Callback], error: ApiError, reported: bool = False) -> None:
+        """`reported`: the guard has already told the user, so `failed` does not say it again."""
         if error.kind == "cancelled":
             return
         if on_error:
-            on_error(error)
-        else:
+            try:
+                on_error(error)
+            except Exception as exc:  # noqa: BLE001 - nothing runs after a failing on_error
+                guard.report(exc, f"{error.kind} {_without_query(error.url)}: on_error")
+        elif not reported:
             self.failed.emit(error)

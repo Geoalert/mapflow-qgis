@@ -8,6 +8,7 @@ from qgis.PyQt.QtWidgets import QAbstractItemView, QDialog, QHBoxLayout, QListWi
 
 from .theme import stylesheet
 from .widgets import button, label
+from ..core.guard import guarded
 
 
 class LayerPicker(QDialog):
@@ -34,12 +35,12 @@ class LayerPicker(QDialog):
         buttons = QHBoxLayout()
         buttons.addStretch(1)
         cancel = button("Cancel", "ghost")
-        cancel.clicked.connect(lambda *_: self.reject())
+        cancel.clicked.connect(guarded(lambda *_: self.reject()))
         self.upload = button("Upload", "primary")
-        self.upload.clicked.connect(lambda *_: self.accept())
+        self.upload.clicked.connect(guarded(lambda *_: self.accept()))
         self.upload.setDefault(True)
         self.upload.setEnabled(False)
-        self.list.itemSelectionChanged.connect(lambda: self.upload.setEnabled(bool(self.list.selectedItems())))
+        self.list.itemSelectionChanged.connect(guarded(lambda: self.upload.setEnabled(bool(self.list.selectedItems()))))
         if layers:
             self.list.setCurrentRow(0)
         buttons.addWidget(cancel)

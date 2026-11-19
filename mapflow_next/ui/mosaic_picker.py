@@ -16,6 +16,7 @@ from .layer_picker import pick_layers
 from .theme import stylesheet, tokens
 from .widgets import (Callout, Card, DropTarget, ElidedLabel, OptionRow, button, clear_layout, label, link,
                       menu_action, placeholder, rounded, tool)
+from ..core.guard import guarded
 
 THUMB = 72
 
@@ -69,7 +70,7 @@ class MosaicPicker(QDialog):
         # (file, name) of the GeoTIFFs a drag carries; the controller sets it. Dropped, they go where uploads go
         self.parse_drop: Callable[[object], List[Tuple[str, str]]] = lambda mime: []
         self.drop = DropTarget(self, lambda mime: self.parse_drop(mime))
-        self.drop.dropped.connect(lambda items: self.filesDropped.emit(items, self.current or ""))
+        self.drop.dropped.connect(guarded(lambda items: self.filesDropped.emit(items, self.current or "")))
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(20, 18, 20, 14)
@@ -84,14 +85,14 @@ class MosaicPicker(QDialog):
         actions = QHBoxLayout()
         actions.setSpacing(8)
         self.upload_button = button("Upload a GeoTIFF", "outline", "upload")
-        self.upload_button.clicked.connect(lambda *_: self.uploadRequested.emit(self.current or ""))
+        self.upload_button.clicked.connect(guarded(lambda *_: self.uploadRequested.emit(self.current or "")))
         actions.addWidget(self.upload_button)
         self.layer_button = button("Choose from raster layers", "outline", "layers")
-        self.layer_button.clicked.connect(lambda *_: self._choose_layers())
+        self.layer_button.clicked.connect(guarded(lambda *_: self._choose_layers()))
         actions.addWidget(self.layer_button)
         actions.addStretch(1)
         self.create_button = button("Create collection", "ghost", "plus")
-        self.create_button.clicked.connect(lambda *_: self.createRequested.emit())
+        self.create_button.clicked.connect(guarded(lambda *_: self.createRequested.emit()))
         actions.addWidget(self.create_button)
         outer.addLayout(actions)
         self.target = label("", "meta", wrap=True)
@@ -117,8 +118,8 @@ class MosaicPicker(QDialog):
         self._debounce = QTimer(self)
         self._debounce.setSingleShot(True)
         self._debounce.setInterval(300)
-        self._debounce.timeout.connect(lambda: self.queryChanged.emit(self.search.text().strip()))
-        self.search.textChanged.connect(lambda *_: self._query_typed())
+        self._debounce.timeout.connect(guarded(lambda: self.queryChanged.emit(self.search.text().strip())))
+        self.search.textChanged.connect(guarded(lambda *_: self._query_typed()))
         left.addWidget(self.search)
         self.list_scroll, self.list_box = self._scroll_box(6)
         left.addWidget(self.list_scroll, 1)
@@ -134,17 +135,17 @@ class MosaicPicker(QDialog):
         self.title = ElidedLabel("", "h2")
         title_row.addWidget(self.title, 1)
         self.show_button = tool("eye", "Show the collection on the map", "plain", 18)
-        self.show_button.clicked.connect(lambda *_: self.current and self.showRequested.emit(self.current))
+        self.show_button.clicked.connect(guarded(lambda *_: self.current and self.showRequested.emit(self.current)))
         title_row.addWidget(self.show_button)
         self.more_button = tool("more", "More actions", "plain", 18)
-        self.more_button.clicked.connect(lambda *_: self._popup(self.collection_menu(), self.more_button))
+        self.more_button.clicked.connect(guarded(lambda *_: self._popup(self.collection_menu(), self.more_button)))
         title_row.addWidget(self.more_button)
         right.addLayout(title_row)
         self.meta = label("", "meta", wrap=True)
         right.addWidget(self.meta)
         self.use_all = button("Use the whole collection", "primary", "layers")
         self._use_all_icon = self.use_all.icon()
-        self.use_all.clicked.connect(lambda *_: self.current and self.chosen.emit(self.current, ""))
+        self.use_all.clicked.connect(guarded(lambda *_: self.current and self.chosen.emit(self.current, "")))
         right.addWidget(self.use_all, 0, Qt.AlignmentFlag.AlignLeft)
         self.images_scroll, self.images_box = self._scroll_box(8)
         right.addWidget(self.images_scroll, 1)
@@ -155,7 +156,7 @@ class MosaicPicker(QDialog):
         foot.addWidget(label("A collection is processed as one mosaic. Pick an image to process only that one.",
                              "meta", wrap=True), 1)
         close = button("Cancel", "ghost")
-        close.clicked.connect(lambda *_: self.reject())
+        close.clicked.connect(guarded(lambda *_: self.reject()))
         foot.addWidget(close)
         outer.addLayout(foot)
 
@@ -221,7 +222,8 @@ class MosaicPicker(QDialog):
             self._rows, drawn = {}, []
             self.list_empty = label("", "meta")
             self.more_collections = button("Show more", "outline", size="sm")
-            self.more_collections.clicked.connect(lambda *_: self.moreRequested.emit(self.search.text().strip()))
+            self.more_collections.clicked.connect(
+                guarded(lambda *_: self.moreRequested.emit(self.search.text().strip())))
             self.list_box.addWidget(self.list_empty)
             self.list_box.addWidget(self.more_collections)
             self.list_box.addStretch(1)
@@ -231,7 +233,7 @@ class MosaicPicker(QDialog):
                                           if mosaic.size_bytes else "") if t)
             row = OptionRow(mosaic.name, meta)
             row.set_selected(mosaic.id == self.current)
-            row.clicked.connect(lambda *_, mid=mosaic.id: self._row_clicked(mid))
+            row.clicked.connect(guarded(lambda *_, mid=mosaic.id: self._row_clicked(mid)))
             self.list_box.insertWidget(len(self._rows), row)      # before the note, "Show more" and the stretch
             self._rows[mosaic.id] = row
         self._drawn, self._drawn_mode = ids, searching
@@ -373,11 +375,12 @@ class MosaicPicker(QDialog):
         chosen = mosaic_id == self.chosen_mosaic and image.id == self.chosen_image
         use = button("Chosen" if chosen else "Use this image", "outline" if chosen else "primary", size="sm")
         use.setEnabled(not chosen)
-        use.clicked.connect(lambda *_, iid=image.id: self.chosen.emit(mosaic_id, iid))
+        use.clicked.connect(guarded(lambda *_, iid=image.id: self.chosen.emit(mosaic_id, iid)))
         row.addWidget(use, 0, Qt.AlignmentFlag.AlignVCenter)
         more = tool("more", "More actions", "plain", 16)
         more.setObjectName(f"more:{image.id}")
-        more.clicked.connect(lambda *_, iid=image.id, anchor=more: self._popup(self.image_menu(mosaic_id, iid), anchor))
+        more.clicked.connect(
+            guarded(lambda *_, iid=image.id, anchor=more: self._popup(self.image_menu(mosaic_id, iid), anchor)))
         row.addWidget(more, 0, Qt.AlignmentFlag.AlignVCenter)
         card.add(row)
         return card

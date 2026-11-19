@@ -8,6 +8,7 @@ from qgis.PyQt.QtWidgets import QDialog, QHBoxLayout, QLineEdit, QVBoxLayout, QW
 
 from .theme import stylesheet, tokens
 from .widgets import Pill, button, clear_layout, label, tool
+from ..core.guard import guarded
 
 MAX_TAG = 40
 
@@ -43,7 +44,7 @@ class CollectionDialog(QDialog):
         self.tag.returnPressed.connect(self.add_tag)
         entry.addWidget(self.tag)
         self.add_button = tool("plus", "Add the tag", "plain", 16)
-        self.add_button.clicked.connect(lambda *_: self.add_tag())
+        self.add_button.clicked.connect(guarded(lambda *_: self.add_tag()))
         entry.addWidget(self.add_button)
         entry.addStretch(1)
         layout.addLayout(entry)
@@ -57,14 +58,14 @@ class CollectionDialog(QDialog):
         buttons = QHBoxLayout()
         buttons.addStretch(1)
         cancel = button("Cancel", "ghost")
-        cancel.clicked.connect(lambda *_: self.reject())
+        cancel.clicked.connect(guarded(lambda *_: self.reject()))
         self.create = button("Create", "primary")
-        self.create.clicked.connect(lambda *_: self.accept())
+        self.create.clicked.connect(guarded(lambda *_: self.accept()))
         buttons.addWidget(cancel)
         buttons.addWidget(self.create)
         layout.addSpacing(10)
         layout.addLayout(buttons)
-        self.name.textChanged.connect(lambda text: self.create.setEnabled(bool(text.strip())))
+        self.name.textChanged.connect(guarded(lambda text: self.create.setEnabled(bool(text.strip()))))
         self.create.setEnabled(False)
         self.name.setFocus()
 
@@ -75,6 +76,7 @@ class CollectionDialog(QDialog):
             return
         super().keyPressEvent(event)
 
+    @guarded
     def add_tag(self) -> None:
         tag = self.tag.text().strip()
         if tag and tag.lower() not in {t.lower() for t in self.tags}:
@@ -96,7 +98,7 @@ class CollectionDialog(QDialog):
             row.setSpacing(2)
             row.addWidget(Pill(tag, "gray"))
             remove = tool("x", f"Remove “{tag}”", "plain", 12)
-            remove.clicked.connect(lambda *_, t=tag: self.remove_tag(t))
+            remove.clicked.connect(guarded(lambda *_, t=tag: self.remove_tag(t)))
             row.addWidget(remove)
             self.chips.addWidget(chip)
         self.chips.addStretch(1)

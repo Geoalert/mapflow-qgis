@@ -11,6 +11,7 @@ from qgis.PyQt.QtWidgets import (QAbstractButton, QAction, QApplication, QButton
 
 from . import icons
 from .theme import color, set_prop, tokens
+from ..core.guard import guarded
 
 
 def menu_action(menu, icon_name: str, text: str, handler, ink: Optional[str] = None) -> QAction:
@@ -19,7 +20,7 @@ def menu_action(menu, icon_name: str, text: str, handler, ink: Optional[str] = N
     not move it to the application menu (it does that to "Settings…")."""
     action = QAction(icons.icon(icon_name, ink or tokens()["ink"]), text, menu)
     action.setMenuRole(QAction.MenuRole.NoRole)
-    action.triggered.connect(lambda *_: handler())
+    action.triggered.connect(guarded(lambda *_: handler()))
     menu.addAction(action)
     return action
 
@@ -62,7 +63,7 @@ def link(text: str, url=None, external: bool = True, parent: Optional[QWidget] =
     if url:
         if isinstance(url, str):
             widget.setToolTip(url)
-        widget.clicked.connect(lambda *_: QDesktopServices.openUrl(QUrl(url() if callable(url) else url)))
+        widget.clicked.connect(guarded(lambda *_: QDesktopServices.openUrl(QUrl(url() if callable(url) else url))))
     return widget
 
 
@@ -82,6 +83,7 @@ def tool(icon_name: str, tooltip: str, variant: str = "icon", size: int = 16,
 def same_width(buttons: List[QWidget]) -> None:
     """Buttons stacked in a list (Use, Chosen, Choose…), made one width: the widest's. Measured once they are
     shown and styled, so the theme's font and padding count."""
+    @guarded
     def apply() -> None:
         try:
             width = max((b.sizeHint().width() for b in buttons), default=0)
@@ -221,6 +223,7 @@ class HoverTip(QObject):
             QToolTip.hideText()
         return False
 
+    @guarded
     def _show(self) -> None:
         if self.widget.underMouse():
             QToolTip.showText(QCursor.pos(), self.text, self.widget, self.widget.rect())
@@ -316,7 +319,8 @@ class Callout(QFrame):
         self.action.setProperty("callout_action", True)     # small, in the callout's own colours (theme)
         self.action.setVisible(False)
         self._action_url = ""
-        self.action.clicked.connect(lambda *_: self._action_url and QDesktopServices.openUrl(QUrl(self._action_url)))
+        self.action.clicked.connect(
+            guarded(lambda *_: self._action_url and QDesktopServices.openUrl(QUrl(self._action_url))))
         layout.addWidget(self.action, 0, Qt.AlignmentFlag.AlignVCenter)
         self.set(kind, text)
 
@@ -442,7 +446,7 @@ class Stars(QWidget):
             star.setCursor(Qt.CursorShape.PointingHandCursor)
             star.setToolTip(f"Rate {index} of 5")
             star.setAccessibleName(f"Rate {index} of 5")
-            star.clicked.connect(lambda _=False, i=index: self._rate(i))
+            star.clicked.connect(guarded(lambda _=False, i=index: self._rate(i)))
             layout.addWidget(star)
             self.buttons.append(star)
         self._paint()
@@ -772,7 +776,7 @@ class FitLineEdit(QLineEdit):
         super().__init__(parent)
         self._editing = False
         self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
-        self.textChanged.connect(lambda *_: self._editing or self.updateGeometry())
+        self.textChanged.connect(guarded(lambda *_: self._editing or self.updateGeometry()))
 
     def focusInEvent(self, event) -> None:
         super().focusInEvent(event)

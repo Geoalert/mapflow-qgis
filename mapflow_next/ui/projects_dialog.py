@@ -14,6 +14,7 @@ from ..core.models import Project, Role
 from . import icons
 from .theme import stylesheet, tokens
 from .widgets import Callout, ElidedLabel, FocusRing, Pill, button, clear_layout, event_pos, label, link, tool
+from ..core.guard import guarded
 
 GAP = 14
 MIN_TILE = 250
@@ -60,7 +61,7 @@ class ProjectTile(FocusRing, QFrame):
         pin = tool("pin-filled" if pinned else "pin", "Unpin" if pinned else "Pin to the top", "plain", 16)
         if pinned:
             pin.setIcon(icons.icon("pin-filled", t["primary"], 16))
-        pin.clicked.connect(lambda *_: self.pinToggled.emit(project.id, not pinned))
+        pin.clicked.connect(guarded(lambda *_: self.pinToggled.emit(project.id, not pinned)))
         self.pin_button = pin
         top.addWidget(pin)
         layout.addLayout(top)
@@ -101,7 +102,7 @@ class ProjectTile(FocusRing, QFrame):
         updated = formatting.when(project.updated) if project.updated else ""
         bottom.addWidget(label(f"Updated {updated}" if updated else "", "meta"), 1)
         share = tool("share", "Share this project in Mapflow Web", "plain", 15)
-        share.clicked.connect(lambda *_: self.shareRequested.emit(project.id))
+        share.clicked.connect(guarded(lambda *_: self.shareRequested.emit(project.id)))
         self.share_button = share
         bottom.addWidget(share)
         layout.addLayout(bottom)
@@ -156,11 +157,11 @@ class ProjectsDialog(QDialog):
         team.setIcon(icons.icon("users", tokens()["link"], 14))
         head.addWidget(team)
         share = link("Share project in Mapflow Web", lambda: "")      # opens the current project
-        share.clicked.connect(lambda *_: self.shareRequested.emit(self.current_id or ""))
+        share.clicked.connect(guarded(lambda *_: self.shareRequested.emit(self.current_id or "")))
         head.addWidget(share)
         create = button("New project", "primary")
         create.setIcon(icons.icon("plus", tokens()["primary_text"], 14))
-        create.clicked.connect(lambda *_: self.createRequested.emit())
+        create.clicked.connect(guarded(lambda *_: self.createRequested.emit()))
         head.addWidget(create)
         outer.addLayout(head)
 
@@ -171,8 +172,8 @@ class ProjectsDialog(QDialog):
         self._debounce = QTimer(self)
         self._debounce.setSingleShot(True)
         self._debounce.setInterval(300)
-        self._debounce.timeout.connect(lambda: self.queryChanged.emit(self.search.text().strip()))
-        self.search.textChanged.connect(lambda *_: self._debounce.start())
+        self._debounce.timeout.connect(guarded(lambda: self.queryChanged.emit(self.search.text().strip())))
+        self.search.textChanged.connect(guarded(lambda *_: self._debounce.start()))
         outer.addWidget(self.search)
 
         self.scroll = QScrollArea(self)
@@ -191,7 +192,7 @@ class ProjectsDialog(QDialog):
         foot.addWidget(label("Pinned projects stay on top: they are your starred projects in Mapflow Web. "
                              "Sharing and roles are managed there.", "meta", wrap=True), 1)
         close = button("Close", "ghost")
-        close.clicked.connect(lambda *_: self.reject())
+        close.clicked.connect(guarded(lambda *_: self.reject()))
         foot.addWidget(close)
         outer.addLayout(foot)
         QShortcut(QKeySequence.StandardKey.Find, self, activated=self.search.setFocus)
@@ -268,13 +269,13 @@ class ProjectsDialog(QDialog):
             more = button("Loading…" if self.loading else
                           f"Show more · {len(self.results):,} of {self.total:,}", "outline")
             more.setEnabled(not self.loading)
-            more.clicked.connect(lambda *_: self.moreRequested.emit())
+            more.clicked.connect(guarded(lambda *_: self.moreRequested.emit()))
             self.more_button = more
             self.body.addWidget(more, 0, Qt.AlignmentFlag.AlignHCenter)
         self.body.addStretch(1)
         shown = len(self.results) + len([p for p in pinned if p.id not in {r.id for r in self.results}])
         self.count.setText(f"{self.total:,} projects" if self.total else (f"{shown}" if shown else ""))
-        QTimer.singleShot(0, lambda: bar.setValue(position))
+        QTimer.singleShot(0, guarded(lambda: bar.setValue(position)))
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)

@@ -160,6 +160,114 @@ def old_town_layer():
     return layer
 
 
+def check_the_guard(iface, plugin, api_url, settings):
+    """spec/006 § The guard: `Http` tells a body that is not JSON from a callback that raises, a request ends
+    in one outcome, a result that cannot be placed leaves no "loading" flag, and a timer reaches the reporter."""
+    from mapflow_next.core.guard import guarded
+    from mapflow_next.core.models import Processing
+    from mapflow_next.services.results import FILES, TILES
+    http, results = plugin.services[0], plugin.services[4]
+    ledger = iface.bar.ledger
+    unhandled = []                                  # what `Http` reports when no caller took the error
+    http.failed.connect(unhandled.append)
+
+    def raiser(_result=None):
+        raise ValueError("boom")
+
+    # an on_success that raises: logged with its traceback, reported, then on_error runs once
+    errors, seen = [], len(ledger.unexpected())
+    http.get("user/status", on_success=raiser, on_error=errors.append)
+    check(wait_until(lambda: errors, 5), "a request whose on_success raises ends in on_error")
+    wait_until(lambda: False, 0.3)
+    lines = ledger.unexpected()[seen:]
+    check(len(errors) == 1 and errors[0].kind == "plugin"
+          and "Unexpected response from Mapflow" not in errors[0].message,
+          f"…once, and a ValueError of the callback is not shown as a bad answer ({[e.message for e in errors]})")
+    check(len(lines) == 2 and lines[0].startswith("log: ") and "Traceback" in lines[0]
+          and all(part in lines[0] for part in ("ValueError: boom", "raiser", "user/status"))
+          and lines[1].startswith("bar: Something went wrong: boom"),
+          f"…the log has the traceback and the request, then the bar has the Critical line ({len(lines)} lines)")
+    expect_critical(iface, "boom", "the guard's lines of an on_success that raises", count=2)
+    check(not unhandled, "…and Http.failed stays silent: the caller's on_error took it")
+
+    # no on_error: the guard has told the user once, and nothing says it again
+    http.get("user/status", on_success=raiser)
+    wait_until(lambda: len(ledger.unexpected()) > 0, 5)
+    wait_until(lambda: False, 0.3)
+    check(not unhandled, "an on_success that raises, with no on_error, is reported once and Http.failed stays silent")
+    expect_critical(iface, "boom", "the guard's lines of an on_success that raises without on_error", count=2)
+
+    # an on_error that raises: reported, and nothing runs again
+    calls = []
+
+    def bad_error(error):
+        calls.append(error.kind)
+        raise ValueError("on_error boom")
+    http.get("projects/missing", on_success=raiser, on_error=bad_error)
+    check(wait_until(lambda: calls, 5), "a failed request reaches on_error")
+    wait_until(lambda: False, 0.3)
+    check(calls == ["not_found"] and not unhandled, f"an on_error that raises runs once ({calls})")
+    expect_critical(iface, "on_error boom", "the guard's lines of an on_error that raises", count=2)
+
+    # a body that is not the promised JSON is the expected failure
+    answered, errors, seen = [], [], len(ledger.unexpected())
+    http.get("not-json", on_success=answered.append, on_error=errors.append)
+    check(wait_until(lambda: errors, 5), "a body that is not JSON ends in on_error")
+    wait_until(lambda: False, 0.3)
+    check(not answered and len(errors) == 1 and errors[0].kind == "server"
+          and errors[0].message.startswith("Unexpected response from Mapflow"),
+          f"…once, as “Unexpected response from Mapflow” ({[e.message for e in errors]})")
+    check(len(ledger.unexpected()) == seen, "…and it is no failure of the plugin: nothing Critical")
+    texts = []
+    http.get("not-json", parse="text", on_success=texts.append)
+    check(wait_until(lambda: texts, 5) and texts == ["<html>maintenance</html>"],
+          "the same body is fine when the caller asked for text")
+
+    # a result whose bounds cannot be transformed leaves no "loading" flag
+    def done_processing(name):
+        body = fixtures.processing_json(name, "OK", 100, name="Forest · odd")
+        body["vectorLayer"]["tileJsonUrl"] = f"{api_url}/tiles/{name}.json"
+        return Processing.from_api(body)
+
+    failures = []
+    results.failed.connect(lambda pid, text: failures.append((pid, text)))
+    odd = done_processing(mock_server.ODD_BOUNDS_ID)
+    seen = len(ledger.unexpected())
+    settings.setValue("mapflow_next/results_mode", TILES)
+    try:
+        results.add_to_map(odd)
+        check(wait_until(lambda: odd.id in results.in_map() and not results.is_busy(odd.id), 5)
+              and not failures and len(ledger.unexpected()) == seen,
+              "bounds that cannot be transformed: the results still load, the processing is not left loading")
+    finally:
+        settings.setValue("mapflow_next/results_mode", FILES)
+    for layer in results.layers.layers_for(odd.id):
+        QgsProject.instance().removeMapLayer(layer.id())
+
+    # an exception that nobody expected, in the code between the answer and the map
+    broken = done_processing("broken-files")
+    saved = results.layers.save_results
+    failures.clear()
+
+    def disk_full(*args, **kwargs):
+        raise RuntimeError("disk")
+    results.layers.save_results = disk_full
+    try:
+        results.add_to_map(broken)
+        check(wait_until(lambda: len(failures) >= 1, 5), "an exception while placing the results reaches the user")
+        wait_until(lambda: False, 0.3)
+    finally:
+        del results.layers.save_results                     # the instance attribute: the class method is back
+    check(saved == results.layers.save_results and not results.is_busy(broken.id) and len(failures) == 1,
+          f"…the processing is not left loading, and it fails once ({failures})")
+    expect_critical(iface, "disk", "the guard's lines of an exception in the results", count=2)
+
+    # a timer reaches the reporter that the plugin installed
+    QTimer.singleShot(0, guarded(lambda: raiser()))
+    wait_until(lambda: False, 0.1)
+    expect_critical(iface, "boom", "the guard's lines of a timer callback that raises", count=2)
+
+
 def main():
     server, state, url = mock_server.start()
     links = UrlRecorder()
@@ -681,6 +789,7 @@ def main():
     settings.setValue("mapflow_next/results_mode", FILES)
     wait_until(lambda: False, 0.4)
     shot(content, "05-processings-done", QSize(400, 880))
+    check_the_guard(iface, plugin, url, settings)
 
     # imagery search: the Area drop-down is the run's area
     run.searchImageryRequested.emit()
@@ -805,9 +914,9 @@ def main():
     from mapflow_next.qgis_bridge.layers import footprint_corners
     nw, ne, se, sw = (37.600, 55.752), (37.612, 55.750), (37.610, 55.740), (37.598, 55.742)
     turned = {"type": "Polygon", "coordinates": [[list(se), list(sw), list(nw), list(ne), list(se)]]}
+    pentagon = {"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0.5, 1.5], [0, 1], [0, 0]]]}
     check(footprint_corners(turned) == [nw, ne, se, sw] and footprint_corners(box(37.60)) is not None
-          and footprint_corners({"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0.5, 1.5], [0, 1],
-                                                                       [0, 0]]]}) is None,
+          and footprint_corners(pentagon) is None,
           "a quadrilateral footprint's corners are read as NW, NE, SE, SW, whatever order they come in")
     orbview = CatalogImage.from_api({"id": "orb-1", "providerName": "orbview", "productType": "Image",
                                      "previewType": "png", "previewUrl": f"{base}/orb-1", "footprint": turned})
@@ -1038,6 +1147,7 @@ def main():
         if files:
             mime.setUrls([QUrl.fromLocalFile(f) for f in files])
         return mime
+
     def dropped(mime):          # (file, name), the file as the OS writes it
         return [(os.path.normcase(os.path.normpath(p)), n) for p, n in rasters_module.dropped_geotiffs(mime)]
     pier_file, dock_file, loose = (os.path.normcase(os.path.normpath(p)) for p in (
@@ -1819,6 +1929,10 @@ def main():
     plugin.unload()
     check(wait_until(lambda: not iface.window.findChildren(QToolBar, "MapflowToolbar"), 3)
           and not any(iface.menu_actions.values()), "unload removes the Mapflow toolbar and the menu")
+    from mapflow_next.core import guard
+    shown = len(iface.bar.messages)
+    guard.report(ValueError("late"), "after unload")
+    check(len(iface.bar.messages) == shown, "after unload the guard has no reporter: nothing reaches the bar")
     server.shutdown()
     APP.processEvents()                                   # log lines can arrive from another thread
     unexpected = iface.bar.ledger.unexpected()

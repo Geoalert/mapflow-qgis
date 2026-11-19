@@ -4,9 +4,7 @@ The main scenario lives here: model → area → imagery → processing → resu
 """
 from __future__ import annotations
 
-import functools
 import re
-import traceback
 from pathlib import Path
 import json
 from typing import Dict, List, Optional, Set, Tuple
@@ -14,12 +12,13 @@ from typing import Dict, List, Optional, Set, Tuple
 from qgis.PyQt.QtCore import QObject, QTimer, QUrl
 from qgis.PyQt.QtGui import QDesktopServices, QPixmap
 from qgis.PyQt.QtWidgets import QDialog, QFileDialog, QMessageBox
-from qgis.core import Qgis, QgsGeometry, QgsMessageLog, QgsProject, QgsVectorLayer
+from qgis.core import Qgis, QgsGeometry, QgsProject, QgsVectorLayer
 
 from . import config
 from .api.client import MapflowApi
 from .core import formatting
 from .core.draft import Coverage, ImageryChoice, Issue, RunDraft
+from .core.guard import guarded
 from .core.models import BillingType, CatalogImage, Processing, UserStatus
 from .core.scenarios import Catalogue, recommended_zoom, resolve, scenario_for_model
 from .qgis_bridge import aoi as aoi_tools
@@ -48,19 +47,6 @@ VECTOR_FILTER = "Vector files (*.geojson *.json *.gpkg *.shp *.kml *.kmz *.gml);
 
 PROJECTS_WINDOW_PAGE = 24        # eight rows of three tiles
 EXTENT_PROPERTY = "mapflow_next/extent_of"   # on an area layer made from My imagery: the imagery's name
-
-
-def guarded(method):
-    """Slots never let an exception escape into Qt: it is logged and shown, the plugin keeps working."""
-    @functools.wraps(method)
-    def wrapper(self, *args, **kwargs):
-        try:
-            return method(self, *args, **kwargs)
-        except Exception as exc:  # noqa: BLE001 - last line of defence for UI slots
-            QgsMessageLog.logMessage(traceback.format_exc(), config.PLUGIN_NAME, Qgis.MessageLevel.Critical)
-            self.notify(f"Something went wrong: {exc}. Details are in the Log Messages panel.",
-                        Qgis.MessageLevel.Critical)
-    return wrapper
 
 
 class Controller(QObject):
@@ -112,7 +98,8 @@ class Controller(QObject):
         # Collections made in Mapflow Web show up here: asked for again now and then while the panel is open
         self._mosaic_refresh = QTimer(self)
         self._mosaic_refresh.setInterval(config.MOSAICS_REFRESH_MS)
-        self._mosaic_refresh.timeout.connect(lambda: self._refresh_mosaics(config.MOSAICS_REFRESH_MS / 1000 - 1))
+        self._mosaic_refresh.timeout.connect(
+            guarded(lambda: self._refresh_mosaics(config.MOSAICS_REFRESH_MS / 1000 - 1)))
         self._mosaic_refresh.start()
         self.content.imagery.my_data_url = session.config.my_data_url
         self._connect()
@@ -123,15 +110,15 @@ class Controller(QObject):
         c, s, p = self.content, self.session, self.processings
         s.stateChanged.connect(self.on_state)
         s.statusChanged.connect(self.on_status)
-        s.projectsChanged.connect(lambda *_: c.set_project(s.project))
+        s.projectsChanged.connect(guarded(lambda *_: c.set_project(s.project)))
         s.projectChanged.connect(self.on_project)
         s.error.connect(self.on_session_error)
 
         c.sign_in.browserRequested.connect(self.sign_in_browser)
-        c.sign_in.cancelRequested.connect(self.session.cancel_sign_in)
+        c.sign_in.cancelRequested.connect(guarded(self.session.cancel_sign_in))
         c.sign_in.tokenSubmitted.connect(self.sign_in_token)
         c.sign_in.networkSettingsRequested.connect(
-            lambda: self.iface.showOptionsDialog(self.iface.mainWindow(), "mOptionsPageNetwork"))
+            guarded(lambda: self.iface.showOptionsDialog(self.iface.mainWindow(), "mOptionsPageNetwork")))
         c.projectsRequested.connect(self.open_projects)
         c.settingsRequested.connect(self.open_settings)
         c.signOutRequested.connect(self.sign_out)
@@ -140,12 +127,12 @@ class Controller(QObject):
         c.start.scenarioChosen.connect(self.apply_scenario)
         c.start.galleryRequested.connect(self.open_gallery)
         c.start.customRequested.connect(self.custom_setup)
-        c.start.processingsRequested.connect(lambda: c.go(PROCESSINGS))
-        c.start.processingOpened.connect(lambda pid: c.go(PROCESSINGS) or c.processings.expand(pid))
+        c.start.processingsRequested.connect(guarded(lambda: c.go(PROCESSINGS)))
+        c.start.processingOpened.connect(guarded(lambda pid: c.go(PROCESSINGS) or c.processings.expand(pid)))
 
         run = c.run
-        run.backRequested.connect(c.open_start)
-        run.changeScenarioRequested.connect(lambda *_: self.open_gallery(""))
+        run.backRequested.connect(guarded(c.open_start))
+        run.changeScenarioRequested.connect(guarded(lambda *_: self.open_gallery("")))
         run.nameEdited.connect(self.on_name)
         run.renameRequested.connect(self.rename_draft)
         run.modelChosen.connect(self.on_model)
@@ -154,7 +141,7 @@ class Controller(QObject):
         run.areaAction.connect(self.on_area_action)
         run.imageryChosen.connect(self.on_imagery)
         run.zoomChosen.connect(self.on_zoom)
-        run.mosaicPickRequested.connect(lambda *_: self.pick_my_imagery())
+        run.mosaicPickRequested.connect(guarded(lambda *_: self.pick_my_imagery()))
         run.catalogRemoved.connect(self.on_catalog_removed)
         run.previewRequested.connect(self.preview_imagery)
         run.searchImageryRequested.connect(self.open_search)
@@ -162,7 +149,7 @@ class Controller(QObject):
 
         page = c.processings
         page.addToMap.connect(self.add_to_map)
-        page.zoomTo.connect(lambda pid: self.layers.zoom_to(self.layers.layers_for(pid)))
+        page.zoomTo.connect(guarded(lambda pid: self.layers.zoom_to(self.layers.layers_for(pid))))
         page.saveGeojson.connect(self.save_geojson)
         page.restart.connect(self.restart)
         page.rename.connect(self.rename)
@@ -171,11 +158,11 @@ class Controller(QObject):
         page.openWeb.connect(self.open_in_web)
         page.rate.connect(self.rate)
         page.downloadAoi.connect(self.download_aoi)
-        page.startRequested.connect(c.open_start)
-        page.refreshRequested.connect(lambda: p.refresh() or page.set_refreshing(False))
-        p.refreshed.connect(lambda: page.set_refreshing(False))
+        page.startRequested.connect(guarded(c.open_start))
+        page.refreshRequested.connect(guarded(lambda: p.refresh() or page.set_refreshing(False)))
+        p.refreshed.connect(guarded(lambda: page.set_refreshing(False)))
         p.rated.connect(self.on_rated)
-        page.moreRequested.connect(p.load_more)
+        page.moreRequested.connect(guarded(p.load_more))
 
         imagery_page = c.imagery
         imagery_page.searchRequested.connect(self.search)
@@ -183,13 +170,13 @@ class Controller(QObject):
         imagery_page.showImage.connect(self.show_image)
         imagery_page.useMosaic.connect(self.use_mosaic)
         imagery_page.showMosaic.connect(self.show_mosaic)
-        imagery_page.moreMosaics.connect(self.imagery.load_more_mosaics)
-        imagery_page.uploadRequested.connect(lambda *_: self.upload())
+        imagery_page.moreMosaics.connect(guarded(self.imagery.load_more_mosaics))
+        imagery_page.uploadRequested.connect(guarded(lambda *_: self.upload()))
         imagery_page.layerUploadRequested.connect(self.upload_layers)
         imagery_page.geotiff_layers = lambda: [(layer.id(), layer.name()) for layer in rasters.geotiff_layers()]
         imagery_page.parse_drop = rasters.dropped_geotiffs
         imagery_page.drop.dropped.connect(self.upload_dropped)
-        imagery_page.tabs.changed.connect(lambda index: index == imagery_tabs.MINE and self._refresh_mosaics())
+        imagery_page.tabs.changed.connect(guarded(lambda index: index == imagery_tabs.MINE and self._refresh_mosaics()))
         imagery_page.areaAction.connect(self.on_area_action)
         imagery_page.layerChosen.connect(self.on_layer)
         imagery_page.clearRequested.connect(self.clear_search)
@@ -201,32 +188,32 @@ class Controller(QObject):
         p.finished.connect(self.on_finished)
         p.failed.connect(self.on_failed)
         p.costReady.connect(self.on_cost)
-        p.actionFailed.connect(lambda text: self.notify(text, Qgis.MessageLevel.Warning))
+        p.actionFailed.connect(guarded(lambda text: self.notify(text, Qgis.MessageLevel.Warning)))
 
         self.imagery.searchDone.connect(self.on_search_done)
         self.imagery.moreDone.connect(self.on_more_results)
         self.imagery.searchFailed.connect(self.on_search_failed)
         self.imagery.mosaicsChanged.connect(self.on_mosaics)
         self.imagery.mosaicSearchChanged.connect(
-            lambda query, found: self.mosaic_picker is not None and self.mosaic_picker.set_found(
-                query, found, self.imagery.found_total, self.imagery.found_loading))
+            guarded(lambda query, found: self.mosaic_picker is not None and self.mosaic_picker.set_found(
+                query, found, self.imagery.found_total, self.imagery.found_loading)))
         self.imagery.mosaicImagesChanged.connect(self.on_mosaic_images)
         self.imagery.uploadProgress.connect(self._upload_progress)
         self.imagery.on_duplicate = lambda file, collection: self._ask_duplicate([file], collection)
-        self.imagery.uploadDone.connect(lambda name: (
+        self.imagery.uploadDone.connect(guarded(lambda name: (
             self._upload_progress(None),
             c.imagery.set_upload(None, f"“{name}” is uploaded and ready to use.", "info"),
             self.mosaic_picker and self.mosaic_picker.set_upload(None, f"Uploaded to “{name}”.", "info"),
-            self.notify(f"“{name}” is uploaded to My imagery.", Qgis.MessageLevel.Success)))
-        self.imagery.uploadFailed.connect(lambda text: (
+            self.notify(f"“{name}” is uploaded to My imagery.", Qgis.MessageLevel.Success))))
+        self.imagery.uploadFailed.connect(guarded(lambda text: (
             setattr(self, "_choose_uploaded", None),
             self._upload_progress(None), c.imagery.set_upload(None, text, "error"),
             self.mosaic_picker and self.mosaic_picker.set_upload(None, text, "error"),
-            self.notify(text, Qgis.MessageLevel.Warning)))
+            self.notify(text, Qgis.MessageLevel.Warning))))
 
         self.results.loaded.connect(self.on_results_loaded)
         self.results.failed.connect(self.on_results_failed)
-        self.results.busy.connect(lambda *_: self.render_processings())
+        self.results.busy.connect(guarded(lambda *_: self.render_processings()))
 
         project = QgsProject.instance()
         project.layersAdded.connect(self.on_layers_changed)
@@ -306,6 +293,7 @@ class Controller(QObject):
             if pending:
                 {"aoi": self.use_layer_as_aoi, "imagery": self.use_layer_as_imagery}[pending[0]](pending[1])
 
+    @guarded
     def on_session_error(self, text: str) -> None:
         if self.session.state != SIGNED_IN:
             self.content.sign_in.show_error(text, open_token=self.session.method == "token")
@@ -415,6 +403,7 @@ class Controller(QObject):
                     dialog.pinned.pop(project_id, None)
             dialog.set_state(dialog.current_id, ids)
 
+    @guarded
     def _query_projects(self, query: str, offset: int = 0) -> None:
         dialog = self.projects_dialog
         if dialog is None:
@@ -443,6 +432,7 @@ class Controller(QObject):
         self._projects_request = self.api.projects_page(self.session.email, done, failed, query=query, offset=offset,
                                                         limit=PROJECTS_WINDOW_PAGE)
 
+    @guarded
     def _more_projects(self) -> None:
         dialog = self.projects_dialog
         if dialog is not None:
@@ -476,6 +466,7 @@ class Controller(QObject):
                                 lambda error: self.notify(f"The project wasn't created: {error.message}",
                                                           Qgis.MessageLevel.Warning))
 
+    @guarded
     def _choose_project(self, project_id: str) -> None:
         if self.projects_dialog is not None:
             self.projects_dialog.accept()
@@ -506,6 +497,7 @@ class Controller(QObject):
         if self.session.state == "signed_in" and self.content.isVisible():
             self.imagery.refresh_mosaics(max_age)
 
+    @guarded
     def on_tab(self, tab: int) -> None:
         if tab == IMAGERY:
             self.render_imagery_area()
@@ -711,6 +703,7 @@ class Controller(QObject):
         self.notify("Click the corners of your area. Double-click or right-click to finish, Esc to cancel.",
                     Qgis.MessageLevel.Info, duration=8)
 
+    @guarded
     def stop_drawing(self) -> None:
         canvas = self.iface.mapCanvas() if self.iface else None
         if canvas and self.draw_tool and canvas.mapTool() is self.draw_tool:
@@ -756,6 +749,7 @@ class Controller(QObject):
             for signal in (layer.selectionChanged, layer.editingStopped, layer.featuresDeleted, layer.featureAdded):
                 signal.connect(self._layer_changed)
 
+    @guarded
     def _layer_changed(self, *args) -> None:
         if self.aoi_layer is not None and self.aoi_layer.isEditable():
             return   # wait for the edit to be saved
@@ -1299,6 +1293,7 @@ class Controller(QObject):
         if processing:
             self.results.add_to_map(processing)
 
+    @guarded
     def on_results_loaded(self, processing_id: str, layer_ids) -> None:
         processing = self.processings.get(processing_id)
         name = processing.name if processing else "Results"
@@ -1306,6 +1301,7 @@ class Controller(QObject):
         self.notify(f"“{name}” is on the map, in the Mapflow group.{where}", Qgis.MessageLevel.Success)
         self.render_processings()
 
+    @guarded
     def on_results_failed(self, processing_id: str, text: str) -> None:
         self.notify(text, Qgis.MessageLevel.Warning, duration=10)
         self.render_processings()
@@ -1366,6 +1362,7 @@ class Controller(QObject):
         else:
             self.render_processings()           # the stars go back to what was sent before
 
+    @guarded
     def on_rated(self, processing_id: str, rating: int) -> None:
         ratings = self._ratings()
         ratings[processing_id] = rating
@@ -1381,6 +1378,7 @@ class Controller(QObject):
             stored = {}
         return {str(k): int(v) for k, v in stored.items() if str(v).isdigit()} if isinstance(stored, dict) else {}
 
+    @guarded
     def open_in_web(self, processing_id: str) -> None:
         processing = self.processings.get(processing_id)
         project = processing.project_id if processing and processing.project_id else (
@@ -1548,6 +1546,7 @@ class Controller(QObject):
 
     # ---------- imagery tab ----------
 
+    @guarded
     def open_search(self) -> None:
         self.content.go(IMAGERY)
         self.content.imagery.show_tab(imagery_tabs.SEARCH)
@@ -1604,6 +1603,7 @@ class Controller(QObject):
         self._show_footprints()
         self._load_thumbnails(images)
 
+    @guarded
     def more_results(self) -> None:
         self.imagery.search_more()
         self.render_search_results()
@@ -1673,6 +1673,7 @@ class Controller(QObject):
                                          self.chosen_image.key if self.chosen_image else None,
                                          self._search_previewing(), self.imagery.loading_more)
 
+    @guarded
     def on_search_failed(self, text: str) -> None:
         self.content.imagery.set_searching(False)
         self.content.imagery.show_search_message(text, "error")
@@ -1777,6 +1778,7 @@ class Controller(QObject):
         self.content.imagery.set_mosaics(self.imagery.mosaics, chosen, self.imagery.mosaics_total,
                                          self.imagery.loading_mosaics)
 
+    @guarded
     def _render_mosaics(self) -> None:
         choice = self.draft.imagery
         self._show_mosaics(choice.mosaic_id if choice and choice.kind == "my_imagery" else None)
@@ -1838,21 +1840,22 @@ class Controller(QObject):
         self._refresh_mosaics()
         if self.mosaic_picker is None:
             picker = MosaicPicker(self.iface.mainWindow(), self.session.config.my_data_url)
-            picker.collectionOpened.connect(lambda mid: self.imagery.load_images(mid))
+            picker.collectionOpened.connect(guarded(lambda mid: self.imagery.load_images(mid)))
             picker.chosen.connect(self._mosaic_chosen)
             picker.showRequested.connect(self.show_mosaic)
-            picker.uploadRequested.connect(lambda target: self.upload(target or None))
-            picker.layerUploadRequested.connect(lambda ids, target: self.upload_layers(ids, mosaic_id=target or None))
+            picker.uploadRequested.connect(guarded(lambda target: self.upload(target or None)))
+            picker.layerUploadRequested.connect(
+                guarded(lambda ids, target: self.upload_layers(ids, mosaic_id=target or None)))
             picker.createRequested.connect(self.create_collection)
             picker.deleteCollectionRequested.connect(self.delete_collection)
             picker.deleteImageRequested.connect(self.delete_image)
             picker.geotiff_layers = lambda: [(layer.id(), layer.name()) for layer in rasters.geotiff_layers()]
             picker.parse_drop = rasters.dropped_geotiffs
-            picker.filesDropped.connect(lambda items, target: self.upload_dropped(items, target or None))
+            picker.filesDropped.connect(guarded(lambda items, target: self.upload_dropped(items, target or None)))
             picker.lookup = self.imagery.get_mosaic
-            picker.queryChanged.connect(self.imagery.search_mosaics)
-            picker.moreRequested.connect(lambda query: self.imagery.search_mosaics(query, more=True) if query
-                                         else self.imagery.load_more_mosaics())
+            picker.queryChanged.connect(guarded(self.imagery.search_mosaics))
+            picker.moreRequested.connect(guarded(lambda query: self.imagery.search_mosaics(query, more=True) if query
+                                         else self.imagery.load_more_mosaics()))
             self.mosaic_picker = picker
         choice = self.draft.imagery
         chosen_mosaic = choice.mosaic_id if choice and choice.kind == "my_imagery" else None
@@ -1930,6 +1933,7 @@ class Controller(QObject):
                     "or upload a GeoTIFF on the Imagery sources tab.", Qgis.MessageLevel.Critical,
                     ("Mapflow Web", lambda: QDesktopServices.openUrl(QUrl(my_data))), duration=10)
 
+    @guarded
     def use_mosaic(self, mosaic_id: str) -> None:
         mosaic = self.imagery.get_mosaic(mosaic_id)
         if mosaic is None:

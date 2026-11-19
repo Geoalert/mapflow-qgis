@@ -13,6 +13,7 @@ from ..api.oauth import BrowserSignIn, refresh_tokens
 from ..config import STATUS_IDLE_INTERVAL_MS, STATUS_INTERVAL_MS, Config
 from ..core.models import Project, UserStatus
 from ..core.oauth import Tokens
+from ..core.guard import guarded
 
 SIGNED_OUT, SIGNING_IN, SIGNED_IN = "signed_out", "signing_in", "signed_in"
 BROWSER, TOKEN = "browser", "token"
@@ -131,6 +132,7 @@ class Session(QObject):
 
     # ---------- browser sign-in tokens ----------
 
+    @guarded
     def _on_tokens(self, tokens: Tokens) -> None:
         if self.method != BROWSER or self.state == SIGNED_OUT:
             return                                   # cancelled or signed out meanwhile
@@ -144,6 +146,7 @@ class Session(QObject):
         if self.state == SIGNING_IN:
             self.api.default_project(self._signed_in, self._sign_in_failed)
 
+    @guarded
     def refresh_sign_in(self) -> None:
         """Renew the access token before it expires (and after a restart)."""
         if self.method != BROWSER or not self.tokens or not self.tokens.refresh or self._refreshing:
@@ -168,6 +171,7 @@ class Session(QObject):
             self._clear_credentials()
             self._set_state(SIGNED_OUT)               # the saved sign-in ran out: show the sign-in page
 
+    @guarded
     def _browser_failed(self, message: str) -> None:
         if self.state != SIGNED_IN and self.method == BROWSER:
             self._clear_credentials()
@@ -213,6 +217,7 @@ class Session(QObject):
                            if method == TOKEN else "Mapflow didn't accept the sign-in. Try again.")
             self.error.emit(message)
 
+    @guarded
     def _on_unauthorized(self) -> None:
         if self.state != SIGNED_IN:
             return
@@ -239,6 +244,7 @@ class Session(QObject):
         if active and self.state == SIGNED_IN:
             self.refresh_status()
 
+    @guarded
     def refresh_status(self) -> None:
         if self.state != SIGNED_IN or self._status_pending:
             return

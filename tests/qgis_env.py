@@ -91,7 +91,12 @@ class FakeIface:
         self.canvas = QgsMapCanvas(self.window)
         self.window.setCentralWidget(self.canvas)
         self.bar = RecordingBar(self.canvas)
-        QgsApplication.messageLog().messageReceived.connect(self._log_received)
+        log = QgsApplication.messageLog()
+        if hasattr(log, "messageReceivedWithFormat"):       # QGIS 4 emits this one only; QGIS 3.28 has the other
+            log.messageReceivedWithFormat.connect(lambda message, tag, level, _format: self._log_received(
+                message, tag, level))
+        else:
+            log.messageReceived.connect(self._log_received)
         self._active = None
         self.toolbar_actions = []                 # the Plugins toolbar
         self.menu_actions = {}

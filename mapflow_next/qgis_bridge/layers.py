@@ -72,13 +72,16 @@ def footprint_corners(geometry: Optional[dict]) -> Optional[List[Tuple[float, fl
 
 
 def bounds_extent(bounds) -> Optional[QgsRectangle]:
-    """A tilejson `bounds` [w, s, e, n] in EPSG:3857, the CRS of tile layers."""
+    """A tilejson `bounds` [w, s, e, n] in EPSG:3857, the CRS of tile layers; None if they cannot be used."""
     try:
         west, south, east, north = [float(v) for v in bounds]
     except (TypeError, ValueError):
         return None
     transform = QgsCoordinateTransform(WGS84, WEB_MERCATOR, QgsProject.instance().transformContext())
-    return transform.transformBoundingBox(QgsRectangle(west, south, east, north))
+    try:
+        return transform.transformBoundingBox(QgsRectangle(west, south, east, north))
+    except QgsCsException:      # bounds beyond the map (latitude past 90°) are unusable data, not a plugin failure
+        return None
 
 
 def extent_is_world(extent: QgsRectangle, crs: Optional[QgsCoordinateReferenceSystem] = None) -> bool:

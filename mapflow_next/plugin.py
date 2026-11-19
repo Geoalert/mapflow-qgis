@@ -4,7 +4,7 @@ from __future__ import annotations
 from configparser import ConfigParser
 from typing import Optional
 
-from qgis.core import QgsProject
+from qgis.core import Qgis, QgsMessageLog, QgsProject
 from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtWidgets import QAction, QToolBar
 
@@ -12,8 +12,11 @@ from . import config
 from .api.client import MapflowApi
 from .api.http import Http
 from .controller import Controller
+from .core import guard
+from .core.guard import guarded
 from .core.scenarios import Catalogue
 from .qgis_bridge import aoi as aoi_tools
+from .qgis_bridge import message_bar
 from .qgis_bridge import rasters, updates
 from .qgis_bridge.compat import RASTER_LAYER, VECTOR_LAYER
 from .qgis_bridge.layers import MapLayers
@@ -60,6 +63,7 @@ class MapflowNextPlugin:
     # ---------- QGIS hooks ----------
 
     def initGui(self) -> None:
+        guard.set_reporter(self._report)
         load_fonts()
         window = self.iface.mainWindow()
         self.action = QAction(app_icon(is_dark()), "Mapflow", window)
@@ -67,10 +71,10 @@ class MapflowNextPlugin:
         self.action.setToolTip("Mapflow: map buildings, roads and forest from imagery")
         self.action.triggered.connect(self.toggle)
         self.gallery_action = QAction(app_icon(is_dark()), "Scenarios…", window)
-        self.gallery_action.triggered.connect(lambda *_: self.open_gallery())
+        self.gallery_action.triggered.connect(guarded(lambda *_: self.open_gallery()))
         self.updates_action = QAction("Check for updates…", window)
         self.updates_action.setMenuRole(QAction.MenuRole.NoRole)    # macOS would move it to the app menu
-        self.updates_action.triggered.connect(lambda *_: self.check_for_updates())
+        self.updates_action.triggered.connect(guarded(lambda *_: self.check_for_updates()))
         self.toolbar = self.iface.addToolBar(config.PLUGIN_SHORT_NAME)
         self.toolbar.setObjectName(TOOLBAR)
         self.toolbar.setToolTip("Mapflow")
@@ -100,6 +104,13 @@ class MapflowNextPlugin:
             self.toolbar.setParent(None)      # Python owns it now, and it goes when the reference does
         self.dock = self.controller = self.toolbar = None
         self.services = []
+        guard.clear_reporter(self._report)          # last, so a failure while unloading is still reported
+
+    def _report(self, exc: BaseException, details: str) -> None:
+        """The guard's reporter: the traceback to the QGIS log, then a Critical line on the message bar."""
+        QgsMessageLog.logMessage(details, config.PLUGIN_NAME, Qgis.MessageLevel.Critical)
+        message_bar.push(self.iface, f"Something went wrong: {exc}. Details are in the Log Messages panel.",
+                         Qgis.MessageLevel.Critical)
 
     # ---------- the Layers panel's context menu ----------
 
@@ -109,15 +120,16 @@ class MapflowNextPlugin:
         registered for no layer and then added to each layer it fits, as layers come."""
         window = self.iface.mainWindow()
         self.aoi_action = QAction(app_icon(is_dark()), "Use as AOI in Mapflow", window)
-        self.aoi_action.triggered.connect(lambda *_: self._layer_action("aoi"))
+        self.aoi_action.triggered.connect(guarded(lambda *_: self._layer_action("aoi")))
         self.imagery_action = QAction(app_icon(is_dark()), "Use as imagery in Mapflow", window)
-        self.imagery_action.triggered.connect(lambda *_: self._layer_action("imagery"))
+        self.imagery_action.triggered.connect(guarded(lambda *_: self._layer_action("imagery")))
         self.iface.addCustomActionForLayerType(self.aoi_action, "", VECTOR_LAYER, False)
         self.iface.addCustomActionForLayerType(self.imagery_action, "", RASTER_LAYER, False)
         project = QgsProject.instance()
         self._on_layers_added(list(project.mapLayers().values()))
         project.layersAdded.connect(self._on_layers_added)
 
+    @guarded
     def _on_layers_added(self, layers) -> None:
         for layer in layers:
             if aoi_tools.is_polygon_layer(layer):
@@ -169,9 +181,10 @@ class MapflowNextPlugin:
         else:
             self.iface.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.dock)
         self.dock.visibilityChanged.connect(self.action.setChecked)
-        self.dock.visibilityChanged.connect(session.set_active)
+        self.dock.visibilityChanged.connect(guarded(session.set_active))
         session.restore()
 
+    @guarded
     def toggle(self, checked: bool = True) -> None:
         if self.dock is None:
             self._build()

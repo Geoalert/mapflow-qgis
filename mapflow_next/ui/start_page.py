@@ -16,6 +16,7 @@ from . import icons
 from .theme import tokens
 from .widgets import (Card, ElidedLabel, ImageTile, Pill, button, clear_layout, event_pos, label, link, placeholder,
                       vbox)
+from ..core.guard import guarded
 
 
 def scenario_pixmap(catalogue: Catalogue, scenario: Scenario, width: int = 170, height: int = 88) -> QPixmap:
@@ -88,7 +89,7 @@ class StartPage(QWidget):
         self.search.setClearButtonEnabled(True)
         self.search.addAction(icons.icon("search", tokens()["text2"], 16), QLineEdit.ActionPosition.LeadingPosition)
         self.search.textChanged.connect(self._filter)
-        self.search.returnPressed.connect(lambda: self.galleryRequested.emit(self.search.text()))
+        self.search.returnPressed.connect(guarded(lambda: self.galleryRequested.emit(self.search.text())))
         layout.addWidget(self.search)
 
         self.grid = QGridLayout()
@@ -100,7 +101,7 @@ class StartPage(QWidget):
         actions = QHBoxLayout()
         actions.setSpacing(8)
         self.all_button = button(f"All {len(catalogue.scenarios)} scenarios", "outline", "grid")
-        self.all_button.clicked.connect(lambda: self.galleryRequested.emit(self.search.text()))
+        self.all_button.clicked.connect(guarded(lambda: self.galleryRequested.emit(self.search.text())))
         custom = button("Custom setup", "ghost", "sliders")
         custom.clicked.connect(self.customRequested.emit)
         actions.addWidget(self.all_button, 1)
@@ -128,6 +129,7 @@ class StartPage(QWidget):
         self._tiles: List[ImageTile] = []
         self._filter("")
 
+    @guarded
     def _filter(self, text: str) -> None:
         for tile in self._tiles:
             self.grid.removeWidget(tile)
@@ -139,7 +141,7 @@ class StartPage(QWidget):
             tile = ImageTile(scenario.title, f"{plain(scenario.model_label)} · {scenario.price_short.split(' +')[0]}",
                              scenario_pixmap(self.catalogue, scenario), scenario.icon)
             tile.setToolTip(scenario.short)
-            tile.clicked.connect(lambda _=False, sid=scenario.id: self.scenarioChosen.emit(sid))
+            tile.clicked.connect(guarded(lambda _=False, sid=scenario.id: self.scenarioChosen.emit(sid)))
             self.grid.addWidget(tile, index // 2, index % 2)
             self._tiles.append(tile)
         more = len(found) - 4

@@ -19,6 +19,7 @@ from . import icons
 from .theme import set_prop, tokens
 from .widgets import (Callout, Card, Combo, ElidedLabel, FitLineEdit, HoverTip, OptionRow, Pill, StepHeader, Toggle,
                       button, clear_layout, label, link, rounded, tool, vbox)
+from ..core.guard import guarded
 
 
 STAR = "#d69e2e"            # the recommended zoom's star: amber, seen on white, hover grey, the selected row, dark
@@ -128,9 +129,10 @@ class RunPage(QWidget):
         self.name.setToolTip("Processing name: edit to rename")
         self.name.textEdited.connect(self.nameEdited.emit)
         edit = tool("edit", "Name and description of this processing", "plain", 14)
-        edit.clicked.connect(lambda *_: self.renameRequested.emit())
+        edit.clicked.connect(guarded(lambda *_: self.renameRequested.emit()))
         self.rename_button = edit
-        self.name.editing.connect(lambda on: edit.setVisible(not on))     # no pencil to push along while typing
+        # no pencil to push along while typing
+        self.name.editing.connect(guarded(lambda on: edit.setVisible(not on)))
         policy = edit.sizePolicy()
         policy.setRetainSizeWhenHidden(True)        # hidden, it keeps its place: the row's height doesn't jump
         edit.setSizePolicy(policy)
@@ -140,7 +142,7 @@ class RunPage(QWidget):
         texts.addWidget(self.scenario_title)
         texts.addLayout(name_row)
         change = tool("grid", "Change the scenario: open the scenario gallery", "icon", 18)
-        change.clicked.connect(lambda *_: self.changeScenarioRequested.emit())
+        change.clicked.connect(guarded(lambda *_: self.changeScenarioRequested.emit()))
         self.change_button = change
         row.addWidget(back)
         row.addWidget(self.thumb)
@@ -197,7 +199,7 @@ class RunPage(QWidget):
             item.setMinimumWidth(90)
             item.setToolTip(tip)
             item.setCursor(Qt.CursorShape.PointingHandCursor)
-            item.clicked.connect(lambda _=False, k=key: self.areaAction.emit(k))
+            item.clicked.connect(guarded(lambda _=False, k=key: self.areaAction.emit(k)))
             if key == "draw":
                 item.setCheckable(True)
             grid.addWidget(item, index // 2, index % 2)
@@ -272,10 +274,12 @@ class RunPage(QWidget):
 
     # ---------- events ----------
 
+    @guarded
     def _model_activated(self, index: int) -> None:
         if 0 <= index < len(self._model_ids):
             self.modelChosen.emit(self._model_ids[index])
 
+    @guarded
     def _layer_activated(self, index: int) -> None:
         if 0 <= index < len(self._layer_ids):
             self.layerChosen.emit(self._layer_ids[index])
@@ -319,7 +323,7 @@ class RunPage(QWidget):
             yield
         finally:
             bar.setValue(value)
-            QTimer.singleShot(0, lambda: bar.setValue(value))
+            QTimer.singleShot(0, guarded(lambda: bar.setValue(value)))
 
     def set_options(self, model: Optional[Model], enabled: set, base_price: str, note: str = "",
                     tips: Optional[Dict[str, str]] = None) -> None:
@@ -356,7 +360,7 @@ class RunPage(QWidget):
             holder.tip = HoverTip(holder, f"<p>{html.escape(tip)}</p>")    # rich text: Qt wraps it
         switch.setChecked(checked)
         switch.setAccessibleName(block.display_name)
-        switch.toggled.connect(lambda on, name=block.name: self.optionToggled.emit(name, bool(on)))
+        switch.toggled.connect(guarded(lambda on, name=block.name: self.optionToggled.emit(name, bool(on))))
         self._switches[block.name] = switch
         row.addLayout(texts, 1)
         row.addWidget(switch)
@@ -399,7 +403,7 @@ class RunPage(QWidget):
             item.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
             item.setMinimumWidth(90)
             item.setToolTip(caption)
-            item.clicked.connect(lambda *_, a=action: self.areaAction.emit(a))
+            item.clicked.connect(guarded(lambda *_, a=action: self.areaAction.emit(a)))
             self.area_hint_actions.addWidget(item, index // 2, index % 2)
             self.area_hint_buttons[action] = item
         self.area_hint.setVisible(bool(text))
@@ -423,7 +427,7 @@ class RunPage(QWidget):
             row.set_selected(chosen)
             if spec.note:
                 row.add_note(spec.note)
-            row.clicked.connect(lambda *_, key=spec.key: self.imageryChosen.emit(key))
+            row.clicked.connect(guarded(lambda *_, key=spec.key: self.imageryChosen.emit(key)))
             if spec.recommended:
                 row.right.addWidget(Pill("Recommended", "ok"))
             controls = QHBoxLayout()
@@ -439,13 +443,14 @@ class RunPage(QWidget):
                                 "this scenario")
                 zoom.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
                 zoom.setMinimumContentsLength(4)
-                zoom.activated.connect(lambda i, key=spec.key, combo=zoom: self.zoomChosen.emit(key, combo.itemData(i)))
+                zoom.activated.connect(
+                    guarded(lambda i, key=spec.key, combo=zoom: self.zoomChosen.emit(key, combo.itemData(i))))
                 controls.addWidget(zoom)
             if spec.pick:
                 pick = button(spec.pick, "outline", size="sm")
                 pick.setToolTip("Upload a GeoTIFF to My imagery" if spec.pick == "Add imagery…"
                                 else "Choose a collection, or one image of it")
-                pick.clicked.connect(lambda *_: self.mosaicPickRequested.emit())
+                pick.clicked.connect(guarded(lambda *_: self.mosaicPickRequested.emit()))
                 controls.addWidget(pick, 0, Qt.AlignmentFlag.AlignVCenter)
             if chosen and spec.previewable:
                 on = bool(spec.previewing)
@@ -453,11 +458,11 @@ class RunPage(QWidget):
                 if on:      # the preview is on the map: the eye shows it, and a click takes it off
                     eye.setIcon(icons.icon("eye", tokens()["primary_ink"], 16))
                     eye.setProperty("on", True)
-                eye.clicked.connect(lambda *_: self.previewRequested.emit())
+                eye.clicked.connect(guarded(lambda *_: self.previewRequested.emit()))
                 controls.insertWidget(0, eye)       # the eye first, the control by the row's edge
             if spec.removable:
                 remove = tool("x", "Remove this image", "plain", 14)
-                remove.clicked.connect(lambda *_: self.catalogRemoved.emit())
+                remove.clicked.connect(guarded(lambda *_: self.catalogRemoved.emit()))
                 controls.addWidget(remove)
             if spec.price and not inline_price:
                 column = QVBoxLayout()

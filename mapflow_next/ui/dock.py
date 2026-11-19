@@ -21,6 +21,7 @@ from .sign_in import SignInPage
 from .start_page import StartPage
 from .theme import color, is_dark, load_fonts, stylesheet, tokens
 from .widgets import FocusRing, link, menu_action, tool
+from ..core.guard import guarded
 
 START, PROCESSINGS, IMAGERY = 0, 1, 2
 PAGE_SIGN_IN, PAGE_START, PAGE_RUN, PAGE_PROCESSINGS, PAGE_IMAGERY = range(5)
@@ -154,17 +155,17 @@ class DockContent(QWidget):
         self.project_button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.project_button.setToolTip("Projects: find, pin and switch projects")
         self.project_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.project_button.clicked.connect(lambda *_: self.projectsRequested.emit())
+        self.project_button.clicked.connect(guarded(lambda *_: self.projectsRequested.emit()))
         row.addWidget(self.project_button, 1)
         self.credits = QToolButton(header)
         self.credits.setProperty("variant", "credits")
         self.credits.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         self.credits.setIcon(icons.icon("coins", tokens()["primary_ink"], 14))
         self.credits.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.credits.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(config.TOP_UP_URL)))
+        self.credits.clicked.connect(guarded(lambda: QDesktopServices.openUrl(QUrl(config.TOP_UP_URL))))
         row.addWidget(self.credits)
         settings = tool("settings", "Settings")
-        settings.clicked.connect(lambda *_: self.settingsRequested.emit())
+        settings.clicked.connect(guarded(lambda *_: self.settingsRequested.emit()))
         row.addWidget(settings)
         self.avatar = QToolButton(header)
         self.avatar.setProperty("variant", "avatar")
@@ -220,7 +221,7 @@ class DockContent(QWidget):
         for index, (text, icon_name) in enumerate((("Start", "home"), ("Processings", "list"),
                                                    ("Imagery sources", "image"))):
             item = TabButton(text, icon_name, bar)
-            item.clicked.connect(lambda *_, i=index: self.go(i))
+            item.clicked.connect(guarded(lambda *_, i=index: self.go(i)))
             self.tab_group.addButton(item, index)
             self.tab_buttons.append(item)
             row.addWidget(item)
@@ -270,7 +271,7 @@ class DockContent(QWidget):
         dot.setDevicePixelRatio(2)
         self.live_dot.setPixmap(dot)
         self.running_link = link("", external=False)
-        self.running_link.clicked.connect(lambda *_: self.go(PROCESSINGS))
+        self.running_link.clicked.connect(guarded(lambda *_: self.go(PROCESSINGS)))
         self.running_bar = QProgressBar(footer)
         self.running_bar.setTextVisible(False)
         self.running_bar.setFixedWidth(56)

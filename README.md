@@ -102,6 +102,7 @@ mapflow_next/
     draft.py           the run form as data: issues(), estimate(), payload()
     scenarios.py       scenario catalogue and scenario → model matching
     messages.py        readable texts for Mapflow error codes
+    guard.py           the guard: no exception escapes from an entry point Qt calls (no Qt; every layer imports it)
     oauth.py           browser sign-in without Qt: PKCE, the redirect, tokens
   api/
     http.py            async HTTP over QgsNetworkAccessManager, error classification
@@ -228,7 +229,7 @@ Tests and lint run in the official `qgis/qgis` Docker images, so only Docker is 
 make test          # both of the two runs below (the gate before review)
 make test-qgis3    # unit + end-to-end tests on QGIS 3 (qgis/qgis:release-3_28)
 make test-qgis4    # the same on QGIS 4 (qgis/qgis:4.2), plus the Qt 6 code check
-make test-core     # pure-Python tests only (41)
+make test-core     # pure-Python tests only (52)
 make lint          # the plugins.qgis.org checks: flake8, bandit, detect-secrets
 make screens       # run the end-to-end flow and rewrite docs/screens/*.png
 ```
@@ -241,7 +242,7 @@ make test-qt6 QT6_PYTHON=…    # the pages, sign-in and HTTP client on PyQt6 (4
 make check-qt6 QT6_PYTHON=…   # Qt enum names and calls that only Qt 5 accepts
 ```
 
-**The end-to-end test** (`tests/e2e_flow.py`, 314 checks) runs a real offscreen QGIS against a mock
+**The end-to-end test** (`tests/e2e_flow.py`, 334 checks) runs a real offscreen QGIS against a mock
 Mapflow API and sign-in server (`tests/mock_server.py`).
 - **Request checks:** the mock rejects request bodies the real API rejects, such as `myImagery` with both
   `mosaicId` and `imageIds`.
@@ -252,7 +253,8 @@ Mapflow API and sign-in server (`tests/mock_server.py`).
   renaming, "Run again", the account menu, unload and dark mode.
 - **Critical messages:** the plugin's guard turns an exception into a Critical line in the message bar and
   the log. An unexpected Critical message in the bar or the log fails the flow; a check that expects one
-  declares it.
+  declares it. A source check in `tests/test_core.py` fails on any `connect` or `QTimer.singleShot` whose
+  callable is not guarded (`@guarded`, or `guarded(...)` at the connection site).
 - **Isolation:** each run gets its own QGIS settings and authentication database in a temporary folder.
 - **Real clicks:** the test clicks the real buttons wherever a bug hid behind a click. For example,
   toggling an option must leave the form's scroll position alone.

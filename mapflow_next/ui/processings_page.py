@@ -18,6 +18,7 @@ from .start_page import model_icon, status_pill
 from .theme import set_prop, tokens
 from .widgets import (Card, ElidedLabel, Pill, Stars, button, clear_layout, event_pos, label, link, menu_action,
                       rule, tool)
+from ..core.guard import guarded
 
 FILTERS = (("all", "All"), ("running", "Running"), ("done", "Done"), ("attention", "Needs action"))
 
@@ -90,19 +91,19 @@ class ProcessingCard(Card):
                 add.setEnabled(False)
             elif in_map:
                 add = button("Show on map", "outline", "layers", size="sm")
-                add.clicked.connect(lambda *_: page.zoomTo.emit(pid))
+                add.clicked.connect(guarded(lambda *_: page.zoomTo.emit(pid)))
             else:
                 add = button("Add to map", "primary", "layers", size="sm")
-                add.clicked.connect(lambda *_: page.addToMap.emit(pid))
+                add.clicked.connect(guarded(lambda *_: page.addToMap.emit(pid)))
             row.addWidget(add, 1)
             save = button("GeoJSON", "outline", "download", size="sm")
             save.setToolTip("Save the results as a GeoJSON file")
             save.setEnabled(not busy)
-            save.clicked.connect(lambda *_: page.saveGeojson.emit(pid))
+            save.clicked.connect(guarded(lambda *_: page.saveGeojson.emit(pid)))
             row.addWidget(save)
         elif processing.status is Status.failed and page.can_manage:
             restart = button("Restart", "outline", "refresh", size="sm")
-            restart.clicked.connect(lambda *_: page.restart.emit(pid))
+            restart.clicked.connect(guarded(lambda *_: page.restart.emit(pid)))
             row.addWidget(restart)
             row.addStretch(1)
         else:
@@ -132,7 +133,7 @@ class ProcessingCard(Card):
             rating.addWidget(label("Your rating" if rated else "Rate the result", "label"))
             stars = Stars(self)
             stars.set_value(rated)
-            stars.rated.connect(lambda value: page.rate.emit(pid, value))   # opens the feedback form
+            stars.rated.connect(guarded(lambda value: page.rate.emit(pid, value)))   # opens the feedback form
             rating.addWidget(stars)
             rating.addStretch(1)
             self.add(rating)
@@ -191,7 +192,7 @@ class ProcessingsPage(QWidget):
             chip.setProperty("chip", True)
             chip.setCheckable(True)
             chip.setCursor(Qt.CursorShape.PointingHandCursor)
-            chip.clicked.connect(lambda _=False, k=key: self._set_filter(k))
+            chip.clicked.connect(guarded(lambda _=False, k=key: self._set_filter(k)))
             self.chips.addButton(chip)
             self.chip_buttons[key] = chip
             toolbar.addWidget(chip)
@@ -202,12 +203,12 @@ class ProcessingsPage(QWidget):
         self.search.setPlaceholderText("Find by name or model")
         self.search.setClearButtonEnabled(True)
         self.search.addAction(icons.icon("search", tokens()["text2"], 16), QLineEdit.ActionPosition.LeadingPosition)
-        self.search.textChanged.connect(lambda _: self._render())
+        self.search.textChanged.connect(guarded(lambda _: self._render()))
         search_row = QHBoxLayout()
         search_row.setContentsMargins(16, 4, 16, 4)
         search_row.addWidget(self.search, 1)
         refresh = tool("refresh", "Refresh")       # here, so the filter chips keep the full width
-        refresh.clicked.connect(lambda *_: (self.set_refreshing(True), self.refreshRequested.emit()))
+        refresh.clicked.connect(guarded(lambda *_: (self.set_refreshing(True), self.refreshRequested.emit())))
         search_row.addWidget(refresh)
         self.refresh_button = refresh
         outer.addLayout(search_row)
@@ -232,7 +233,7 @@ class ProcessingsPage(QWidget):
         self.empty_text = label("No processings in this project yet.", "lead", wrap=True)
         self.empty_text.setAlignment(Qt.AlignmentFlag.AlignCenter)
         start = button("Start mapping", "primary", "play")
-        start.clicked.connect(lambda *_: self.startRequested.emit())
+        start.clicked.connect(guarded(lambda *_: self.startRequested.emit()))
         self.start_button = start
         empty_layout.addWidget(self.empty_text)
         empty_layout.addWidget(start, 0, Qt.AlignmentFlag.AlignHCenter)
@@ -254,7 +255,7 @@ class ProcessingsPage(QWidget):
         elif self._spin.isActive():
             if time.monotonic() < self._spin_until:
                 QTimer.singleShot(int((self._spin_until - time.monotonic()) * 1000) + 10,
-                                  lambda: self.set_refreshing(False))
+                                  guarded(lambda: self.set_refreshing(False)))
                 return
             self._spin.stop()
             self._angle = 0
@@ -265,6 +266,7 @@ class ProcessingsPage(QWidget):
     def refreshing(self) -> bool:
         return self._spin.isActive()
 
+    @guarded
     def _turn(self) -> None:
         self._angle = (self._angle + 30) % 360
         pixmap = icons.pixmap("refresh", tokens()["primary_ink"], 16)
@@ -303,7 +305,7 @@ class ProcessingsPage(QWidget):
         if self.search.text():
             self.search.clear()                 # or the search may hide it
         self._render()
-        QTimer.singleShot(0, lambda: self._scroll_to(processing_id))    # after _render restores the scroll
+        QTimer.singleShot(0, guarded(lambda: self._scroll_to(processing_id)))    # after _render restores the scroll
 
     def _scroll_to(self, processing_id: str) -> None:
         cards = (self.list.itemAt(i).widget() for i in range(self.list.count()))
@@ -360,15 +362,16 @@ class ProcessingsPage(QWidget):
             more = button("Loading…" if self.loading_more else
                           f"Show more · {len(self.items):,} of {self.total:,}", "outline")
             more.setEnabled(not self.loading_more)
-            more.clicked.connect(lambda *_: self.moreRequested.emit())
+            more.clicked.connect(guarded(lambda *_: self.moreRequested.emit()))
             self.more_button = more
             self.list.addWidget(more, 0, Qt.AlignmentFlag.AlignHCenter)
         else:
             self.more_button = None
         self.list.addStretch(1)
         bar.setValue(position)
-        QTimer.singleShot(0, lambda: bar.setValue(position))   # polling re-renders: keep the reader's place
+        QTimer.singleShot(0, guarded(lambda: bar.setValue(position)))   # polling re-renders: keep the reader's place
 
+    @guarded
     def _toggle(self, processing_id: str) -> None:
         self.expanded = None if self.expanded == processing_id else processing_id
         self._render()
