@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from functools import partial
 from itertools import count
 from typing import Any, Callable, Dict, Optional, Tuple
-from urllib.parse import urlencode, urlparse
+from urllib.parse import urlencode
 
 from qgis.PyQt.QtCore import QByteArray, QFile, QIODevice, QObject, QSaveFile, QTimer, QUrl, pyqtSignal
 from qgis.PyQt.QtNetwork import QHttpMultiPart, QHttpPart, QNetworkReply, QNetworkRequest
@@ -21,8 +21,14 @@ from ..config import PLUGIN_NAME, TIMEOUT_S
 from ..core import guard
 from ..core.guard import guarded
 from ..core.messages import describe
+from ..core.origin import Origin, carries_credentials
 
 Callback = Callable[..., None]
+
+# Redirects are followed one hop at a time by `Http`, never by Qt: each hop is judged on its own URL, so
+# credentials never travel to another origin in a header that Qt copied. MAX_REDIRECTS stops a redirect loop.
+MAX_REDIRECTS = 5
+_REDIRECT_STATUSES = (301, 302, 303, 307, 308)
 
 PLUGIN_FAILED_TEXT = ("Mapflow answered, but the plugin could not process the answer. "
                       "Details are in the Log Messages panel.")
@@ -104,9 +110,22 @@ def classify(qt_error: int, status: Optional[int], body: str, url: str, timed_ou
     return ApiError("client", readable or f"Request failed ({status or qt_error}).", status, code, params, url, body)
 
 
+def _status_of(reply: QNetworkReply) -> Optional[int]:
+    return reply.attribute(QNetworkRequest.Attribute.HttpStatusCodeAttribute)
+
+
+def _is_redirect(reply: QNetworkReply) -> bool:
+    return _status_of(reply) in _REDIRECT_STATUSES
+
+
+def _origin_of(url: QUrl) -> Optional[Origin]:
+    """The origin of the URL that Qt will send: the parser that sends is the one that decides."""
+    return Origin.from_parts(url.scheme(), url.host(), url.port(-1))
+
+
 @dataclass
 class _Pending:
-    reply: QNetworkReply
+    reply: Optional[QNetworkReply]    # the reply of the current hop
     on_success: Optional[Callback]
     on_error: Optional[Callback]
     parse: str
@@ -118,6 +137,15 @@ class _Pending:
     bearer: Optional[str] = None  # …the access token it carried, if any
     method: str = ""
     url: str = ""                 # without the query string: it names the request in reports
+    allow_credentials: bool = True    # False: never carries them (the token endpoint)
+    data: Optional[QByteArray] = None  # the body of a JSON or form request
+    form: bool = False            # …and it is a form
+    body: Any = None              # the multipart of an upload
+    upload: bool = False
+    on_progress: Optional[Callback] = None
+    timeout: int = 0              # seconds of inactivity; 0: none
+    hops: int = 0                 # redirects followed so far
+    redirect_refused: str = ""    # why a redirect was not followed
 
 
 class Http(QObject):
@@ -136,7 +164,7 @@ class Http(QObject):
         self._nam = QgsNetworkAccessManager.instance()
         self._pending: Dict[int, _Pending] = {}
         self._ids = count(1)
-        self._trusted_host = urlparse(self.server).hostname or ""
+        self._api_origin = _origin_of(QUrl(self.server))
 
     # ---------- public ----------
 
@@ -198,69 +226,82 @@ class Http(QObject):
     def _send(self, method: str, path: str, body: Any = None, on_success: Optional[Callback] = None,
               on_error: Optional[Callback] = None, timeout: Optional[int] = None, parse: str = "json",
               sink: Optional[QSaveFile] = None, on_progress: Optional[Callback] = None,
-              upload: bool = False, authorize: Optional[bool] = None,
+              upload: bool = False, authorize: bool = True,
               form: Optional[Dict[str, str]] = None) -> int:
+        """`authorize` says the request may carry credentials; whether it does depends on its origin (`_dispatch`)."""
         url = self.url_for(path)
-        request = QNetworkRequest(QUrl(url))
+        data = None
+        if form is not None:
+            data = QByteArray(urlencode(form).encode())
+        elif isinstance(body, (dict, list)):
+            data = QByteArray(json.dumps(body).encode())
+        elif isinstance(body, (bytes, bytearray)):
+            data = QByteArray(bytes(body))
+        key = next(self._ids)
+        pending = _Pending(None, on_success, on_error, parse, sink=sink, keep=body if upload else None,
+                           method=method, url=_without_query(url), allow_credentials=authorize, data=data,
+                           body=body, upload=upload, on_progress=on_progress, form=form is not None,
+                           timeout=TIMEOUT_S if timeout is None else timeout)
+        self._pending[key] = pending
+        try:
+            self._dispatch(key, QUrl(url))
+        except Exception:
+            del self._pending[key]
+            raise
+        if pending.timeout:
+            pending.timer = QTimer(self)
+            pending.timer.setSingleShot(True)
+            pending.timer.timeout.connect(partial(self._timeout, key))
+            pending.timer.start(pending.timeout * 1000)
+        return key
+
+    def _dispatch(self, key: int, url: QUrl) -> None:
+        """Start the request of one hop (the first, or a redirect's) for the pending `key`."""
+        pending = self._pending[key]
+        request = QNetworkRequest(url)
         request.setRawHeader(b"x-plugin-version", self.plugin_version.encode())
-        if authorize is None:
-            # Credentials go to Mapflow only, never to a preview or presigned storage URL
-            authorize = (urlparse(url).hostname or "") == self._trusted_host
-        authorize = bool(authorize and (self.bearer or self.auth_config_id))
+        request.setAttribute(QNetworkRequest.Attribute.RedirectPolicyAttribute,
+                             QNetworkRequest.RedirectPolicy.ManualRedirectPolicy)
+        # Credentials go to the API's own scheme, host and port only, never to a preview or a presigned URL
+        authorize = bool(pending.allow_credentials and (self.bearer or self.auth_config_id)
+                         and carries_credentials(_origin_of(url), self._api_origin))
         if authorize and self.bearer:
             request.setRawHeader(b"Authorization", f"Bearer {self.bearer}".encode())
         elif authorize:
             result = QgsApplication.authManager().updateNetworkRequest(request, self.auth_config_id)
             updated, request = result if isinstance(result, tuple) else (result, request)
             if not updated:
-                QgsMessageLog.logMessage(f"Auth config {self.auth_config_id} was not applied to {url}",
-                                         PLUGIN_NAME, Qgis.MessageLevel.Warning)
-        data = None
-        if form is not None:
-            data = QByteArray(urlencode(form).encode())
-            request.setHeader(QNetworkRequest.KnownHeaders.ContentTypeHeader, "application/x-www-form-urlencoded")
-        elif isinstance(body, (dict, list)):
-            data = QByteArray(json.dumps(body).encode())
-            request.setHeader(QNetworkRequest.KnownHeaders.ContentTypeHeader, "application/json")
-        elif isinstance(body, (bytes, bytearray)):
-            data = QByteArray(bytes(body))
-            request.setHeader(QNetworkRequest.KnownHeaders.ContentTypeHeader, "application/json")
-
+                QgsMessageLog.logMessage(f"Auth config {self.auth_config_id} was not applied to "
+                                         f"{_without_query(url.toString())}", PLUGIN_NAME, Qgis.MessageLevel.Warning)
+        if pending.data is not None:
+            request.setHeader(QNetworkRequest.KnownHeaders.ContentTypeHeader,
+                              "application/x-www-form-urlencoded" if pending.form else "application/json")
+        method, data, body = pending.method, pending.data, pending.body
         if method == "GET":
             reply = self._nam.get(request)
         elif method == "DELETE":
             reply = self._nam.deleteResource(request)
         elif method == "PUT":
             reply = self._nam.put(request, data if data is not None else QByteArray())
-        elif upload:
+        elif pending.upload:
             reply = self._nam.post(request, body)
             body.setParent(reply)
         else:
             reply = self._nam.post(request, data if data is not None else QByteArray())
-
-        key = next(self._ids)
-        pending = _Pending(reply, on_success, on_error, parse, sink=sink, keep=body if upload else None,
-                           authorized=authorize, bearer=self.bearer if authorize else None,
-                           method=method, url=_without_query(url))
-        self._pending[key] = pending
+        pending.reply = reply
+        pending.authorized = authorize
+        pending.bearer = self.bearer if authorize else None
         reply.finished.connect(partial(self._finished, key))
-        if sink is not None:
+        if pending.sink is not None:
             reply.readyRead.connect(partial(self._drain, key))
-        if on_progress is not None:
-            signal = reply.uploadProgress if upload else reply.downloadProgress
-            signal.connect(guarded(lambda done, total, cb=on_progress: cb(done, total)))
-        seconds = TIMEOUT_S if timeout is None else timeout
-        if seconds:
-            pending.timer = QTimer(self)
-            pending.timer.setSingleShot(True)
-            pending.timer.timeout.connect(partial(self._timeout, key))
-            pending.timer.start(seconds * 1000)
-        return key
+        if pending.on_progress is not None:
+            signal = reply.uploadProgress if pending.upload else reply.downloadProgress
+            signal.connect(guarded(lambda done, total, cb=pending.on_progress: cb(done, total)))
 
     @guarded
     def _drain(self, key: int) -> None:
         pending = self._pending.get(key)
-        if pending and pending.sink is not None:
+        if pending and pending.sink is not None and not _is_redirect(pending.reply):   # a redirect's body is no result
             pending.sink.write(pending.reply.readAll())
             if pending.timer:
                 pending.timer.start()   # data is flowing: restart the inactivity timer
@@ -274,14 +315,19 @@ class Http(QObject):
 
     @guarded
     def _finished(self, key: int) -> None:
-        pending = self._pending.pop(key, None)
+        pending = self._pending.get(key)
         if pending is None:
             return
         reply = pending.reply
+        status = _status_of(reply)
+        if (_is_redirect(reply) and reply.error() == QNetworkReply.NetworkError.NoError
+                and not pending.timed_out):
+            if self._redirect(key, pending, reply):
+                return
+        del self._pending[key]
         if pending.timer:
             pending.timer.stop()
             pending.timer.deleteLater()
-        status = reply.attribute(QNetworkRequest.Attribute.HttpStatusCodeAttribute)
         reported = False
         try:
             ok, outcome = self._read(pending, reply, status)
@@ -295,14 +341,55 @@ class Http(QObject):
         else:
             self._fail(pending.on_error, outcome, reported)
 
+    def _redirect(self, key: int, pending: _Pending, reply: QNetworkReply) -> bool:
+        """Follow the redirect of `reply` as the next hop of the same request. False: it ends here, as an error
+        (`_finished` reports it): the answer that is not a redirect, a write, another protocol, a step from https
+        to http, a loop."""
+        target = reply.attribute(QNetworkRequest.Attribute.RedirectionTargetAttribute)
+        target = QUrl(target) if isinstance(target, str) else target
+        if not isinstance(target, QUrl) or target.isEmpty():
+            return False
+        origin_url = reply.url()
+        url = origin_url.resolved(target)
+        if pending.method != "GET":
+            reason = "it answered a change with a redirect, which the plugin does not repeat"
+        elif url.scheme().lower() not in ("http", "https"):
+            reason = "it redirected to an address that is not http or https"
+        elif origin_url.scheme().lower() == "https" and url.scheme().lower() == "http":
+            reason = "it redirected from https to http"
+        elif pending.hops >= MAX_REDIRECTS:
+            reason = "it redirected too many times"
+        else:
+            reason = ""
+        if reason:
+            pending.redirect_refused = reason
+            return False
+        pending.hops += 1
+        reply.deleteLater()
+        if pending.timer:
+            pending.timer.start()
+        self._dispatch(key, url)
+        return True
+
     def _read(self, pending: _Pending, reply: QNetworkReply, status: Optional[int]) -> Tuple[bool, Any]:
         """(True, the result) or (False, the ApiError). Reading is the only place that turns a bad body into
         "Unexpected response from Mapflow": the caller's callbacks run elsewhere (`_succeed`)."""
+        if status in _REDIRECT_STATUSES and reply.error() == QNetworkReply.NetworkError.NoError \
+                and not pending.timed_out:
+            # A redirect that `_redirect` did not follow
+            if pending.sink is not None:
+                pending.sink.cancelWriting()
+            reason = pending.redirect_refused or "its answer has no address to go to"
+            error = ApiError("server", f"Mapflow redirected the request, and the plugin did not follow it: {reason}.",
+                             status, url=pending.url)
+            QgsMessageLog.logMessage(f"{error.kind} {status} {pending.url}: redirect refused: {reason}",
+                                     PLUGIN_NAME, Qgis.MessageLevel.Warning)
+            return False, error
         if reply.error() != QNetworkReply.NetworkError.NoError or pending.timed_out:
             body = "" if pending.sink is not None else bytes(reply.readAll()).decode("utf-8", "replace")
             if pending.sink is not None:
                 pending.sink.cancelWriting()
-            error = classify(reply.error(), status, body, reply.url().toString(), pending.timed_out)
+            error = classify(reply.error(), status, body, _without_query(reply.url().toString()), pending.timed_out)
             QgsMessageLog.logMessage(f"{error.kind} {status} {error.url}: {error.code} {error.body[:500]}",
                                      PLUGIN_NAME, Qgis.MessageLevel.Warning)
             # A request sent with an access token renewed since says nothing about the current sign-in
@@ -323,7 +410,7 @@ class Http(QObject):
             return True, (json.loads(raw.decode("utf-8")) if raw.strip() else None)
         except ValueError as exc:       # JSONDecodeError and UnicodeDecodeError: the body is not the promised JSON
             error = ApiError("server", f"Unexpected response from Mapflow: {exc}", status,
-                             url=reply.url().toString(), body=raw[:500].decode("utf-8", "replace"))
+                             url=_without_query(reply.url().toString()), body=raw[:500].decode("utf-8", "replace"))
             QgsMessageLog.logMessage(f"{error.kind} {status} {pending.url}: not JSON: {exc}",
                                      PLUGIN_NAME, Qgis.MessageLevel.Warning)
             return False, error

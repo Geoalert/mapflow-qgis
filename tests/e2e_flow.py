@@ -161,6 +161,103 @@ def old_town_layer():
     return layer
 
 
+def check_credentials_origin(iface, plugin, state, api_url):
+    """spec/002_api.md § Authentication: credentials go only to the API's own scheme, host and port, on a first
+    request and on every redirect hop. A second mock server (same host, another port) plays another origin."""
+    from mapflow_next.api.client import MapflowApi
+    http = plugin.services[0]
+    other_server, other, other_url = mock_server.start()
+    unauthorized = []
+
+    def on_unauthorized():
+        unauthorized.append(True)
+    http.unauthorized.connect(on_unauthorized)
+    seen = len(iface.bar.ledger.unexpected())
+
+    def header(requests, path):
+        """The Authorization header of the last request for `path` ("" when it had none), or None if none came."""
+        matching = [r for r in requests if r[1] == path]
+        if not matching:
+            return None
+        return next((v for k, v in matching[-1][3].items() if k.lower() == "authorization"), "")
+
+    def fetch(path, parse="bytes", **kwargs):
+        got = {}
+        http.get(path, parse=parse, on_success=lambda value: got.setdefault("ok", value),
+                 on_error=lambda error: got.setdefault("error", error), **kwargs)
+        wait_until(lambda: got, 10)
+        return got
+
+    def run(label, expect_prefix):
+        before_api, before_other = len(state.requests), len(other.requests)
+        got = fetch("user/status", parse="json")
+        sent = header(state.requests[before_api:], "/user/status")
+        check("ok" in got and (sent or "").startswith(expect_prefix),
+              f"{label}: a request to the API origin carries the {expect_prefix.strip()} credentials")
+        got = fetch(f"{other_url}/open/preview.png")
+        check(got.get("ok") == mock_server.PNG and header(other.requests[before_other:], "/open/preview.png") == "",
+              f"{label}: a picture of another port loads and its request has no Authorization header")
+        previews = {}
+        MapflowApi(http).preview(f"{other_url}/open/preview.png", lambda data: previews.setdefault("ok", data),
+                                 lambda error: previews.setdefault("error", error))
+        wait_until(lambda: previews, 10)
+        check(previews.get("ok") == mock_server.PNG, f"{label}: MapflowApi.preview of another origin loads")
+        before_api, before_other = len(state.requests), len(other.requests)
+        target = f"{other_url}/open/preview.png"
+        got = fetch(f"redirect?to={target}")
+        check(got.get("ok") == mock_server.PNG and header(state.requests[before_api:], "/redirect") != ""
+              and header(other.requests[before_other:], "/open/preview.png") == "",
+              f"{label}: a redirect from the API to another origin loads the picture without the credentials "
+              f"({got.get('error')})")
+        got = fetch("redirect?to=/rest/user/status", parse="json")
+        check("ok" in got and header(state.requests, "/user/status").startswith(expect_prefix),
+              f"{label}: a redirect to a path of the API origin keeps the credentials ({got.get('error')})")
+
+    saved = (http.bearer, http.auth_config_id)
+    try:
+        run("API token", "Basic")
+        token = "access-origin-check"
+        state.access_tokens.add(token)
+        http.bearer = token
+        run("browser sign-in", "Bearer")
+        http.bearer = None
+
+        # the sink survives a redirect, and the redirect's own body does not reach the file
+        target_file = str(Path(tempfile.mkdtemp()) / "picture.png")
+        done = {}
+        http.download(f"redirect?to={other_url}/open/preview.png", target_file,
+                      on_success=lambda path: done.setdefault("ok", path),
+                      on_error=lambda error: done.setdefault("error", error))
+        wait_until(lambda: done, 10)
+        check("ok" in done and Path(target_file).read_bytes() == mock_server.PNG,
+              f"a download that is redirected to another origin writes the picture ({done.get('error')})")
+
+        # a redirect loop ends in one error
+        errors, answers = [], []
+        http.get("redirect", parse="bytes", on_success=answers.append, on_error=errors.append)
+        wait_until(lambda: errors or answers, 10)
+        wait_until(lambda: False, 0.3)
+        check(not answers and len(errors) == 1 and errors[0].kind == "server",
+              f"a redirect loop ends in one error of kind server ({[e.kind for e in errors]})")
+
+        # a write is never redirected
+        before_other = len(other.requests)
+        errors, answers = [], []
+        http.post(f"redirect?to={other_url}/open/preview.png", {"a": 1}, on_success=answers.append,
+                  on_error=errors.append)
+        wait_until(lambda: errors or answers, 10)
+        wait_until(lambda: False, 0.3)
+        check(not answers and len(errors) == 1 and errors[0].kind == "server"
+              and len(other.requests) == before_other,
+              f"a redirect of a POST is an error and nothing is sent to the target ({[e.kind for e in errors]})")
+    finally:
+        http.bearer, http.auth_config_id = saved
+        http.unauthorized.disconnect(on_unauthorized)
+        other_server.shutdown()
+    check(not unauthorized, "no request of these checks ended the sign-in")
+    check(len(iface.bar.ledger.unexpected()) == seen, "…and none of them raised a Critical message")
+
+
 def check_the_guard(iface, plugin, api_url, settings):
     """spec/006 § The guard: `Http` tells a body that is not JSON from a callback that raises, a request ends
     in one outcome, a result that cannot be placed leaves no "loading" flag, and a timer reaches the reporter."""
@@ -1259,6 +1356,7 @@ def main():
     wait_until(lambda: False, 0.4)
     shot(content, "05-processings-done", QSize(400, 880))
     check_the_guard(iface, plugin, url, settings)
+    check_credentials_origin(iface, plugin, state, url)
 
     # imagery search: the Area drop-down is the run's area
     run.searchImageryRequested.emit()

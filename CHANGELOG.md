@@ -9,6 +9,7 @@
     - Sign in with Mapflow in the browser and stay signed in across restarts; an API token as a fallback; both kept in the QGIS authentication database
     - Live cost estimate before every run; results load as styled GeoPackage layers or vector tiles
     - My imagery window: upload several GeoTIFFs at once from files or layers, or drag them in; create a collection, delete a collection or an image; collections are listed 50 at a time and searched on the server, by their name or by an image's file name
+    - Your credentials go only to Mapflow's own address: a picture or a redirect to another address loads without them
     - Imagery search: a minimum area coverage filter; previews that come in several parts are shown whole
     - A list that fails to load says so instead of looking empty; a refresh that keeps failing tells you once, and the default project opens when the open one is deleted in Mapflow Web
     - Not carried over yet: planned processings (templates), custom XYZ/TMS providers, translations (es, pt, ru, zh; planned for 4.1)

@@ -1047,3 +1047,63 @@ def _tree_problems_of(rule):
         name = str(path.relative_to(PLUGIN))
         problems += [f"{name}:{number}: {why}" for number, why in rule(path.read_text(encoding="utf-8"))]
     return problems
+
+
+# ---------- core/origin.py: which requests may carry Mapflow credentials ----------
+
+def _origin(url):
+    from urllib.parse import urlsplit
+    from mapflow_next.core.origin import Origin
+    parts = urlsplit(url)
+    return Origin.from_parts(parts.scheme, parts.hostname or "", parts.port if parts.port else -1)
+
+
+def _carries(request, api):
+    from mapflow_next.core.origin import carries_credentials
+    return carries_credentials(_origin(request), _origin(api))
+
+
+def test_origin_same_scheme_host_and_port_carries():
+    assert _carries("https://api.example/rest/x", "https://api.example/rest")
+    assert _carries("https://API.Example./a", "https://api.example/rest")
+
+
+def test_origin_default_port_written_out_is_the_same_origin():
+    assert _carries("https://api.example:443/x", "https://api.example")
+    assert _carries("https://api.example/x", "https://api.example:443")
+    assert _carries("http://127.0.0.1:80/x", "http://127.0.0.1")
+
+
+def test_origin_another_port_host_or_scheme_does_not_carry():
+    assert not _carries("https://api.example:8443/x", "https://api.example")
+    assert not _carries("https://cdn.example/x", "https://api.example")
+    assert not _carries("https://api.example.evil.example/x", "https://api.example")
+    assert not _carries("http://api.example/x", "https://api.example")
+    assert not _carries("http://127.0.0.1:9000/x", "http://127.0.0.1:8000")
+
+
+def test_origin_of_a_relative_or_empty_url_is_none_and_never_carries():
+    from mapflow_next.core.origin import Origin, carries_credentials
+    assert Origin.from_parts("", "", -1) is None
+    assert Origin.from_parts("https", "", -1) is None
+    assert Origin.from_parts("", "api.example", -1) is None
+    api = _origin("https://api.example")
+    assert not carries_credentials(None, api)
+    assert not carries_credentials(api, None)
+    assert not carries_credentials(None, None)
+
+
+def test_origin_plain_http_carries_only_on_a_local_host():
+    assert not _carries("http://api.example/x", "http://api.example")
+    assert not _carries("http://192.168.1.5:8000/x", "http://192.168.1.5:8000")
+    assert _carries("http://127.0.0.1:8000/x", "http://127.0.0.1:8000")
+    assert _carries("http://localhost:8000/x", "http://localhost:8000")
+    assert _carries("http://[::1]:8000/x", "http://[::1]:8000")
+    assert _carries("http://127.0.0.2:8000/x", "http://127.0.0.2:8000")
+
+
+def test_origin_is_local_names():
+    from mapflow_next.core.origin import is_local
+    assert is_local("localhost") and is_local("LOCALHOST") and is_local("127.0.0.1") and is_local("::1")
+    assert not is_local("localhost.evil.example") and not is_local("api.example") and not is_local("")
+    assert not is_local("10.0.0.1")

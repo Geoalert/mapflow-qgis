@@ -497,6 +497,26 @@ def _network():
         check(wait(lambda: "missing" in got or "found" in got)
               and getattr(got.get("missing"), "kind", "") == "not_found",
               f"a 404 becomes a readable “not found” error (QNetworkReply error enums) ({got.get('missing')!r})")
+        # credentials stay with the API's origin: another port gets none, directly or through a redirect
+        other_server, other, other_url = mock_server.start()
+        try:
+            def sent_headers(path):
+                return [{k.lower(): v for k, v in r[3].items()} for r in other.requests if r[1] == path]
+            picture = "/open/preview.png"
+            api.preview(f"{other_url}/open/preview.png", lambda data: got.setdefault("picture", data),
+                        lambda e: got.setdefault("picture_error", e))
+            check(wait(lambda: "picture" in got or "picture_error" in got) and got.get("picture") == mock_server.PNG
+                  and sent_headers(picture) and "authorization" not in sent_headers(picture)[-1],
+                  f"a Bearer request to another port loads the picture with no Authorization header "
+                  f"({got.get('picture_error')})")
+            api.preview(f"redirect?to={other_url}/open/preview.png", lambda data: got.setdefault("hop", data),
+                        lambda e: got.setdefault("hop_error", e))
+            check(wait(lambda: "hop" in got or "hop_error" in got) and got.get("hop") == mock_server.PNG
+                  and len(sent_headers(picture)) == 2 and "authorization" not in sent_headers(picture)[-1],
+                  f"a redirect from the API to another port arrives without Authorization (manual redirect policy "
+                  f"on Qt 6) ({got.get('hop_error')})")
+        finally:
+            other_server.shutdown()
         http.bearer = "expired"
         api.user_status(lambda *_: got.setdefault("ok_with_bad_token", True), lambda e: got.setdefault("denied", e))
         check(wait(lambda: "denied" in got or "ok_with_bad_token" in got)

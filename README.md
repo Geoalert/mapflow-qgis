@@ -107,6 +107,7 @@ mapflow_next/
     failures.py        what a failed request means by what triggered it: transient or permanent, the poll's count
     guard.py           the guard: no exception escapes from an entry point Qt calls (no Qt; every layer imports it)
     oauth.py           browser sign-in without Qt: PKCE, the redirect, tokens
+    origin.py          which requests may carry credentials: the API's own scheme, host and port
   api/
     http.py            async HTTP over QgsNetworkAccessManager, error classification
     auth.py            credentials in the QGIS authentication database

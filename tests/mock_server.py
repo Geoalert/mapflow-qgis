@@ -203,8 +203,13 @@ class Handler(BaseHTTPRequestHandler):
         body = self._body() if method in ("POST", "PUT") else None
         with self.state.lock:
             self.state.requests.append((method, path, body, dict(self.headers)))
+        if method == "GET" and path == "/open/preview.png":     # a public picture: no sign-in
+            return self._send(200, PNG, "image/png")
         if not self._authorized():
             return
+        if path == "/redirect":                                 # answers 302 to the `to` query value
+            target = parse_qs(urlsplit(self.path).query).get("to", [""])[0]
+            return self._redirect(target or self.path)             # no `to`: back to itself, a loop
         failure = self.state.failure_for(method, path)
         if failure is not None:
             return self._fail(failure)
