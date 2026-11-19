@@ -234,6 +234,50 @@ def _rename():
           "the name dialog runs modally with exec() and returns the name and description")
 
 
+@step("report dialog")
+def _report_dialog():
+    from urllib.parse import parse_qs, urlsplit
+    from PyQt6.QtCore import QObject, QUrl, pyqtSlot
+    from mapflow_next.core.report import Environment, RequestInfo, technical_text
+    from mapflow_next.ui.report_dialog import ReportDialog
+    from PyQt6.QtGui import QDesktopServices
+
+    class Mail(QObject):
+        def __init__(self):
+            super().__init__()
+            self.opened = []
+
+        @pyqtSlot(QUrl)
+        def handle(self, url):
+            self.opened.append(url.toString(QUrl.ComponentFormattingOption.FullyEncoded))
+
+    mail = Mail()
+    QDesktopServices.setUrlHandler("mailto", mail, "handle")
+    request = RequestInfo("GET", "https://api.example.com/rest/user/status?token=SECRET", 200,
+                          '{"access_token": "AAA", "name": "kept"}')
+    environment = Environment("4.0.0", "4.2.0", "6.8.0", "Linux", "production")
+    technical = technical_text("ValueError: boom", "Traceback (most recent call last):\nValueError: boom",
+                               request, environment)
+    dialog = ReportDialog("ValueError: boom", technical, config.SUPPORT_EMAIL, "4.0.0")
+    dialog.show()
+    shot(dialog, "q6-report-dialog", QSize(600, 560))
+    check(dialog.summary_label.text() == "ValueError: boom", "the report dialog shows the one-line summary")
+    check(dialog.report_view.isReadOnly() and dialog.report_view.toPlainText() == technical
+          and "Request: GET https://api.example.com/rest/user/status\n" in technical
+          and "SECRET" not in technical and "AAA" not in technical,
+          "the technical text is read-only, and has the request without its query and without secrets")
+    check(dialog.report_text() == technical, "without a comment the report is the technical text")
+    dialog.comment.setPlainText("I pressed Run")
+    check(dialog.report_text() == "I pressed Run\n\n" + technical, "the comment goes above the technical text")
+    dialog.send()
+    check(len(mail.opened) == 1 and mail.opened[0].startswith(f"mailto:{config.SUPPORT_EMAIL}?subject=")
+          and parse_qs(urlsplit(mail.opened[0]).query)["body"] == [dialog.report_text().replace("\n", "\r\n")],
+          "Send opens a mailto: link to Mapflow support with the report")
+    dialog.copy()
+    check(QApplication.clipboard().text() == dialog.report_text(), "Copy puts the same text on the clipboard")
+    dialog.close()
+
+
 @step("imagery search and My imagery")
 def _imagery():
     from mapflow_next.ui.imagery_page import MINE, SEARCH

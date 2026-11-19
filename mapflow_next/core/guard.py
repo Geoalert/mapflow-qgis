@@ -6,7 +6,8 @@ the plugin keeps working.
 
 This module is in `core/`, and has no Qt and no qgis import, because `core/` is the one package that every
 layer may import (the controller, the services, `plugin.py`, `api/http.py` and `ui/`). The reporter is the
-Qt side: `plugin.py` installs one that writes to the QGIS log and the message bar. Do not import Qt here to
+Qt side: `plugin.py` installs one that writes to the QGIS log and shows the Critical line with its
+"Send a report" button on the message bar. Do not import Qt here to
 report directly: `api/` and `ui/` import this module, and the layer rules of `spec/007` would break.
 """
 from __future__ import annotations
@@ -17,7 +18,10 @@ import sys
 import traceback
 from typing import Callable, Optional
 
-Reporter = Callable[[BaseException, str], None]
+from .report import RequestInfo
+
+# (the exception, its details, the request that failed or None)
+Reporter = Callable[[BaseException, str, Optional[RequestInfo]], None]
 
 _reporter: Optional[Reporter] = None
 
@@ -35,9 +39,10 @@ def clear_reporter(reporter: Reporter) -> None:
         _reporter = None
 
 
-def report(exc: BaseException, where: str = "") -> None:
-    """Hand `exc` to the reporter. Never raises: without a reporter, or when the reporter itself fails,
-    the details go to stderr."""
+def report(exc: BaseException, where: str = "", request: Optional[RequestInfo] = None) -> None:
+    """Hand `exc` to the reporter, with the request that failed when there is one (the report carries its method,
+    URL without query, status and response body). Never raises: without a reporter, or when the reporter itself
+    fails, the details go to stderr."""
     details = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
     if where:
         details = f"{where}\n{details}"
@@ -45,7 +50,7 @@ def report(exc: BaseException, where: str = "") -> None:
     try:
         if reporter is None:
             raise RuntimeError("no reporter installed")
-        reporter(exc, details)
+        reporter(exc, details, request)
     except Exception:  # noqa: BLE001 - the guard is the last line: it must not raise
         print(details, file=sys.stderr)
 

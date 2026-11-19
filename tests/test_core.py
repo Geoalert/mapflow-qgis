@@ -754,7 +754,7 @@ def reporter():
     """Install a reporter that records its calls; the previous one comes back after the test."""
     from mapflow_next.core import guard
     saved, calls = guard._reporter, []
-    guard.set_reporter(lambda exc, details: calls.append((exc, details)))
+    guard.set_reporter(lambda exc, details, request: calls.append((exc, details, request)))
     yield calls
     guard._reporter = saved
 
@@ -769,7 +769,8 @@ def test_guard_returns_the_value_and_swallows_an_exception(reporter):
     assert reporter == []
     assert guarded(divide)(1, 0) is None
     assert len(reporter) == 1
-    exc, details = reporter[0]
+    exc, details, request = reporter[0]
+    assert request is None
     assert isinstance(exc, ZeroDivisionError)
     assert "ZeroDivisionError" in details and "divide" in details and "Traceback" in details
 
@@ -800,7 +801,7 @@ def test_guard_survives_a_reporter_that_raises(capsys):
     from mapflow_next.core import guard
     saved = guard._reporter
 
-    def broken(exc, details):
+    def broken(exc, details, request):
         raise RuntimeError("reporter is broken")
 
     guard.set_reporter(broken)
@@ -814,7 +815,7 @@ def test_guard_survives_a_reporter_that_raises(capsys):
 def test_clear_reporter_leaves_another_reporter_alone(reporter):
     from mapflow_next.core import guard
     installed = guard._reporter
-    guard.clear_reporter(lambda exc, details: None)
+    guard.clear_reporter(lambda exc, details, request: None)
     assert guard._reporter is installed
     guard.clear_reporter(installed)
     assert guard._reporter is None
@@ -824,7 +825,7 @@ def test_a_bound_method_is_cleared_by_an_equal_bound_method():
     from mapflow_next.core import guard
 
     class Owner:
-        def report(self, exc, details):
+        def report(self, exc, details, request):
             pass
 
     saved, owner = guard._reporter, Owner()
@@ -875,7 +876,7 @@ def test_a_guarded_method_stays_a_bound_method(reporter):
     page.one(5, 6)
     assert page.seen == ["slot", 5]
     page.boom(1)
-    assert [str(exc) for exc, _ in reporter] == ["boom"] and "Page.boom" in reporter[0][1]
+    assert [str(call[0]) for call in reporter] == ["boom"] and "Page.boom" in reporter[0][1]
 
 
 def test_guard_works_on_partials_and_other_objects_methods(reporter):
@@ -1250,3 +1251,231 @@ def test_preview_files_have_no_system_temp_folder_of_their_own():
     root = Path(__file__).resolve().parent.parent / "mapflow_next"
     assert "gettempdir" not in (root / "qgis_bridge" / "layers.py").read_text(encoding="utf-8")
     assert "gettempdir" not in (root / "plugin.py").read_text(encoding="utf-8")
+
+
+# ---------- core/report.py: the text of a report (spec/006 § The report dialog) ----------
+
+REMOVED = "[removed]"
+
+
+def _environment():
+    from mapflow_next.core.report import Environment
+    return Environment(plugin_version="4.0.0", qgis_version="3.28.15", qt_version="5.15.3",
+                       os="Linux-6.8-x86_64", env="staging")
+
+
+@pytest.mark.parametrize("text, secret", [
+    ("Authorization: Bearer abc123", "abc123"),
+    ("authorization: Token zzz999", "zzz999"),
+    ("AUTHORIZATION:xyz789", "xyz789"),
+    ("sent Bearer eyfake-value now", "eyfake-value"),
+    ("sent Basic dXNlcjpwYXNz now", "dXNlcjpwYXNz"),
+    ('{"access_token": "AAA111", "ok": 1}', "AAA111"),
+    ('{"refresh_token":"RRR222"}', "RRR222"),
+    ("{'id_token': 'III333', 'x': 1}", "III333"),
+    ('{"password": "pa ss 444"}', "pa ss 444"),  # pragma: allowlist secret
+    ('{"client_secret": "SSS555"}', "SSS555"),  # pragma: allowlist secret
+    ('{"api_key": "KKK666"}', "KKK666"),  # pragma: allowlist secret
+    ("grant_type=password&password=PPP777&username=me", "PPP777"),
+    ("token=TTT888 and more", "TTT888"),
+    ("code=CCC999&state=s", "CCC999"),
+    ('{"access_token": "CUT000', "CUT000"),                       # a body that was cut inside the value
+    ("{'refresh_token': 'CUT111", "CUT111"),
+    ("seen eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.c2lnbmF0dXJl here", "eyJhbGciOiJIUzI1NiJ9"),  # pragma: allowlist secret
+    ("cut eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOi", "eyJzdWIiOi"),
+])
+def test_redact_removes_each_kind_of_secret(text, secret):
+    from mapflow_next.core.report import redact
+    assert secret in text
+    out = redact(text)
+    assert secret not in out and REMOVED in out
+
+
+@pytest.mark.parametrize("text, secret, kept", [
+    ("GET https://s3.example.com/a/b.tif?X-Amz-Signature=SIG123&X-Amz-Date=D", "SIG123",
+     "https://s3.example.com/a/b.tif"),
+    ("GET https://s3.example.com/a/b.tif?plain=Q42", "Q42", "https://s3.example.com/a/b.tif"),
+    ("redirect https://app.example.com/cb#access_token=FRAG5", "FRAG5", "https://app.example.com/cb"),
+])
+def test_redact_cuts_the_query_and_fragment_of_a_url(text, secret, kept):
+    from mapflow_next.core.report import redact
+    out = redact(text)
+    assert secret not in out and kept in out and "?" not in out and "#" not in out
+
+
+def test_redact_keeps_the_words_around_a_secret():
+    from mapflow_next.core.report import redact
+    out = redact('{"access_token": "AAA", "name": "Roads", "count": 3} for https://h.io/p/q?x=1 failed')
+    assert '"name": "Roads"' in out and '"count": 3' in out and out.endswith("https://h.io/p/q failed")
+    assert redact("Authorization: Bearer abc\nnext line stays").endswith("next line stays")
+    assert "Authorization:" not in redact("Authorization: Bearer abc")
+    assert redact("Processing failed: area is too large (status 422)") == \
+        "Processing failed: area is too large (status 422)"
+
+
+def test_redact_keeps_an_api_error_code():
+    from mapflow_next.core.report import redact
+    body = '{"code": "processing.blocksNotAvailable", "message": "No blocks"}'
+    assert redact(body) == body
+
+
+def test_redact_removes_the_literals_it_is_given():
+    from mapflow_next.core.report import redact
+    out = redact("the session held AbCdEf-literal-token in a place no pattern knows",
+                 secrets=("AbCdEf-literal-token", ""))
+    assert "AbCdEf" not in out and out.startswith("the session held") and REMOVED in out
+    assert redact("no change", secrets=("",)) == "no change"
+
+
+def test_redact_twice_is_the_same_as_once():
+    from mapflow_next.core.report import redact
+    once = redact('Authorization: Bearer A\n{"password": "B"} https://h.io/p?q=1 eyJabcdefghijk.l.m')
+    assert redact(once) == once
+
+
+def test_without_query_cuts_at_the_question_mark():
+    from mapflow_next.core.report import without_query
+    assert without_query("https://h.io/a/b?x=1&y=2") == "https://h.io/a/b"
+    assert without_query("https://h.io/a/b") == "https://h.io/a/b"
+
+
+def test_summary_is_one_short_line_without_secrets():
+    from mapflow_next.core.report import summary_of
+    text = summary_of(ValueError("line one\nline two  with   gaps"))
+    assert text == "ValueError: line one line two with gaps"
+    assert "\n" not in summary_of(ValueError("a\r\nb"))
+    long = summary_of(ValueError("x" * 1000))
+    assert len(long) <= 201 and long.endswith("…")
+    out = summary_of(ValueError("bad header Authorization: Bearer BBB"))
+    assert "BBB" not in out and out.startswith("ValueError: bad header")
+
+
+def _failed_request():
+    from mapflow_next.core.report import RequestInfo
+    body = ('{"access_token": "AAA", "refresh_token": "RRR", '
+            '"password": "PPP", "rest": "kept-text"}')  # pragma: allowlist secret
+    return RequestInfo("GET", "https://api.example.com/rest/user/status?X-Amz-Signature=SECRET&token=T", 200, body)
+
+
+def test_a_request_report_has_the_request_and_no_secret():
+    from mapflow_next.core.report import summary_of, technical_text
+    try:
+        raise ValueError("callback broke on Authorization: Bearer BBB")
+    except ValueError as exc:
+        details = "GET https://api.example.com/rest/user/status: on_success\n" + "".join(
+            __import__("traceback").format_exception(type(exc), exc, exc.__traceback__))
+        text = technical_text(summary_of(exc), details, _failed_request(), _environment())
+    for secret in ("SECRET", "AAA", "RRR", "PPP", "BBB"):
+        assert secret not in text, secret
+    assert "token=T" not in text and "?" not in text.split("Response body:")[0].split("Request:")[1].split("\n")[0]
+    assert "Authorization:" not in text
+    assert "Request: GET https://api.example.com/rest/user/status\n" in text
+    assert "HTTP status: 200" in text
+    assert "Response body:" in text and "kept-text" in text
+    assert "ValueError" in text and "Traceback" in text
+
+
+def test_a_report_without_a_request_has_no_request_lines():
+    from mapflow_next.core.report import technical_text
+    text = technical_text("ZeroDivisionError: division by zero", "Page.slot\nTraceback ...", None, _environment())
+    assert "Request:" not in text and "HTTP status" not in text and "Response body" not in text
+    assert text.startswith("ZeroDivisionError: division by zero")
+    assert "Traceback" in text
+
+
+def test_a_report_names_the_plugin_qgis_qt_os_and_environment():
+    from mapflow_next.core.report import technical_text
+    text = technical_text("E: x", "", None, _environment())
+    for part in ("4.0.0", "3.28.15", "5.15.3", "Linux-6.8-x86_64", "staging"):
+        assert part in text, part
+
+
+def test_the_response_body_is_redacted_before_it_is_cut():
+    from mapflow_next.core.report import RequestInfo, technical_text
+    body = "x" * 1990 + ' "access_token": "TOKENTOKENTOKEN" ' + "y" * 500
+    text = technical_text("E: x", "", RequestInfo("POST", "https://h.io/a", 500, body), _environment())
+    assert "TOKENTOKEN" not in text and "TOKEN" not in text.replace("access_token", "")
+    shown = text.split("Response body:\n")[1]
+    assert "[cut]" in shown and len(shown.split("[cut]")[0]) <= 2100
+    short = technical_text("E: x", "", RequestInfo("POST", "https://h.io/a", 500, "short body"), _environment())
+    assert "short body" in short and "[cut]" not in short
+
+
+def test_the_literal_secrets_of_the_session_are_removed_from_a_report():
+    from mapflow_next.core.report import RequestInfo, technical_text
+    text = technical_text("E: x", "trace with SESSIONVALUE in it",
+                          RequestInfo("GET", "https://h.io/a", 200, "body SESSIONVALUE"), _environment(),
+                          secrets=("SESSIONVALUE",))
+    assert "SESSIONVALUE" not in text
+
+
+def test_the_comment_goes_above_the_technical_part():
+    from mapflow_next.core.report import compose
+    out = compose("  I pressed Run twice.  \n", "ValueError: x\nTraceback")
+    assert out == "I pressed Run twice.\n\nValueError: x\nTraceback"
+    assert compose("", "ValueError: x") == "ValueError: x"
+    assert compose("  \n ", "ValueError: x") == "ValueError: x"
+
+
+def test_mailto_carries_the_address_a_one_line_subject_and_the_body():
+    from urllib.parse import parse_qs, unquote, urlsplit
+    from mapflow_next.core.report import mailto
+    body = "Comment & more #1 100% a+b ünï ☃\n\nLine 2\nLine 3"
+    link = mailto("help@example.io", "Mapflow Next 4.0.0: E\nsecond line", body)
+    assert link.startswith("mailto:help@example.io?subject=")
+    parts = urlsplit(link)
+    assert parts.scheme == "mailto" and unquote(parts.path) == "help@example.io"
+    query = parse_qs(parts.query, keep_blank_values=True)
+    assert set(query) == {"subject", "body"}
+    assert query["subject"] == ["Mapflow Next 4.0.0: E second line"]
+    assert query["body"] == [body.replace("\n", "\r\n")]
+    encoded = link.split("?", 1)[1]
+    assert "\n" not in link and " " not in link and "#" not in link and encoded.count("&") == 1
+
+
+def test_the_mailto_subject_is_cut():
+    from urllib.parse import parse_qs, urlsplit
+    from mapflow_next.core.report import mailto
+    subject = parse_qs(urlsplit(mailto("a@b.io", "S" * 500, "b")).query)["subject"][0]
+    assert len(subject) <= 100
+
+
+def test_the_guard_passes_the_request_to_the_reporter(reporter):
+    from mapflow_next.core import guard
+    from mapflow_next.core.report import RequestInfo
+    request = RequestInfo("GET", "https://h.io/a", 200, "ok")
+    guard.report(ValueError("x"), "where", request)
+    guard.report(ValueError("y"), "elsewhere")
+    assert reporter[0][2] is request and reporter[1][2] is None
+    assert reporter[0][1].startswith("where\n")
+
+
+def rule_report_dialog_is_opened_only_by_the_plugin(source):
+    import ast
+    problems = []
+    for node in ast.walk(ast.parse(source)):
+        names = ([alias.name for alias in node.names] if isinstance(node, (ast.Import, ast.ImportFrom)) else [])
+        names += [node.id] if isinstance(node, ast.Name) else [node.attr] if isinstance(node, ast.Attribute) else []
+        names += [node.module or ""] if isinstance(node, ast.ImportFrom) else []
+        if any(name == "ReportDialog" or name.endswith(".report_dialog") or name == "report_dialog"
+               for name in names):
+            problems.append((node.lineno, "only plugin.py opens the report dialog: it is the user's button"))
+    return sorted(set(problems))
+
+
+def test_only_the_report_button_opens_the_report_dialog():
+    _bites(rule_report_dialog_is_opened_only_by_the_plugin,
+           "from .ui.report_dialog import ReportDialog\n", "from .ui.dock import MapflowDock\n")
+    _bites(rule_report_dialog_is_opened_only_by_the_plugin,
+           "dialog = ReportDialog(a, b)\n", "dialog = RenameDialog()\n")
+    _bites(rule_report_dialog_is_opened_only_by_the_plugin,
+           "from .ui import report_dialog\n", "from .ui import rename_dialog\n")
+    problems = []
+    for path in sorted(PLUGIN.rglob("*.py")):
+        name = str(path.relative_to(PLUGIN))
+        if name in ("plugin.py", "ui/report_dialog.py"):
+            continue
+        problems += [f"{name}:{number}: {why}" for number, why in
+                     rule_report_dialog_is_opened_only_by_the_plugin(path.read_text(encoding="utf-8"))]
+    assert not problems, "\n".join(problems)
+    assert "ReportDialog" in (PLUGIN / "plugin.py").read_text(encoding="utf-8")

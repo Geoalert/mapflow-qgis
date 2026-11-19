@@ -1,11 +1,12 @@
 """QGIS entry point: a Mapflow toolbar whose button opens the dock on the right, and the plugin's menu."""
 from __future__ import annotations
 
+import platform
 from configparser import ConfigParser
 from typing import Optional
 
 from qgis.core import Qgis, QgsMessageLog, QgsProject
-from qgis.PyQt.QtCore import Qt
+from qgis.PyQt.QtCore import Qt, qVersion
 from qgis.PyQt.QtWidgets import QAction, QToolBar
 
 from . import config
@@ -14,6 +15,7 @@ from .api.http import Http
 from .controller import Controller
 from .core import guard
 from .core.guard import guarded
+from .core.report import Environment, RequestInfo, summary_of, technical_text
 from .core.scenarios import Catalogue
 from .qgis_bridge import aoi as aoi_tools
 from .qgis_bridge import message_bar
@@ -27,6 +29,7 @@ from .services.session import Session
 from .settings import Settings
 from .ui.dock import MapflowDock
 from .ui.icons import app_icon
+from .ui.report_dialog import ReportDialog
 from .ui.theme import is_dark, load_fonts
 
 MENU = "&Mapflow Next"
@@ -60,6 +63,7 @@ class MapflowNextPlugin:
         self.controller: Optional[Controller] = None
         self.layers: Optional[MapLayers] = None
         self.services = []
+        self.report_dialog: Optional[ReportDialog] = None
 
     # ---------- QGIS hooks ----------
 
@@ -85,6 +89,7 @@ class MapflowNextPlugin:
         self._add_layer_actions()
 
     def unload(self) -> None:
+        self._close_report_dialog()
         self._remove_layer_actions()
         # The controller first (windows, timers), then the services in reverse order of construction
         steps = [service.stop for service in reversed(self.services)]
@@ -110,11 +115,36 @@ class MapflowNextPlugin:
         self.services = []
         guard.clear_reporter(self._report)          # last, so a failure while unloading is still reported
 
-    def _report(self, exc: BaseException, details: str) -> None:
-        """The guard's reporter: the traceback to the QGIS log, then a Critical line on the message bar."""
+    def _report(self, exc: BaseException, details: str, request: Optional[RequestInfo] = None) -> None:
+        """The guard's reporter: the traceback to the QGIS log, then a Critical line on the message bar with a
+        "Send a report" button. The line stays until the user closes it, so the button is there when they look."""
         QgsMessageLog.logMessage(details, config.PLUGIN_NAME, Qgis.MessageLevel.Critical)
         message_bar.push(self.iface, f"Something went wrong: {exc}. Details are in the Log Messages panel.",
-                         Qgis.MessageLevel.Critical)
+                         Qgis.MessageLevel.Critical,
+                         action=("Send a report", lambda: self._open_report(exc, details, request)), duration=0)
+
+    def _open_report(self, exc: BaseException, details: str, request: Optional[RequestInfo]) -> None:
+        """The button's work, done when it is pressed: a failure while building the text cannot stop the line."""
+        secrets = [self.services[0].bearer] if self.services and self.services[0].bearer else []
+        environment = Environment(plugin_version(), Qgis.QGIS_VERSION, qVersion(), platform.platform(),
+                                  config.load_config().env)
+        summary = summary_of(exc, secrets)
+        technical = technical_text(summary, details, request, environment, secrets)
+        self._close_report_dialog()
+        dialog = self.report_dialog = ReportDialog(summary, technical, config.SUPPORT_EMAIL, plugin_version(),
+                                                   self.iface.mainWindow())
+        try:
+            dialog.exec()
+        finally:
+            if self.report_dialog is dialog:        # `unload` or a newer report has otherwise deleted it already
+                self.report_dialog = None
+                dialog.deleteLater()
+
+    def _close_report_dialog(self) -> None:
+        dialog, self.report_dialog = self.report_dialog, None
+        if dialog is not None:
+            dialog.close()
+            dialog.deleteLater()
 
     # ---------- the Layers panel's context menu ----------
 

@@ -22,6 +22,7 @@ from ..core import guard
 from ..core.guard import guarded
 from ..core.messages import describe
 from ..core.origin import Origin, carries_credentials
+from ..core.report import RequestInfo, without_query
 
 Callback = Callable[..., None]
 
@@ -30,13 +31,10 @@ Callback = Callable[..., None]
 MAX_REDIRECTS = 5
 _REDIRECT_STATUSES = (301, 302, 303, 307, 308)
 
+RESPONSE_KEPT = 20_000      # bytes of an answer kept for a report; core/report.py cuts it shorter
+
 PLUGIN_FAILED_TEXT = ("Mapflow answered, but the plugin could not process the answer. "
                       "Details are in the Log Messages panel.")
-
-
-def _without_query(url: str) -> str:
-    """The query string can carry a token (a presigned URL): it never goes to a log or a report."""
-    return url.split("?", 1)[0]
 
 
 @dataclass
@@ -147,6 +145,7 @@ class _Pending:
     sent: int = 0                 # bytes of an upload sent so far, as the last progress said
     hops: int = 0                 # redirects followed so far
     redirect_refused: str = ""    # why a redirect was not followed
+    response: str = ""            # the start of a decoded text or JSON answer: a report names it if the callback fails
 
 
 class Http(QObject):
@@ -262,7 +261,7 @@ class Http(QObject):
             data = QByteArray(bytes(body))
         key = next(self._ids)
         pending = _Pending(None, on_success, on_error, parse, sink=sink, keep=body if upload else None,
-                           method=method, url=_without_query(url), allow_credentials=authorize, data=data,
+                           method=method, url=without_query(url), allow_credentials=authorize, data=data,
                            body=body, upload=upload, on_progress=on_progress, form=form is not None,
                            timeout=timeout)
         self._pending[key] = pending
@@ -294,7 +293,7 @@ class Http(QObject):
             updated, request = result if isinstance(result, tuple) else (result, request)
             if not updated:
                 QgsMessageLog.logMessage(f"Auth config {self.auth_config_id} was not applied to "
-                                         f"{_without_query(url.toString())}", PLUGIN_NAME, Qgis.MessageLevel.Warning)
+                                         f"{without_query(url.toString())}", PLUGIN_NAME, Qgis.MessageLevel.Warning)
         if pending.data is not None:
             request.setHeader(QNetworkRequest.KnownHeaders.ContentTypeHeader,
                               "application/x-www-form-urlencoded" if pending.form else "application/json")
@@ -364,14 +363,15 @@ class Http(QObject):
         try:
             ok, outcome = self._read(pending, reply, status)
         except Exception as exc:  # noqa: BLE001 - plugin code failed while reading; the caller still gets an outcome
-            guard.report(exc, f"{pending.method} {pending.url}: reading the answer")
+            guard.report(exc, f"{pending.method} {pending.url}: reading the answer",
+                         RequestInfo(pending.method, pending.url, status, ""))
             ok, outcome, reported = False, ApiError("plugin", PLUGIN_FAILED_TEXT, status, url=pending.url), True
         finally:
             reply.deleteLater()
         if ok:
             self._succeed(pending, outcome, status)
         else:
-            self._fail(pending.on_error, outcome, reported)
+            self._fail(pending.on_error, outcome, reported, pending)
 
     def _redirect(self, key: int, pending: _Pending, reply: QNetworkReply) -> bool:
         """Follow the redirect of `reply` as the next hop of the same request. False: it ends here, as an error
@@ -421,7 +421,7 @@ class Http(QObject):
             body = "" if pending.sink is not None else bytes(reply.readAll()).decode("utf-8", "replace")
             if pending.sink is not None:
                 pending.sink.cancelWriting()
-            error = classify(reply.error(), status, body, _without_query(reply.url().toString()), pending.timed_out)
+            error = classify(reply.error(), status, body, without_query(reply.url().toString()), pending.timed_out)
             QgsMessageLog.logMessage(f"{error.kind} {status} {error.url}: {error.code} {error.body[:500]}",
                                      PLUGIN_NAME, Qgis.MessageLevel.Warning)
             # A request sent with an access token renewed since says nothing about the current sign-in
@@ -436,13 +436,14 @@ class Http(QObject):
         raw = bytes(reply.readAll())
         if pending.parse == "bytes":
             return True, raw
+        pending.response = raw[:RESPONSE_KEPT].decode("utf-8", "replace")
         if pending.parse == "text":
             return True, raw.decode("utf-8", "replace")
         try:
             return True, (json.loads(raw.decode("utf-8")) if raw.strip() else None)
         except ValueError as exc:       # JSONDecodeError and UnicodeDecodeError: the body is not the promised JSON
             error = ApiError("server", f"Unexpected response from Mapflow: {exc}", status,
-                             url=_without_query(reply.url().toString()), body=raw[:500].decode("utf-8", "replace"))
+                             url=without_query(reply.url().toString()), body=raw[:500].decode("utf-8", "replace"))
             QgsMessageLog.logMessage(f"{error.kind} {status} {pending.url}: not JSON: {exc}",
                                      PLUGIN_NAME, Qgis.MessageLevel.Warning)
             return False, error
@@ -453,19 +454,24 @@ class Http(QObject):
         try:
             pending.on_success(result)
         except Exception as exc:  # noqa: BLE001 - a failure of the caller's code, not of the answer
-            guard.report(exc, f"{pending.method} {pending.url}: on_success")
+            guard.report(exc, f"{pending.method} {pending.url}: on_success",
+                         RequestInfo(pending.method, pending.url, status, pending.response))
             # The user has been told: the caller's on_error still runs, so its cleanup happens, once
             self._fail(pending.on_error, ApiError("plugin", PLUGIN_FAILED_TEXT, status, url=pending.url),
-                       reported=True)
+                       reported=True, pending=pending)
 
-    def _fail(self, on_error: Optional[Callback], error: ApiError, reported: bool = False) -> None:
-        """`reported`: the guard has already told the user, so `failed` does not say it again."""
+    def _fail(self, on_error: Optional[Callback], error: ApiError, reported: bool = False,
+              pending: Optional[_Pending] = None) -> None:
+        """`reported`: the guard has already told the user, so `failed` does not say it again. `pending` is the
+        request that failed, when there is one: a failing `on_error` is reported with it."""
         if error.kind == "cancelled":
             return
         if on_error:
             try:
                 on_error(error)
             except Exception as exc:  # noqa: BLE001 - nothing runs after a failing on_error
-                guard.report(exc, f"{error.kind} {_without_query(error.url)}: on_error")
+                request = (RequestInfo(pending.method, pending.url, error.status, error.body)
+                           if pending is not None else None)
+                guard.report(exc, f"{error.kind} {without_query(error.url)}: on_error", request)
         elif not reported:
             self.failed.emit(error)

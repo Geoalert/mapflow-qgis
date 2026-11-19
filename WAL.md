@@ -24,7 +24,7 @@ describes the state after the chain; each step makes the code match it, and upda
 [ready-for-review] `ui/` imports no service, and the controller does not talk to `Http` directly — `spec/007` § Layer rules
 [ready-for-review] Unload closes every window the plugin opened; every service has `stop()` — `spec/007` § Unload
 [ready-for-review] Sign-in hosts `auth-{env}.mapflow.ai` for staging and internal — `spec/002_api.md`
-[ ] Report dialog behind "Send a report", with the user's comment — `spec/006` § The report dialog
+[ready-for-review] Report dialog behind "Send a report", with the user's comment — `spec/006` § The report dialog
 
 ## 2. Defects
 

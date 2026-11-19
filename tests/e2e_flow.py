@@ -111,6 +111,17 @@ class UrlRecorder(QObject):
         self.opened.append(url.toString())
 
 
+class MailRecorder(UrlRecorder):
+    """Takes `mailto:` links instead of the mail program. Keeps each link as it would be sent (encoded)."""
+
+    @pyqtSlot(QUrl)
+    def handle(self, url):
+        self.opened.append(url.toString(QUrl.ComponentFormattingOption.FullyEncoded))
+
+
+MAIL = MailRecorder()
+
+
 def close_modal_later(record, fill=None, delay=300):
     """A modal dialog blocks in exec(): look at it shortly after it opens, then close it."""
     def close():
@@ -261,7 +272,73 @@ def check_credentials_origin(iface, plugin, state, api_url):
     check(len(iface.bar.ledger.unexpected()) == seen, "…and none of them raised a Critical message")
 
 
-def check_the_guard(iface, plugin, api_url, settings):
+def report_buttons(iface):
+    """The texts of the buttons on the newest message-bar widget."""
+    return [b.text() for b in iface.bar.widgets[-1].findChildren(QPushButton)] if iface.bar.widgets else []
+
+
+def press_report(iface, comment):
+    """Press "Send a report" on the newest Critical line, type `comment`, press Send and Copy. Returns what the
+    dialog showed, what Send opened, what Copy put on the clipboard, and the type of the modal that was open."""
+    from urllib.parse import parse_qs
+    button = next(b for b in iface.bar.widgets[-1].findChildren(QPushButton) if b.text() == "Send a report")
+    seen, got = [], {}
+    QApplication.clipboard().clear()
+    sent = len(MAIL.opened)
+
+    def fill(dialog):
+        got["summary"] = dialog.summary_label.text()
+        got["view"], got["read_only"] = dialog.report_view.toPlainText(), dialog.report_view.isReadOnly()
+        dialog.comment.setPlainText(comment)
+        dialog.send()
+        dialog.copy()
+        got["text"] = dialog.report_text()
+        got["clipboard"] = QApplication.clipboard().text()
+        got["dialog"] = dialog
+    close_modal_later(seen, fill)
+    button.click()
+    mails = MAIL.opened[sent:]
+    got["mails"] = mails
+    got["modal"] = seen
+    got["mail_body"] = parse_qs(urlsplit(mails[0]).query).get("body", [""])[0] if mails else ""
+    got["mail_to"] = mails[0].split("?", 1)[0] if mails else ""
+    return got
+
+
+def check_the_report(iface, plugin, text, expect_request, comment):
+    """spec/006 § The report dialog, for the report of the Critical line that just appeared."""
+    http = plugin.services[0]
+    check(report_buttons(iface) == ["Send a report"] and QApplication.activeModalWidget() is None,
+          f"{text}: the Critical line has a Send a report button, and no dialog is open until it is pressed "
+          f"({report_buttons(iface)})")
+    got = press_report(iface, comment)
+    body = got["text"]
+    check(got["modal"] == ["ReportDialog"], f"{text}: the button opens the report dialog ({got['modal']})")
+    check(got["summary"].startswith("ValueError: boom") and "\n" not in got["summary"],
+          f"{text}: the dialog shows a one-line summary ({got['summary']!r})")
+    check(got["read_only"] and got["view"] in body and body.startswith(comment),
+          f"{text}: the technical text is read-only, and the comment is above it")
+    check("ValueError: boom" in body and "Traceback" in body and "Plugin: " in body and "QGIS: " in body
+          and "Qt: " in body and "OS: " in body and "Environment: " in body,
+          f"{text}: the report has the exception, the traceback, the versions, the system and the environment")
+    if expect_request:
+        check(f"Request: GET {http.url_for('user/status')}\n" in body and "HTTP status: 200" in body
+              and "Response body:" in body, f"{text}: the report names the request, its status and the answer")
+    else:
+        check("Request:" not in body and "HTTP status" not in body, f"{text}: the report has no request lines")
+    request_line = next((line for line in body.splitlines() if line.startswith("Request:")), "")
+    check("Authorization" not in body and not (http.bearer and http.bearer in body)
+          and mock_server.TOKEN not in body and "?" not in request_line,
+          f"{text}: the report has no Authorization header, no token and no query string")
+    check(len(got["mails"]) == 1 and got["mail_to"] == f"mailto:{config.SUPPORT_EMAIL}"
+          and got["mail_body"] == body.replace("\n", "\r\n"),
+          f"{text}: Send opens one mailto: link to Mapflow support with the same text ({got['mails'][:1]})")
+    check(got["clipboard"] == body, f"{text}: Copy puts the same text on the clipboard")
+    check(wait_until(lambda: all_deleted([got["dialog"]]), 3) and plugin.report_dialog is None,
+          f"{text}: the dialog is gone after it is closed")
+
+
+def check_the_guard(iface, plugin, api_url, settings, state):
     """spec/006 § The guard: `Http` tells a body that is not JSON from a callback that raises, a request ends
     in one outcome, a result that cannot be placed leaves no "loading" flag, and a timer reaches the reporter."""
     from mapflow_next.core.guard import guarded
@@ -290,6 +367,7 @@ def check_the_guard(iface, plugin, api_url, settings):
           f"…the log has the traceback and the request, then the bar has the Critical line ({len(lines)} lines)")
     expect_critical(iface, "boom", "the guard's lines of an on_success that raises", count=2)
     check(not unhandled, "…and Http.failed stays silent: the caller's on_error took it")
+    check_the_report(iface, plugin, "report of a failing on_success", True, "I opened the plugin and waited.")
 
     # no on_error: the guard has told the user once, and nothing says it again
     http.get("user/status", on_success=raiser)
@@ -349,6 +427,44 @@ def check_the_guard(iface, plugin, api_url, settings):
     QTimer.singleShot(0, guarded(lambda: raiser()))
     wait_until(lambda: False, 0.1)
     expect_critical(iface, "boom", "the guard's lines of a timer callback that raises", count=2)
+    check_the_report(iface, plugin, "report of a failing timer callback", False, "Nothing was running.")
+    check_no_report_for_connectivity(iface, plugin, state)
+
+
+def check_no_report_for_connectivity(iface, plugin, state):
+    """spec/006 § The report dialog: offline, a proxy error, a timeout, 403 and 5xx are message tier. They never
+    reach the guard, so no Critical line and no "Send a report" button comes of them."""
+    from mapflow_next.api import http as http_module
+    http = plugin.services[0]
+    seen_lines, seen_widgets = len(iface.bar.ledger.unexpected()), len(iface.bar.widgets)
+    kinds = {}
+    saved_timeout = http_module.TIMEOUT_S
+    try:
+        for name, what in (("403", 403), ("503", 503), ("a closed connection", "drop"), ("a timeout", "hang")):
+            state.heal()
+            state.hang_seconds = 3
+            http_module.TIMEOUT_S = 1 if what == "hang" else saved_timeout
+            state.fail("GET", r"/user/status", what)
+            errors = []
+            http.get("user/status", on_error=errors.append)
+            wait_until(lambda: errors, 8)
+            kinds[name] = [e.kind for e in errors]
+        state.heal()
+        errors = []
+        http.get("http://127.0.0.1:1/unreachable", on_error=errors.append)      # nothing listens: refused
+        wait_until(lambda: errors, 8)
+        kinds["a refused connection"] = [e.kind for e in errors]
+    finally:
+        http_module.TIMEOUT_S = saved_timeout
+        state.heal()
+    check(kinds == {"403": ["forbidden"], "503": ["server"], "a closed connection": ["server"],
+                    "a timeout": ["timeout"], "a refused connection": ["server"]},
+          f"connectivity failures end as expected errors ({kinds})")
+    wait_until(lambda: False, 0.3)
+    check(len(iface.bar.ledger.unexpected()) == seen_lines and plugin.report_dialog is None
+          and not any(b.text() == "Send a report" for w in iface.bar.widgets[seen_widgets:]
+                      for b in w.findChildren(QPushButton)),
+          "…and none of them gives a Critical line or a Send a report button")
 
 
 def files_under(folder):
@@ -1188,6 +1304,24 @@ def check_unload(iface, classFactory, state):
         again.unload()
         check_unloaded("reload", iface, state, {"windows": again_windows, "dock": again_dock,
                                                 "timers": again_timers, "http": again_http, "late": []})
+        # a report dialog that is open when the plugin unloads is closed and deleted
+        from mapflow_next.core import guard
+        last = classFactory(iface)
+        last.initGui()
+        guard.report(ValueError("report-open"), "unload with the report dialog open")
+        expect_critical(iface, "report-open", "the guard's lines of the report that is open at unload", count=2)
+        button = next(b for b in iface.bar.widgets[-1].findChildren(QPushButton) if b.text() == "Send a report")
+        opened = {}
+
+        def unload_it(dialog):
+            opened["dialog"] = dialog
+            last.unload()
+            opened["hidden"] = not dialog.isVisible()
+        close_modal_later([], unload_it)
+        button.click()
+        check(opened.get("hidden") and wait_until(lambda: all_deleted([opened["dialog"]]), 3)
+              and last.report_dialog is None and not visible_windows(iface),
+              "unload: a report dialog that is open is closed and deleted")
     finally:
         state.hang_seconds = saved_hang
         state.heal()
@@ -1199,6 +1333,7 @@ def main():
     links = UrlRecorder()
     QDesktopServices.setUrlHandler("https", links, "handle")       # no real browser opens during the test
     QDesktopServices.setUrlHandler("http", links, "handle")
+    QDesktopServices.setUrlHandler("mailto", MAIL, "handle")        # no real mail program opens either
     out_dir = tempfile.mkdtemp(prefix="mapflow-results-")
     settings = QgsSettings()
     check("mapflow-next-data-" in settings.fileName(), "the test runs with its own QGIS settings")
@@ -1742,7 +1877,7 @@ def main():
     settings.setValue("mapflow_next/results_mode", FILES)
     wait_until(lambda: False, 0.4)
     shot(content, "05-processings-done", QSize(400, 880))
-    check_the_guard(iface, plugin, url, settings)
+    check_the_guard(iface, plugin, url, settings, state)
     check_result_conversion(iface, plugin)
     check_credentials_origin(iface, plugin, state, url)
 
@@ -2643,6 +2778,7 @@ def main():
     check(any(level == Qgis.MessageLevel.Critical for level, m in iface.bar.messages if "has no images" in (m or ""))
           and iface.bar.widgets and iface.bar.widgets[-1].findChildren(QPushButton)[-1].text() == "Mapflow Web",
           "…the message bar shows it as an error, with a button to Mapflow Web")
+    check("Send a report" not in report_buttons(iface), "…an expected failure offers no report")
     expect_critical(iface, "has no images", "…the test expects these error messages (an empty collection is refused)",
                     count=len(refused))
     # chosen another way (a scenario's default, Run again): the run form says it, and so does the message bar, once
