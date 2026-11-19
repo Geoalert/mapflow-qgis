@@ -378,7 +378,7 @@ def test_code_runs_on_qt5_and_qt6():
                     problems.append(f"{name}:{number}: {why}")
     assert not problems, "\n".join(problems)
     metadata = (root / "metadata.txt").read_text(encoding="utf-8")
-    assert "qgisMaximumVersion=4.99" in metadata and "qgisMinimumVersion=3.22" in metadata
+    assert "qgisMaximumVersion=4.99" in metadata and "qgisMinimumVersion=3.28" in metadata
 
 
 def test_update_check_reads_the_plugin_installer_record():

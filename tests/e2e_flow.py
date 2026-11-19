@@ -721,8 +721,14 @@ def main():
     content.go(2)
     controller.render_search_results()
     from mapflow_next.ui.widgets import rounded
+
+    def centre(pixmap):  # QLabel.pixmap() differs in size and pixel ratio between Qt 5 and Qt 6
+        image = pixmap.toImage()
+        return image.pixelColor(image.width() // 2, image.height() // 2).getRgb()  # (r, g, b, a)
+
     shown = imagery_page._thumbs["img-1"].pixmap()
-    check(shown is not None and shown.toImage() == rounded(imagery_page._pixmaps["img-1"], 56, 56, 8).toImage(),
+    expected = centre(rounded(imagery_page._pixmaps["img-1"], 56, 56, 8))
+    check(shown is not None and not shown.isNull() and expected[3] == 255 and centre(shown) == expected,
           "back from Start, the results keep their picture previews")
     links_texts = [b.text() for b in imagery_page.findChildren(QPushButton)]
     check(any("Get advanced imagery search tools in Mapflow Web" in t for t in links_texts),
