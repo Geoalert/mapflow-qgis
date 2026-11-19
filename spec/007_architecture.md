@@ -1,11 +1,81 @@
 # 007 Architecture
 
 ## Purpose
-Define the target module structure, the layers and what each may depend on, and the
-invariants that keep the structure from decaying back. This is the destination for the
-3.7.0 refactoring; the ordered steps to reach it live in `WAL.md`.
+Define the module structure, the layers and what each may depend on, and the
+invariants that keep the structure from decaying back.
 
-## Content
+This document has two parts. **§ Mapflow Next (4.x)** is the structure of `mapflow_next/` and is
+what gates work on it. Everything from **§ Why the current structure fails** on was written for
+the 3.7.0 refactoring of the 3.x plugin (`mapflow/`): it is kept because it is the reasoning the
+4.x rules come from, but its module names, its `.ui` rules and its tests
+(`tests/functional/test_layering.py`, `test_entry_points_guarded.py`, `guarded_connect`) do not
+exist in `mapflow_next/` and bind nothing there.
+
+## Mapflow Next (4.x)
+
+### Structure
+
+```
+mapflow_next/
+  plugin.py        the composition root: toolbar, menu, dock, wiring; undoes all of it on unload
+  controller.py    the flow: connects services to pages and to QGIS
+  config.py        environments, URLs, timings      settings.py   QgsSettings under mapflow_next/
+  core/            pure Python, no Qt: models, the run form as data (draft.py), scenarios, messages, OAuth helpers
+  api/             HTTP over QgsNetworkAccessManager (http.py), the endpoints (client.py), credentials, browser sign-in
+  services/        Qt objects that hold state and emit signals: session, processings, imagery, results
+  qgis_bridge/     map-side code: area from layers, layers and styles, draw tool; compat.py for QGIS 3/4
+  ui/              dock, pages, dialogs, theme and icons — built in code, no .ui files
+  resources/       scenarios, result styles (QML), fonts, icons
+```
+
+### Layer rules
+
+| layer | may import | must not |
+|---|---|---|
+| `core/` | the standard library | import Qt or QGIS: it is tested without them |
+| `api/` | `core/`, `config`, Qt/QGIS networking, the QGIS authentication manager and message log, `QDesktopServices` (to open the browser for sign-in) | know about pages or services |
+| `services/` | `api/`, `core/`, `qgis_bridge/`, `config`, `settings` | import `ui/`, or build a widget |
+| `qgis_bridge/` | `core/`, `config`, QGIS | import `ui/` or `services/` |
+| `ui/` | `core/`, `config`, `settings`, other `ui/` modules | import `services/` or `api/`: a page renders what it is given and emits what the user wants |
+| `controller.py` | everything above | talk to `Http` directly: requests go through `api/client.py` or a service |
+| `plugin.py` | everything | — |
+
+A value that both a page and a service need (the result modes, the default output folder) lives in
+`config` or `core/`, where both may import it — not in the service.
+
+### Unload
+
+`plugin.py` undoes everything it and the controller set up: timers stopped, QGIS and project signals
+disconnected, actions, toolbar and dock removed, and **every window the plugin opened closed and
+deleted** — the scenario gallery, the Projects window and the My imagery window are children of the
+QGIS main window and would otherwise outlive the plugin. Every service has a `stop()` that ends its
+timers and pending requests. After unload, no late reply or timer reaches plugin code.
+
+### Where the code is not there yet
+
+Recorded so that nobody mistakes the current shape for the intended one, and so that a change in these
+areas moves toward the rule instead of copying its neighbour.
+
+- **State lives in the controller as well as in the services.** The rule is that services hold state,
+  pages render it and the controller connects them. In fact `controller.py` — one class of some 2,200
+  lines — holds the run draft, the chosen catalog image, zoom choices, project pins and a number of
+  pending flags, and runs the upload check flow itself. This was a deliberate shortcut to ship the
+  redesign: the run form's state touches every service, and no service was its natural owner.
+  **It is to be reviewed after 4.0.0.** The direction to examine first is an explicit application
+  context object (an `AppContext`) that owns the draft and the selections, with the controller split
+  by dock region; the 3.x analysis below (§ Why the current structure fails, § Controllers) is the
+  reasoning to start from.
+- **Services take callbacks as well as emitting signals.** `Imagery.on_duplicate` is a function the
+  controller sets and the service calls for a modal answer; `fetch_mosaic`, `delete_mosaic`,
+  `delete_image`, `create_collection` and `validate` take `on_done` / `on_error` arguments. The rule is signals. A callback is tolerable for a one-shot answer to
+  the caller that asked; it is not for anything a second listener could want. To be settled in the same
+  review.
+- **Not every entry point is guarded yet** — see `006_error_reporting.md` § The guard, which is the rule.
+
+No new code may add to the first two: new state goes into a service, and a new service method reports
+through a signal unless it answers exactly one caller.
+
+## Content (3.x — rationale only, see Purpose)
 
 ### Why the current structure fails
 

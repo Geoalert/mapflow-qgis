@@ -4,7 +4,62 @@ Forward-facing only: `[ ]` planned, `[ready-for-review]` in flight. Entries are 
 merge — the WHY lives in the commit message and, for durable decisions, in `spec/`.
 See AGENTS.md § WHERE THE WHY GOES.
 
+# V 4.0.0 — Mapflow Next
+
+Base branch: `feature/mapflow-next`. The steps below are one chain: one branch, one commit per step, in
+this order — infrastructure and architecture first, then defects, then features. `spec/` already
+describes the state after the chain; each step makes the code match it, and updates its own line in
+`README.md` and `CHANGELOG.md`.
+
+## 1. Infrastructure and architecture
+
+[ ] `on_status` must not raise when the imagery is empty after Run again (`controller.py`, the `elif` after `_imagery_to_choose`). Goes first: the next step makes the end-to-end flow fail on it
+[ ] The end-to-end flow fails on a Critical message it did not ask for; a missing `qgis.core` fails in the test images; CI runs `test-qt6`; every Qt 5/6 rule of the README has a check — `spec/004` § Test runtime, `spec/006` § The tests must see what the guard hides
+[ ] One guard for every Qt entry point and for the callbacks `Http` runs; a callback's exception is never "Unexpected response from Mapflow", and a result whose bounds can't be transformed leaves no "loading" flag set — `spec/006` § The guard
+[ ] Failed requests: lists and polls no longer fail silently, nothing stays pending, the poll stops on 403/404 and the default project opens — `spec/005` § Failed requests
+[ ] Credentials only for the API's own scheme, host and port — `spec/002_api.md` § Authentication
+[ ] Preview files in a per-session temporary folder, with safe file names — `spec/003` § Temporary Files
+[ ] Uploads have a 1 h timeout; every request has one — `spec/005`, `spec/002_C`
+[ ] A result is converted to GeoPackage in a `QgsTask`, off the GUI thread — `spec/005` § QGIS Application
+[ ] `ui/` imports no service, and the controller does not talk to `Http` directly — `spec/007` § Layer rules
+[ ] Unload closes every window the plugin opened; every service has `stop()` — `spec/007` § Unload
+[ ] Sign-in hosts `auth-{env}.mapflow.ai` for staging and internal — `spec/002_api.md`
+[ ] Report dialog behind "Send a report", with the user's comment — `spec/006` § The report dialog
+
+## 2. Defects
+
+[ ] Run again on a catalog image shows that image in the run form (Fibery milestone 413: "Run again restores … catalog imagery")
+[ ] A file that disappears before its upload leaves no upload flag set — `spec/006` § A guarded callback is interrupted
+[ ] "Review this result in Mapflow Web" opens the processing, not the home page
+
+## 3. Features
+
+[ ] Restart for failed and cancelled processings, for every role that may run one — `spec/002_B`
+[ ] Processing search on the server (`terms`) — `spec/002_B`
+[ ] Off-nadir range slider 0–30° — `spec/002_D` § What the plugin sends
+[ ] "Available for me" switch in the imagery search — `spec/002_D`
+[ ] The area is clipped to the footprint of the chosen catalog image — `spec/002_B` § AOI and the imagery footprint
+[ ] Upload limits and free storage from `GET /rasters/memory` — `spec/002_C` § Storage Endpoints
+[ ] Rename a collection — `spec/002_C`
+[ ] Download an original image — `spec/002_C` § Client-side download
+[ ] Rename a project — `spec/002_A`
+[ ] Delete a project — `spec/002_A`
+[ ] Forced upgrade when the backend expects a higher major version — `spec/002_api.md` § Versioning policy
+[ ] Terms of use link on the sign-in page
+[ ] XYZ/TMS layers that QGIS already has as an imagery source — `spec/001`. Needs its own spec text for the source parameters before the code
+[ ] Planned processings in the Processings tab, with a "search processing" mark; a click opens Mapflow Web — `spec/002_F` § Plugin behaviour in Mapflow Next
+
+## Later, not in 4.0.0
+
+[ ] Pin the test images by digest, so the end-to-end tests name the QGIS they ran on — `spec/004` § Test runtime
+[ ] Review where state lives (controller versus services, an `AppContext`) and callbacks versus signals — `spec/007` § Where the code is not there yet
+[ ] Translations (es, pt, ru, zh) — 4.1
+
 # V 3.7.0 LTR
+
+**Superseded by 4.0.0 for everything below that is about the 3.x code base (`mapflow/`).** Kept until the
+4.0.0 release decides what, if anything, is carried over.
+
 
 We are planning a long-term release, effectively the LAST, stable release for QGIS3, the next version will be for QGIS4,
 and this version will get only API compatibility changes and bug fixes.

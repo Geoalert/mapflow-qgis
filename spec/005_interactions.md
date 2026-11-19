@@ -9,68 +9,77 @@ Describe integration boundaries and interaction rules with external/internal sys
 - Direction: outbound
 - Protocol: HTTPS REST (JSON)
 - Auth: Basic Auth (token) or OAuth2 (Keycloak)
-- Timeout: 10s default, 1h for file uploads
-- Retry: decided per request by its **mode** — see § Request modes. Nothing retries a request that
+- Timeout: 30 s default (`config.TIMEOUT_S`), 1 h for file uploads, and a longer one of its own for a
+  result download (`config.RESULT_TIMEOUT_S`). **Every request has a timeout**: none waits on the network
+  stack alone.
+- Retry: only what a timer sends again anyway — see § Failed requests. Nothing retries a request that
   changes server state.
-- Failure handling: parse error response (multiple formats), display user-friendly message via QMessageBox or QGIS message bar
+- Failure handling: parse error response (multiple formats), display a user-friendly message in the QGIS
+  message bar or next to the control that failed. No modal dialog opens for a failed request, with one
+  exception: an upload that Mapflow refuses because the collection already has the file asks what to do
+  (upload again, skip, cancel), since the upload cannot go on without the answer.
 
-### Request modes
+### Failed requests
 
-A failed request nobody is waiting on is not worth a dialog: the next attempt usually succeeds. A
-failed request the user just triggered is, and a hidden retry would only add seconds of silence
-before it — the user can press the button again. So every request declares which it is, as
-`Http`'s `mode` argument, and **there is no default**: a request nobody classified fails at the call.
+A failed request nobody is waiting on is not worth interrupting the user: the next attempt usually
+succeeds. A failed request the user just triggered is, at once. And a failure that asking again cannot
+change must end the asking. Three rules follow, by **what triggered the request**, not by its endpoint
+(the processings page is both the 6 s refresh and "Show more").
 
-| mode | declare it for | a transient failure is |
+| the request is | a transient failure | a permanent failure |
 |---|---|---|
-| `INTERACTIVE` | a request the user just triggered and is waiting on | handed to the error handlers at once |
-| `BACKGROUND` | a one-off request nobody is waiting on — a refresh sent from another response's callback, the data loaded after login | re-sent once after `BACKGROUND_RETRY_DELAY_SECONDS`, and handed to the handlers only if that fails too |
-| `POLL` | a request a timer sends again on its own | dropped (and logged) until `POLL_FAILURES_BEFORE_ALERT` consecutive attempts at the same endpoint have failed; any success on that endpoint resets the count |
+| one the user just triggered and is waiting on (a click, a search, a run, an upload) | shown at once | shown at once |
+| a one-off load nobody is waiting on (collections and image lists, the project list, what loads after sign-in) | shown once in the message bar, and whatever was marked as pending is cleared | the same |
+| one a timer sends again on its own (the processings list, the account status, the collections refresh) | dropped and logged until `POLL_FAILURES_BEFORE_ALERT` consecutive attempts have failed, then said **once**; any success resets the count | the timer stops asking, and the user is told why |
 
-- **Transient** means the connection or the server, not the request: a timeout, 500/502/503/504,
-  a refused or dropped connection, host not found, a temporary network failure. Anything else —
-  401, 403, 404 and every other 4xx — is handed to the handlers at once in every mode: asking again
-  cannot change the answer.
-- **The mode belongs to the trigger, not the endpoint.** One endpoint is often reached from a timer
-  and from a click — the processings page is the 6 s refresh, and also paging, sorting and
-  filtering. So an api method for a read takes the mode as a required parameter and the caller that
-  knows the trigger passes it. A follow-up request sent from a response's callback to complete the
-  same data inherits that response's mode.
-- **Only reads may retry.** An api method for a request that changes server state declares
-  `INTERACTIVE` itself: a create that timed out may still have landed, and sending it again would
-  create twice. For the same reason nothing but `INTERACTIVE` accepts a multipart upload body, which
-  the first send consumes.
-- **A `BACKGROUND` request still gets exactly one outcome** — its callback or its error handler —
-  only later, unless logout or `unload` cancels its re-send (below); whatever those cancel is the
-  session's or the plugin's to clean up, not the request's. A dropped `POLL` failure gets **none**,
-  so a `POLL` request takes no error handler of its own: cleanup placed there would silently not
-  run (`spec/006` § A guarded callback is interrupted, not completed).
-- A timer-driven request that counts its own attempts and needs every failure — the post-login
-  `/user/status` retry — is `INTERACTIVE`, not `POLL`: its budget is the tolerance.
-- A pending `BACKGROUND` re-send is cancelled on logout, where it would go out without credentials,
-  and on `unload`, like any other subscription that would outlive the plugin (`spec/007` § The
-  composition root). After `unload` a late failure schedules no new one.
-- `BACKGROUND_RETRY_DELAY_SECONDS` and `POLL_FAILURES_BEFORE_ALERT` live in `config.py`, next to the
-  throttle's numbers and for the same reason: they are a first guess for live use to move.
+- **Transient** means the connection or the server, not the request: a timeout, 500/502/503/504, a
+  refused or dropped connection, host not found, a proxy failure. **Permanent** is every other answer —
+  403, 404 and the other 4xx: asking again cannot change it. (401 is the session's: it renews the token
+  or signs the user out.)
+- **No failure is silent for good.** A list that failed to load must not look like an empty list:
+  "No processings in this project yet" is shown only after a successful answer with no items.
+- **A failed load leaves nothing pending.** A flag set before the request ("loading", "use this
+  collection when it arrives") is cleared in the failure path as well as in the success path, so the
+  control that set it works again.
+- **The open project is gone** (the processings list answers 403 or 404 — deleted or unshared in Mapflow
+  Web): the poll stops, the user is told, and the plugin opens the default project.
+- **Only reads may be sent again.** A create that timed out may still have landed, and sending it again
+  would create twice.
+- `POLL_FAILURES_BEFORE_ALERT` lives in `config.py`: it is a first guess for live use to move.
+
+The 3.x plugin implemented these rules as a required `mode` argument of its HTTP client
+(`INTERACTIVE` / `BACKGROUND` / `POLL`). Mapflow Next is free to implement them another way; what is
+specified is the behaviour in the table.
 
 ### Keycloak (OAuth2)
 - Direction: outbound (browser redirect + token exchange)
 - Protocol: OpenID Connect Authorization Code with PKCE
-- Local redirect: `http://localhost:7070`
-- Token storage: QGIS Auth Manager (encrypted)
-- Token refresh: automatic via Auth Manager before expiration
+- Hosts: `auth.mapflow.ai` in production, `auth-{env}.mapflow.ai` in staging, internal and duty
+  (see `002_api.md`)
+- Local redirect: `http://127.0.0.1:7070/qgis`, served by a listener the plugin opens for the sign-in
+- Token storage: the refresh token in the QGIS authentication database (encrypted); the access token in
+  memory only
+- Token refresh: by the plugin's own timer, ahead of expiry, with a retry through a network hiccup.
+  QGIS's OAuth2 authentication method is not used
 
 ### QGIS Application
 - Direction: bidirectional
 - Inbound: layer events, canvas changes, project open/save, settings access
 - Outbound: add/remove layers, apply styles, zoom canvas, display messages, persist settings
 - Protocol: QGIS Python API (qgis.core, qgis.gui)
-- Layer types produced: QgsVectorLayer (GeoJSON), QgsRasterLayer (XYZ tiles), QgsVectorTileLayer
-- Persistence: QgsSettings for plugin config, QgsAuthManager for OAuth2 tokens
+- Layer types produced: QgsVectorLayer (a result saved as GeoPackage), QgsRasterLayer (XYZ tiles, preview
+  pictures), QgsVectorTileLayer
+- Persistence: QgsSettings for plugin config, the QGIS authentication database for secrets
+- **The GUI thread is not blocked by a result.** Converting a downloaded result (it can be hundreds of
+  megabytes) to GeoPackage runs in a background task (`QgsTask`); only adding the finished layer to the
+  project happens on the GUI thread.
+- **A basemap provider without a preview has no preview control.** The 3.x plugin added an OpenStreetMap
+  layer in its place; Mapflow Next adds nothing, because a layer that is not the imagery says nothing
+  about the imagery.
 
 ### Local Filesystem
 - Direction: outbound (write)
-- Purpose: save GeoJSON processing results, download raster previews, save My Imagery images the user downloads
+- Purpose: save processing results (GeoPackage), download raster previews, save My Imagery images the user downloads
 - Location: user-configured output directory; a downloaded My Imagery image goes to the path the user picks
   (see `002_C_myimagery_api.md` § Client-side download)
 - Failure handling: display permission/space errors to user

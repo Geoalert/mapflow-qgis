@@ -55,13 +55,15 @@ Each item is the same mosaic object as the other endpoints return, with `status_
 Get mosaic details (the same mosaic object as in the listings).
 
 ### `PUT /rasters/mosaic/{id}`
-Update mosaic name/tags.
+Update mosaic name/tags. The plugin offers it as "Rename…" in a collection's ⋯ menu (name and tags).
 
 ### `DELETE /rasters/mosaic/{id}`
 Delete a mosaic and all its images.
 
 ### `POST /rasters/mosaic/{id}/image`
-Upload an image to an existing mosaic. Multipart form data, 1h timeout.
+Upload an image to an existing mosaic. Multipart form data, 1h timeout. The timeout is a real limit, not
+the absence of one: an upload on a dead connection ends after an hour with a message, and the upload
+state is cleared so the next upload can start.
 
 ### `POST /rasters/mosaic/image`
 Create a new mosaic and upload the first image in one request. Query params: `name`, `tags`.
@@ -105,7 +107,8 @@ Field notes:
 - `available_for_download`: boolean, defaults to `true` if absent from API response. Indicates whether the image can be downloaded by the user. Images not ingested via `load_data` workflow are not downloadable.
 
 ### `PUT /rasters/image/{id}`
-Update image (rename). Query param: `name`.
+Update image (rename). Query param: `name`. **Not used by the plugin**: renaming an image is done in
+Mapflow Web.
 
 ### `DELETE /rasters/image/{id}`
 Delete an image from its mosaic.
@@ -172,6 +175,14 @@ Response shape (`UserLimitSchema`):
     "maxPixelCount": 0
 }
 ```
+
+#### Plugin behaviour
+- The plugin asks for the limits when My imagery opens and before an upload. `maxUploadFileSize` and
+  `maxPixelCount` replace its built-in limits (2 GB, 30,000 px a side), which remain only as the fallback
+  when the request fails: an account with larger limits must not be refused locally.
+- An upload larger than `memoryFree` is refused before anything is sent, with a message that names the
+  free space.
+- The usage itself ("Your data: X. Free space: Y") is not shown; Mapflow Web shows it.
 
 ## Error Model
 Data catalog errors use format: `{"detail": {error_data}}`.

@@ -22,14 +22,18 @@ Imagery Search: Mapflow catalog search.
 
 ## 002_F_plan_processing_api.md
 Planned processing: create/list/update/delete, run from template, and template status/actions.
+Mapflow Next only lists planned processings and opens them in Mapflow Web (§ Plugin behaviour in Mapflow Next).
 Also covers template AOI management (add/update/delete, naming, `aoiDetails` structure)
 and the in-template navigation level (Projects → Processings → Template).
 
 ## 002_E_zoom_selector_api.md
-Zoom selector API for automatic zoom detection based on imagery source resolution.
+The data-catalog service's API as that service documents it (its title is "API Specification"). It is
+kept as reference: it is not the zoom selector API the file name promises, and it does not list
+`validate-image-metadata` or `allow_duplicate`, which the plugin uses (`mapflow_next/api/client.py`).
+Open: neither is specified in `002_C_myimagery_api.md` yet.
 
 ## 003_local_storage.md
-Local persistence: QgsSettings keys, QGIS Auth Manager (OAuth2), temporary files. Full key inventory derived from code.
+Local persistence: QgsSettings keys under `mapflow_next`, the QGIS authentication database, the layer group, temporary files. No migration from the 3.x plugin.
 
 ## 004_stack.md
 Used libraries, pinned versions where important, external system implementation choices, the test runtime, and the static-analysis toolchain.
@@ -38,10 +42,10 @@ Used libraries, pinned versions where important, external system implementation 
 Integration boundaries: Mapflow backend, Keycloak OAuth2, QGIS application, local filesystem.
 
 ## 006_error_reporting.md
-How failures reach the user: the expected/unexpected split, the three presentation tiers (log / message / report dialog), and the suppression contract that bounds dialog volume on timer-driven paths.
+How failures reach the user: the expected/unexpected split, the three presentation tiers (log / message / report dialog), the guard, the report dialog, and why no dialog opens from a timer-driven path.
 
 ## 007_architecture.md
-Target module structure for the 3.7.0 refactoring: the layers (api / service / controller / view / model), what each may import, where the entry points are, and the test surfaces the refactoring is verified against.
+Module structure. § Mapflow Next (4.x) is the structure of `mapflow_next/`: the layers, what each may import, unload, and where the code is not there yet. The rest is the 3.7.0 refactoring analysis of the 3.x plugin, kept as rationale.
 
 ## etc.
 Additional documents can be added with increasing numeric prefixes (for example: `008_security.md`, `009_observability.md`).

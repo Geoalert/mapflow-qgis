@@ -7,7 +7,7 @@ height), forest (optionally with height), roads, fields, construction sites and 
 [models](https://docs.mapflow.ai/userguides/pipelines).
 
 This repository holds **Mapflow Next** (`mapflow_next/`, version 4.0.0), a redesigned plugin for
-**QGIS 3.22+ and QGIS 4**. Everything in it follows one flow: **model → area → imagery → processing →
+**QGIS 3.28+ and QGIS 4**. Everything in it follows one flow: **model → area → imagery → processing →
 results**. The previous plugin (3.x, `mapflow/`) is in the history up to tag `v3.6.3`.
 
 | Sign in | Start | Run form | Processings |
@@ -26,14 +26,16 @@ The plugin covers the work that belongs next to the map. Each tab has its scenar
   or the map view), choose imagery, check the cost and run.
 - **Start › Map your own imagery.** In the run form, My imagery opens a window with your collections. Choose a
   collection or one image in it, or add imagery right there: upload GeoTIFFs, from files or from the project's
-  GeoTIFF layers, into the selected collection, or into a new one when none is selected. You can also create a
+  GeoTIFF layers — several at once, or dragged from the Layers panel or the file manager — into the selected
+  collection, or into a new one when none is selected. You can also create a
   collection with a name and tags, and delete a collection or an image from its ⋯ menu. Files are checked before upload: bands, CRS, size, that they match each
   other, and, for an existing collection, that they fit it.
   The imagery's extent becomes the area, and its preview goes on the map.
 - **Layers panel › Use a layer in Mapflow.** Right-click a polygon layer for "Use as AOI in Mapflow", or a
   GeoTIFF layer for "Use as imagery in Mapflow": it's uploaded to My imagery and chosen when it's ready.
-- **Imagery sources › Find imagery in the catalog.** Search by area, dates, cloud cover and off-nadir
-  angle, look at the footprints on the map, and use an image in the run form.
+- **Imagery sources › Find imagery in the catalog.** Search by area, dates, cloud cover, off-nadir
+  angle and how much of the area an image covers, look at the footprints on the map, and use an image in
+  the run form.
 - **Processings › Follow the work and its history.** Progress updates on its own. Filter, search, load
   older processings, rename them, run one again with the same settings, or delete it.
 - **Processings › Get the results into QGIS.** Finished results load as styled layers: GeoPackage files,
@@ -48,7 +50,9 @@ links there (see [below](#in-the-plugin-and-in-mapflow-web)).
 
 - **From a zip:** Plugins › Manage and Install Plugins › Install from ZIP, with the zip from `make zip`.
   The plugin is called **Mapflow Next** (folder `mapflow_next`), so it installs next to the 3.x
-  Mapflow plugin instead of replacing it.
+  Mapflow plugin instead of replacing it. **Settings are not carried over from the 3.x plugin**: sign in
+  again, and set the output folder again if you changed it. Too much changed between the two for the old
+  values to mean the same thing.
 - **For development:** `make link` symlinks `mapflow_next/` into your QGIS profile, then reload the
   plugin with Plugin Reloader. The default path is the macOS one for QGIS 3; use `make link QGIS_MAJOR=4`
   for QGIS 4, or set `PLUGINS_DIR` on Linux or Windows.
@@ -62,8 +66,9 @@ for the 3.x plugin is [here](https://docs.mapflow.ai/api/qgis_mapflow).
 
 ## QGIS 3 and QGIS 4
 
-One zip runs in QGIS 3.22 and later (Qt 5) and in QGIS 4 (Qt 6): `metadata.txt` sets
-`qgisMinimumVersion=3.22` and `qgisMaximumVersion=4.99`. Every feature works in both.
+One zip runs in QGIS 3.28 and later (Qt 5) and in QGIS 4 (Qt 6): `metadata.txt` sets
+`qgisMinimumVersion=3.28` and `qgisMaximumVersion=4.99`. Every feature works in both. 3.28 is the oldest
+version the tests run on, so it is the oldest one declared.
 
 To keep it that way, write code both Qt versions accept. `tests/test_core.py` and `tools/qt6_check.py`
 check these rules:
@@ -109,8 +114,9 @@ mapflow_next/
   resources/         scenario data and pictures, result styles (QML), Nunito, brand icons
 ```
 
-State lives in services. Pages only render it and emit what the user wants. `controller.py` connects
-the two.
+Services hold state, pages render it and emit what the user wants, and `controller.py` connects the two.
+That is the rule; today the controller also holds the run form's state itself. `spec/007_architecture.md`
+§ Mapflow Next (4.x) has the layer rules and where the code is not there yet.
 
 ## What it keeps from the 3.x plugin
 
@@ -154,9 +160,14 @@ the two.
 - **Zoom:** basemaps offer z17–z21, with the scenario's zoom preselected and marked ★.
 - **My imagery:**
   - Collections show their image count, and a picker lets you use the whole collection or one image.
+  - Collections are listed 50 at a time, newest first, with "Show more". The collection search runs on
+    the server: it finds collections that aren't loaded yet, by their name or by the file name of an
+    image in them.
   - The imagery's extent becomes the area, and any other area is clipped to the imagery.
   - An area outside the imagery blocks Run, with a way back to the extent.
-- **Imagery search:** the same Area drop-down as on Start, date and slider filters, and "Clear".
+- **Imagery search:** the same Area drop-down as on Start, date and slider filters (cloud cover,
+  off-nadir angle, minimum area coverage), and "Clear". Filters apply when you press "Search imagery":
+  the list always shows what the last search returned.
 - **Processings:** pages of 30 with "Show more". Polling refreshes the shown window and leaves older
   pages in place.
 - **Live cost:** a local estimate at once, then the figure from `/cost`.
@@ -176,15 +187,17 @@ every Mapflow user. The plugin links to the right page wherever it leaves someth
 | Run processings: models, options, area, providers, catalog, My imagery | **Kept**, redesigned as one form | The core of the plugin |
 | Processings list, results on the map, rename, delete, run again | **Kept** | Results belong in QGIS |
 | Imagery search in the catalog | **Kept** | Footprints are judged on the map |
-| Upload a GeoTIFF to My imagery | **Kept**, as a new collection, from one or several files | Your imagery is made in QGIS and processed from there |
-| My imagery data management: create, rename and delete collections, add or delete images, download originals | **Mapflow Web** › [My data](https://app.mapflow.ai/my-data) ("Manage collections in Mapflow Web") | File management, not mapping: it needs whole collections in view and many files at once. Deleting is permanent and affects everyone in the project, so it belongs where the whole collection is shown |
+| Upload a GeoTIFF to My imagery | **Kept**: into a new or an existing collection, from one or several files or layers | Your imagery is made in QGIS and processed from there |
+| My imagery collections: create, delete, add or delete images | **Kept**: the My imagery window and its ⋯ menus | Adding imagery and clearing out what was added by mistake belong where the imagery is chosen |
+| My imagery: rename a collection or an image, download originals, storage usage | **Mapflow Web** › [My data](https://app.mapflow.ai/my-data) ("Manage collections in Mapflow Web") | File management, not mapping |
 | Create a project | **Kept**: New project in the Projects window | Starting new work shouldn't need a trip to the browser |
 | Projects: rename, delete, share | **Mapflow Web** › the project ("Share project in Mapflow Web" and the share icon in the Projects window) | Done rarely, and sharing needs the team's members and roles. The plugin creates, switches, searches and pins projects |
 | Review: accept or send back results | **Mapflow Web** (the processing links there) | Review is a step of its own, with its own page, after the processing; the plugin shows that a processing needs it |
 | Balance and top-up, API tokens | **Mapflow Web** › [Account](https://app.mapflow.ai/account/balance) ("Top up" in the run form) | Payments and keys stay with the account |
 | Planned processings (search templates) and their areas | **Not yet** | Left out of the first release to keep it to the main flow |
 | Custom XYZ/TMS providers | **Not yet** | Left out of the first release; Mapflow's own basemaps and My imagery cover the main cases |
-| Translations (es, pt, ru, zh) | **Not yet** | Every text is new, so the 3.x translations don't apply |
+| Translations (es, pt, ru, zh) | **Not yet**: planned for 4.1 | Every text is new, so the 3.x translations don't apply |
+| Settings of the 3.x plugin | **Not migrated** | The two plugins install side by side; sign in and set the output folder again |
 | Georeferenced catalog previews, forced-upgrade dialog, Segment Anything zooms | **Not yet** | Smaller features, after the first release |
 
 ## To verify against the real API
@@ -242,8 +255,10 @@ Mapflow API and sign-in server (`tests/mock_server.py`).
   toggling an option must leave the form's scroll position alone.
 
 CI (`.github/workflows/tests.yml`) runs `test-qgis3`, `test-qgis4` and `lint` on every push to `dev` and
-`master` and on pull requests. Releases go through `qgis-plugin-ci` (`.qgis-plugin-ci` points at
-`mapflow_next`).
+`master` and on pull requests. **Releases are made by hand**: `make zip` builds the archive, and a
+maintainer uploads it to the QGIS Plugin Repository. No workflow publishes a release (`.qgis-plugin-ci`
+is kept for the `qgis-plugin-ci` tool, which nothing runs today; `release.yml` in the repository root is
+not under `.github/workflows/` and never runs).
 
 **Release review.** Every release PR into `master` is reviewed by Claude, following
 [`.claude/agents/release-reviewer.md`](.claude/agents/release-reviewer.md)
