@@ -213,11 +213,30 @@ def test_sign_in_addresses():
     production = Config("production", "https://whitemaps-production.mapflow.ai/rest")
     assert production.authorize_url == "https://auth.mapflow.ai/auth/realms/mapflow/protocol/openid-connect/auth"
     assert production.redirect_uri == "http://127.0.0.1:7070/qgis"
-    assert Config("duty", "x").token_url.startswith("https://auth-duty.mapflow.ai/auth/realms/mapflow-duty/")
     settings = {"variables/mapflow_env": "staging", "mapflow_next/auth_url": "http://localhost:9/oidc/"}
     staging = load_config(type("S", (), {"value": lambda self, k, d=None: settings.get(k, d)})())
     assert staging.server == "https://whitemaps-staging.mapflow.ai/rest"
     assert staging.token_url == "http://localhost:9/oidc/token"
+
+
+@pytest.mark.parametrize("env, base", [
+    ("production", "https://auth.mapflow.ai/auth/realms/mapflow/protocol/openid-connect"),
+    ("staging", "https://auth-staging.mapflow.ai/auth/realms/mapflow-staging/protocol/openid-connect"),
+    ("internal", "https://auth-internal.mapflow.ai/auth/realms/mapflow-internal/protocol/openid-connect"),
+    ("duty", "https://auth-duty.mapflow.ai/auth/realms/mapflow-duty/protocol/openid-connect"),
+])
+def test_sign_in_host_of_each_environment(env, base):
+    config = Config(env, f"https://whitemaps-{env}.mapflow.ai/rest")
+    assert config.authorize_url == f"{base}/auth"
+    assert config.token_url == f"{base}/token"
+
+
+@pytest.mark.parametrize("env", ["production", "staging", "internal", "duty"])
+def test_sign_in_override_wins_in_every_environment(env):
+    settings = {"variables/mapflow_env": env, "mapflow_next/auth_url": "http://localhost:9/oidc/"}
+    config = load_config(type("S", (), {"value": lambda self, k, d=None: settings.get(k, d)})())
+    assert config.token_url == "http://localhost:9/oidc/token"
+    assert config.authorize_url == "http://localhost:9/oidc/auth"
 
 
 def test_pkce_and_authorize_url():

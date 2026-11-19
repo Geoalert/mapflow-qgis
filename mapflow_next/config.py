@@ -56,8 +56,8 @@ MIN_BILLED_AREA_KM2 = 1.0         # areas under 1 km² are billed as 1 km²
 # then sends the browser on to Mapflow Web.
 _AUTH_REALMS = {
     "production": ("auth.mapflow.ai", "mapflow"),
-    "staging": ("auth.mapflow.ai", "mapflow-staging"),
-    "internal": ("auth.mapflow.ai", "mapflow-internal"),
+    "staging": ("auth-staging.mapflow.ai", "mapflow-staging"),
+    "internal": ("auth-internal.mapflow.ai", "mapflow-internal"),
     "duty": ("auth-duty.mapflow.ai", "mapflow-duty"),
 }
 OAUTH_CLIENT_ID = "qgis"
