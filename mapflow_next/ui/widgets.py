@@ -265,6 +265,7 @@ class DropCard(Card):
         super().__init__(parent, kind="drop", **kwargs)
         self.setAttribute(Qt.WidgetAttribute.WA_Hover)
 
+    @guarded(default=False)
     def event(self, event) -> bool:
         if event.type() in (QEvent.Type.HoverEnter, QEvent.Type.HoverLeave):
             set_prop(self, "hover", event.type() == QEvent.Type.HoverEnter)
@@ -728,6 +729,7 @@ class MetaWithNote(QWidget):
         takes, so a row with a warning spaces its texts as one without."""
         return self.meta.heightForWidth(10_000) if self.text else self.meta.fontMetrics().height()
 
+    @guarded(default=-1)               # -1: Qt's own "no height for width"
     def heightForWidth(self, width: int) -> int:
         block = self.block.sizeHint().height()
         if self._one_line(width):

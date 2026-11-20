@@ -1180,22 +1180,72 @@ def test_every_entry_point_is_guarded():
     assert not problems, "\n".join(problems)
 
 
-# Qt calls these methods of a class of the plugin: a `*Event` handler, an event filter, `QgsTask.finished` and
-# `QgsMapTool.deactivate`. An exception that leaves one opens the raw error dialog of QGIS, as one that leaves a slot.
-QT_VIRTUALS = re.compile(r"^(?:[a-z][A-Za-z]*Event|eventFilter|finished|deactivate)$")
+# Qt calls these methods of a class of the plugin: a `*Event` handler, `event`, an event filter,
+# `heightForWidth`, `QgsTask.finished` and `QgsMapTool.deactivate`. An exception that leaves one opens the raw
+# error dialog of QGIS, as one that leaves a slot.
+QT_VIRTUALS = re.compile(r"^(?:[a-z][A-Za-z]*Event|event|eventFilter|finished|deactivate|heightForWidth)$")
+# `cancel` is called by Qt on a `QgsTask` only: another class may have a `cancel` that Qt never calls.
+QT_TASK_VIRTUALS = {"cancel"}
+
+
+def _has_base(cls, name):
+    import ast
+    for base in cls.bases:
+        if (isinstance(base, ast.Name) and base.id == name) or \
+                (isinstance(base, ast.Attribute) and base.attr == name):
+            return True
+    return False
+
+
+def _own_returns(node):
+    """The `return` statements of a method's own body: not those of a nested function or lambda."""
+    import ast
+    found, stack = [], list(node.body)
+    while stack:
+        item = stack.pop()
+        if isinstance(item, ast.Return):
+            found.append(item)
+        if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)):
+            stack.extend(ast.iter_child_nodes(item))
+    return found
+
+
+def _has_result(node):
+    """The method gives Qt a value: a return annotation other than `None`, or a `return <value>`."""
+    import ast
+    if node.returns is not None and not (isinstance(node.returns, ast.Constant) and node.returns.value is None):
+        return True
+    return any(r.value is not None and not (isinstance(r.value, ast.Constant) and r.value.value is None)
+               for r in _own_returns(node))
+
+
+def _has_default(node):
+    """The method has the decorator `guarded(default=...)`."""
+    import ast
+    return any(isinstance(d, ast.Call) and _is_guarded_decorator(d) and any(k.arg == "default" for k in d.keywords)
+               for d in node.decorator_list)
 
 
 def rule_virtual_overrides(source):
-    """Every method that Qt calls by name (see QT_VIRTUALS) is decorated with `@guarded`."""
+    """Every method that Qt calls by name (see QT_VIRTUALS) is decorated with `@guarded`, and one that gives Qt
+    a value is decorated with `@guarded(default=...)`: PyQt raises a `TypeError` for a `None` where Qt wants a
+    `bool` or an `int`."""
     import ast
     problems = []
     for cls in ast.walk(ast.parse(source)):
-        if isinstance(cls, ast.ClassDef):
-            for node in cls.body:
-                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and QT_VIRTUALS.match(node.name) \
-                        and not _is_guarded_def(node):
-                    problems.append((node.lineno, f"`{cls.name}.{node.name}` is a Qt virtual method that is not "
-                                                  "guarded: decorate it with @guarded"))
+        if not isinstance(cls, ast.ClassDef):
+            continue
+        for node in cls.body:
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            if not (QT_VIRTUALS.match(node.name) or (node.name in QT_TASK_VIRTUALS and _has_base(cls, "QgsTask"))):
+                continue
+            where = f"`{cls.name}.{node.name}` is a Qt virtual method"
+            if not _is_guarded_def(node):
+                problems.append((node.lineno, f"{where} that is not guarded: decorate it with @guarded"))
+            elif _has_result(node) and not _has_default(node):
+                problems.append((node.lineno, f"{where} with a result that is guarded without a default: "
+                                              "decorate it with @guarded(default=...)"))
     return problems
 
 
@@ -1217,12 +1267,80 @@ def test_every_qt_virtual_override_is_guarded():
             def eventFilter(self, obj, event): return False
         """))
     _bites(rule_virtual_overrides, _src("""
+        class A(QObject):
+            @guarded
+            def eventFilter(self, obj, event): return False
+        """), _src("""
+        class A(QObject):
+            @guarded(default=False)
+            def eventFilter(self, obj, event) -> bool: return False
+        """))
+    _bites(rule_virtual_overrides, _src("""
+        class A(QWidget):
+            def event(self, event): return super().event(event)
+        """), _src("""
+        class A(QWidget):
+            @guarded(default=False)
+            def event(self, event) -> bool: return super().event(event)
+        """))
+    _bites(rule_virtual_overrides, _src("""
+        class A(QWidget):
+            @guarded
+            def event(self, event) -> bool: return super().event(event)
+        """), _src("""
+        class A(QWidget):
+            @guarded(default=False)
+            def event(self, event) -> bool: return super().event(event)
+        """))
+    _bites(rule_virtual_overrides, _src("""
+        class A(QWidget):
+            @guarded
+            def heightForWidth(self, width) -> int: return 1
+        """), _src("""
+        class A(QWidget):
+            @guarded(default=-1)
+            def heightForWidth(self, width) -> int: return 1
+        """))
+    _bites(rule_virtual_overrides, _src("""
+        class A(QWidget):
+            def heightForWidth(self, width): return 1
+        """), _src("""
+        class A(QWidget):
+            @guarded(default=-1)
+            def heightForWidth(self, width): return 1
+        """))
+    _bites(rule_virtual_overrides, _src("""
         class A(QgsTask):
             def finished(self, ok): pass
         """), _src("""
         class A(QgsTask):
             @guarded
             def finished(self, ok): pass
+        """))
+    _bites(rule_virtual_overrides, _src("""
+        class A(QgsTask):
+            def cancel(self): pass
+        """), _src("""
+        class A(QgsTask):
+            @guarded
+            def cancel(self) -> None: pass
+        """))
+    _bites(rule_virtual_overrides, _src("""
+        class A(core.QgsTask):
+            def cancel(self): pass
+        """), _src("""
+        class A(core.QgsTask):
+            @guarded
+            def cancel(self): pass
+        """))
+    # a `cancel` of a class that is not a task is not Qt's; a void handler keeps the bare decorator
+    assert not rule_virtual_overrides("class A:\n    def cancel(self): pass\n")
+    assert not rule_virtual_overrides(_src("""
+        class A(QWidget):
+            @guarded
+            def paintEvent(self, event) -> None:
+                def inner(): return 1
+                super().paintEvent(event)
         """))
     _bites(rule_virtual_overrides, "class A:\n    def deactivate(self): pass\n",
            "class A:\n    @guarded\n    def deactivate(self): pass\n")
@@ -1428,6 +1546,13 @@ def test_summary_is_one_short_line_without_secrets():
     assert len(long) <= 201 and long.endswith("…")
     out = summary_of(ValueError("bad header Authorization: Bearer BBB"))
     assert "BBB" not in out and out.startswith("ValueError: bad header")
+
+
+def test_summary_from_strings_is_the_summary_of_the_exception():
+    from mapflow_next.core.report import summary_from, summary_of
+    exc = ValueError("a\nb  Authorization: Bearer BBB")
+    assert summary_from("ValueError", str(exc)) == summary_of(exc)
+    assert "TOKEN" not in summary_from("KeyError", "has TOKEN inside", ["TOKEN"])
 
 
 def _failed_request():

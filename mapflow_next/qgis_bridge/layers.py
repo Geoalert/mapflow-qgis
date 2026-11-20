@@ -21,7 +21,7 @@ from ..config import LAYER_GROUP_NAME, PREVIEW_PROPERTY, PROCESSING_PROPERTY, RE
 from ..core import filenames
 from ..core.models import Mosaic, Processing
 from . import styles
-from .conversion import GPKG, ConvertTask, Converted, Job, work_path
+from .conversion import GPKG, ConvertTask, Converted, Job, claimed, work_path
 
 WGS84 = QgsCoordinateReferenceSystem("EPSG:4326")
 WEB_MERCATOR = QgsCoordinateReferenceSystem("EPSG:3857")
@@ -352,7 +352,7 @@ class MapLayers:
     def _unique(folder: Path, stem: str, suffix: str) -> Path:
         candidate = folder / f"{stem}{suffix}"
         index = 1
-        while candidate.exists():
+        while candidate.exists() or claimed(candidate):
             candidate = folder / f"{stem}_{index}{suffix}"
             index += 1
         return candidate

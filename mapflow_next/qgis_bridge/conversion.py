@@ -134,6 +134,12 @@ def convert_geojson(job: Job, is_canceled: Callable[[], bool], feedback: QgsFeed
 _LIVE: Set["ConvertTask"] = set()               # a detached task must not be collected while Qt still runs it
 
 
+def claimed(path: Path) -> bool:
+    """True when `path` is the target or the fallback of a live task. The names stay claimed while the task is
+    live, because a cancelled task may still move or remove files after a new add of the same processing began."""
+    return any(path in (task.job.target, task.job.fallback) for task in _LIVE)
+
+
 class ConvertTask(QgsTask):
     """Runs `convert_geojson` on a worker thread. `callback(task)` runs once on the GUI thread when it ends,
     with `result` set on success, `error` set when the worker raised, and neither when it was cancelled."""
@@ -161,9 +167,12 @@ class ConvertTask(QgsTask):
             return False
         return not self.isCanceled()
 
+    @guarded
     def cancel(self) -> None:
-        self.feedback.cancel()                  # first: a write in progress checks the feedback, not the task
-        super().cancel()
+        try:
+            self.feedback.cancel()              # first: a write in progress checks the feedback, not the task
+        finally:
+            super().cancel()                    # the task stops even when the feedback raised
 
     @guarded
     def finished(self, ok: bool) -> None:

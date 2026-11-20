@@ -200,6 +200,11 @@ class Results(QObject):
         self.api.processing_aois(processing.id, done, failed)
 
     def save_geojson(self, processing: Processing, path: str, done: Callable[[str], None]) -> None:
+        self._continuing(processing)(self._save)(processing, path, done)
+
+    def _save(self, processing: Processing, path: str, done: Callable[[str], None]) -> None:
+        """The synchronous part of `save_geojson`: the flag, then the request. It runs under `_continuing`, so a
+        raise between the two (or in a slot of `busy`) clears the flag."""
         self._set_busy(processing.id, True)
 
         @self._continuing(processing)

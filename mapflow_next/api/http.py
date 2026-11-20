@@ -87,7 +87,9 @@ def parse_error_body(body: str):
 def classify(qt_error: int, status: Optional[int], body: str, url: str, timed_out: bool) -> ApiError:
     code, message, params = parse_error_body(body)
     readable = describe(code, params, message) if (code or message) else ""
-    if timed_out or qt_error == QNetworkReply.NetworkError.TimeoutError:
+    # Read at call time, with a default: a Qt build without the name must not make a failed request raise.
+    timeout_error = getattr(QNetworkReply.NetworkError, "TimeoutError", None)
+    if timed_out or qt_error == timeout_error:
         return ApiError("timeout", "Mapflow did not answer in time. Try again.", status, url=url, body=body)
     if qt_error == QNetworkReply.NetworkError.OperationCanceledError:
         return ApiError("cancelled", "Request cancelled.", status, url=url)

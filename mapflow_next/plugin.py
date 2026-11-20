@@ -15,7 +15,7 @@ from .api.http import Http
 from .controller import Controller
 from .core import guard
 from .core.guard import guarded
-from .core.report import Environment, RequestInfo, summary_of, technical_text
+from .core.report import Environment, RequestInfo, summary_from, technical_text
 from .core.scenarios import Catalogue
 from .qgis_bridge import aoi as aoi_tools
 from .qgis_bridge import message_bar
@@ -119,16 +119,21 @@ class MapflowNextPlugin:
         """The guard's reporter: the traceback to the QGIS log, then a Critical line on the message bar with a
         "Send a report" button. The line stays until the user closes it, so the button is there when they look."""
         QgsMessageLog.logMessage(details, config.PLUGIN_NAME, Qgis.MessageLevel.Critical)
-        message_bar.push(self.iface, f"Something went wrong: {exc}. Details are in the Log Messages panel.",
+        kind, message = type(exc).__name__, str(exc)
+        # The button keeps strings, not `exc`: the exception holds its traceback, the traceback holds the frames,
+        # and the frame of a failed `paintEvent` holds its `QPainter`, which would stay active for as long as
+        # this line stays (`duration=0`).
+        message_bar.push(self.iface, f"Something went wrong: {message}. Details are in the Log Messages panel.",
                          Qgis.MessageLevel.Critical,
-                         action=("Send a report", lambda: self._open_report(exc, details, request)), duration=0)
+                         action=("Send a report", lambda: self._open_report(kind, message, details, request)),
+                         duration=0)
 
-    def _open_report(self, exc: BaseException, details: str, request: Optional[RequestInfo]) -> None:
+    def _open_report(self, kind: str, message: str, details: str, request: Optional[RequestInfo]) -> None:
         """The button's work, done when it is pressed: a failure while building the text cannot stop the line."""
         secrets = [self.services[0].bearer] if self.services and self.services[0].bearer else []
         environment = Environment(plugin_version(), Qgis.QGIS_VERSION, qVersion(), platform.platform(),
                                   config.load_config().env)
-        summary = summary_of(exc, secrets)
+        summary = summary_from(kind, message, secrets)
         technical = technical_text(summary, details, request, environment, secrets)
         self._close_report_dialog()
         dialog = self.report_dialog = ReportDialog(summary, technical, config.SUPPORT_EMAIL, plugin_version(),

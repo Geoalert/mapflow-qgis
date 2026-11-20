@@ -84,9 +84,13 @@ def _one_line(text: str, limit: int) -> str:
     return text if len(text) <= limit else text[:limit - 1].rstrip() + "…"
 
 
+def summary_from(kind: str, message: str, secrets: Iterable[str] = ()) -> str:
+    """One line that says what failed: the exception's type name and message, without secrets."""
+    return _one_line(redact(f"{kind}: {message}", secrets), SUMMARY_LIMIT)
+
+
 def summary_of(exc: BaseException, secrets: Iterable[str] = ()) -> str:
-    """One line that says what failed: the exception's type and message, without secrets."""
-    return _one_line(redact(f"{type(exc).__name__}: {exc}", secrets), SUMMARY_LIMIT)
+    return summary_from(type(exc).__name__, str(exc), secrets)
 
 
 def technical_text(summary: str, details: str, request: Optional[RequestInfo], environment: Environment,

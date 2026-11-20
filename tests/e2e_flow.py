@@ -12,6 +12,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+import weakref
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
@@ -20,7 +21,7 @@ from .qgis_env import FakeIface, start_qgis, wait_until
 APP = start_qgis()
 
 from qgis.PyQt.QtCore import QCoreApplication, QEvent, QObject, QSize, Qt, QTimer, QUrl, pyqtSlot  # noqa: E402
-from qgis.PyQt.QtGui import QDesktopServices  # noqa: E402
+from qgis.PyQt.QtGui import QDesktopServices, QPainter  # noqa: E402
 from qgis.PyQt.QtTest import QTest  # noqa: E402
 from qgis.PyQt.QtWidgets import QAction, QSlider, QToolBar, QToolButton  # noqa: E402
 from qgis.PyQt.QtGui import QColor, QPalette  # noqa: E402
@@ -634,6 +635,9 @@ def check_result_conversion(iface, plugin):
         results.add_to_map(again_late)
         check(wait_until(lambda: len(started) == 2, 10), "…the same processing is added again after sign-in")
         new_job = started[1]
+        check(new_job.target != started[0].target and new_job.fallback != started[0].fallback,
+              f"…its output names are not the ones of the old task ({started[0].target.name}, "
+              f"{new_job.target.name})")
         check(new_job.geojson != started[0].geojson and new_job.geojson.exists(),
               f"…its download has a file of its own ({started[0].geojson.name}, {new_job.geojson.name})")
         release_old.set()
@@ -646,6 +650,8 @@ def check_result_conversion(iface, plugin):
         release_new.set()
         check(wait_until(lambda: again_late.id in loaded, 10) and not results.is_busy(again_late.id)
               and not failures, f"…and the new add finishes ({failures})")
+        check(new_job.target.exists() and not started[0].target.exists(),
+              "…and its GeoPackage is there: the old task did not remove it")
     finally:
         release_old.set()
         release_new.set()
@@ -655,6 +661,19 @@ def check_result_conversion(iface, plugin):
     check(not [f for f in files_under(out_dir) if f.startswith(".downloads")],
           "…and nothing stays in .downloads")
     before = files_under(out_dir)              # the GeoPackage of that add stays
+
+    # `_unique` skips a name that a live task holds, and gives it again when the task is released
+    holder = results.layers.convert_results(str(out_dir / "unique-probe.geojson"), processing_done("conv-unique"),
+                                            out_dir, lambda _task: None)
+    try:
+        taken = holder.job.target
+        check(results.layers._unique(out_dir, taken.stem, ".gpkg") != taken
+              and results.layers._unique(out_dir, taken.stem, ".gpkg").name == f"{taken.stem}_1.gpkg",
+              "A live task holds its names: `_unique` gives the next one")
+    finally:
+        holder.release()
+    check(results.layers._unique(out_dir, taken.stem, ".gpkg") == taken,
+          "…and the name is free again when the task is released")
 
     # the same processing converts again after that: the work file of the old task is not in the way
     again = processing_done("conv-signout")
@@ -716,6 +735,20 @@ def check_results_loading_flag(iface, plugin):
         check(not results.is_busy(start.id) and failures == [(start.id, GENERIC_FAILURE)],
               f"LOADING FLAG: an exception in the start of a load clears the flag ({failures})")
         expect_critical(iface, "vector tiles", "the guard's lines of the failing start", count=2)
+
+        # save_geojson: the flag is set, and the request's start raises
+        failures.clear()
+        saved_done = []
+        save = Processing.from_api(fixtures.processing_json("flag-save", "OK", 100, name="Forest · flag-save"))
+        saved_download = results.api.download_result
+        try:
+            results.api.download_result = raising("save request")
+            results.save_geojson(save, str(Path(tempfile.gettempdir()) / "flag-save.geojson"), saved_done.append)
+        finally:
+            results.api.download_result = saved_download
+        check(not results.is_busy(save.id) and failures == [(save.id, GENERIC_FAILURE)] and not saved_done,
+              f"LOADING FLAG: an exception between the flag and the request of a save clears the flag ({failures})")
+        expect_critical(iface, "save request", "the guard's lines of the failing save", count=2)
     finally:
         results.settings.setValue("results_mode", saved_mode)
         layers.tile_raster, layers.vector_tiles = saved_tile_raster, saved_vector_tiles
@@ -749,6 +782,81 @@ def check_virtual_guard(iface, plugin):
     finally:
         sys.excepthook = saved_hook
         widget.deleteLater()
+
+
+def check_paint_guard(iface, plugin):
+    """spec/006 § The guard: a `paintEvent` that raises leaves no active QPainter, also while the Critical line
+    (with its "Send a report" button) stays on the message bar, and the button still gives the type, the message
+    and the traceback."""
+    from mapflow_next.core.guard import guarded
+
+    class Local:
+        """A local of the failing frame: it is freed only when nothing holds that frame."""
+
+    locals_seen = []
+
+    class Failing(QWidget):
+        @guarded
+        def paintEvent(self, event) -> None:
+            painter = QPainter(self)
+            painter.drawLine(0, 0, 1, 1)
+            local = Local()
+            locals_seen.append(weakref.ref(local))
+            raise ValueError("boom")
+
+    escaped = []
+    saved_hook = sys.excepthook
+    sys.excepthook = lambda *info: escaped.append(info)
+    widget = Failing()
+    try:
+        widget.resize(40, 40)
+        widget.show()
+        widget.repaint()
+        QApplication.processEvents()
+        check(locals_seen and all(ref() is None for ref in locals_seen) and not widget.paintingActive(),
+              "PAINT GUARD: a paintEvent that raises leaves no active QPainter, and nothing holds its frame, "
+              "while the Critical line stays")
+        check(not escaped, f"…and nothing reaches the excepthook ({escaped})")
+        expect_critical(iface, "boom", "the guard's lines of the failing paintEvent", count=2)
+        check_the_report(iface, plugin, "report of a failing paintEvent", False, "A widget failed to paint.")
+    finally:
+        sys.excepthook = saved_hook
+        widget.close()
+        widget.deleteLater()
+
+
+def check_classify_without_timeout_error():
+    """spec/006: a failed request is classified, not raised, also on a Qt build whose `NetworkError` has no
+    `TimeoutError`."""
+    import mapflow_next.api.http as http_module
+    from qgis.PyQt.QtNetwork import QNetworkReply
+
+    class Without:
+        def __getattr__(self, name):
+            if name == "TimeoutError":
+                raise AttributeError(name)
+            return getattr(QNetworkReply.NetworkError, name)
+
+    class Reply:
+        NetworkError = Without()
+
+    saved = http_module.QNetworkReply
+    http_module.QNetworkReply = Reply
+    try:
+        try:
+            other = http_module.classify(QNetworkReply.NetworkError.HostNotFoundError, None, "", "u", False)
+            raised = None
+        except Exception as exc:  # noqa: BLE001
+            other, raised = None, exc
+        check(raised is None and other is not None and other.kind not in ("timeout", "cancelled"),
+              f"CLASSIFY: a Qt build without TimeoutError does not make a failed request raise ({raised}, "
+              f"{other and other.kind})")
+        check(http_module.classify(0, None, "", "u", True).kind == "timeout",
+              "…and a request that timed out is still a timeout")
+    finally:
+        http_module.QNetworkReply = saved
+    check(http_module.classify(QNetworkReply.NetworkError.TimeoutError, None, "", "u", False).kind == "timeout",
+          "…and the Qt timeout error is a timeout")
 
 
 def check_poll_auth(iface, plugin, state, browser):
@@ -2265,6 +2373,8 @@ def main():
     check_result_conversion(iface, plugin)
     check_results_loading_flag(iface, plugin)
     check_virtual_guard(iface, plugin)
+    check_paint_guard(iface, plugin)
+    check_classify_without_timeout_error()
     check_credentials_origin(iface, plugin, state, url)
 
     # imagery search: the Area drop-down is the run's area
