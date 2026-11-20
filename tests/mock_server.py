@@ -51,6 +51,9 @@ class State:
         self.deleted_mosaics = set()       # DELETE rasters/mosaic/{id}
         self.created_mosaics = 0           # POST rasters/mosaic so far: numbers the new collections' ids
         self.deleted_images = set()        # DELETE rasters/image/{id}
+        self.renamed_mosaics = {}          # PUT rasters/mosaic/{id}: collection id → (name, tags)
+        self.rename_requests = []          # …the bodies of those requests that were accepted or refused
+        self.rename_refusal = None         # a message: PUT rasters/mosaic/{id} answers 409 with it
         self.codes = {}                 # code → (code_challenge, redirect_uri)
         self.access_tokens = set()
         self.refresh_tokens = set()
@@ -105,7 +108,9 @@ class Handler(BaseHTTPRequestHandler):
                  f"{n % 60:02d}Z", "sizeInBytes": 1000, "footprint": None, "tags": [],
                  "rasterLayer": {"tileUrl": "", "tileJsonUrl": ""}, "status_summary": {"total": 1}}
                 for n in range(self.state.many_mosaics)]
-        every = [m for m in fixtures.MOSAICS + self.state.extra_mosaics + many
+        every = [dict(m, name=self.state.renamed_mosaics[m["id"]][0], tags=self.state.renamed_mosaics[m["id"]][1])
+                 if m["id"] in self.state.renamed_mosaics else m
+                 for m in fixtures.MOSAICS + self.state.extra_mosaics + many
                  if m["id"] not in self.state.deleted_mosaics]
         return sorted(every, key=lambda m: m.get("created_at") or "", reverse=True)
 
@@ -447,6 +452,21 @@ class Handler(BaseHTTPRequestHandler):
             found = next((m for m in self._mosaics() if m["id"] == match.group(1)), None)
             return self._send(200, found) if found else \
                 self._send(404, {"detail": {"code": "ItemNotFound", "message": "mosaicId not found"}})
+        if method == "PUT" and match:
+            body = body if isinstance(body, dict) else {}
+            if not body.get("name") or not isinstance(body.get("tags"), list):     # MosaicUpdateRequestSchema
+                return self._send(422, {"detail": [{"loc": ["body"], "msg": "Field required", "type": "missing"}]})
+            with self.state.lock:
+                self.state.rename_requests.append((match.group(1), body))
+                refusal = self.state.rename_refusal
+            found = next((m for m in self._mosaics() if m["id"] == match.group(1)), None)
+            if found is None:
+                return self._send(404, {"detail": {"code": "ItemNotFound", "message": "mosaicId not found"}})
+            if refusal is not None:
+                return self._send(409, {"detail": {"code": "MosaicNameRefused", "message": refusal}})
+            with self.state.lock:
+                self.state.renamed_mosaics[match.group(1)] = (body["name"], body["tags"])
+            return self._send(200, dict(found, name=body["name"], tags=body["tags"]))
         if method == "DELETE" and match:
             with self.state.lock:
                 self.state.deleted_mosaics.add(match.group(1))

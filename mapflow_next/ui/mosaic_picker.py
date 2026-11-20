@@ -36,6 +36,7 @@ class MosaicPicker(QDialog):
     layerUploadRequested = pyqtSignal(list, str)  # GeoTIFF layers' ids, into this collection ("" = a new one)
     filesDropped = pyqtSignal(list, str)        # [(file, name)] dragged in, into this collection ("" = a new one)
     createRequested = pyqtSignal()              # "Create collection"
+    renameCollectionRequested = pyqtSignal(str)   # mosaic id
     deleteCollectionRequested = pyqtSignal(str)   # mosaic id
     deleteImageRequested = pyqtSignal(str, str)   # mosaic id, image id
     queryChanged = pyqtSignal(str)              # the search box, once typing pauses ("" = the listing again)
@@ -257,6 +258,25 @@ class MosaicPicker(QDialog):
         self.more_collections.setText("Loading…" if loading else f"Show more · {len(shown):,} of {total:,}")
         self.more_collections.setEnabled(not loading)
 
+    def collection_renamed(self, mosaic_id: str, mosaics: List[Mosaic], query: str, found: List[Mosaic]) -> None:
+        """A collection has a new name. `mosaics` and `found` (the answer to `query`) are the lists with it as the
+        service holds them: their objects are not the ones drawn after a refresh. Its row (in the listing or the
+        search) shows the name, and so do the title and the target line when it is the selected one. The list
+        stays where the user scrolled it."""
+        self.mosaics = list(mosaics)
+        if query == self.search.text().strip():
+            self.found = list(found)
+        mosaic = self._lookup(mosaic_id)
+        if mosaic is None:
+            return
+        bar = self.list_scroll.verticalScrollBar()
+        place = bar.value()
+        self._render_collections()
+        QTimer.singleShot(0, guarded(lambda: bar.setValue(place)))
+        if mosaic_id == self.current:
+            self.title.setText(mosaic.name)
+            self._show_target()
+
     def update_counts(self) -> None:
         for mosaic in self._shown():
             row = self._rows.get(mosaic.id)
@@ -312,6 +332,7 @@ class MosaicPicker(QDialog):
         """The selected collection's actions."""
         menu = QMenu(self)
         mosaic_id = self.current or ""
+        menu_action(menu, "edit", "Rename…", lambda: self.renameCollectionRequested.emit(mosaic_id))
         menu_action(menu, "trash", "Delete collection…", lambda: self.deleteCollectionRequested.emit(mosaic_id),
                     ink=tokens()["err_fg"])
         return menu

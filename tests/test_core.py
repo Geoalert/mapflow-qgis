@@ -368,6 +368,27 @@ def test_collections_and_images():
     assert ImageryChoice.from_mosaic("m", "A").source_params() == {"myImagery": {"mosaicId": "m"}}
 
 
+def test_collection_tags():
+    from mapflow_next.core.models import Mosaic
+    assert Mosaic.from_api({"id": "m", "name": "A", "tags": ["a", "b"]}).tags == ["a", "b"]
+    assert Mosaic.from_api({"id": "m", "name": "A"}).tags == []
+    assert Mosaic.from_api({"id": "m", "name": "A", "tags": "a"}).tags == []
+    assert Mosaic.from_api({"id": "m", "name": "A", "tags": ["a", "", None, 3, "b"]}).tags == ["a", "b"]
+
+
+def test_imagery_choice_follows_a_renamed_collection():
+    from mapflow_next.core.draft import ImageryChoice
+    whole = ImageryChoice.from_mosaic("m", "Old")
+    whole.with_collection_name("Old", "New")
+    assert whole.label == "New"
+    one = ImageryChoice.from_mosaic("m", "Old", "i", "a.tif")
+    one.with_collection_name("Old", "New")
+    assert one.label == "New · a.tif" and one.source_params() == {"myImagery": {"imageIds": ["i"]}}
+    other = ImageryChoice.from_mosaic("m", "Something")
+    other.with_collection_name("Old", "New")
+    assert other.label == "Something"
+
+
 def _swallows_checked(handler, methods) -> bool:
     """Would `checked` (passed by some PyQt builds) land in a parameter that has a default value?"""
     import ast

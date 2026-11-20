@@ -567,17 +567,20 @@ class Mosaic:
     tile_url: str = ""
     tilejson_url: str = ""
     image_count: Optional[int] = None    # None until known
+    tags: List[str] = field(default_factory=list)
 
     @classmethod
     def from_api(cls, data: dict) -> "Mosaic":
         raster = data.get("rasterLayer") or {}
         summary = data.get("status_summary") or data.get("statusSummary") or {}
         count = summary.get("total", data.get("imagesCount", data.get("images_count")))
+        tags = data.get("tags")
         return cls(id=str(data.get("id", "")), name=data.get("name") or "",
                    image_count=int(_num(count)) if count is not None else None,
                    created=parse_datetime(data.get("created_at")), size_bytes=int(_num(data.get("sizeInBytes"))),
                    footprint_wkt=data.get("footprint") or "", tile_url=raster.get("tileUrl") or "",
-                   tilejson_url=raster.get("tileJsonUrl") or "")
+                   tilejson_url=raster.get("tileJsonUrl") or "",
+                   tags=[t for t in tags if isinstance(t, str) and t] if isinstance(tags, list) else [])
 
 
 @dataclass

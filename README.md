@@ -28,7 +28,7 @@ The plugin covers the work that belongs next to the map. Each tab has its scenar
   collection or one image in it, or add imagery right there: upload GeoTIFFs, from files or from the project's
   GeoTIFF layers — several at once, or dragged from the Layers panel or the file manager — into the selected
   collection, or into a new one when none is selected. You can also create a
-  collection with a name and tags, and delete a collection or an image from its ⋯ menu. Files are checked before upload: bands, CRS, size, that they match each
+  collection with a name and tags, rename a collection (its name and tags), and delete a collection or an image from its ⋯ menu. Files are checked before upload: bands, CRS, size, that they match each
   other, and, for an existing collection, that they fit it.
   The imagery's extent becomes the area, and its preview goes on the map.
 - **Layers panel › Use a layer in Mapflow.** Right-click a polygon layer for "Use as AOI in Mapflow", or a

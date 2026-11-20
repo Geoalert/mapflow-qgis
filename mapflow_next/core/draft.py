@@ -51,6 +51,11 @@ class ImageryChoice:
         label = f"{name} · {image_name}" if image_id and image_name else name
         return cls("my_imagery", label, mosaic_id=mosaic_id, image_ids=[image_id] if image_id else [])
 
+    def with_collection_name(self, old: str, new: str) -> None:
+        """A chosen collection (or one of its images) was renamed: the label starts with the collection's name."""
+        if self.kind == "my_imagery" and self.label.startswith(old):
+            self.label = new + self.label[len(old):]
+
     @classmethod
     def from_catalog(cls, image_id: str, provider_name: str, zoom: Optional[int], label: str,
                      min_area_km2: float = 0.0) -> "ImageryChoice":

@@ -194,6 +194,12 @@ class MapflowApi:
         """An empty My imagery collection (POST /rasters/mosaic {name, tags})."""
         self.http.post("rasters/mosaic", {"name": name, "tags": list(tags)}, on_success=on_done, on_error=on_error)
 
+    def update_mosaic(self, mosaic_id: str, name: str, tags: List[str], on_done: Callable[[object], None],
+                      on_error: OnError = None) -> None:
+        """A collection's name and tags (PUT rasters/mosaic/{id})."""
+        self.http.put(f"rasters/mosaic/{mosaic_id}", {"name": name, "tags": list(tags)},
+                      on_success=on_done, on_error=on_error)
+
     def upload_to_mosaic(self, mosaic_id: str, file_path: str, on_done: Callable[[dict], None],
                          on_error: OnError = None, on_progress: Optional[Callable] = None,
                          allow_duplicate: bool = False) -> None:

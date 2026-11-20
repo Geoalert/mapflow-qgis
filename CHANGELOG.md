@@ -8,7 +8,7 @@
     - Zoom z17–z21 with the scenario's recommended zoom; pick one image from a My imagery collection, whose extent becomes the area
     - Sign in with Mapflow in the browser and stay signed in across restarts; an API token as a fallback; both kept in the QGIS authentication database
     - Live cost estimate before every run; results load as styled GeoPackage layers or vector tiles
-    - My imagery window: upload several GeoTIFFs at once from files or layers, or drag them in; create a collection, delete a collection or an image; collections are listed 50 at a time and searched on the server, by their name or by an image's file name
+    - My imagery window: upload several GeoTIFFs at once from files or layers, or drag them in; create a collection, rename a collection (name and tags), delete a collection or an image; collections are listed 50 at a time and searched on the server, by their name or by an image's file name
     - Run again on an image from the imagery search shows that image in the run form
     - The search in Processings runs on Mapflow's side and covers the whole project, not only the processings already loaded; the full list, the Start tab and the "is ready" notices stay current while you search
     - Your credentials go only to Mapflow's own address: a picture or a redirect to another address loads without them

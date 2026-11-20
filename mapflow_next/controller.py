@@ -2001,6 +2001,7 @@ class Controller(QObject):
             picker.layerUploadRequested.connect(
                 guarded(lambda ids, target: self.upload_layers(ids, mosaic_id=target or None)))
             picker.createRequested.connect(self.create_collection)
+            picker.renameCollectionRequested.connect(self.rename_collection)
             picker.deleteCollectionRequested.connect(self.delete_collection)
             picker.deleteImageRequested.connect(self.delete_image)
             picker.geotiff_layers = lambda: [(layer.id(), layer.name()) for layer in rasters.geotiff_layers()]
@@ -2063,7 +2064,7 @@ class Controller(QObject):
         def add(tilejson: Optional[dict]):
             if self.layers.previews(key):           # two requests crossed
                 return
-            layer = self.layers.tile_raster(mosaic.tile_url, f"My imagery · {mosaic.name}",
+            layer = self.layers.tile_raster(mosaic.tile_url, self.layers.mosaic_layer_name(mosaic.name),
                                             bounds_extent((tilejson or {}).get("bounds")) if tilejson else None)
             if layer:
                 self.layers.add(layer, position=len(self.layers.group().children()), preview=key)
@@ -2316,6 +2317,40 @@ class Controller(QObject):
             self.notify(f"Couldn't create the collection “{name}”: {message}", Qgis.MessageLevel.Warning)
 
         self.imagery.create_collection(name, tags, created, failed)
+
+    @guarded
+    def rename_collection(self, mosaic_id: str) -> None:
+        """“Rename…” in a collection's ⋯ menu: its name and tags. Nothing is sent for an empty name or no change."""
+        mosaic = self.imagery.get_mosaic(mosaic_id)
+        if mosaic is None:
+            return
+        dialog = CollectionDialog(self.mosaic_picker if self._picker_open() else self.iface.mainWindow(),
+                                  title="Rename collection", action="Save", name=mosaic.name, tags=mosaic.tags)
+        if not dialog.exec():
+            return
+        name, tags = dialog.values()
+        old = mosaic.name
+        if not name or (name, tags) == (old, mosaic.tags):
+            return
+
+        def done(old_name: str) -> None:
+            choice = self.draft.imagery
+            if choice and choice.kind == "my_imagery" and choice.mosaic_id == mosaic_id:
+                choice.with_collection_name(old_name, name)
+            for layer in self.layers.previews(f"mosaic:{mosaic_id}"):
+                layer.setName(self.layers.mosaic_layer_name(name))
+            if self.mosaic_picker is not None:
+                self.mosaic_picker.collection_renamed(mosaic_id, self.imagery.mosaics, self.imagery.found_query,
+                                                      self.imagery.found)
+            self._picker_note(f"“{old_name}” is renamed to “{name}”.")
+            self.render_processings()
+            self.refresh_run()
+
+        def failed(message: str) -> None:
+            self._picker_note(f"Couldn't rename “{old}”: {message}", "error")
+            self.notify(f"Couldn't rename “{old}”: {message}", Qgis.MessageLevel.Warning)
+
+        self.imagery.rename_collection(mosaic_id, name, tags, done, failed)
 
     def _confirm_delete(self, title: str, text: str, detail: str) -> bool:
         box = QMessageBox(self.mosaic_picker if self._picker_open() else self.iface.mainWindow())

@@ -40,7 +40,7 @@ describes the state after the chain; each step makes the code match it, and upda
 [ready-for-review] "Available for me" switch in the imagery search — `spec/002_D`
 [ready-for-review] The area is clipped to the footprint of the chosen catalog image — `spec/002_B` § AOI and the imagery footprint
 [ready-for-review] Upload limits and free storage from `GET /rasters/memory` — `spec/002_C` § Storage Endpoints
-[ ] Rename a collection — `spec/002_C`
+[ready-for-review] Rename a collection — `spec/002_C`
 [ ] Download an original image — `spec/002_C` § Client-side download
 [ ] Rename a project — `spec/002_A`
 [ ] Delete a project — `spec/002_A`

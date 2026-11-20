@@ -568,6 +568,23 @@ class Imagery(QObject):
 
         self.api.create_mosaic(name, tags, created, lambda error: on_error(error.message))
 
+    def rename_collection(self, mosaic_id: str, name: str, tags: List[str], on_done: Callable[[str], None],
+                          on_error: Callable[[str], None]) -> None:
+        """A collection's new name and tags. `on_done` gets the old name. The collection changes where it is
+        cached, with no new listing. The listing, the search and the lookups can each hold an object of its own
+        for the collection, so all of them change. The window that shows the search redraws its rows itself (see
+        MosaicPicker.collection_renamed)."""
+        def done(_data):
+            known = self.get_mosaic(mosaic_id)
+            old = known.name if known is not None else name
+            for mosaic in (*self.mosaics, *self.found, *([known] if known else [])):
+                if mosaic.id == mosaic_id:
+                    mosaic.name, mosaic.tags = name, list(tags)
+            self.mosaicsChanged.emit(self.mosaics)
+            on_done(old)
+
+        self.api.update_mosaic(mosaic_id, name, tags, done, lambda error: on_error(error.message))
+
     def validate(self, images: List[Tuple[str, dict]], on_done: Callable[[List[str], List[str]], None]) -> None:
         """Mapflow's check of each image, (file name, request), before it is uploaded. `on_done` gets the
         reasons it refuses images and its warnings about the others. A request it can't answer (the check

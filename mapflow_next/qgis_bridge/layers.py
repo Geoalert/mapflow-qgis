@@ -229,8 +229,12 @@ class MapLayers:
             layer.setExtent(extent)
         return layer
 
+    @staticmethod
+    def mosaic_layer_name(mosaic_name: str) -> str:
+        return f"My imagery · {mosaic_name}"
+
     def mosaic_layer(self, mosaic: Mosaic) -> Optional[QgsRasterLayer]:
-        return self.tile_raster(mosaic.tile_url, f"My imagery · {mosaic.name}") if mosaic.tile_url else None
+        return self.tile_raster(mosaic.tile_url, self.mosaic_layer_name(mosaic.name)) if mosaic.tile_url else None
 
     def picture_on_footprint(self, data: bytes, footprint: Optional[dict], name: str,
                              image_id: str) -> Optional[QgsRasterLayer]:

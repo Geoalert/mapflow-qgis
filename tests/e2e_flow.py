@@ -2382,6 +2382,189 @@ def check_upload_timeout(iface, plugin, state):
         wait_until(lambda: not http._pending, 5)
 
 
+def check_rename_collection(iface, plugin, state, picker):
+    """spec/002_C § PUT /rasters/mosaic/{id}: "Rename…" in a collection's ⋯ menu (name and tags) sends the PUT and
+    the new name shows without a full reload: in the picker's rows (listing and search), its title and target
+    line, the My imagery tab, the run form (the chosen collection or image) and the map preview. An empty name is
+    refused in the dialog; a refusal shows the server's message and leaves the old name. An image can't be
+    renamed here. Everything the function changes is restored."""
+    import mapflow_next.controller as controller_module
+    from mapflow_next.core.draft import ImageryChoice
+    from mapflow_next.ui.collection_dialog import CollectionDialog
+    from mapflow_next.ui.widgets import ElidedLabel
+    controller, imagery = plugin.controller, plugin.services[3]
+    content = plugin.dock.content
+    warn = Qgis.MessageLevel.Warning
+
+    def pages():
+        return getattr(state, "mosaic_pages", [])
+
+    def card_names():
+        page = content.imagery.mosaic_list
+        return [w.full_text() for i in range(page.count()) for w in page.itemAt(i).widget().findChildren(ElidedLabel)]
+
+    def run_meta():
+        row = next((r for r in content.run._rows if r.title.text() == "My imagery"), None)
+        return row.meta.text() if row else ""
+
+    def rename(mosaic_id, answer):
+        """The ⋯ menu's Rename… with the dialog answering `answer` (None: cancelled)."""
+        Fake.answer = answer
+        picker.open_collection(mosaic_id)
+        menu = picker.collection_menu()
+        menu.actions()[0].trigger()
+
+    # The menus: a collection can be renamed, an image can't (Mapflow Web does that)
+    picker.open_collection("m-2")
+    check([a.text() for a in picker.collection_menu().actions()] == ["Rename…", "Delete collection…"]
+          and [a.text() for a in picker.image_menu("m-2", "m-2-i0").actions()] == ["Delete from the collection…"],
+          "a collection's ⋯ menu offers Rename… and Delete; an image's offers Delete only")
+
+    # The dialog: the name and the tags, prefilled; no empty name
+    dialog = CollectionDialog(title="Rename collection", action="Save", name="Beirut", tags=["a", "b"])
+    check(dialog.windowTitle() == "Rename collection" and dialog.name.text() == "Beirut"
+          and dialog.create.text() == "Save" and dialog.create.isEnabled() and not dialog.chips_holder.isHidden()
+          and dialog.values() == ("Beirut", ["a", "b"]),
+          f"the rename dialog shows the name and the tags ({dialog.values()})")
+    shot(dialog, "19b-rename-collection", QSize(460, 300))
+    dialog.name.clear()
+    check(not dialog.create.isEnabled(), "an empty name can't be saved")
+    dialog.name.setText("   ")
+    check(not dialog.create.isEnabled(), "…nor a name of spaces")
+    dialog.name.setText("Beirut port")
+    dialog.tag.setText("typed")
+    check(dialog.create.isEnabled() and dialog.values() == ("Beirut port", ["a", "b", "typed"]),
+          f"a tag typed but not added is saved too ({dialog.values()})")
+    dialog.close()
+    check(CollectionDialog().create.text() == "Create" and not CollectionDialog().create.isEnabled(),
+          "the new-collection dialog is as before")
+
+    class Fake:
+        answer = None
+        made = []
+
+        def __init__(self, *_a, **kwargs):
+            Fake.made.append(kwargs)
+
+        def exec(self):
+            return 0 if Fake.answer is None else 1
+
+        def values(self):
+            return Fake.answer
+
+    saved_dialog, saved_imagery = controller_module.CollectionDialog, controller.draft.imagery
+    shown_before = {layer.id(): layer.name() for layer in controller.layers.previews("mosaic:m-1")}
+    controller_module.CollectionDialog = Fake
+    try:
+        # Rename: the PUT, and the name everywhere without a reload
+        state.rename_requests.clear()
+        asked = len(pages())
+        rename("m-2", ("Beirut harbour", ["port"]))
+        check(wait_until(lambda: imagery.get_mosaic("m-2").name == "Beirut harbour", 5)
+              and state.rename_requests == [("m-2", {"name": "Beirut harbour", "tags": ["port"]})]
+              and Fake.made[-1].get("name") == "Beirut" and list(Fake.made[-1].get("tags")) == [],
+              f"Rename… sends PUT rasters/mosaic/m-2 with the name and tags ({state.rename_requests})")
+        check(wait_until(lambda: "Beirut harbour" in card_names(), 5)
+              and picker._rows["m-2"].title.text() == "Beirut harbour"
+              and picker.title.full_text() == "Beirut harbour" and "“Beirut harbour”" in picker.target.text()
+              and picker.current == "m-2" and imagery.get_mosaic("m-2").tags == ["port"],
+              "…the picker's row, title and target line, and the My imagery tab show the new name, still selected")
+        check(len(pages()) == asked and "“Beirut” is renamed to “Beirut harbour”" in picker.upload_note.text.text(),
+              "…without asking for the list again, and the window says so")
+
+        # The chosen collection of the run form, and its preview on the map
+        controller.draft.imagery = ImageryChoice.from_mosaic("m-1", "Drone survey March")
+        controller.refresh_run()
+        controller.show_mosaic("m-1", zoom=False)
+        check(wait_until(lambda: len(controller.layers.previews("mosaic:m-1")) >= 1, 5)
+              and "Drone survey March" in run_meta(), "(the run form uses a collection, shown on the map)")
+        rename("m-1", ("Drone survey April", []))
+        check(wait_until(lambda: "Drone survey April" in run_meta(), 5)
+              and controller.draft.imagery.label == "Drone survey April"
+              and {layer.name() for layer in controller.layers.previews("mosaic:m-1")}
+              == {"My imagery · Drone survey April"},
+              f"the run form and the map preview show the new name of the chosen collection ({run_meta()})")
+        controller.draft.imagery = ImageryChoice.from_mosaic("m-1", "Drone survey April", "m-1-i1", "centre.tif")
+        controller.refresh_run()
+        rename("m-1", ("Drone survey May", []))
+        check(wait_until(lambda: run_meta().startswith("Drone survey May"), 5)
+              and controller.draft.imagery.label == "Drone survey May · centre.tif"
+              and controller.draft.imagery.image_ids == ["m-1-i1"],
+              f"…also when one image of it is chosen ({controller.draft.imagery.label})")
+
+        # A search listing
+        picker.search.setText("survey")
+        check(wait_until(lambda: [m.id for m in picker.found] == ["m-1"] and not picker.found_loading, 5),
+              "(a search lists the collection)")
+        listed = len([p for p in pages() if not p.get("name_contains")])
+        rename("m-1", ("Drone survey June", []))
+        check(wait_until(lambda: picker._rows["m-1"].title.text() == "Drone survey June", 5)
+              and picker.found[0].name == "Drone survey June"
+              and len([p for p in pages() if not p.get("name_contains")]) == listed,
+              "a collection renamed from a search listing shows the new name there, with no listing request")
+        picker.search.clear()
+        check(wait_until(lambda: picker._shown() is picker.mosaics, 3)
+              and picker._rows["m-1"].title.text() == "Drone survey June", "…and in the listing")
+
+        # Refused: the server's message, the old name stays
+        state.rename_refusal = "A collection with this name already exists"
+        count = len(state.rename_requests)
+        iface.bar.messages.clear()
+        rename("m-1", ("Beirut harbour", []))
+        check(wait_until(lambda: len(state.rename_requests) == count + 1
+                         and "A collection with this name already exists" in picker.upload_note.text.text(), 5)
+              and any(level == warn and "A collection with this name already exists" in (text or "")
+                      for level, text in iface.bar.messages),
+              f"a refusal shows the message of Mapflow ({picker.upload_note.text.text()})")
+        check(imagery.get_mosaic("m-1").name == "Drone survey June" and picker._rows["m-1"].title.text()
+              == "Drone survey June" and run_meta().startswith("Drone survey June")
+              and controller.draft.imagery.label == "Drone survey June · centre.tif",
+              "…and the old name stays in the service, the window and the run form")
+        state.rename_refusal = None
+
+        # Nothing to send: an empty name, a cancelled dialog, nothing changed
+        count = len(state.rename_requests)
+        rename("m-1", ("", []))
+        rename("m-1", None)
+        rename("m-1", ("Drone survey June", []))
+        wait_until(lambda: False, 0.3)
+        check(len(state.rename_requests) == count, "an empty name, a cancelled dialog or no change send nothing")
+    finally:
+        controller_module.CollectionDialog = saved_dialog
+
+    # The real dialog through the controller: its tags are prefilled and a tag typed but not added is sent
+    class Editing(CollectionDialog):
+        def exec(self):
+            self.name.setText("Beirut docks")
+            self.tag.setText("typed")
+            return 1
+
+    controller_module.CollectionDialog = Editing
+    try:
+        state.rename_requests.clear()
+        picker.open_collection("m-2")
+        picker.collection_menu().actions()[0].trigger()
+        check(wait_until(lambda: state.rename_requests == [("m-2", {"name": "Beirut docks",
+                                                                    "tags": ["port", "typed"]})], 5),
+              f"the dialog starts with the collection's tags, and a tag typed but not added is sent "
+              f"({state.rename_requests})")
+    finally:
+        controller_module.CollectionDialog = saved_dialog
+
+    controller.draft.imagery = saved_imagery
+    state.renamed_mosaics.clear()
+    state.rename_requests.clear()
+    for layer in controller.layers.previews("mosaic:m-1"):
+        if layer.id() in shown_before:
+            layer.setName(shown_before[layer.id()])
+        else:
+            controller.layers.remove([layer])
+    imagery.load_mosaics()
+    wait_until(lambda: not imagery.loading_mosaics, 5)
+    controller.refresh_run()
+    picker.set_upload(None)
+
+
 def check_storage_limits(iface, plugin, state, picked):
     """spec/002_C § Storage Endpoints › Plugin behaviour, spec/005 § Failed requests, spec/006 § A guarded
     callback is interrupted, not completed: the limits come from GET /rasters/memory when My imagery opens and
@@ -4330,10 +4513,11 @@ def main():
               "deleting the last image leaves the collection in place, empty, and says so")
         check(controller.draft.imagery is None, "…and the run form no longer uses the deleted image")
         menu = picker.collection_menu()
-        check(picker.more_button.isVisible() and [a.text() for a in menu.actions()] == ["Delete collection…"],
-              "the selected collection has a ⋯ menu with Delete collection")
+        check(picker.more_button.isVisible()
+              and [a.text() for a in menu.actions()] == ["Rename…", "Delete collection…"],
+              "the selected collection has a ⋯ menu with Rename and Delete collection")
         controller.draft.imagery = controller_module.ImageryChoice.from_mosaic(jetty.id, "Jetty")
-        menu.actions()[0].trigger()
+        menu.actions()[1].trigger()
         check(wait_until(lambda: jetty.id in state.deleted_mosaics and imagery_service.get_mosaic(jetty.id) is None
                          and picker.current is None and jetty.id not in picker._rows, 5)
               and confirms[-1][1] == "Delete “Jetty”?" and controller.draft.imagery is None,
@@ -4341,6 +4525,7 @@ def main():
     finally:
         controller._confirm_delete = saved_confirm
         controller.draft.imagery = imagery_kept
+    check_rename_collection(iface, plugin, state, picker)
     state.list_uploads = False
     state.extra_mosaics, state.extra_images = [], {}
     imagery_service.load_mosaics()
