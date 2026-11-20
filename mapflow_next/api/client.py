@@ -85,8 +85,13 @@ class MapflowApi:
     # ---------- processings ----------
 
     def processings(self, project_id: str, on_done: Callable[[List[Processing], int], None],
-                    on_error: OnError = None, limit: int = PROCESSINGS_PAGE_SIZE, offset: int = 0) -> None:
+                    on_error: OnError = None, limit: int = PROCESSINGS_PAGE_SIZE, offset: int = 0,
+                    terms: str = "") -> None:
+        """One page, newest first. `terms` is a name search on the server; empty is not sent."""
         body = {"limit": limit, "offset": offset, "sortBy": "CREATED", "sortOrder": "DESC"}
+        terms = terms.strip()
+        if terms:
+            body["terms"] = terms
         self.http.post(f"projects/{project_id}/processings/v2/page", body, on_error=on_error,
                        on_success=lambda d: on_done([Processing.from_api(p) for p in (d or {}).get("results") or []],
                                                     int((d or {}).get("total") or 0)))

@@ -41,6 +41,7 @@ POLL_FAILURES_BEFORE_ALERT = 3
 STATUS_INTERVAL_MS = 5_000        # balance and limits, while the Mapflow panel is open
 STATUS_IDLE_INTERVAL_MS = 60_000  # …and while it is closed
 COST_DEBOUNCE_MS = 400            # wait for the form to settle before asking /cost
+PROCESSINGS_SEARCH_DEBOUNCE_MS = 400   # wait for typing to pause before the search goes to the server
 TIMEOUT_S = 30
 RESULT_TIMEOUT_S = 600
 # An upload may be silent for an hour: the timer restarts while bytes move, so a slow, healthy one is not cut

@@ -1684,6 +1684,183 @@ def check_restart(iface, content, controller, processings, state):
         reload()
 
 
+def check_processing_search(iface, content, controller, processings, state):
+    """spec/002_B § Plugin behaviour: the search sends `terms` to Mapflow, so it covers the whole project and not
+    only the pages loaded. It waits for typing to pause. "Show more" and the poll keep the terms; an answer for an
+    older text changes nothing; a search with no match, or one that failed, does not say the project is empty; a
+    cleared field asks for the full list at once. Everything the function changes is restored."""
+    from mapflow_next.core.models import Status
+    from mapflow_next.ui.processings_page import ProcessingCard
+    page, path = content.processings, "/projects/project-1/processings/v2/page"
+    saved_interval = processings._poll.interval()
+    needle = fixtures.processing_json("search-needle", "OK", 100, name="Needle deep")
+    bulk = [fixtures.processing_json(f"search-bulk-{n}", "OK", 100, name=f"Bulk {n}") for n in range(1, 35)]
+    running = fixtures.processing_json("search-running", "IN_PROGRESS", -1000, name="Bulk running")
+    slow = fixtures.processing_json("search-slow", "OK", 100, name="Slow survey")
+    extra = [needle] + bulk + [running, slow]
+    ids = {item["id"] for item in extra}
+    warn = Qgis.MessageLevel.Warning
+
+    def bodies():
+        return [r[2] for r in state.requests if r[0] == "POST" and r[1] == path]
+
+    def with_terms(text):
+        return [b for b in bodies() if b.get("terms") == text]
+
+    def names():
+        return sorted(c.processing.name for c in page.findChildren(ProcessingCard))
+
+    def full_total():
+        return len([p for p in state.processings if p["projectId"] == "project-1"])
+
+    def reload():
+        page.search.clear()
+        page.refresh_button.click()
+        wait_until(lambda: not page.refreshing, 5)
+
+    state.page_delay = {}
+    state.processings = [needle] + state.processings + bulk + [running, slow]
+    processings._poll.setInterval(60000)        # the flow leaves a short one: polls would blur the request counts
+    try:
+        reload()
+        check(wait_until(lambda: len(processings.items) == 30 and processings.total == full_total(), 5),
+              "SEARCH: the full list loads: the first 30 of the project")
+        check(processings.get("search-needle") is None and not any(b.get("terms") for b in bodies()),
+              "SEARCH: the oldest processing is not on the loaded pages, and no request has carried terms")
+
+        # the whole project, after a pause
+        page.search.setText("needle")
+        check(not with_terms("needle"), "SEARCH: right after typing no request is sent (the pause)")
+        check(wait_until(lambda: len(with_terms("needle")) == 1, 3)
+              and with_terms("needle")[0].get("offset") == 0 and with_terms("needle")[0].get("limit") == 30,
+              "SEARCH: after the pause one request carries the terms, from offset 0")
+        check(wait_until(lambda: names() == ["Needle deep"], 3),
+              f"SEARCH: the page shows the processing that was not on the loaded pages ({names()})")
+
+        # typing: one request for the burst
+        page.search.clear()
+        wait_until(lambda: len(processings.items) == 30, 5)
+        asked = len(bodies())
+        for text in ("b", "bu", "bul", "bulk"):
+            page.search.setText(text)
+            wait_until(lambda: False, 0.03)
+        check(wait_until(lambda: len(with_terms("bulk")) == 1, 3), "SEARCH: typing in a burst sends one request")
+        wait_until(lambda: False, 0.6)
+        sent = [(b.get("terms"), b.get("offset"), b.get("limit")) for b in bodies()[asked:]]
+        check([s[0] for s in sent] == ["bulk"], f"SEARCH: …with the final text, none for the keys before it ({sent})")
+        check(wait_until(lambda: len(names()) == 30 and processings.total == 35, 5),
+              "SEARCH: 30 of the 35 matches show")
+
+        # no local filter of the loaded rows
+        before = [p.id for p in page.items]
+        page.search.setText("zzz")
+        page._debounce.stop()
+        check([p.id for p in page._visible()] == before,
+              "SEARCH: the text does not filter the loaded rows on this side")
+        page.search.setText("bulk")
+        page._debounce.stop()
+
+        # "Show more" keeps the terms
+        check(page.more_button is not None and "30 of 35" in page.more_button.text(),
+              "SEARCH: “Show more” counts the matches")
+        asked = len(bodies())
+        page.more_button.click()
+        check(wait_until(lambda: any(b.get("terms") == "bulk" and b.get("offset") == 30 for b in bodies()[asked:]), 3),
+              "SEARCH: “Show more” sends the terms, from the offset of the rows shown")
+        check(wait_until(lambda: len(names()) == 35, 5) and all("Bulk" in n for n in names()),
+              "SEARCH: …and the page shows all 35 matches, and only them")
+
+        # the poll keeps the terms
+        running["status"], running["percentCompleted"] = "IN_PROGRESS", -200
+        processings.refresh(LOAD)
+        check(wait_until(lambda: processings.get("search-running") is not None
+                         and processings.get("search-running").status is Status.in_progress, 5),
+              "SEARCH: a running processing is on the searched pages")
+        processings._poll.setInterval(150)
+        processings._poll.start()
+        asked = len(bodies())
+        check(wait_until(lambda: len(bodies()) >= asked + 2
+                         and all(b.get("terms") == "bulk" and b.get("offset") == 0 for b in bodies()[asked:]), 5),
+              f"SEARCH: the poll sends the terms ({[b.get('terms') for b in bodies()[asked:]]})")
+        check(wait_until(lambda: processings.get("search-running").status is Status.ok, 8),
+              "SEARCH: …and its running processing is loaded as finished")
+        processings._poll.setInterval(60000)
+        processings._poll.stop()
+        check(wait_until(lambda: len(names()) == 35, 3), "SEARCH: the polls keep the 35 matches")
+
+        # an answer for an older text does not replace a newer list
+        state.page_delay = {"slow": 1.5}
+        page.search.setText("slow")
+        check(wait_until(lambda: len(with_terms("slow")) == 1, 3), "SEARCH: the slow request is in flight")
+        page.search.setText("needle")
+        check(wait_until(lambda: names() == ["Needle deep"] and processings.terms == "needle", 5),
+              "SEARCH: the newer text shows its list while the older request is in flight")
+        text = page.empty_text.text()
+        wait_until(lambda: False, 2)
+        check(names() == ["Needle deep"] and processings.terms == "needle" and page.empty_text.text() == text
+              and [p.name for p in processings.items] == ["Needle deep"],
+              f"SEARCH: the late answer for the older text changes nothing ({names()})")
+        state.page_delay = {}
+
+        # …also an answer for "Show more"
+        page.search.setText("bulk")
+        check(wait_until(lambda: len(names()) == 30 and processings.terms == "bulk", 5),
+              "SEARCH: the 30 first matches show again")
+        state.page_delay = {"bulk": 1.5}
+        asked = len(bodies())
+        page.more_button.click()
+        check(wait_until(lambda: any(b.get("offset") == 30 for b in bodies()[asked:]), 3),
+              "SEARCH: a “Show more” request is in flight")
+        page.search.setText("needle")
+        check(wait_until(lambda: names() == ["Needle deep"] and processings.terms == "needle", 5),
+              "SEARCH: the text changes before the page comes")
+        wait_until(lambda: False, 2)
+        check(names() == ["Needle deep"] and [p.name for p in processings.items] == ["Needle deep"]
+              and not processings.loading_more,
+              f"SEARCH: the late page adds no row to the newer list ({names()})")
+        state.page_delay = {}
+
+        # no match
+        page.search.setText("zzzz-nothing")
+        shown = "No processings match “zzzz-nothing”."
+        check(wait_until(lambda: page.empty_text.text() == shown, 5),
+              f"SEARCH: a search with no match says so ({page.empty_text.text()!r})")
+        check(not names() and not page.start_button.isVisibleTo(page.empty) and page.more_button is None,
+              "SEARCH: …shows no card, no “Start mapping” and no “Show more”")
+        page.set_items([], set(), set(), True, loaded=True)
+        check(page.empty_text.text() == "No processings in this project yet."
+              and page.start_button.isVisibleTo(page.empty),
+              "SEARCH: …and a project with no processings says that, with “Start mapping”")
+        controller.render_processings()
+
+        # a failed search says so
+        state.fail("POST", r"/projects/project-1/processings/v2/page", 503)
+        since = len(iface.bar.messages)
+        page.search.setText("needle")
+        check(wait_until(lambda: any(level == warn and text.startswith("Processings didn't load")
+                                     for level, text in iface.bar.messages[since:]), 5),
+              "SEARCH: a search that fails shows the failure in the message bar")
+        check(wait_until(lambda: page.empty_text.text() == "Processings didn't load.", 3)
+              and "No processings match" not in page.empty_text.text(),
+              f"SEARCH: …and the page says that the list did not load ({page.empty_text.text()!r})")
+        state.heal()
+
+        # a cleared field shows the full list at once
+        page.search.clear()
+        asked = len(bodies())
+        check(wait_until(lambda: any("terms" not in b for b in bodies()[asked:]), 0.3),
+              "SEARCH: a cleared field asks for the full list at once, with no terms")
+        check(wait_until(lambda: len(names()) == 30 and processings.total == full_total()
+                         and processings.terms == "", 5),
+              f"SEARCH: …and the page shows the first 30 of {full_total()}")
+    finally:
+        state.heal()
+        state.page_delay = {}
+        processings._poll.setInterval(saved_interval)
+        state.processings = [p for p in state.processings if p["id"] not in ids]
+        reload()
+
+
 def check_upload_timeout(iface, plugin, state):
     """spec/005 § Mapflow Backend API, spec/002_C (upload): every request has a timer, and an upload that stalls
     ends through `on_error` as a timeout, with the upload flags cleared so the next upload can start.
@@ -2564,6 +2741,7 @@ def main():
           f"Open in Mapflow Web opens that processing ({links.opened})")
     check_review_link(content, controller, processings, links, state, started)
     check_restart(iface, content, controller, processings, state)
+    check_processing_search(iface, content, controller, processings, state)
 
     # Download the area (AOI)
     import mapflow_next.controller as controller_module
@@ -3745,15 +3923,12 @@ def main():
     chips = content.processings.chip_buttons
     check(chips["all"].text() == "All 70", f"All counts every processing in the project ({chips['all'].text()!r})")
     empty = next((k for k in ("running", "attention", "done") if not content.processings.counts()[k]), None)
-    if empty:
-        chips[empty].click()
-    else:
-        content.processings.search.setText("no processing has this name")
+    check(empty is not None, "a status filter with no match among the loaded processings exists")
+    chips[empty].click()                # the search sends its text to Mapflow: only a status chip filters here
     check(content.processings.more_button is None and content.processings.empty.isVisibleTo(content.processings)
           and "latest 30 of 70" in content.processings.empty_text.text(),
           f"a filter that matches nothing offers no “Show more” and says what it looked through "
           f"({content.processings.empty_text.text()!r})")
-    content.processings.search.setText("")
     chips["all"].click()
     check(content.processings.more_button is not None, "…and All brings “Show more” back")
     content.processings.more_button.click()

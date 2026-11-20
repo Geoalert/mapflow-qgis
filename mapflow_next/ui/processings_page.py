@@ -160,6 +160,7 @@ class ProcessingsPage(QWidget):
     startRequested = pyqtSignal()
     refreshRequested = pyqtSignal()
     moreRequested = pyqtSignal()
+    searchChanged = pyqtSignal(str)         # the trimmed text, once typing pauses (at once when it is empty)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -175,6 +176,8 @@ class ProcessingsPage(QWidget):
         self.loaded, self.failed = True, False
         self.loading_more = False
         self.total = 0
+        self.terms = ""                             # the terms the list shown answers (the field may be ahead)
+        self._scroll_pending: Optional[str] = None
         self.provider_names: Dict[str, str] = {}
         self.mosaic_names: Dict[str, str] = {}
         self.ratings: Dict[str, int] = {}           # processing id → the rating sent from here
@@ -204,10 +207,14 @@ class ProcessingsPage(QWidget):
         toolbar.addStretch(1)
         outer.addLayout(toolbar)
         self.search = QLineEdit(self)
-        self.search.setPlaceholderText("Find by name or model")
+        self.search.setPlaceholderText("Find by name")
         self.search.setClearButtonEnabled(True)
         self.search.addAction(icons.icon("search", tokens()["text2"], 16), QLineEdit.ActionPosition.LeadingPosition)
-        self.search.textChanged.connect(guarded(lambda _: self._render()))
+        self._debounce = QTimer(self)
+        self._debounce.setSingleShot(True)
+        self._debounce.setInterval(config.PROCESSINGS_SEARCH_DEBOUNCE_MS)
+        self._debounce.timeout.connect(guarded(lambda: self.searchChanged.emit(self.search.text().strip())))
+        self.search.textChanged.connect(guarded(lambda _: self._typed()))
         search_row = QHBoxLayout()
         search_row.setContentsMargins(16, 4, 16, 4)
         search_row.addWidget(self.search, 1)
@@ -281,6 +288,21 @@ class ProcessingsPage(QWidget):
         frame.setDevicePixelRatio(pixmap.devicePixelRatio())
         self.refresh_button.setIcon(QIcon(frame))
 
+    def _typed(self) -> None:
+        """The text of the field changed: the search goes to Mapflow once typing pauses. Nothing is filtered here."""
+        if self.search.text().strip():
+            self._debounce.start()
+        else:
+            self._debounce.stop()               # nothing to wait for: the full list is asked for at once
+            self.searchChanged.emit("")
+
+    def clear_search(self) -> None:
+        """Empty the field without a search (a new project starts with the full list)."""
+        self._debounce.stop()
+        self.search.blockSignals(True)
+        self.search.clear()
+        self.search.blockSignals(False)
+
     def _set_filter(self, key: str) -> None:
         self.filter = key
         self._render()
@@ -295,12 +317,12 @@ class ProcessingsPage(QWidget):
 
     def set_items(self, items: List[Processing], in_map: set, busy: set, can_manage: bool, loading: bool = False,
                   total: int = 0, loading_more: bool = False, loaded: bool = True, failed: bool = False,
-                  can_run: bool = True) -> None:
+                  can_run: bool = True, terms: str = "") -> None:
         """`loaded`: a list of this project came back. `failed`: the last answer was a failure. The "no
-        processings" text needs a successful answer with no items."""
+        processings" text needs a successful answer with no items. `terms`: the search the list answers."""
         self.items, self.in_map, self.busy, self.can_manage = items, in_map, busy, can_manage
         self.loading, self.total, self.loading_more = loading, max(total, len(items)), loading_more
-        self.loaded, self.failed, self.can_run = loaded, failed, can_run
+        self.loaded, self.failed, self.can_run, self.terms = loaded, failed, can_run, terms
         if self.expanded is None and items:
             self.expanded = items[0].id
         self._render()
@@ -310,10 +332,10 @@ class ProcessingsPage(QWidget):
         self.expanded = processing_id
         self.filter = "all"
         self.chip_buttons["all"].setChecked(True)
+        self._scroll_pending = processing_id
         if self.search.text():
-            self.search.clear()                 # or the search may hide it
+            self.search.clear()                 # or the search may hide it: the full list is asked for at once
         self._render()
-        QTimer.singleShot(0, guarded(lambda: self._scroll_to(processing_id)))    # after _render restores the scroll
 
     def _scroll_to(self, processing_id: str) -> None:
         cards = (self.list.itemAt(i).widget() for i in range(self.list.count()))
@@ -322,7 +344,6 @@ class ProcessingsPage(QWidget):
             self.scroll.ensureWidgetVisible(card, 0, 40)
 
     def _visible(self) -> List[Processing]:
-        needle = self.search.text().strip().lower()
         result = []
         for p in self.items:
             if self.filter == "running" and not p.is_running:
@@ -330,8 +351,6 @@ class ProcessingsPage(QWidget):
             if self.filter == "done" and not (p.is_done and not p.needs_review):
                 continue
             if self.filter == "attention" and not (p.status is Status.failed or p.needs_review):
-                continue
-            if needle and needle not in f"{p.name} {p.model_name}".lower():
                 continue
             result.append(p)
         return result
@@ -353,18 +372,22 @@ class ProcessingsPage(QWidget):
             self.list.addWidget(card)
         partial = len(self.items) < self.total
         if not self.items:
-            self.empty_text.setText(empty_list_text("processings", "No processings in this project yet.",
-                                                    self.loaded, self.loading, self.failed))
+            if self.terms and self.loaded and not self.loading and not self.failed:
+                self.empty_text.setText(f"No processings match “{self.terms}”.")
+            else:
+                self.empty_text.setText(empty_list_text("processings", "No processings in this project yet.",
+                                                        self.loaded, self.loading, self.failed))
         elif partial:
             self.empty_text.setText(f"Nothing matches this filter among the latest {len(self.items):,} of "
                                     f"{self.total:,} processings.")
         else:
             self.empty_text.setText("Nothing matches this filter.")
-        self.start_button.setVisible(self.loaded and not self.failed and not self.loading and not self.items)
+        self.start_button.setVisible(self.loaded and not self.failed and not self.loading and not self.items
+                                     and not self.terms)
         self.list.addWidget(self.empty)
         self.empty.setVisible(not visible)
         if visible and partial:
-            # Older processings, one page at a time. Filters and search apply to the loaded ones; with
+            # Older processings, one page at a time. The status filters apply to the loaded ones; with
             # nothing shown, a button whose pages may show nothing either would read as broken.
             more = button("Loading…" if self.loading_more else
                           f"Show more · {len(self.items):,} of {self.total:,}", "outline")
@@ -377,6 +400,9 @@ class ProcessingsPage(QWidget):
         self.list.addStretch(1)
         bar.setValue(position)
         QTimer.singleShot(0, guarded(lambda: bar.setValue(position)))   # polling re-renders: keep the reader's place
+        if self._scroll_pending and not self.loading:
+            target, self._scroll_pending = self._scroll_pending, None
+            QTimer.singleShot(0, guarded(lambda: self._scroll_to(target)))     # after the scroll above is restored
 
     @guarded
     def _toggle(self, processing_id: str) -> None:

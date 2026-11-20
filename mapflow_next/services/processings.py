@@ -10,7 +10,7 @@ from ..api.client import MapflowApi
 from ..api.http import ApiError
 from ..config import COST_DEBOUNCE_MS, POLL_FAILURES_BEFORE_ALERT, POLL_INTERVAL_MS, PROCESSINGS_PAGE_SIZE
 from ..core.draft import RunDraft
-from ..core.failures import ALERT, LOAD, POLL, STOP, PollFailures, keeps_schedule, poll_notice, stronger
+from ..core.failures import ALERT, LOAD, POLL, STOP, USER, PollFailures, keeps_schedule, poll_notice, stronger
 from ..core.models import Processing, Project, Status
 from ..core.guard import guarded
 
@@ -52,6 +52,8 @@ class Processings(QObject):
         self.project: Optional[Project] = None
         self.items: List[Processing] = []
         self.total = 0
+        self.terms = ""                         # the name search the list on screen answers
+        self._search = 0                        # bumped at every change of terms: an older answer is dropped
         self._last_status: Dict[str, Status] = {}
         self.started_here: Set[str] = set()
         self._poll = QTimer(self)
@@ -89,6 +91,8 @@ class Processings(QObject):
             self.project = project
             return
         self.project = project
+        self.terms = ""
+        self._search += 1
         self.items, self._last_status, self.total = [], {}, 0
         self._loading = self.loading_more = False   # a list still loading for the previous project no longer counts
         self.loaded = self.load_failed = False
@@ -97,6 +101,23 @@ class Processings(QObject):
         self._poll.stop()
         self.refresh(LOAD)
         self.changed.emit([])
+
+    def set_terms(self, terms: str) -> None:
+        """Search the project's processings by name on the server; empty shows the full list. The rows of the
+        old terms leave at once, and an answer still on its way for them is dropped."""
+        terms = terms.strip()
+        if terms == self.terms:
+            return
+        self.terms = terms
+        if not self.project:
+            return
+        self._search += 1
+        self.items, self.total = [], 0
+        self._loading = self.loading_more = False
+        self._again = None
+        self._poll.stop()
+        self.changed.emit(self.items)
+        self.refresh(USER)                      # the user waits on it: a failure shows at once
 
     def stop(self) -> None:
         """Unload: stop the timers and abort the pending requests. Emits nothing: the dock goes too."""
@@ -127,8 +148,10 @@ class Processings(QObject):
         project_id = self.project.id
         # The newest processings, as many as are shown (up to the API's page limit); polling keeps them current
         limit = min(max(PROCESSINGS_PAGE_SIZE, len(self.items)), MAX_PAGE)
-        self.api.processings(project_id, partial(self._on_list, project_id, limit),
-                             partial(self._on_list_error, project_id, trigger), limit=limit)
+        search = self._search
+        self.api.processings(project_id, partial(self._on_list, project_id, search, limit),
+                             partial(self._on_list_error, project_id, search, trigger), limit=limit,
+                             terms=self.terms)
         return True
 
     def load_more(self) -> None:
@@ -137,12 +160,14 @@ class Processings(QObject):
             return
         self.loading_more = True
         project_id = self.project.id
-        self.api.processings(project_id, partial(self._on_more, project_id), partial(self._on_more_error, project_id),
-                             limit=PROCESSINGS_PAGE_SIZE, offset=len(self.items))
+        search = self._search
+        self.api.processings(project_id, partial(self._on_more, project_id, search),
+                             partial(self._on_more_error, project_id, search),
+                             limit=PROCESSINGS_PAGE_SIZE, offset=len(self.items), terms=self.terms)
         self.changed.emit(self.items)
 
-    def _on_more(self, project_id: str, items: List[Processing], total: int) -> None:
-        if not self._current(project_id):
+    def _on_more(self, project_id: str, search: int, items: List[Processing], total: int) -> None:
+        if not self._current(project_id, search):
             return
         self.loading_more = False
         known = {p.id for p in self.items}
@@ -153,8 +178,8 @@ class Processings(QObject):
         self.total = max(total, len(self.items))
         self.changed.emit(self.items)
 
-    def _on_more_error(self, project_id: str, error: ApiError) -> None:
-        if self._current(project_id):
+    def _on_more_error(self, project_id: str, search: int, error: ApiError) -> None:
+        if self._current(project_id, search):
             self.loading_more = False
             self.changed.emit(self.items)
             if self._is_gone(error):
@@ -162,11 +187,12 @@ class Processings(QObject):
             else:
                 self.actionFailed.emit(f"Couldn't load more processings: {error.message}")
 
-    def _current(self, project_id: str) -> bool:
-        return self.project is not None and self.project.id == project_id
+    def _current(self, project_id: str, search: int) -> bool:
+        """An answer counts only for the project and the terms it was asked for."""
+        return self.project is not None and self.project.id == project_id and search == self._search
 
-    def _on_list(self, project_id: str, limit: int, items: List[Processing], total: int) -> None:
-        if not self._current(project_id):
+    def _on_list(self, project_id: str, search: int, limit: int, items: List[Processing], total: int) -> None:
+        if not self._current(project_id, search):
             return
         self._loading = False
         self.loaded, self.load_failed = True, False
@@ -188,8 +214,8 @@ class Processings(QObject):
         elif any(not p.is_final for p in items):
             self._schedule()
 
-    def _on_list_error(self, project_id: str, trigger: str, error: ApiError) -> None:
-        if not self._current(project_id):
+    def _on_list_error(self, project_id: str, search: int, trigger: str, error: ApiError) -> None:
+        if not self._current(project_id, search):
             return
         self._loading = False                   # before anything that can raise: the list can be asked for again
         again, self._again = self._again, None

@@ -60,6 +60,7 @@ class State:
         self.failures = []                 # rules from fail(): requests that answer an error instead
         self.hang_seconds = 3              # how long a "hang" holds the request before it closes
         self.restart_refused = None        # (status, code, message): POST /processings/{id}/restart/v2 answers this
+        self.page_delay = {}               # terms (lower case) → seconds the processings page waits before it answers
 
     def fail(self, method, pattern, what, times=None):
         """Requests of `method` whose path (without /rest) matches the regex `pattern` fail. `what`: an HTTP
@@ -274,10 +275,18 @@ class Handler(BaseHTTPRequestHandler):
                         if item["percentCompleted"] >= 100:
                             item["status"] = "OK"
                 items = list(reversed([p for p in self.state.processings if p["projectId"] == match.group(1)]))
+            terms = body.get("terms")
+            if terms is not None and not isinstance(terms, str):
+                return self._send(400, {"code": "BAD_REQUEST", "message": "Invalid value for: body", "params": None})
+            if terms:
+                items = [p for p in items if terms.lower() in (p["name"] or "").lower()]
             offset, limit = int(body.get("offset") or 0), int(body.get("limit") or 30)
             if limit > 100:
                 return self._send(400, {"code": "BAD_REQUEST", "message": "limit must be at most 100"})
             page = items[offset:offset + limit]
+            delay = self.state.page_delay.get((terms or "").lower())
+            if delay:
+                time.sleep(delay)               # outside state.lock: the server is threaded
             return self._send(200, {"results": page, "total": len(items), "count": len(page)})
         match = re.fullmatch(r"/processings/([\w-]+)/v2", path)
         if method == "PUT" and match:

@@ -166,6 +166,7 @@ class Controller(QObject):
         p.refreshed.connect(guarded(lambda: page.set_refreshing(False)))
         p.rated.connect(self.on_rated)
         page.moreRequested.connect(guarded(p.load_more))
+        page.searchChanged.connect(guarded(p.set_terms))
 
         imagery_page = c.imagery
         imagery_page.searchRequested.connect(self.search)
@@ -354,7 +355,10 @@ class Controller(QObject):
     @guarded
     def on_project(self, project) -> None:
         self.content.set_project(project)
+        changed = not (self.processings.project and self.processings.project.id == project.id)
         self.processings.set_project(project)
+        if changed:
+            self.content.processings.clear_search()         # the new project starts with the full list
         if self.draft.model and not project.model(self.draft.model.id):
             self.draft.model, self.draft.options = None, set()
         if self.draft.scenario_id and not self.draft.model:
@@ -1324,7 +1328,8 @@ class Controller(QObject):
                                            loading=self.processings.loading, total=self.processings.total,
                                            loading_more=self.processings.loading_more,
                                            loaded=self.processings.loaded, failed=self.processings.load_failed,
-                                           can_run=project.role.can_run if project else False)
+                                           can_run=project.role.can_run if project else False,
+                                           terms=self.processings.terms)
         self.content.start.set_recent(project.name if project else "", self.processings.items, in_map)
 
     @guarded
