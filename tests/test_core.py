@@ -1926,3 +1926,52 @@ def test_safe_filename_cleans_its_fallback_too_and_never_returns_empty():
 def test_image_download_failure_texts(step, status, expected):
     from mapflow_next.core.messages import image_download_failure
     assert image_download_failure(step, status, "the fallback") == expected
+
+
+@pytest.mark.parametrize("expected, blocks", [
+    ("5.0.0", True),
+    ("5.0.0-beta", True),
+    ("10.0.0", True),
+    (" 5.0.0\n", True),
+    ("4.1.0", False),
+    ("4.0.1", False),
+    ("4.0.0", False),
+    ("3.9.0", False),
+    ("4.0.0-beta", False),
+    ("", False),
+    ("   ", False),
+    (None, False),
+    ("not a version", False),
+    ("5", False),
+    ("5.0", False),
+    ("v5.0.0", False),
+    ("<html>5.0.0</html>", False),
+    ('{"version": "5.0.0"}', False),
+])
+def test_a_higher_major_version_blocks_the_plugin(expected, blocks):
+    from mapflow_next.core.versions import requires_upgrade
+    assert requires_upgrade("4.0.0", expected) is blocks
+
+
+@pytest.mark.parametrize("own", ["", "dev", "4", None])
+def test_a_plugin_version_that_is_not_a_version_is_never_blocked(own):
+    from mapflow_next.core.versions import requires_upgrade
+    assert requires_upgrade(own, "5.0.0") is False
+
+
+def test_parse_version_reads_three_numbers_and_ignores_a_suffix():
+    from mapflow_next.core.versions import parse_version
+    assert parse_version("4.0.0-beta") == (4, 0, 0)
+    assert parse_version("4.0.0+build.7") == (4, 0, 0)
+    assert parse_version(" 12.3.45\n") == (12, 3, 45)
+    assert parse_version("x") is None
+    assert parse_version("") is None
+    assert parse_version(None) is None
+
+
+def test_format_version_gives_the_clean_text_or_empty():
+    from mapflow_next.core.versions import format_version
+    assert format_version(" 5.0.0-beta\n") == "5.0.0-beta"
+    assert format_version("5.0.0+b1") == "5.0.0+b1"
+    assert format_version("<html>5.0.0</html>") == ""
+    assert format_version(None) == ""

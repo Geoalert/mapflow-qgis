@@ -26,6 +26,7 @@
     - Restart is offered for a failed or a cancelled processing, to everyone who may run a processing in the project, not only to maintainers and owners. A refused restart shows the message of Mapflow
     - A large result is converted to GeoPackage in the background: QGIS stays usable, and the task can be cancelled in the Tasks panel
     - An unexpected error shows a “Send a report” button: it opens a window with the details and your comment, and opens your mail program with the report to Mapflow support. Nothing is sent without you
+    - When Mapflow expects a higher major version of the plugin, the plugin shows one page that asks to upgrade and opens the QGIS plugin manager, instead of working. A higher minor or patch version is not announced
     - Not carried over yet: planned processings (templates), custom XYZ/TMS providers, translations (es, pt, ru, zh; planned for 4.1)
 
 ## 3.6.3

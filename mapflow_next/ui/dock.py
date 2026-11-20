@@ -20,11 +20,12 @@ from .run_page import RunPage
 from .sign_in import SignInPage
 from .start_page import StartPage
 from .theme import color, is_dark, load_fonts, stylesheet, tokens
+from .upgrade_page import UpgradePage
 from .widgets import FocusRing, link, menu_action, tool
 from ..core.guard import guarded
 
 START, PROCESSINGS, IMAGERY = 0, 1, 2
-PAGE_SIGN_IN, PAGE_START, PAGE_RUN, PAGE_PROCESSINGS, PAGE_IMAGERY = range(5)
+PAGE_SIGN_IN, PAGE_START, PAGE_RUN, PAGE_PROCESSINGS, PAGE_IMAGERY, PAGE_UPGRADE = range(6)
 
 
 class TabButton(FocusRing, QAbstractButton):
@@ -132,7 +133,8 @@ class DockContent(QWidget):
         self.run = RunPage()
         self.processings = ProcessingsPage()
         self.imagery = ImageryPage()
-        for page in (self.sign_in, self.start, self.run, self.processings, self.imagery):
+        self.upgrade = UpgradePage()
+        for page in (self.sign_in, self.start, self.run, self.processings, self.imagery, self.upgrade):
             self.stack.addWidget(page)
         layout.addWidget(self.stack, 1)
         layout.addWidget(self._footer())
@@ -300,6 +302,13 @@ class DockContent(QWidget):
         for widget in (self.header, self.tabs, self.footer):
             widget.setVisible(False)
         self.stack.setCurrentIndex(PAGE_SIGN_IN)
+
+    def show_upgrade(self, expected: str, installed: str) -> None:
+        """Only the upgrade page, with its own Sign out: the header's account menu needs an email that is not known."""
+        for widget in (self.header, self.tabs, self.footer):
+            widget.setVisible(False)
+        self.upgrade.show_versions(expected, installed)
+        self.stack.setCurrentIndex(PAGE_UPGRADE)
 
     def show_signed_in(self) -> None:
         for widget in (self.header, self.tabs, self.footer):

@@ -1030,6 +1030,175 @@ def check_poll_auth(iface, plugin, state, browser):
         processings._poll.setInterval(saved_poll_interval)
 
 
+def check_forced_upgrade(iface, plugin, state, browser):
+    """spec/002_api.md § Versioning policy: the plugin asks GET /version at sign-in (also at a silent start). A higher
+    major version than the plugin's own blocks it: one page that says to upgrade, a button for the plugin manager, a
+    Sign out, no other request, no poll. A higher minor or patch version, a failed request and an answer that is not
+    a version change nothing and show nothing. Starts and ends signed out; everything it changes is restored."""
+    from mapflow_next.api import auth
+    from mapflow_next.qgis_bridge import updates
+    session, processings = plugin.services[1], plugin.services[2]
+    controller, content = plugin.controller, plugin.dock.content
+    opened = []
+    saved_open = updates.open_upgrades
+    saved_status, saved_poll = session._timer.interval(), processings._poll.interval()
+    told = []
+    session.error.connect(told.append)
+
+    def api_requests(since):
+        """The (method, path) of the API requests after index `since`, without the sign-in server's."""
+        return [(r[0], r[1]) for r in state.requests[since:] if not r[1].startswith(mock_server.OIDC)]
+
+    def asked_version(since):
+        return len([r for r in api_requests(since) if r == ("GET", "/version")])
+
+    def timers():
+        return [session._timer.isActive(), session._refresh_timer.isActive(), processings._poll.isActive(),
+                controller._mosaic_refresh.isActive()]
+
+    def sign_in_token():
+        content.sign_in.tokenSubmitted.emit(mock_server.TOKEN)
+
+    def sign_in_browser():
+        content.sign_in.browserRequested.emit()
+        browse(browser.opened[-1])
+        status, back = browse(browser.opened[-1])
+        browse(back)
+
+    def signed_in():
+        return wait_until(lambda: session.state == "signed_in" and session.project is not None
+                          and processings.loaded, 8)
+
+    def blocked():
+        return wait_until(lambda: session.state == "upgrade_required", 8)
+
+    def quiet(label, bar_mark, ledger_mark):
+        check(not told and len(iface.bar.messages) == bar_mark and len(iface.bar.ledger.unexpected()) == ledger_mark
+              and content.stack.currentWidget() is not content.upgrade and not session.expected_version,
+              f"{label}: nothing is shown and the plugin is not blocked ({told}, {iface.bar.messages[bar_mark:]})")
+
+    def start():
+        del told[:]
+        return len(state.requests), len(iface.bar.messages), len(iface.bar.ledger.unexpected())
+
+    def sign_out():
+        controller.sign_out()
+        wait_until(lambda: session.state == "signed_out", 5)
+
+    try:
+        state.heal()
+        state.expected_version = "4.0.0"
+        session._timer.setInterval(50)
+        processings._poll.setInterval(150)
+
+        # the same version: asked once, before the account, and the sign-in goes on
+        mark, bar_mark, ledger_mark = start()
+        sign_in_token()
+        check(signed_in(), "forced upgrade: signed in with the API token against the same version")
+        calls = api_requests(mark)
+        check(asked_version(mark) == 1 and calls[0] == ("GET", "/version")
+              and calls.index(("GET", "/projects/default")) > calls.index(("GET", "/version")),
+              f"GET /version is asked once at sign-in, before the account ({calls[:3]})")
+        quiet("the same version", bar_mark, ledger_mark)
+        sign_out()
+
+        # a higher major version blocks the plugin (API token)
+        state.expected_version = "5.0.0"
+        mark, bar_mark, ledger_mark = start()
+        sign_in_token()
+        check(blocked(), "a higher major version blocks the plugin after an API token sign-in")
+        wait_until(lambda: False, 0.8)
+        text = content.upgrade.message.text()
+        check(content.stack.currentWidget() is content.upgrade and session.expected_version == "5.0.0",
+              "the dock shows the upgrade page")
+        check(content.header.isHidden() and content.tabs.isHidden() and content.footer.isHidden(),
+              "…and nothing else: no header, tabs or footer")
+        check("5.0.0" in text and "4.0.0" in text and "Upgrade" in text, f"…its text names both versions ({text})")
+        check(api_requests(mark) == [("GET", "/version")], f"no other request is sent ({api_requests(mark)})")
+        check(not any(timers()), f"…and no poll or renewal timer runs ({timers()})")
+        check(session.settings.value("auth_method") == "token" and session.settings.value("auth_config_id"),
+              "the blocked sign-in is remembered for the next start")
+        check(not told and len(iface.bar.ledger.unexpected()) == ledger_mark,
+              f"nothing is reported as an error ({told})")
+        shot(content, "01c-upgrade", QSize(400, 880))
+        updates.open_upgrades = lambda: opened.append(True)
+        content.upgrade.upgrade.click()
+        check(opened == [True], "the upgrade button opens the QGIS plugin manager")
+
+        # a silent start with stored credentials asks again
+        mark = len(state.requests)
+        session.restore()
+        check(blocked() and wait_until(lambda: asked_version(mark) == 1, 5), "a silent start asks GET /version again "
+              "and is blocked again")
+        wait_until(lambda: False, 0.5)
+        check(api_requests(mark) == [("GET", "/version")] and not any(timers()) and not told,
+              f"…with no other request and no message ({api_requests(mark)})")
+        state.expected_version = "4.0.0"
+        mark = len(state.requests)
+        session.restore()
+        check(signed_in() and not told and content.stack.currentWidget() is not content.upgrade,
+              f"after the upgrade a silent start signs in without a message ({told})")
+        sign_out()
+
+        # sign out stays possible on the page
+        state.expected_version = "5.0.0"
+        sign_in_token()
+        check(blocked(), "a higher major version blocks again")
+        content.upgrade.sign_out.click()
+        check(wait_until(lambda: session.state == "signed_out", 5) and content.stack.currentWidget() is content.sign_in
+              and not session.settings.value("auth_method") and not session.expected_version,
+              "Sign out on the upgrade page returns to the sign-in page and forgets the sign-in")
+
+        # the browser sign-in
+        mark = len(state.requests)
+        sign_in_browser()
+        check(blocked() and content.stack.currentWidget() is content.upgrade,
+              "a higher major version blocks the plugin after a browser sign-in")
+        seen = len(state.requests)
+        wait_until(lambda: False, 0.8)
+        check(len(state.requests) == seen and not any(timers()) and auth.load_refresh_token(session.config)
+              and session.settings.value("auth_method") == "browser",
+              f"…no request leaves the plugin, not even a token renewal ({len(state.requests) - seen} new), and "
+              "the sign-in is remembered")
+        mark = len(state.requests)
+        session.restore()
+        check(blocked() and wait_until(lambda: asked_version(mark) == 1, 5)
+              and len(browser.opened) and not told,
+              "a silent start after a browser sign-in asks GET /version again and is blocked again")
+        wait_until(lambda: False, 0.5)
+        check(api_requests(mark) == [("GET", "/version")], f"…with no other API request ({api_requests(mark)})")
+        state.expected_version = "4.0.0"
+        session.restore()
+        check(signed_in() and not told, f"after the upgrade the silent start signs in ({told})")
+        sign_out()
+
+        # a higher minor or patch version, a failed request, an answer that is not a version: nothing changes
+        cases = [("4.1.0", None), ("4.0.1", None), ("4.0.0-beta", None), ("5", None), ("", None),
+                 ("not a version", None), ("<html>5.0.0</html>", None), ("4.0.0", 503), ("4.0.0", 404),
+                 ("5.0.0", "drop")]
+        for expected, failure in cases:
+            state.heal()
+            state.expected_version = expected
+            if failure is not None:
+                state.fail("GET", r"^/version$", failure)
+            label = f"a version answer {expected!r}" if failure is None else f"a failed GET /version ({failure})"
+            mark, bar_mark, ledger_mark = start()
+            sign_in_token()
+            check(signed_in(), f"{label}: the sign-in goes on")
+            quiet(label, bar_mark, ledger_mark)
+            sign_out()
+        state.heal()
+        state.expected_version = "4.0.0"
+        check(session.state == "signed_out", "forced upgrade: the check ends signed out")
+    finally:
+        session.error.disconnect(told.append)
+        state.heal()
+        state.expected_version = "4.0.0"
+        updates.open_upgrades = saved_open
+        session._timer.setInterval(saved_status)
+        processings._poll.setInterval(saved_poll)
+
+
 def check_rename_project(iface, plugin, state):
     """spec/002_A § Plugin behaviour, § PUT /projects/{id}: "Rename…" is in a ⋯ menu on the tile of a project the
     user owns, never on the default project or a project shared with the user as a member. The dialog edits the
@@ -3956,6 +4125,7 @@ def main():
           and browse(mock_server.REDIRECT_URI)[0] == 0, "Cancel stops waiting and closes the listener")
 
     check_poll_auth(iface, plugin, state, browser)
+    check_forced_upgrade(iface, plugin, state, browser)
 
     # ---------- API token ----------
     # wrong token first: a friendly error, still signed out

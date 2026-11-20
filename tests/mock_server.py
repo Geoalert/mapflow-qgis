@@ -80,6 +80,7 @@ class State:
         self.download_chunks = 10          # the number of chunks of a "slow" download
         self.not_downloadable = set()      # image ids listed with available_for_download: false
         self.download_links = []           # image ids GET rasters/image/{id}/download was asked for
+        self.expected_version = "4.0.0"    # GET /version answers this, as text: the plugin version the backend expects
         self.page_delay = {}               # terms (lower case) → seconds the processings page waits before it answers
         #                                    (or before it fails, when fail() applies to it)
 
@@ -282,6 +283,8 @@ class Handler(BaseHTTPRequestHandler):
             if method == "POST" and path.endswith("/processings/v2/page"):
                 time.sleep(self.state.page_delay.get(((body or {}).get("terms") or "").lower(), 0))
             return self._fail(failure)
+        if method == "GET" and path == "/version":
+            return self._send(200, self.state.expected_version, "text/plain")
         if method == "GET" and path == "/projects/default":
             return self._send(200, fixtures.PROJECT)
         if method == "GET" and path == "/user/status":

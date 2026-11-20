@@ -144,6 +144,30 @@ def _menu():
     check(settings and sign_out, "Settings… and Sign out work on Qt 6 (QAction.triggered passes checked)")
 
 
+@step("dock: upgrade page")
+def _upgrade():
+    from mapflow_next.ui.dock import PAGE_UPGRADE, DockContent
+    content = DockContent(catalogue)
+    content.resize(400, 880)
+    content.show()
+    content.show_upgrade("5.0.0", "4.0.0")
+    page = content.upgrade
+    check(content.stack.currentWidget() is page and content.stack.currentIndex() == PAGE_UPGRADE,
+          "the upgrade page is the current page")
+    check(not content.header.isVisible() and not content.tabs.isVisible() and not content.footer.isVisible(),
+          "header, tabs and footer are hidden on it")
+    text = page.message.text()
+    check("5.0.0" in text and "4.0.0" in text and "Upgrade" in text,
+          f"it names both versions and says to upgrade ({text})")
+    upgrade, sign_out = recorder(page.upgradeRequested), recorder(page.signOutRequested)
+    page.upgrade.click()
+    page.sign_out.click()
+    check(len(upgrade) == 1 and len(sign_out) == 1, "its two buttons emit upgradeRequested and signOutRequested")
+    shot(content, "q6-01c-upgrade")
+    content.show_signed_out()
+    check(content.stack.currentWidget() is content.sign_in, "show_signed_out leaves the upgrade page")
+
+
 @step("run form")
 def _run():
     from mapflow_next.ui.run_page import CostView, ImageryRow

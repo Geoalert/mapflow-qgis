@@ -14,9 +14,10 @@ from ..config import POLL_FAILURES_BEFORE_ALERT, STATUS_IDLE_INTERVAL_MS, STATUS
 from ..core.failures import ALERT, STOP, TRANSIENT_KINDS, PollFailures, poll_notice
 from ..core.models import Project, UserStatus
 from ..core.oauth import Tokens
+from ..core.versions import format_version, requires_upgrade
 from ..core.guard import guarded
 
-SIGNED_OUT, SIGNING_IN, SIGNED_IN = "signed_out", "signing_in", "signed_in"
+SIGNED_OUT, SIGNING_IN, SIGNED_IN, UPGRADE_REQUIRED = "signed_out", "signing_in", "signed_in", "upgrade_required"
 BROWSER, TOKEN = "browser", "token"
 RETRY_REFRESH_MS = 30_000
 
@@ -39,6 +40,8 @@ class Session(QObject):
         self.project: Optional[Project] = None
         self.default_project: Optional[Project] = None    # what Mapflow answered for projects/default at sign-in
         self.tokens: Optional[Tokens] = None
+        self.own_version = http.plugin_version
+        self.expected_version = ""                        # what the backend expects, while the plugin is blocked
         self._silent = False
         self._refreshing = False
         self._forced_refresh_at = 0.0
@@ -125,6 +128,7 @@ class Session(QObject):
         self.status, self._status_pending = None, False
         self._status_poll.succeeded()
         self.default_project = None
+        self.expected_version = ""
         self.tokens = None
         self.http.bearer = None
         self.http.auth_config_id = None
@@ -134,7 +138,7 @@ class Session(QObject):
         self.http.auth_config_id = config_id
         self.method, self._silent = TOKEN, silent
         self._set_state(SIGNING_IN)
-        self.api.default_project(self._signed_in, self._sign_in_failed)
+        self._start_account()
 
     # ---------- browser sign-in tokens ----------
 
@@ -150,7 +154,7 @@ class Session(QObject):
             auth.store_refresh_token(self.config, tokens.refresh)
         self._refresh_timer.start(int(tokens.refresh_delay() * 1000))
         if self.state == SIGNING_IN:
-            self.api.default_project(self._signed_in, self._sign_in_failed)
+            self._start_account()
 
     @guarded
     def refresh_sign_in(self) -> None:
@@ -186,15 +190,38 @@ class Session(QObject):
 
     # ---------- after the credentials are in place ----------
 
-    def _signed_in(self, data: dict) -> None:
-        data = data or {}
-        user = data.get("user") or {}
-        self.email = user.get("email") or (auth.token_login(self.http.auth_config_id) if self.method == TOKEN else "")
+    def _start_account(self) -> None:
+        """Ask which plugin version the backend expects, then load the account. A failed answer, or one that is not
+        a version, does not block the plugin."""
+        self.api.version(self._on_version, on_error=lambda _error: self._load_account())
+
+    def _on_version(self, text: str) -> None:
+        if self.state != SIGNING_IN:
+            return                                       # cancelled or signed out meanwhile
+        if requires_upgrade(self.own_version, text):
+            self.expected_version = format_version(text)
+            self._refresh_timer.stop()                   # blocked: no request leaves the plugin
+            self._remember_sign_in()
+            self._set_state(UPGRADE_REQUIRED)
+            return
+        self._load_account()
+
+    def _load_account(self) -> None:
+        if self.state == SIGNING_IN:
+            self.api.default_project(self._signed_in, self._sign_in_failed)
+
+    def _remember_sign_in(self) -> None:
         self.settings.setValue("auth_method", self.method)
         if self.method == TOKEN:
             self.settings.setValue("auth_config_id", self.http.auth_config_id)
         else:
             self.settings.remove("auth_config_id")
+
+    def _signed_in(self, data: dict) -> None:
+        data = data or {}
+        user = data.get("user") or {}
+        self.email = user.get("email") or (auth.token_login(self.http.auth_config_id) if self.method == TOKEN else "")
+        self._remember_sign_in()
         default = Project.from_api(data, self.email)
         self.projects = [default]
         self.default_project = default

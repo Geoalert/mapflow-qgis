@@ -201,6 +201,7 @@ every Mapflow user. The plugin links to the right page wherever it leaves someth
 | Create a project | **Kept**: New project in the Projects window | Starting new work shouldn't need a trip to the browser |
 | Rename a project | **Kept**: the ⋯ menu of a project tile in the Projects window (the owner; not the default project) | A name is fixed where the project is picked |
 | Delete a project | **Kept**: the ⋯ menu of a project tile in the Projects window, after a confirmation (the owner; not the default project) | The processings of the project go with it; results already on the map stay |
+| Forced upgrade | **Kept**, as one page: when Mapflow expects a higher major version of the plugin, the dock asks to upgrade and opens the QGIS plugin manager | An old plugin would send requests the backend no longer understands. A higher minor or patch version is not announced |
 | Projects: share | **Mapflow Web** › the project ("Share project in Mapflow Web" and the share icon in the Projects window) | Sharing needs the team's members and roles. The plugin creates, renames, deletes, switches, searches and pins projects |
 | Review: accept or send back results | **Mapflow Web** (the processing links there) | Review is a step of its own, with its own page, after the processing; the plugin shows that a processing needs it |
 | Balance and top-up, API tokens | **Mapflow Web** › [Account](https://app.mapflow.ai/account/balance) ("Top up" in the run form) | Payments and keys stay with the account |
@@ -208,7 +209,7 @@ every Mapflow user. The plugin links to the right page wherever it leaves someth
 | Custom XYZ/TMS providers | **Not yet** | Left out of the first release; Mapflow's own basemaps and My imagery cover the main cases |
 | Translations (es, pt, ru, zh) | **Not yet**: planned for 4.1 | Every text is new, so the 3.x translations don't apply |
 | Settings of the 3.x plugin | **Not migrated** | The two plugins install side by side; sign in and set the output folder again |
-| Georeferenced catalog previews, forced-upgrade dialog, Segment Anything zooms | **Not yet** | Smaller features, after the first release |
+| Georeferenced catalog previews, Segment Anything zooms | **Not yet** | Smaller features, after the first release |
 
 ## To verify against the real API
 

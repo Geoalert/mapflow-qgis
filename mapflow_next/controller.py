@@ -26,11 +26,11 @@ from .qgis_bridge import aoi as aoi_tools
 from .qgis_bridge import message_bar
 from .qgis_bridge.draw_tool import PolygonDrawTool
 from .qgis_bridge.layers import MapLayers, bounds_extent
-from .qgis_bridge import rasters
+from .qgis_bridge import rasters, updates
 from .services.imagery import Imagery
 from .services.processings import Processings
 from .services.results import Results
-from .services.session import SIGNED_IN, SIGNED_OUT, SIGNING_IN, Session
+from .services.session import SIGNED_IN, SIGNED_OUT, SIGNING_IN, UPGRADE_REQUIRED, Session
 from .ui.dock import IMAGERY, PROCESSINGS, DockContent
 from .ui.gallery import GalleryDialog
 from .ui import imagery_page as imagery_tabs
@@ -125,6 +125,8 @@ class Controller(QObject):
         c.projectsRequested.connect(self.open_projects)
         c.settingsRequested.connect(self.open_settings)
         c.signOutRequested.connect(self.sign_out)
+        c.upgrade.upgradeRequested.connect(self.open_plugin_manager)
+        c.upgrade.signOutRequested.connect(self.sign_out)
         c.tabChanged.connect(self.on_tab)
 
         c.start.scenarioChosen.connect(self.apply_scenario)
@@ -283,6 +285,10 @@ class Controller(QObject):
         self.session.sign_in_token(token)
 
     @guarded
+    def open_plugin_manager(self) -> None:
+        updates.open_upgrades()
+
+    @guarded
     def sign_out(self) -> None:
         self.processings.stop()
         self.session.sign_out()
@@ -315,6 +321,9 @@ class Controller(QObject):
                 if dialog is not None:
                     dialog.close()
             self.content.show_signed_out()
+        elif state == UPGRADE_REQUIRED:
+            sign_in.set_busy(False)
+            self.content.show_upgrade(self.session.expected_version, self.session.own_version)
         elif state == SIGNED_IN:
             sign_in.set_busy(False)
             sign_in.clear()
