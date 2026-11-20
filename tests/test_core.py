@@ -6,13 +6,14 @@ from pathlib import Path
 
 from mapflow_next.core.draft import AreaOfInterest, ImageryChoice, RunDraft
 from mapflow_next.core.messages import describe
-from mapflow_next.core.models import (BillingType, DataProvider, Model, Processing, Project, Role, Status,
-                                      UserStatus)
+from mapflow_next.core.models import (BillingType, DataProvider, Model, PlannedProcessing, Processing, Project, Role,
+                                      Status, UserStatus, planned_processings)
 from mapflow_next.core.scenarios import Catalogue, match_model, resolve, scenario_for_model
 from mapflow_next.config import RESOURCES, TERMS_URL, Config, load_config
 from mapflow_next.core import oauth
 
-from .fixtures import BUILDINGS, FOREST, MULTI, ROADS, OPEN_DATA, MAPBOX, PROJECT, STATUS, processing_json
+from .fixtures import (BUILDINGS, FOREST, MULTI, ROADS, OPEN_DATA, MAPBOX, PROJECT, STATUS, planned_json,
+                       processing_json)
 
 
 def test_model_prices_and_options():
@@ -601,6 +602,40 @@ def rule_controller_no_http(source, module="mapflow_next.controller"):
     problems += [(node.lineno, "the controller reaches requests through api/client.py, not `.http`")
                  for node in ast.walk(ast.parse(source)) if isinstance(node, ast.Attribute) and node.attr == "http"]
     return sorted(set(problems))
+
+
+def test_planned_processing_from_api():
+    row = PlannedProcessing.from_api(planned_json("tpl-1", "Harbor watch", "SEARCHING", "project-9"))
+    assert (row.id, row.name, row.status, row.project_id) == ("tpl-1", "Harbor watch", "SEARCHING", "project-9")
+    bare = PlannedProcessing.from_api({"id": "tpl-2", "name": None, "status": None})
+    assert (bare.id, bare.name, bare.status, bare.project_id) == ("tpl-2", "", "", "")
+
+
+def test_planned_processings_list_is_tolerant():
+    rows = planned_processings([planned_json("b", "Two"), "text", None, {"name": "no id"}, {"id": ""},
+                                planned_json("a", "One")])
+    assert [r.id for r in rows] == ["b", "a"]
+    for answer in (None, {}, {"id": "x"}, "x", 5):
+        assert planned_processings(answer) == [], answer
+
+
+def test_planned_processing_status_text_and_tone():
+    def row(status):
+        return PlannedProcessing("id", "n", status)
+    expected = {"SEARCHING": ("Searching", "run"), "Failed": ("Failed", "err"), "Created": ("Created", "gray"),
+                "": ("", "gray"), "Some_NEW_value": ("Some new value", "gray"), "failed": ("Failed", "err")}
+    for status, (text, tone) in expected.items():
+        assert (row(status).status_text, row(status).status_tone) == (text, tone), status
+
+
+def test_client_reads_only_the_projects_planned_processings():
+    """spec/002_F § Plugin behaviour in Mapflow Next: the one endpoint, GET /processings/template/project/{id}."""
+    client = (PLUGIN / "api" / "client.py").read_text(encoding="utf-8")
+    assert client.count("processings/template") == 1
+    assert 'self.http.get(f"processings/template/project/{project_id}"' in client
+    code = [*(PLUGIN / "api").glob("*.py"), *(PLUGIN / "services").glob("*.py"), PLUGIN / "controller.py"]
+    others = [path.name for path in code if path.name != "client.py" and "template" in path.read_text("utf-8")]
+    assert not others, others
 
 
 def test_ui_imports_no_service():

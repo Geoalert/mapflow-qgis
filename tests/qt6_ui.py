@@ -110,8 +110,8 @@ print(f"Qt {PyQt6.QtCore.QT_VERSION_STR}, PyQt {PyQt6.QtCore.PYQT_VERSION_STR}")
 
 from mapflow_next import config  # noqa: E402
 from mapflow_next.core.draft import Issue  # noqa: E402
-from mapflow_next.core.models import (CatalogImage, Mosaic, MosaicImage, Processing, Project,  # noqa: E402
-                                      UserStatus)
+from mapflow_next.core.models import (CatalogImage, Mosaic, MosaicImage, PlannedProcessing, Processing,  # noqa: E402
+                                      Project, UserStatus)
 from mapflow_next.core.scenarios import Catalogue  # noqa: E402
 
 from . import fixtures  # noqa: E402
@@ -483,6 +483,19 @@ def _processings():
                 action.trigger()
                 break
     check(rename or not menus, f"the processing menu's Rename works ({len(menus)} menus)")
+
+    page.set_items(items, set(), set(), True, total=30,
+                   planned=[PlannedProcessing.from_api(fixtures.planned_json("tpl-1", "Harbor watch", "Searching"))])
+    spin()
+    layout = [page.list.itemAt(i).widget() for i in range(page.list.count())]
+    kinds = [type(w).__name__ for w in layout if type(w).__name__ in ("PlannedCard", "ProcessingCard")]
+    planned = next((w for w in layout if type(w).__name__ == "PlannedCard"), None)
+    check(kinds[:2] == ["PlannedCard", "ProcessingCard"] and planned is not None
+          and not planned.findChildren(QToolButton), f"a planned processing shows first, with no menu ({kinds[:2]})")
+    opened = recorder(page.plannedOpened)
+    if planned is not None:
+        QTest.mouseClick(planned, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, QPoint(20, 12))
+    check(opened == [("tpl-1",)], f"clicking a planned processing emits its id (mouse position on Qt 6) ({opened})")
 
 
 @step("projects window")

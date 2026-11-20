@@ -1,7 +1,7 @@
 """Mapflow REST endpoints used by the plugin, returning domain objects.
 
-The endpoint set is the current plugin's, minus what the new design leaves out (planned
-processings/templates, custom XYZ providers, review workflow actions).
+The endpoint set is the current plugin's, minus what the new design leaves out (custom XYZ providers,
+review workflow actions). Of the planned processings (templates) only the project's list is read.
 """
 from __future__ import annotations
 
@@ -10,8 +10,8 @@ from urllib.parse import quote, urlencode
 
 from ..config import (IMAGE_DOWNLOAD_TIMEOUT_S, PROCESSINGS_PAGE_SIZE, PROJECTS_PAGE_SIZE, RESULT_TIMEOUT_S,
                       SEARCH_PAGE_SIZE)
-from ..core.models import (CatalogImage, ImageDownload, Mosaic, MosaicImage, Processing, Project, StorageLimits,
-                           UserStatus, aois_geojson)
+from ..core.models import (CatalogImage, ImageDownload, Mosaic, MosaicImage, PlannedProcessing, Processing, Project,
+                           StorageLimits, UserStatus, aois_geojson, planned_processings)
 from .http import Http
 
 OnError = Optional[Callable]
@@ -107,6 +107,12 @@ class MapflowApi:
         self.http.post(f"projects/{project_id}/processings/v2/page", body, on_error=on_error,
                        on_success=lambda d: on_done([Processing.from_api(p) for p in (d or {}).get("results") or []],
                                                     int((d or {}).get("total") or 0)))
+
+    def planned_processings(self, project_id: str, on_done: Callable[[List[PlannedProcessing]], None],
+                            on_error: OnError = None) -> None:
+        """The project's planned processings, in the order Mapflow sends them."""
+        self.http.get(f"processings/template/project/{project_id}", on_error=on_error,
+                      on_success=lambda d: on_done(planned_processings(d)))
 
     def processing(self, processing_id: str, on_done: Callable[[Processing], None], on_error: OnError = None) -> None:
         self.http.get(f"processings/{processing_id}/v2", on_error=on_error,

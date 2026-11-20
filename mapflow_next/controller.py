@@ -161,6 +161,7 @@ class Controller(QObject):
         page.duplicate.connect(self.duplicate)
         page.delete.connect(self.delete)
         page.openWeb.connect(self.open_in_web)
+        page.plannedOpened.connect(self.open_planned)
         page.rate.connect(self.rate)
         page.openWebApp.connect(guarded(lambda: QDesktopServices.openUrl(QUrl(self.session.config.web_url))))
         page.downloadAoi.connect(self.download_aoi)
@@ -191,6 +192,7 @@ class Controller(QObject):
 
         p.changed.connect(self.on_processings)
         p.foundChanged.connect(guarded(lambda *_: self.render_processings()))
+        p.plannedChanged.connect(guarded(lambda *_: self.render_processings()))
         p.started.connect(self.on_started)
         p.startFailed.connect(self.on_start_failed)
         p.finished.connect(self.on_finished)
@@ -1442,7 +1444,7 @@ class Controller(QObject):
                                            loading=shown[2], total=shown[1], loading_more=shown[3],
                                            loaded=shown[4], failed=shown[5],
                                            can_run=project.role.can_run if project else False,
-                                           terms=p.terms, opened=None if searching else p.opened)
+                                           terms=p.terms, opened=None if searching else p.opened, planned=p.planned)
         self.content.start.set_recent(project.name if project else "", p.items, in_map)
 
     @guarded
@@ -1568,6 +1570,15 @@ class Controller(QObject):
         url = (f"{self.session.config.web_url}/projects/{project}?processing={processing_id}" if project
                else self.session.config.web_url)
         QDesktopServices.openUrl(QUrl(url))
+
+    @guarded
+    def open_planned(self, planned_id: str) -> None:
+        """A planned processing is managed in Mapflow Web: open its project there."""
+        row = next((x for x in self.processings.planned if x.id == planned_id), None)
+        project = row.project_id if row and row.project_id else (
+            self.session.project.id if self.session.project else "")
+        web = self.session.config.web_url
+        QDesktopServices.openUrl(QUrl(f"{web}/projects/{project}" if project else web))
 
     @guarded
     def download_aoi(self, processing_id: str) -> None:

@@ -67,6 +67,15 @@ def processing_json(pid, status="IN_PROGRESS", percent=0, name="Buildings · Old
             "reviewStatus": None}
 
 
+def planned_json(pid, name, status="Created", project="project-1"):
+    """A planned processing as GET /processings/template/project/{id} sends it (spec/002_F § Template Object)."""
+    return {"id": pid, "name": name, "status": status, "createdAt": "2026-11-01T10:00:00Z", "userId": "u-1",
+            "projectId": project, "activeUntil": "2027-01-01T00:00:00Z", "lastCheckedAt": "2026-11-20T06:00:00Z",
+            "area": {"type": "Polygon",
+                     "coordinates": [[[37.6, 55.75], [37.61, 55.75], [37.61, 55.76], [37.6, 55.75]]]},
+            "newImagesCount": 3}
+
+
 RESULT = {"type": "FeatureCollection", "features": [
     {"type": "Feature", "properties": {"id": i, "class_id": 101, "area": 120.5, "bbox": {"xmin": 0}},
      "geometry": {"type": "Polygon", "coordinates": [[

@@ -485,6 +485,39 @@ def aois_geojson(data: Any) -> dict:
     return {"type": "FeatureCollection", "features": features}
 
 
+@dataclass
+class PlannedProcessing:
+    """A planned processing (a search template) of the project, as GET /processings/template/project/{id} lists it.
+    The plugin only shows it: Mapflow Web manages it."""
+    id: str
+    name: str
+    status: str = ""
+    project_id: str = ""
+
+    @classmethod
+    def from_api(cls, data: Dict[str, Any]) -> "PlannedProcessing":
+        return cls(id=str(data.get("id", "")), name=data.get("name") or "", status=str(data.get("status") or ""),
+                   project_id=str(data.get("projectId") or ""))
+
+    @property
+    def status_text(self) -> str:
+        """The backend's status in sentence case: `SEARCHING` reads `Searching`."""
+        return self.status.replace("_", " ").strip().capitalize()
+
+    @property
+    def status_tone(self) -> str:
+        """The kind of the status pill: one of the plain pill kinds."""
+        status = self.status.strip().lower()
+        return "err" if status == "failed" else "run" if status == "searching" else "gray"
+
+
+def planned_processings(data: Any) -> List[PlannedProcessing]:
+    """GET /processings/template/project/{id}: a list of templates. Anything else is an empty list, and an item that
+    is not an object or has no id is skipped."""
+    return [PlannedProcessing.from_api(item) for item in data if isinstance(item, dict) and item.get("id")] \
+        if isinstance(data, list) else []
+
+
 # ---------- imagery catalog and My imagery ----------
 
 @dataclass

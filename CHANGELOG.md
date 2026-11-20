@@ -28,7 +28,8 @@
     - An unexpected error shows a “Send a report” button: it opens a window with the details and your comment, and opens your mail program with the report to Mapflow support. Nothing is sent without you
     - When Mapflow expects a higher major version of the plugin, the plugin shows one page that asks to upgrade and opens the QGIS plugin manager, instead of working. A higher minor or patch version is not announced
     - The sign-in page has a "Terms of use" link that opens the terms in your browser
-    - Not carried over yet: planned processings (templates), custom XYZ/TMS providers, translations (es, pt, ru, zh; planned for 4.1)
+    - The Processings tab lists the planned processings (templates) of the project, before the other processings, each with a "search processing" mark, its name and its status. A click opens the project in Mapflow Web. They are not shown while you search, and when they don't load they are hidden without a message
+    - Not carried over yet: creating and managing planned processings (Mapflow Web does it), custom XYZ/TMS providers, translations (es, pt, ru, zh; planned for 4.1)
 
 ## 3.6.3
     - Fix: downloading an image from My imagery could crash QGIS, or finish without saving anything — mostly for large images, whose download lasts long enough for Python's garbage collector to discard the code waiting for it to finish. The plugin now holds each download until it completes

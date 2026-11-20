@@ -13,7 +13,7 @@ from .. import config
 from ..core import formatting
 from ..core.failures import empty_list_text
 from ..core.messages import describe
-from ..core.models import Processing, Status
+from ..core.models import PlannedProcessing, Processing, Status
 from . import icons
 from .start_page import model_icon, status_pill
 from .theme import set_prop, tokens
@@ -146,6 +146,37 @@ class ProcessingCard(Card):
         super().mouseReleaseEvent(event)
 
 
+class PlannedCard(Card):
+    """A planned processing: a mark, the name and the status. It has no actions; a click opens Mapflow Web."""
+    clicked = pyqtSignal(str)
+
+    def __init__(self, planned: PlannedProcessing):
+        super().__init__(margins=(14, 12, 14, 12), spacing=8)
+        self.planned = planned
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setToolTip("Open in Mapflow Web")
+        top = QHBoxLayout()
+        top.setSpacing(8)
+        icon = label("")
+        icon.setPixmap(icons.pixmap("search", tokens()["text"], 18))
+        top.addWidget(icon)
+        top.addWidget(ElidedLabel(planned.name, "title"), 1)
+        if planned.status_text:
+            top.addWidget(Pill(planned.status_text, planned.status_tone))
+        self.add(top)
+        marks = QHBoxLayout()
+        marks.setSpacing(8)
+        marks.addWidget(Pill("Search processing", "gray"))
+        marks.addStretch(1)
+        self.add(marks)
+
+    @guarded
+    def mouseReleaseEvent(self, event) -> None:
+        if event.button() == Qt.MouseButton.LeftButton and self.rect().contains(event_pos(event)):
+            self.clicked.emit(self.planned.id)
+        super().mouseReleaseEvent(event)
+
+
 class ProcessingsPage(QWidget):
     addToMap = pyqtSignal(str)
     zoomTo = pyqtSignal(str)
@@ -155,6 +186,7 @@ class ProcessingsPage(QWidget):
     duplicate = pyqtSignal(str)
     delete = pyqtSignal(str)
     openWeb = pyqtSignal(str)
+    plannedOpened = pyqtSignal(str)         # a planned processing was clicked: its id
     rate = pyqtSignal(str, int)             # a star was clicked: the feedback form opens, nothing is sent yet
     downloadAoi = pyqtSignal(str)
     startRequested = pyqtSignal()
@@ -167,6 +199,7 @@ class ProcessingsPage(QWidget):
         super().__init__(parent)
         self.setObjectName("mfPage")
         self.items: List[Processing] = []
+        self.planned: List[PlannedProcessing] = []
         self.expanded: Optional[str] = None
         self.filter = "all"
         self.in_map: set = set()
@@ -320,12 +353,15 @@ class ProcessingsPage(QWidget):
 
     def set_items(self, items: List[Processing], in_map: set, busy: set, can_manage: bool, loading: bool = False,
                   total: int = 0, loading_more: bool = False, loaded: bool = True, failed: bool = False,
-                  can_run: bool = True, terms: str = "", opened: Optional[Processing] = None) -> None:
+                  can_run: bool = True, terms: str = "", opened: Optional[Processing] = None,
+                  planned: Optional[List[PlannedProcessing]] = None) -> None:
         """`loaded`: a list of this project came back. `failed`: the last answer was a failure. The "no
         processings" text needs a successful answer with no items. `terms`: the search the list answers.
         `opened`: a processing that is not among `items` and has its card above them. It is no part of the counts
-        or of "Show more"."""
+        or of "Show more". `planned`: the project's planned processings, shown above the cards under "All" and
+        while no search is on."""
         self.opened = opened
+        self.planned = list(planned or [])
         if opened is not None and opened.id == self._scroll_waits:
             self._scroll_pending, self._scroll_waits = opened.id, None
         self.items, self.in_map, self.busy, self.can_manage = items, in_map, busy, can_manage
@@ -373,6 +409,11 @@ class ProcessingsPage(QWidget):
         for key, text in FILTERS:
             self.chip_buttons[key].setText(f"{text} {counts[key]}" if counts[key] else text)
         visible = self._visible()
+        if not self.terms and self.filter == "all":
+            for planned in self.planned:
+                row = PlannedCard(planned)
+                row.clicked.connect(guarded(lambda planned_id: self.plannedOpened.emit(planned_id)))
+                self.list.addWidget(row)
         # Above the cards: it is on none of the loaded pages, so its place among them is not known
         extra = self.opened if self.opened is not None and self._passes(self.opened) else None
         for processing in ([extra] if extra else []) + visible:

@@ -934,6 +934,7 @@ def check_poll_auth(iface, plugin, state, browser):
         check(wait_until(lambda: requests("POST", page()) >= asked + 4 and processings.loaded
                          and not processings.load_failed, 5),
               "…the next ticks load the list: the poll goes on")
+        wait_until(lambda: processings._poll.isActive(), 2)     # not while a list request is in flight
         check(processings._poll_failures.count == 0 and not processings._poll_failures.stopped
               and not lines(before) and not content.sign_in.error.isVisible() and processings._poll.isActive(),
               f"…the 401 is not counted and says nothing ({lines(before)})")
@@ -2594,8 +2595,9 @@ def check_processing_search(iface, content, controller, processings, state):
         asked = len(state.requests)
         controller.on_failed(in_page)
         press_show()
-        check(page.expanded == "search-slow" and processings.opened is None
-              and not [r for r in state.requests[asked:] if r[0] == "GET" and r[1].startswith("/processings/")],
+        by_id = [r for r in state.requests[asked:] if r[0] == "GET" and r[1].startswith("/processings/")
+                 and not r[1].startswith("/processings/template/")]      # (the planned list is no fetch by id)
+        check(page.expanded == "search-slow" and processings.opened is None and not by_id,
               "SHOW: a processing on the loaded pages opens its card, and nothing is fetched")
 
         state.fail("GET", r"/processings/.+/v2", 404)
@@ -2627,7 +2629,9 @@ def check_processing_search(iface, content, controller, processings, state):
         press_show()
         wait_until(lambda: False, 0.3)
         # (opening the tab refreshes the opened card: one GET by id at most, and "Show" itself asks for none)
-        check(len([r for r in state.requests[asked:] if r[0] == "GET" and r[1].startswith("/processings/")]) <= 1
+        by_id = [r for r in state.requests[asked:] if r[0] == "GET" and r[1].startswith("/processings/")
+                 and not r[1].startswith("/processings/template/")]
+        check(len(by_id) <= 1
               and processings.open("search-needle") is False and page.opened.id == "search-needle",
               "SHOW: a processing that is already opened is not fetched again by “Show”")
         page.addToMap.emit("search-needle")
@@ -2895,6 +2899,239 @@ def check_opened_card(iface, content, controller, processings, state):
         processings._poll.stop()
         processings._poll.setInterval(saved_interval)
         state.processings = [p for p in state.processings if p["id"] not in ids]
+        reload()
+
+
+def planned_endpoint_only(state):
+    """spec/002_F § Plugin behaviour in Mapflow Next: of the planned-processing endpoints the plugin sends only
+    GET /processings/template/project/{projectId}."""
+    return [(m, p) for m, p, _body, _headers in state.requests
+            if p.startswith("/processings/template")
+            and not (m == "GET" and re.fullmatch(r"/processings/template/project/[\w-]+", p))]
+
+
+def check_planned_processings(iface, content, controller, processings, state, links):
+    """spec/002_F § Plugin behaviour in Mapflow Next, spec/003 § Developer overrides: the Processings tab lists the
+    open project's planned processings before the others, each with a mark, the name and the status, and nothing
+    else: no action, no menu, no notice, no count. They load and refresh with the list; a click opens the project
+    in Mapflow Web; a request that fails hides the rows and says nothing; a search hides them. Everything the
+    function changes is restored."""
+    import dataclasses
+    from mapflow_next.ui.processings_page import PlannedCard, ProcessingCard
+    session, page = controller.session, content.processings
+    pj, path = fixtures.planned_json, "/processings/template/project/"
+    saved_config, saved_interval = session.config, processings._poll.interval()
+    threshold = config.POLL_FAILURES_BEFORE_ALERT
+    finished, failed_notices = [], []
+    on_finished, on_failed = finished.append, failed_notices.append
+    processings.finished.connect(on_finished)
+    processings.failed.connect(on_failed)
+
+    def asks():
+        return [r[1] for r in state.requests if r[0] == "GET" and r[1].startswith(path)]
+
+    def lists():
+        return len([r for r in state.requests if r[0] == "POST" and r[1].endswith("/processings/v2/page")])
+
+    def planned_cards():
+        return page.findChildren(PlannedCard)
+
+    def names():
+        return [c.planned.name for c in planned_cards()]
+
+    def order():
+        widgets = (page.list.itemAt(i).widget() for i in range(page.list.count()))
+        return [type(w).__name__ for w in widgets if isinstance(w, (PlannedCard, ProcessingCard))]
+
+    def reload():
+        page.refresh_button.click()
+        wait_until(lambda: not page.refreshing, 5)
+        wait_until(lambda: not processings._full.loading, 5)
+        wait_until(lambda: False, 0.4)           # the planned answer comes after the list's
+
+    def lines():
+        return [text for _level, text in iface.bar.messages]
+
+    def chips():
+        return {key: button.text() for key, button in page.chip_buttons.items()}
+
+    def menu_texts():
+        return sorted(a.text() for tool in page.findChildren(QToolButton) if tool.menu() for a in tool.menu().actions())
+
+    def open_project(project_id):
+        session.select_project(project_id)
+        wait_until(lambda: session.project.id == project_id and processings.loaded, 5)
+        wait_until(lambda: False, 0.4)
+
+    def click(card):
+        QTest.mouseClick(card, Qt.MouseButton.LeftButton)
+        wait_until(lambda: False, 0.2)
+
+    state.planned, state.planned_delay = {}, {}
+    processings._poll.setInterval(60000)         # the checks tick by hand
+    try:
+        check(session.project.id == "project-1" and page.filter == "all" and not page.terms,
+              "PLANNED: the checks start in the default project, with the whole list shown")
+        reload()
+        base_chips, base_running, base_menus = chips(), content.running_link.text(), menu_texts()
+        base_cards = [c.processing.id for c in page.findChildren(ProcessingCard)]
+        check(base_cards and not planned_cards(), "PLANNED: a project without planned processings shows no row")
+
+        # ---------- rows and order ----------
+        searching, forest = pj("tpl-1", "Harbor watch", "Searching"), pj("tpl-2", "Forest watch", "Failed")
+        other = pj("tpl-3", "Other project", "Created", "project-2")
+        state.planned = {"project-1": [searching, forest], "project-2": [other]}
+        before = len(lines())
+        reload()
+        check(names() == ["Harbor watch", "Forest watch"], f"PLANNED: the rows of the open project show ({names()})")
+        check(order() == ["PlannedCard"] * 2 + ["ProcessingCard"] * len(base_cards),
+              f"PLANNED: …before every processing, in the order of the answer ({order()})")
+        texts = [[x.text() for x in c.findChildren(QLabel)] for c in planned_cards()]
+        check(all("Search processing" in t for t in texts) and "Searching" in texts[0] and "Failed" in texts[1]
+              and "Harbor watch" in "".join(texts[0]) and "Forest watch" in "".join(texts[1]),
+              f"PLANNED: …each with the mark, the name and the status ({texts})")
+        check(not [w for c in planned_cards() for w in c.findChildren(QPushButton) + c.findChildren(QToolButton)]
+              and menu_texts() == base_menus
+              and not any(t in ("Restart", "Add to map", "Show on map", "GeoJSON", "Run again with these settings",
+                                "Rename…", "Delete…") for c in planned_cards() for t in
+                          [x.text() for x in c.findChildren(QLabel)]),
+              "PLANNED: …and no button, no menu and no action")
+        check(chips() == base_chips and content.running_link.text() == base_running
+              and [c.processing.id for c in page.findChildren(ProcessingCard)] == base_cards,
+              "PLANNED: …they do not count in the chips or in “running”, and the other cards are the same")
+        forest["status"] = "Searching"
+        searching["status"] = "Failed"
+        reload()
+        check(names() == ["Harbor watch", "Forest watch"] and not finished and not failed_notices
+              and len(lines()) == before and content.running_link.text() == base_running,
+              "PLANNED: a status change of a row gives no notice")
+
+        # ---------- they load and refresh with the list ----------
+        state.planned["project-1"].append(pj("tpl-4", "Port watch", "Created"))
+        asked, listed = len(asks()), lists()
+        reload()
+        check(names()[-1:] == ["Port watch"] and asks()[asked:] == [path + "project-1"] and lists() == listed + 1,
+              f"PLANNED: Refresh asks again for them, once per list ({asks()[asked:]})")
+        state.planned["project-1"][2]["name"] = "Port watch 2"
+        asked = len(asks())
+        processings._tick()
+        wait_until(lambda: names()[-1:] == ["Port watch 2"], 5)
+        check(names()[-1:] == ["Port watch 2"] and asks()[asked:] == [path + "project-1"],
+              f"PLANNED: the poll refreshes them ({asks()[asked:]})")
+        asked = len(asks())
+        open_project("project-2")
+        check(names() == ["Other project"] and asks()[asked:] == [path + "project-2"],
+              f"PLANNED: a project change loads those of the new project ({names()}, {asks()[asked:]})")
+        open_project("project-1")
+        check(names() == ["Harbor watch", "Forest watch", "Port watch 2"],
+              f"PLANNED: …and back ({names()})")
+        state.planned_delay = {"project-2": 1.0}
+        session.select_project("project-2")
+        wait_until(lambda: session.project.id == "project-2", 5)
+        session.select_project("project-1")
+        wait_until(lambda: session.project.id == "project-1", 5)
+        wait_until(lambda: False, 1.6)
+        check(names() == ["Harbor watch", "Forest watch", "Port watch 2"],
+              f"PLANNED: a late answer of the other project is dropped ({names()})")
+        state.planned_delay = {}
+
+        # ---------- a click opens Mapflow Web ----------
+        expanded, total = page.expanded, len(state.requests)
+        session.config = dataclasses.replace(saved_config, web="https://web.example.test/")
+        links.opened.clear()
+        click(planned_cards()[0])
+        new = [r[1] for r in state.requests[total:]]
+        check(links.opened == ["https://web.example.test/projects/project-1"] and page.expanded == expanded
+              and not new,
+              f"PLANNED: a click opens the project on the overridden web address ({links.opened}, {new})")
+        state.planned["project-1"][1]["projectId"] = "project-9"
+        reload()
+        links.opened.clear()
+        click(planned_cards()[1])
+        check(links.opened == ["https://web.example.test/projects/project-9"],
+              f"PLANNED: …the project of the planned processing, not the open one ({links.opened})")
+        session.config = dataclasses.replace(saved_config, web="", env="duty")
+        links.opened.clear()
+        click(planned_cards()[0])
+        check(links.opened == ["https://duty.mapflow.ai/projects/project-1"],
+              f"PLANNED: with no override, the environment's web address applies ({links.opened})")
+        session.config = saved_config
+        state.planned["project-1"][1]["projectId"] = "project-1"
+
+        # ---------- a failed request hides the rows and says nothing ----------
+        for what in (503, 404):
+            reload()
+            check(len(planned_cards()) == 3, f"PLANNED: the rows are shown before the failure ({what})")
+            state.fail("GET", r"/processings/template/project/", what)
+            before, gone = len(lines()), []
+            processings.projectGone.connect(gone.append)
+            reload()
+            check(not planned_cards() and page.findChildren(ProcessingCard) and not processings.load_failed
+                  and session.project.id == "project-1" and not page.refreshing,
+                  f"PLANNED: a failed request ({what}) hides the rows and nothing else changes")
+            check("didn't load" not in page.empty_text.text() and not gone and len(lines()) == before,
+                  f"PLANNED: …no text, no message ({what}, {lines()[before:]})")
+            for _ in range(threshold + 2):
+                processings._tick()
+                wait_until(lambda: False, 0.3)
+            open_project("project-2")
+            open_project("project-1")
+            check(not planned_cards() and len(lines()) == before and not gone and not processings.load_failed
+                  and session.project.id == "project-1",
+                  f"PLANNED: …nor after the poll and a project change ({what}, {lines()[before:]})")
+            processings.projectGone.disconnect(gone.append)
+            state.heal()
+            reload()
+            check(len(planned_cards()) == 3, f"PLANNED: …and the rows come back with the next refresh ({what})")
+        # A 401 goes through the session's renewal like every request: spec/005 covers it for the lists.
+
+        # ---------- no planned processings, and no processings ----------
+        state.planned = {}
+        asked = len(asks())
+        reload()
+        check(not planned_cards() and chips() == base_chips and len(asks()) == asked + 1
+              and order() == ["ProcessingCard"] * len(base_cards),
+              "PLANNED: a project without planned processings is as before, with one request per refresh")
+        state.planned = {"project-2": [pj("tpl-3", "Other project", "Created", "project-2")]}
+        open_project("project-2")
+        check(names() == ["Other project"] and page.empty_text.text() == "No processings in this project yet."
+              and page.empty.isVisibleTo(page) and page.start_button.isVisibleTo(page),
+              "PLANNED: a project with planned rows and no processing shows the rows and the usual empty text")
+        open_project("project-1")
+
+        # ---------- the search and the filters hide them ----------
+        state.planned = {"project-1": [searching, forest]}
+        reload()
+        check(len(planned_cards()) == 2, "PLANNED: the rows show before a search")
+        page.search.setText("Forest")
+        wait_until(lambda: processings.terms == "Forest" and processings._found.loaded
+                   and not processings._found.loading, 5)
+        check(not planned_cards() and page.findChildren(ProcessingCard),
+              "PLANNED: during a search the rows are not shown, the matches are")
+        page.search.clear()
+        wait_until(lambda: not processings.terms, 5)
+        wait_until(lambda: len(planned_cards()) == 2, 5)
+        check(len(planned_cards()) == 2, "PLANNED: …and they return when the search is cleared")
+        for key in ("running", "done", "attention"):
+            page.chip_buttons[key].click()
+            check(not planned_cards(), f"PLANNED: the “{key}” filter hides them")
+        page.chip_buttons["all"].click()
+        check(len(planned_cards()) == 2, "PLANNED: …and “All” shows them")
+
+        check(not planned_endpoint_only(state),
+              f"PLANNED: only GET /processings/template/project/{{id}} was sent ({planned_endpoint_only(state)})")
+    finally:
+        state.heal()
+        state.planned, state.planned_delay = {}, {}
+        session.config = saved_config
+        processings.finished.disconnect(on_finished)
+        processings.failed.disconnect(on_failed)
+        page.search.clear()
+        page.chip_buttons["all"].click()
+        if session.project.id != "project-1":
+            open_project("project-1")
+        processings._poll.stop()
+        processings._poll.setInterval(saved_interval)
         reload()
 
 
@@ -4432,6 +4669,7 @@ def main():
     check_restart(iface, content, controller, processings, state)
     check_processing_search(iface, content, controller, processings, state)
     check_opened_card(iface, content, controller, processings, state)
+    check_planned_processings(iface, content, controller, processings, state, links)
 
     # Download the area (AOI)
     import mapflow_next.controller as controller_module
@@ -5903,6 +6141,8 @@ def main():
     guard.report(ValueError("late"), "after unload")
     check(len(iface.bar.messages) == shown, "after unload the guard has no reporter: nothing reaches the bar")
     check_unload(iface, classFactory, state)
+    check(not planned_endpoint_only(state),
+          f"no request went to another planned-processing endpoint ({planned_endpoint_only(state)})")
     server.shutdown()
     APP.processEvents()                                   # log lines can arrive from another thread
     unexpected = iface.bar.ledger.unexpected()

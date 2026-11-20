@@ -11,7 +11,7 @@ from ..api.http import ApiError
 from ..config import COST_DEBOUNCE_MS, POLL_FAILURES_BEFORE_ALERT, POLL_INTERVAL_MS, PROCESSINGS_PAGE_SIZE
 from ..core.draft import RunDraft
 from ..core.failures import ALERT, LOAD, POLL, STOP, USER, PollFailures, keeps_schedule, poll_notice, stronger
-from ..core.models import Processing, Project, Status
+from ..core.models import PlannedProcessing, Processing, Project, Status
 from ..core.guard import guarded
 
 
@@ -74,6 +74,7 @@ class Processings(QObject):
     listFailed = pyqtSignal(str)            # a line for the message bar: a list did not load
     projectGone = pyqtSignal(str, object)   # project id, ApiError: a list answered 403 or 404
     rated = pyqtSignal(str, int)            # processing id, rating: Mapflow saved it
+    plannedChanged = pyqtSignal(list)       # [PlannedProcessing] of the open project, in Mapflow's order
 
     def __init__(self, api: MapflowApi, parent=None):
         super().__init__(parent)
@@ -106,6 +107,10 @@ class Processings(QObject):
         self._deleted: Set[str] = set()         # gone from Mapflow, though a reply in flight may still list it
         self._restarting: Set[str] = set()      # restarts sent and not answered: no second one for the same processing
         self._told = False                      # the failure of this round of list requests was said
+        # The planned processings are no listing: they have no pages, no poll and no failure count. They load with
+        # each refresh of the full listing, and a failure only empties them.
+        self._planned: List[PlannedProcessing] = []
+        self._planned_seq = 0                   # the newest request for them: an older answer is dropped
 
     # ---------- the full listing ----------
 
@@ -184,6 +189,32 @@ class Processings(QObject):
     def found_has_more(self) -> bool:
         return self._found.has_more
 
+    # ---------- the planned processings ----------
+
+    @property
+    def planned(self) -> List[PlannedProcessing]:
+        return self._planned
+
+    def _ask_planned(self) -> None:
+        self._planned_seq += 1
+        seq, project_id, token = self._planned_seq, self.project.id, self._full.token
+
+        def current() -> bool:
+            return seq == self._planned_seq and self._current(self._full, project_id, token)
+
+        def done(items: List[PlannedProcessing]) -> None:
+            if current():
+                self._planned = items
+                self.plannedChanged.emit(items)
+
+        def failed(_error: ApiError) -> None:
+            # No message, and not the project's 403 or 404: the rows only go
+            if current() and self._planned:
+                self._planned = []
+                self.plannedChanged.emit([])
+
+        self.api.planned_processings(project_id, done, failed)
+
     def set_project(self, project: Optional[Project]) -> None:
         if self.project and project and self.project.id == project.id:
             self.project = project
@@ -196,9 +227,11 @@ class Processings(QObject):
         self._full.reset()                      # a list still loading for the previous project no longer counts
         self._found.reset()
         self._last_status = {}
+        self._planned, self._planned_seq = [], self._planned_seq + 1
         self._poll.stop()
         self.refresh(LOAD)
         self.changed.emit([])
+        self.plannedChanged.emit([])
         self.foundChanged.emit([])
 
     def set_terms(self, terms: str) -> None:
@@ -304,6 +337,8 @@ class Processings(QObject):
         self.api.processings(project_id, partial(self._on_page, listing, project_id, token, limit),
                              partial(self._on_page_error, listing, project_id, token, trigger), limit=limit,
                              terms=self.terms if listing is self._found else "")
+        if listing is self._full:
+            self._ask_planned()
         return True
 
     def load_more(self) -> None:

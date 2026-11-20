@@ -38,7 +38,7 @@ The plugin covers the work that belongs next to the map. Each tab has its scenar
   the run form. When an image is chosen, the area is clipped to its footprint, and an area outside it blocks Run.
 - **Processings › Follow the work and its history.** Progress updates on its own. Filter by status, search
   the whole project by name (the list below keeps updating while you search), load older processings, rename them, run one again with the same settings,
-  or delete it. A list that fails to load says so instead of looking empty; if the project is deleted in
+  or delete it. The project's planned processings (search templates) come first, with a "search processing" mark, their name and status; a click opens the project in Mapflow Web. A list that fails to load says so instead of looking empty; if the project is deleted in
   Mapflow Web, the default project opens.
 - **Processings › Get the results into QGIS.** Finished results load as styled layers: GeoPackage files,
   or vector tiles for a quick look. Results can also be saved as GeoJSON.
@@ -177,7 +177,7 @@ That is the rule; today the controller also holds the run form's state itself. `
   off-nadir range, minimum area coverage), the "Available for me" switch, and "Clear". Filters apply when you press "Search imagery":
   the list always shows what the last search returned.
 - **Processings:** pages of 30 with "Show more". Polling refreshes the shown window and leaves older
-  pages in place.
+  pages in place. The planned processings load and refresh with the list; if they fail to load, the rows are hidden with no message.
 - **Live cost:** a local estimate at once, then the figure from `/cost`.
 - **Results:** they go to `Documents/Mapflow` unless you choose another folder. Finished results load
   automatically, which you can turn off. "Run again" restores a processing's settings and its area.
@@ -205,7 +205,8 @@ every Mapflow user. The plugin links to the right page wherever it leaves someth
 | Projects: share | **Mapflow Web** › the project ("Share project in Mapflow Web" and the share icon in the Projects window) | Sharing needs the team's members and roles. The plugin creates, renames, deletes, switches, searches and pins projects |
 | Review: accept or send back results | **Mapflow Web** (the processing links there) | Review is a step of its own, with its own page, after the processing; the plugin shows that a processing needs it |
 | Balance and top-up, API tokens | **Mapflow Web** › [Account](https://app.mapflow.ai/account/balance) ("Top up" in the run form) | Payments and keys stay with the account |
-| Planned processings (search templates) and their areas | **Not yet** | Left out of the first release to keep it to the main flow |
+| Planned processings (search templates): the list | **Kept**: the Processings tab lists them, with a "search processing" mark; a click opens the project in Mapflow Web | The plugin lists them and does nothing else |
+| Planned processings: create one, its areas and results, pause and resume, run from it, delete it | **Mapflow Web** | Managing a search template is a task of its own; the plugin only shows that one exists |
 | Custom XYZ/TMS providers | **Not yet** | Left out of the first release; Mapflow's own basemaps and My imagery cover the main cases |
 | Translations (es, pt, ru, zh) | **Not yet**: planned for 4.1 | Every text is new, so the 3.x translations don't apply |
 | Settings of the 3.x plugin | **Not migrated** | The two plugins install side by side; sign in and set the output folder again |

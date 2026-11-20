@@ -81,6 +81,9 @@ class State:
         self.not_downloadable = set()      # image ids listed with available_for_download: false
         self.download_links = []           # image ids GET rasters/image/{id}/download was asked for
         self.expected_version = "4.0.0"    # GET /version answers this, as text: the plugin version the backend expects
+        self.planned = {}                  # project id → the planned processings (Template objects) of GET
+        #                                    /processings/template/project/{id}; none: an empty list
+        self.planned_delay = {}            # project id → seconds that answer waits
         self.page_delay = {}               # terms (lower case) → seconds the processings page waits before it answers
         #                                    (or before it fails, when fail() applies to it)
 
@@ -374,6 +377,12 @@ class Handler(BaseHTTPRequestHandler):
                 self.state.processings = [p for p in self.state.processings if p["projectId"] != match.group(1)]
                 self.state.starred.discard(match.group(1))
             return self._send(200, "", "text/plain")
+        match = re.fullmatch(r"/processings/template/project/([\w-]+)", path)
+        if method == "GET" and match:
+            time.sleep(self.state.planned_delay.get(match.group(1), 0))
+            with self.state.lock:
+                rows = list(self.state.planned.get(match.group(1), []))
+            return self._send(200, rows)
         match = re.fullmatch(r"/projects/([\w-]+)/processings/v2/page", path)
         if method == "POST" and match:
             with self.state.lock:
