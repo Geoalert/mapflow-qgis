@@ -278,6 +278,53 @@ def _report_dialog():
     dialog.close()
 
 
+def _off_nadir(page, searched):
+    from mapflow_next.ui.widgets import RangeSlider
+    nadir = page.nadir
+    check(isinstance(nadir, RangeSlider) and (nadir.low(), nadir.high()) == (0, 30)
+          and (nadir.minimum(), nadir.maximum()) == (0, 30) and page.nadir_value.text() == "0°–30°",
+          "the off-nadir control is a range slider, 0-30 by default, and its label shows both ends")
+    check(nadir.height() >= 20, f"the range slider is tall enough for its handle ({nadir.height()} px)")
+    changes, sent = recorder(nadir.valuesChanged), len(searched)
+    nadir.setValues(10, 25)
+    check(changes == [(10, 25)] and page.nadir_value.text() == "10°–25°" and len(searched) == sent,
+          f"setValues moves both handles, shows both ends, and asks for no search ({changes})")
+    nadir.setValues(10, 25)
+    check(len(changes) == 1, "a value that does not change emits nothing")
+    nadir.setValues(28, 3)
+    check(0 <= nadir.low() <= nadir.high() <= 30, f"values are clamped, low <= high ({nadir.low()}, {nadir.high()})")
+    nadir.setValues(-5, 99)
+    check((nadir.low(), nadir.high()) == (0, 30), "values out of range are clamped to 0-30")
+    nadir.setValues(10, 25)
+    page.search_button.click()
+    check(searched[-1][0]["min_off_nadir"] == 10.0 and searched[-1][0]["max_off_nadir"] == 25.0
+          and len(searched) == sent + 1, "Search sends the range that was set")
+    middle, none = nadir.height() // 2, Qt.KeyboardModifier.NoModifier
+
+    def drag(start, end):
+        QTest.mousePress(nadir, Qt.MouseButton.LeftButton, none, QPoint(start, middle))
+        QTest.mouseMove(nadir, QPoint(end, middle))
+        QTest.mouseRelease(nadir, Qt.MouseButton.LeftButton, none, QPoint(end, middle))
+    drag(nadir.width() - 8, nadir.width() // 2)
+    check(nadir.low() == 10 and 10 <= nadir.high() < 25, f"dragging the high handle lowers it ({nadir.high()})")
+    drag(nadir.width() // 2, 2)
+    check(nadir.low() <= nadir.high() and nadir.low() <= 10,
+          f"a handle never crosses the other ({nadir.low()}, {nadir.high()})")
+    nadir.setValues(10, 25)
+    nadir.setFocus()
+    before = (nadir.low(), nadir.high())
+    QTest.keyClick(nadir, Qt.Key.Key_Left)
+    moved = (nadir.low(), nadir.high())
+    check(sum(abs(a - b) for a, b in zip(before, moved)) == 1,
+          f"the Left key moves a handle by 1 ({before} -> {moved})")
+    QTest.keyClick(nadir, Qt.Key.Key_Home)
+    QTest.keyClick(nadir, Qt.Key.Key_End)
+    check(nadir.low() <= nadir.high() and 0 <= nadir.low() and nadir.high() <= 30,
+          f"Home and End keep the handles in range ({nadir.low()}, {nadir.high()})")
+    check(len(searched) == sent + 1, "no search was asked for while the control moved")
+    nadir.setValues(0, 30)
+
+
 @step("imagery search and My imagery")
 def _imagery():
     from mapflow_next.ui.imagery_page import MINE, SEARCH
@@ -293,6 +340,9 @@ def _imagery():
     page.cloud.setValue(35)
     page.search_button.click()
     check(searched and searched[-1][0]["max_cloud"] == 35.0, "Search sends the slider's cloud cover")
+    check(searched[-1][0]["min_off_nadir"] == 0.0 and searched[-1][0]["max_off_nadir"] == 30.0,
+          "Search sends both ends of the off-nadir range, the full 0-30 by default")
+    _off_nadir(page, searched)
     images = [CatalogImage.from_api(item) for item in fixtures.CATALOG["images"]]
     page.set_results(images, len(images), None)
     spin()

@@ -172,7 +172,7 @@ That is the rule; today the controller also holds the run form's state itself. `
   - The imagery's extent becomes the area, and any other area is clipped to the imagery.
   - An area outside the imagery blocks Run, with a way back to the extent.
 - **Imagery search:** the same Area drop-down as on Start, date and slider filters (cloud cover,
-  off-nadir angle, minimum area coverage), and "Clear". Filters apply when you press "Search imagery":
+  off-nadir range, minimum area coverage), and "Clear". Filters apply when you press "Search imagery":
   the list always shows what the last search returned.
 - **Processings:** pages of 30 with "Show more". Polling refreshes the shown window and leaves older
   pages in place.

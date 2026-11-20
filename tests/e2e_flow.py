@@ -33,6 +33,7 @@ from . import fixtures, mock_server  # noqa: E402
 from mapflow_next import config  # noqa: E402
 from mapflow_next.core.failures import LOAD  # noqa: E402
 from mapflow_next.ui.imagery_page import MINE  # noqa: E402
+from mapflow_next.ui.widgets import RangeSlider  # noqa: E402
 
 SHOTS = Path(sys.argv[1]) if len(sys.argv) > 1 else None
 CHECKS = []
@@ -1082,7 +1083,7 @@ def check_failed_requests(iface, plugin, state):
         state.fail("POST", "/catalog/meta", what)
         before, asked = len(iface.bar.messages), requests("POST", "/catalog/meta")
         imagery.search({"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 0]]]},
-                       date(2026, 1, 1), date(2026, 2, 1), None, None)
+                       date(2026, 1, 1), date(2026, 2, 1), None, None, None)
         check(wait_until(lambda: content.imagery.search_message.text.text() != "", 5),
               f"USER: a failed catalog search ({what}) shows its error next to the search")
         settle(0.5)
@@ -2819,13 +2820,37 @@ def main():
     check(meta["aoi"]["type"] in ("Polygon", "MultiPolygon") and meta["maxCloudCover"] == 20,
           "search sends the area and the filters")
     check(meta.get("minAoiIntersectionPercent") == 20, f"min area coverage is 20 % by default ({meta})")
+    check(meta.get("minOffNadirAngle") == 0 and meta.get("maxOffNadirAngle") == 30,
+          f"the off-nadir range is the full 0-30 by default, and both ends are sent ({meta})")
     gap = imagery_page.cloud.geometry().top() - imagery_page.cloud_value.geometry().bottom()
     check(0 <= gap <= 4, f"a slider's title sits right on its slider ({gap} px)")
     check(QgsProject.instance().mapLayersByName("Mapflow · search results"), "footprints are drawn on the map")
     check(imagery_page.date_from.calendarPopup() and "calendar" in content.styleSheet(),
           "dates have a calendar picker with a visible calendar icon")
-    check(isinstance(imagery_page.cloud, QSlider) and isinstance(imagery_page.nadir, QSlider),
-          "cloud cover and off-nadir are sliders")
+    check(isinstance(imagery_page.cloud, QSlider) and isinstance(imagery_page.nadir, RangeSlider),
+          "cloud cover is a slider and off-nadir is a range slider")
+    check(imagery_page.nadir.height() >= 20 and imagery_page.nadir_value.text() == "0°–30°",
+          f"the off-nadir range slider is tall enough, and its label shows both ends "
+          f"({imagery_page.nadir.height()} px, {imagery_page.nadir_value.text()})")
+
+    def metas():
+        return [r for r in state.requests if r[1] == "/catalog/meta"]
+    asked, listed = len(metas()), list(plugin.services[3].results)
+    imagery_page.nadir.setValues(5, 20)
+    wait_until(lambda: False, 0.3)
+    check(len(metas()) == asked and plugin.services[3].results == listed
+          and imagery_page.nadir_value.text() == "5°–20°",
+          "moving the off-nadir range changes nothing on screen until Search imagery")
+    imagery_page.search_button.click()
+    check(wait_until(lambda: len(metas()) == asked + 1 and imagery_page.search_button.isEnabled(), 5)
+          and metas()[-1][2].get("minOffNadirAngle") == 5 and metas()[-1][2].get("maxOffNadirAngle") == 20,
+          "the search sends the off-nadir range that was set")
+    imagery_page.nadir.setValues(0, 0)
+    imagery_page.search_button.click()
+    check(wait_until(lambda: len(metas()) == asked + 2 and imagery_page.search_button.isEnabled(), 5)
+          and metas()[-1][2].get("minOffNadirAngle") == 0 and metas()[-1][2].get("maxOffNadirAngle") == 0,
+          "an off-nadir range of 0 to 0 is sent, not dropped")
+    imagery_page.nadir.setValues(0, 30)
     check(wait_until(lambda: imagery_page.has_thumbnail("img-1"), 5), "search results load their picture previews")
     eye = imagery_page._eyes["img-1"]
     eye.click()

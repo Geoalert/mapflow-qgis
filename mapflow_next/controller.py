@@ -1655,7 +1655,8 @@ class Controller(QObject):
         # Loaded tiles stay; one still loading may never answer (a sign-out aborts it): asked for again
         self._world_tiles = {url: tile for url, tile in self._world_tiles.items() if isinstance(tile, bytes)}
         self.imagery.search(self.draft.aoi.geometry, params["date_from"], params["date_to"], params["max_cloud"],
-                            params["max_off_nadir"], params["product_types"], params.get("min_coverage"))
+                            params["min_off_nadir"], params["max_off_nadir"], params["product_types"],
+                            params.get("min_coverage"))
 
     @guarded
     def on_search_done(self, images, total: int) -> None:

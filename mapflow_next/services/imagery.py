@@ -65,14 +65,16 @@ class Imagery(QObject):
         self._found_id = 0
 
     def search(self, geometry: dict, date_from: date, date_to: date, max_cloud: Optional[float],
-               max_off_nadir: Optional[float], product_types: Optional[List[str]] = None,
-               min_coverage: Optional[float] = None) -> None:
-        """`min_coverage`: the least share of the area, in %, an image must cover (None: any overlap)."""
+               min_off_nadir: Optional[float], max_off_nadir: Optional[float],
+               product_types: Optional[List[str]] = None, min_coverage: Optional[float] = None) -> None:
+        """`min_coverage`: the least share of the area, in %, an image must cover (None: any overlap).
+        Both off-nadir angles are sent as given, also 0; None leaves a bound out."""
         request = {
             "aoi": geometry,
             "acquisitionDateFrom": f"{date_from.isoformat()}T00:00:00Z",
             "acquisitionDateTo": f"{date_to.isoformat()}T23:59:59Z",
             "maxCloudCover": max_cloud,
+            "minOffNadirAngle": min_off_nadir,
             "maxOffNadirAngle": max_off_nadir,
             "minAoiIntersectionPercent": min_coverage,
             "productTypes": product_types or None,

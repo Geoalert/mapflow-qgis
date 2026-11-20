@@ -1,7 +1,7 @@
 """Small building blocks shared by the dock pages. Styling comes from theme.QSS via properties."""
 from __future__ import annotations
 
-from typing import Callable, List, Optional
+from typing import Callable, List, Optional, Tuple
 
 from qgis.PyQt.QtCore import QEvent, QObject, QPointF, QRectF, QSize, Qt, QTimer, QUrl, pyqtSignal
 from qgis.PyQt.QtGui import QCursor, QDesktopServices, QFont, QFontMetrics, QPainter, QPainterPath, QPen, QPixmap
@@ -406,6 +406,148 @@ class FocusRing:
 
     def focus_ring(self) -> bool:
         return self.hasFocus() and self._keyboard_focus
+
+
+class RangeSlider(FocusRing, QWidget):
+    """A slider with two handles, for a range of whole numbers. Painted, so it needs no QSS or `qgis.gui`.
+    It works like a QSlider: `setRange`, `setPageStep`, and `valuesChanged` when the low or high end moves."""
+    valuesChanged = pyqtSignal(int, int)
+    HANDLE = 14                                 # the handle's diameter, in px
+
+    def __init__(self, minimum: int = 0, maximum: int = 100, parent: Optional[QWidget] = None):
+        super().__init__(parent)
+        self._minimum, self._maximum = minimum, maximum
+        self._low, self._high = minimum, maximum
+        self._page = 10
+        self._active = 0                        # the handle the keys move: 0 low, 1 high (the last one pressed)
+        self._dragging = False
+        self.setMinimumHeight(22)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+
+    def sizeHint(self) -> QSize:
+        return QSize(120, 22)
+
+    def minimum(self) -> int:
+        return self._minimum
+
+    def maximum(self) -> int:
+        return self._maximum
+
+    def low(self) -> int:
+        return self._low
+
+    def high(self) -> int:
+        return self._high
+
+    def setPageStep(self, step: int) -> None:
+        self._page = max(1, step)
+
+    def setRange(self, minimum: int, maximum: int) -> None:
+        self._minimum, self._maximum = minimum, max(minimum, maximum)
+        self.setValues(self._low, self._high)
+        self.update()
+
+    def setValues(self, low: int, high: int) -> None:
+        """Moves both ends, kept in the range with low <= high. Emits only when an end changes."""
+        low = min(max(int(low), self._minimum), self._maximum)
+        high = min(max(int(high), low), self._maximum)
+        if (low, high) == (self._low, self._high):
+            return
+        self._low, self._high = low, high
+        self.update()
+        self.valuesChanged.emit(low, high)
+
+    def _groove(self) -> Tuple[float, float]:
+        """The x of the minimum and of the maximum: inset by the handle's radius, so a handle stays inside."""
+        radius = self.HANDLE / 2
+        return radius + 1, max(radius + 1, self.width() - radius - 1)
+
+    def _x(self, value: int) -> float:
+        left, right = self._groove()
+        span = self._maximum - self._minimum
+        return left if span <= 0 else left + (right - left) * (value - self._minimum) / span
+
+    def _value_at(self, x: float) -> int:
+        left, right = self._groove()
+        if right <= left:
+            return self._minimum
+        share = min(max((x - left) / (right - left), 0.0), 1.0)
+        return int(round(self._minimum + share * (self._maximum - self._minimum)))
+
+    def _move(self, handle: int, value: int) -> None:
+        if handle == 0:
+            self.setValues(min(value, self._high), self._high)
+        else:
+            self.setValues(self._low, max(value, self._low))
+
+    @guarded
+    def mousePressEvent(self, event) -> None:
+        if event.button() != Qt.MouseButton.LeftButton:
+            super().mousePressEvent(event)
+            return
+        x = event_pos(event).x()
+        near_low, near_high = abs(x - self._x(self._low)), abs(x - self._x(self._high))
+        if near_low == near_high:               # the handles share a place: the click side decides
+            self._active = 0 if x < self._x(self._low) else 1
+        else:
+            self._active = 0 if near_low < near_high else 1
+        self._dragging = True
+        self.setFocus(Qt.FocusReason.MouseFocusReason)
+        self._move(self._active, self._value_at(x))
+        self.update()
+
+    @guarded
+    def mouseMoveEvent(self, event) -> None:
+        if self._dragging:
+            self._move(self._active, self._value_at(event_pos(event).x()))
+        else:
+            super().mouseMoveEvent(event)
+
+    @guarded
+    def mouseReleaseEvent(self, event) -> None:
+        self._dragging = False
+        super().mouseReleaseEvent(event)
+
+    @guarded
+    def keyPressEvent(self, event) -> None:
+        key = event.key()
+        current = self._high if self._active else self._low
+        steps = {Qt.Key.Key_Left: -1, Qt.Key.Key_Down: -1, Qt.Key.Key_Right: 1, Qt.Key.Key_Up: 1,
+                 Qt.Key.Key_PageDown: -self._page, Qt.Key.Key_PageUp: self._page}
+        if key in steps:
+            self._move(self._active, current + steps[key])
+        elif key == Qt.Key.Key_Home:
+            self._move(self._active, self._minimum)
+        elif key == Qt.Key.Key_End:
+            self._move(self._active, self._maximum)
+        else:
+            super().keyPressEvent(event)
+            return
+        self.update()
+
+    @guarded
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        enabled = self.isEnabled()
+        middle = self.height() / 2
+        low_x, high_x = self._x(self._low), self._x(self._high)
+        left, right = self._groove()
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(color("track"))
+        painter.drawRoundedRect(QRectF(left, middle - 2, right - left, 4), 2, 2)
+        painter.setBrush(color("primary") if enabled else color("border"))
+        painter.drawRoundedRect(QRectF(low_x, middle - 2, high_x - low_x, 4), 2, 2)
+        radius = self.HANDLE / 2
+        for index, x in enumerate((low_x, high_x)):
+            if self.focus_ring() and index == self._active:
+                painter.setBrush(Qt.BrushStyle.NoBrush)
+                painter.setPen(QPen(color("focus"), 1.5))
+                painter.drawEllipse(QPointF(x, middle), radius + 2.5, radius + 2.5)
+            painter.setBrush(color("bg"))
+            painter.setPen(QPen(color("primary") if enabled else color("border"), 2))
+            painter.drawEllipse(QPointF(x, middle), radius - 1, radius - 1)
+        painter.end()
 
 
 class Toggle(FocusRing, QAbstractButton):

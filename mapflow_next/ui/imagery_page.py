@@ -16,7 +16,7 @@ from ..core.models import CatalogImage, Mosaic
 from . import icons
 from .layer_picker import pick_layers
 from .theme import set_prop, tokens
-from .widgets import (Callout, Card, Combo, DropCard, DropTarget, ElidedLabel, Pill, Segmented, button,
+from .widgets import (Callout, Card, Combo, DropCard, DropTarget, ElidedLabel, Pill, RangeSlider, Segmented, button,
                       clear_layout, hbox, label, link, placeholder, release_focus, rounded, same_width, tool,
                       vbox)
 from ..core.guard import guarded
@@ -141,7 +141,7 @@ class ImageryPage(QWidget):
             grid.addWidget(widget, 1, column)
         form.add(grid)
         self.cloud, self.cloud_value = self._slider(form, "Max cloud cover", 0, 100, 20, 5, "{} %")
-        self.nadir, self.nadir_value = self._slider(form, "Max off-nadir angle", 0, 50, 30, 5, "{}°")
+        self.nadir, self.nadir_value = self._range_slider(form, "Off-nadir angle", 0, 30, 5, "{}°")
         self.coverage, self.coverage_value = self._slider(form, "Min area coverage", 0, 100, 20, 10, "{} %")
         self.coverage.setToolTip("Only images that cover at least this share of the area. 0: any overlap")
 
@@ -201,12 +201,28 @@ class ImageryPage(QWidget):
         form.add(vbox(head, slider, spacing=0))     # the title sits right on its slider
         return slider, shown
 
+    def _range_slider(self, form: Card, title: str, low: int, high: int, step: int, unit: str):
+        """Like `_slider`, with two handles: the full range is chosen at first. It only changes its label; the
+        search reads it on "Search imagery"."""
+        head = QHBoxLayout()
+        head.addWidget(label(title, "label"))
+        head.addStretch(1)
+        shown = label(f"{unit.format(low)}–{unit.format(high)}", "value")
+        head.addWidget(shown)
+        slider = RangeSlider(low, high)
+        slider.setPageStep(step)
+        slider.setAccessibleName(title)
+        slider.valuesChanged.connect(guarded(lambda a, b: shown.setText(f"{unit.format(a)}–{unit.format(b)}")))
+        form.add(vbox(head, slider, spacing=0))
+        return slider, shown
+
     def _emit_search(self) -> None:
         # The API's product types are MOSAIC and IMAGE (a "Scene" in the results is an IMAGE)
         types = [t for t, chip in (("MOSAIC", self.type_mosaic), ("IMAGE", self.type_image)) if chip.isChecked()]
         self.searchRequested.emit({
             "date_from": self.date_from.date().toPyDate(), "date_to": self.date_to.date().toPyDate(),
-            "max_cloud": float(self.cloud.value()), "max_off_nadir": float(self.nadir.value()),
+            "max_cloud": float(self.cloud.value()), "min_off_nadir": float(self.nadir.low()),
+            "max_off_nadir": float(self.nadir.high()),
             "min_coverage": float(self.coverage.value()) or None,
             "product_types": types if len(types) == 1 else None,
         })
