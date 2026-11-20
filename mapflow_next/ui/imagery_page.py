@@ -16,8 +16,8 @@ from ..core.models import CatalogImage, Mosaic
 from . import icons
 from .layer_picker import pick_layers
 from .theme import set_prop, tokens
-from .widgets import (Callout, Card, Combo, DropCard, DropTarget, ElidedLabel, Pill, RangeSlider, Segmented, button,
-                      clear_layout, hbox, label, link, placeholder, release_focus, rounded, same_width, tool,
+from .widgets import (Callout, Card, Combo, DropCard, DropTarget, ElidedLabel, Pill, RangeSlider, Segmented, Toggle,
+                      button, clear_layout, hbox, label, link, placeholder, release_focus, rounded, same_width, tool,
                       vbox)
 from ..core.guard import guarded
 
@@ -145,6 +145,15 @@ class ImageryPage(QWidget):
         self.coverage, self.coverage_value = self._slider(form, "Min area coverage", 0, 100, 20, 10, "{} %")
         self.coverage.setToolTip("Only images that cover at least this share of the area. 0: any overlap")
 
+        available = QHBoxLayout()
+        available.addWidget(label("Available for me", "label"))
+        available.addStretch(1)
+        self.available = Toggle()
+        self.available.setAccessibleName("Available for me")
+        self.available.setToolTip("Hide images that your account cannot process")
+        available.addWidget(self.available)
+        form.add(available)
+
         types = QHBoxLayout()
         types.setSpacing(6)
         types.addWidget(label("Type", "label"))
@@ -225,6 +234,7 @@ class ImageryPage(QWidget):
             "max_off_nadir": float(self.nadir.high()),
             "min_coverage": float(self.coverage.value()) or None,
             "product_types": types if len(types) == 1 else None,
+            "hide_unavailable": self.available.isChecked(),
         })
 
     def set_drawing(self, active: bool) -> None:

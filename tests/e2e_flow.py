@@ -2822,6 +2822,8 @@ def main():
     check(meta.get("minAoiIntersectionPercent") == 20, f"min area coverage is 20 % by default ({meta})")
     check(meta.get("minOffNadirAngle") == 0 and meta.get("maxOffNadirAngle") == 30,
           f"the off-nadir range is the full 0-30 by default, and both ends are sent ({meta})")
+    check(meta.get("hideUnavailable") is False and not imagery_page.available.isChecked(),
+          f"“Available for me” is off by default, and hideUnavailable False is sent, not left out ({meta})")
     gap = imagery_page.cloud.geometry().top() - imagery_page.cloud_value.geometry().bottom()
     check(0 <= gap <= 4, f"a slider's title sits right on its slider ({gap} px)")
     check(QgsProject.instance().mapLayersByName("Mapflow · search results"), "footprints are drawn on the map")
@@ -2851,6 +2853,25 @@ def main():
           and metas()[-1][2].get("minOffNadirAngle") == 0 and metas()[-1][2].get("maxOffNadirAngle") == 0,
           "an off-nadir range of 0 to 0 is sent, not dropped")
     imagery_page.nadir.setValues(0, 30)
+    imagery_page.available.setChecked(True)
+    asked = len(metas())
+    wait_until(lambda: False, 0.3)
+    check(len(metas()) == asked, "moving “Available for me” sends nothing until Search imagery")
+    imagery_page.search_button.click()
+    check(wait_until(lambda: len(metas()) == asked + 1 and imagery_page.search_button.isEnabled(), 5)
+          and metas()[-1][2].get("hideUnavailable") is True,
+          "with “Available for me” on, the search sends hideUnavailable True")
+    imagery_page.available.setChecked(False)
+    imagery_page.search_button.click()
+    check(wait_until(lambda: len(metas()) == asked + 2 and imagery_page.search_button.isEnabled(), 5)
+          and metas()[-1][2].get("hideUnavailable") is False,
+          "with it off again, the search sends hideUnavailable False")
+    stored = [key for key in QgsSettings().allKeys() if "available" in key.lower()]
+    check(not stored, f"the switch is not stored in the settings ({stored})")
+    from mapflow_next.ui.imagery_page import ImageryPage
+    fresh = ImageryPage()
+    check(not fresh.available.isChecked(), "a new page starts with “Available for me” off")
+    fresh.deleteLater()
     check(wait_until(lambda: imagery_page.has_thumbnail("img-1"), 5), "search results load their picture previews")
     eye = imagery_page._eyes["img-1"]
     eye.click()
@@ -2887,6 +2908,17 @@ def main():
     check(wait_until(lambda: len(plugin.services[3].results) == 60, 5) and imagery_page.more_button is None
           and [r for r in state.requests if r[1] == "/catalog/meta"][-1][2]["offset"] == 50,
           "“Show more” loads the next page (offset 50), and then there is no more")
+    for first in (True, False):              # "Show more" repeats the last search, not the switch as it is now
+        imagery_page.available.setChecked(first)
+        imagery_page.search_button.click()
+        check(wait_until(lambda: len(plugin.services[3].results) == 50 and imagery_page.more_button is not None, 5)
+              and metas()[-1][2].get("hideUnavailable") is first, f"a search with the switch {first} sends {first}")
+        imagery_page.available.setChecked(not first)
+        imagery_page.more_button.click()
+        check(wait_until(lambda: len(plugin.services[3].results) == 60, 5)
+              and metas()[-1][2]["offset"] == 50 and metas()[-1][2].get("hideUnavailable") is first,
+              f"“Show more” sends {first}, the value of the last search, though the switch moved")
+    imagery_page.available.setChecked(False)
     state.catalog_many = False
     imagery_page.search_button.click()
     wait_until(lambda: len(plugin.services[3].results) == 2, 5)

@@ -66,9 +66,11 @@ class Imagery(QObject):
 
     def search(self, geometry: dict, date_from: date, date_to: date, max_cloud: Optional[float],
                min_off_nadir: Optional[float], max_off_nadir: Optional[float],
-               product_types: Optional[List[str]] = None, min_coverage: Optional[float] = None) -> None:
+               product_types: Optional[List[str]] = None, min_coverage: Optional[float] = None,
+               hide_unavailable: bool = False) -> None:
         """`min_coverage`: the least share of the area, in %, an image must cover (None: any overlap).
-        Both off-nadir angles are sent as given, also 0; None leaves a bound out."""
+        Both off-nadir angles are sent as given, also 0; None leaves a bound out. `hide_unavailable` ("Available
+        for me") is always sent, also False; "Show more" repeats it with the rest of this request."""
         request = {
             "aoi": geometry,
             "acquisitionDateFrom": f"{date_from.isoformat()}T00:00:00Z",
@@ -82,6 +84,7 @@ class Imagery(QObject):
             "sortOrder": "DESC",
         }
         request = {key: value for key, value in request.items() if value is not None}
+        request["hideUnavailable"] = bool(hide_unavailable)
         self._request, self.total, self.loading_more = request, 0, False
         self._search_id += 1
         search_id = self._search_id

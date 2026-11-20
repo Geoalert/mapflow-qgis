@@ -278,6 +278,23 @@ def _report_dialog():
     dialog.close()
 
 
+def _available_for_me(page, searched) -> None:
+    from mapflow_next.ui.widgets import Toggle
+    switch = getattr(page, "available", None)
+    check(isinstance(switch, Toggle) and not switch.isChecked() and switch.accessibleName() == "Available for me",
+          "Search has an \"Available for me\" switch, off by default")
+    check(searched[-1][0].get("hide_unavailable") is False, "Search sends hide_unavailable False by default")
+    sent = len(searched)
+    switch.setChecked(True)
+    check(len(searched) == sent, "moving the switch asks for no search")
+    page.search_button.click()
+    check(len(searched) == sent + 1 and searched[-1][0].get("hide_unavailable") is True,
+          "Search sends hide_unavailable True when the switch is on")
+    switch.setChecked(False)
+    page.search_button.click()
+    check(searched[-1][0].get("hide_unavailable") is False, "…and False again when it is turned off")
+
+
 def _off_nadir(page, searched):
     from mapflow_next.ui.widgets import RangeSlider
     nadir = page.nadir
@@ -342,6 +359,7 @@ def _imagery():
     check(searched and searched[-1][0]["max_cloud"] == 35.0, "Search sends the slider's cloud cover")
     check(searched[-1][0]["min_off_nadir"] == 0.0 and searched[-1][0]["max_off_nadir"] == 30.0,
           "Search sends both ends of the off-nadir range, the full 0-30 by default")
+    _available_for_me(page, searched)
     _off_nadir(page, searched)
     images = [CatalogImage.from_api(item) for item in fixtures.CATALOG["images"]]
     page.set_results(images, len(images), None)

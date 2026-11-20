@@ -1656,7 +1656,7 @@ class Controller(QObject):
         self._world_tiles = {url: tile for url, tile in self._world_tiles.items() if isinstance(tile, bytes)}
         self.imagery.search(self.draft.aoi.geometry, params["date_from"], params["date_to"], params["max_cloud"],
                             params["min_off_nadir"], params["max_off_nadir"], params["product_types"],
-                            params.get("min_coverage"))
+                            params.get("min_coverage"), bool(params.get("hide_unavailable")))
 
     @guarded
     def on_search_done(self, images, total: int) -> None:

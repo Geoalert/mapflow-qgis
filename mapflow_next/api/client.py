@@ -142,7 +142,7 @@ class MapflowApi:
 
     def search_catalog(self, request: dict, on_done: Callable[[List[CatalogImage], int], None],
                        on_error: OnError = None, offset: int = 0) -> None:
-        body = {"limit": SEARCH_PAGE_SIZE, "offset": offset, "hideUnavailable": False, **request}
+        body = {"limit": SEARCH_PAGE_SIZE, "offset": offset, **request}
         self.http.post("catalog/meta", body, timeout=60, on_error=on_error,
                        on_success=lambda d: on_done([CatalogImage.from_api(i) for i in (d or {}).get("images") or []],
                                                     int((d or {}).get("total") or 0)))
