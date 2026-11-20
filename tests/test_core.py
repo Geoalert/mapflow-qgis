@@ -1116,6 +1116,14 @@ def test_project_gone_text_says_what_opened():
     assert project_gone_text("", True).startswith("The project")
 
 
+def test_project_deleted_text_names_the_project_and_what_opened():
+    from mapflow_next.core.failures import project_deleted_text
+    assert project_deleted_text("Roads", True) == "Project “Roads” is deleted. The default project is open instead."
+    assert "no other project to open" in project_deleted_text("Roads", False)
+    assert project_deleted_text("Roads", None) == "Project “Roads” is deleted."
+    assert project_deleted_text("", True).startswith("The project")
+
+
 def test_core_imports_no_qt():
     """`core/` is the one package every layer may import (spec/007 layer rules), and it is pure Python."""
     import ast

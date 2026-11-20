@@ -89,3 +89,13 @@ def project_gone_text(name: str, opened_default: bool) -> str:
     if opened_default:
         return f"{label} is gone or no longer shared with you. The default project is open instead."
     return f"{label} is gone or no longer shared with you, and there is no other project to open."
+
+
+def project_deleted_text(name: str, opened_default: Optional[bool]) -> str:
+    """The notice after a delete. `opened_default` is None when the deleted project was not the open one."""
+    label = f"Project “{name}”" if name else "The project"
+    if opened_default is None:
+        return f"{label} is deleted."
+    if opened_default:
+        return f"{label} is deleted. The default project is open instead."
+    return f"{label} is deleted, and there is no other project to open."

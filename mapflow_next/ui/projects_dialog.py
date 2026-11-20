@@ -40,6 +40,7 @@ class ProjectTile(FocusRing, QFrame):
     pinToggled = pyqtSignal(str, bool)
     shareRequested = pyqtSignal(str)
     renameRequested = pyqtSignal(str)
+    deleteRequested = pyqtSignal(str)
 
     def __init__(self, project: Project, current: bool, pinned: bool, parent: Optional[QWidget] = None):
         super().__init__(parent)
@@ -117,10 +118,12 @@ class ProjectTile(FocusRing, QFrame):
         layout.addLayout(bottom)
 
     def menu(self) -> QMenu:
-        """The actions on this project; the Rename… item is built by the same rule that shows the button."""
+        """The actions on this project; they are built by the same rule that shows the button."""
         menu = QMenu(self)
         if self.project.can_edit:
             menu_action(menu, "edit", "Rename…", lambda: self.renameRequested.emit(self.project.id))
+            menu_action(menu, "trash", "Delete…", lambda: self.deleteRequested.emit(self.project.id),
+                        tokens()["err_fg"])
         return menu
 
     @guarded
@@ -146,6 +149,7 @@ class ProjectsDialog(QDialog):
     shareRequested = pyqtSignal(str)
     createRequested = pyqtSignal()
     renameRequested = pyqtSignal(str)
+    deleteRequested = pyqtSignal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -246,6 +250,16 @@ class ProjectsDialog(QDialog):
                 project.name, project.description = name, description
         self._render()
 
+    def project_deleted(self, project_id: str) -> None:
+        """A project was deleted in Mapflow: its tiles, pinned or listed, leave the window."""
+        before = len(self.results)
+        self.results = [p for p in self.results if p.id != project_id]
+        if len(self.results) < before:
+            self.total = max(self.total - 1, len(self.results), 0)
+        self.pinned.pop(project_id, None)
+        self.pinned_ids = [i for i in self.pinned_ids if i != project_id]
+        self._render()
+
     def set_failed(self, text: str) -> None:
         """The list did not load: it says so, and does not read as "No projects yet"."""
         self.loading, self.failed_text = False, text
@@ -284,6 +298,7 @@ class ProjectsDialog(QDialog):
             tile.pinToggled.connect(self.pinToggled.emit)
             tile.shareRequested.connect(self.shareRequested.emit)
             tile.renameRequested.connect(self.renameRequested.emit)
+            tile.deleteRequested.connect(self.deleteRequested.emit)
             grid.addWidget(tile, index // columns, index % columns)
             self.tiles.append(tile)
         self.body.addLayout(grid)

@@ -85,6 +85,10 @@ class MapflowApi:
         self.http.put(f"projects/{project_id}", {"name": name, "description": description},
                       on_success=on_done, on_error=on_error)
 
+    def delete_project(self, project_id: str, on_done: Callable[[object], None], on_error: OnError = None) -> None:
+        """A project and its processings (DELETE /projects/{id}). The answer is not read."""
+        self.http.delete(f"projects/{project_id}", on_success=on_done, on_error=on_error, parse="text")
+
     def project(self, project_id: str, email: str, on_done: Callable[[Project], None],
                 on_error: OnError = None) -> None:
         self.http.get(f"projects/{project_id}", on_error=on_error,

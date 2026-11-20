@@ -440,13 +440,20 @@ def _projects():
     renamed = recorder(dialog.renameRequested)
     by_id = {t.project.id: t for t in dialog.tiles}
     check(by_id["project-1"].more_button is None and by_id["project-2"].more_button is not None
-          and [a.text() for a in by_id["project-2"].menu().actions()] == ["Rename…"],
-          "the default project has no ⋯ menu; an own project's offers Rename…")
+          and [a.text() for a in by_id["project-2"].menu().actions()] == ["Rename…", "Delete…"],
+          "the default project has no ⋯ menu; an own project's offers Rename… and Delete…")
     by_id["project-2"].menu().actions()[0].trigger()
     check(renamed == [("project-2",)], f"Rename… asks to rename the project ({renamed})")
     dialog.project_renamed("project-2", "Harbor east", "New yards")
     check(any(t.project.id == "project-2" and t.project.name == "Harbor east" for t in dialog.tiles),
           "a renamed project shows its new name")
+    deleted = recorder(dialog.deleteRequested)
+    by_id["project-2"].menu().actions()[1].trigger()
+    check(deleted == [("project-2",)], f"Delete… asks to delete the project ({deleted})")
+    dialog.project_deleted("project-2")
+    check(all(t.project.id != "project-2" for t in dialog.tiles) and "project-2" not in dialog.pinned_ids
+          and dialog.total == 44 and next(t for t in dialog.tiles if t.project.id == "project-1").more_button is None,
+          "a deleted project leaves the tiles, the pins and the count")
     dialog.set_note("warn", "Couldn't rename")
     check(dialog.note.isVisibleTo(dialog), "a note shows in the window")
     dialog.close()

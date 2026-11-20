@@ -18,7 +18,7 @@ from . import config
 from .api.client import MapflowApi
 from .core import filenames, formatting
 from .core.draft import Coverage, ImageryChoice, Issue, RunDraft
-from .core.failures import USER, project_gone_text
+from .core.failures import USER, project_deleted_text, project_gone_text
 from .core.guard import guarded
 from .core.models import BillingType, CatalogImage, Processing, SourceInfo, StorageLimits, UserStatus
 from .core.scenarios import Catalogue, recommended_zoom, resolve, scenario_for_model
@@ -406,6 +406,7 @@ class Controller(QObject):
             dialog.shareRequested.connect(self._share_project)
             dialog.createRequested.connect(self.create_project)
             dialog.renameRequested.connect(self.rename_project)
+            dialog.deleteRequested.connect(self.delete_project)
             self.projects_dialog = dialog
         dialog = self.projects_dialog
         dialog.search.blockSignals(True)
@@ -553,6 +554,39 @@ class Controller(QObject):
                 self.projects_dialog.set_note("warn", text)
 
         self.session.rename_project(project_id, name, description, done, failed)
+
+    @guarded
+    def delete_project(self, project_id: str) -> None:
+        """“Delete…” in a project's ⋯ menu: after a confirmation, DELETE /projects/{id}. The project leaves the
+        list and the pins only when Mapflow has deleted it. If it is the open project, the default one opens.
+        Results already on the map stay."""
+        project = self._known_project(project_id)
+        if project is None or not project.can_edit:         # the role changed under a menu that was already open
+            return
+        name = project.name
+        if not self._confirm_delete(
+                "Delete project", f"Delete “{name}”?",
+                "The processings of this project are deleted with it, and so are its other resources in Mapflow. "
+                "Results already on the map stay. This can't be undone.", parent=self.projects_dialog):
+            return
+
+        def done(opened: Optional[bool]) -> None:
+            dialog = self.projects_dialog
+            if dialog is not None:
+                dialog.current_id = self.session.project.id if self.session.project else None
+            self._set_pins([i for i in self.pinned_projects() if i != project_id])
+            if dialog is not None:
+                dialog.project_deleted(project_id)
+            level = Qgis.MessageLevel.Warning if opened is False else Qgis.MessageLevel.Success
+            self.notify(project_deleted_text(name, opened), level)
+
+        def failed(message: str) -> None:
+            text = f"Couldn't delete “{name}”: {message}"
+            self.notify(text, Qgis.MessageLevel.Warning)
+            if self.projects_dialog is not None:
+                self.projects_dialog.set_note("warn", text)
+
+        self.session.delete_project(project_id, done, failed)
 
     @guarded
     def _choose_project(self, project_id: str) -> None:
@@ -2393,8 +2427,8 @@ class Controller(QObject):
 
         self.imagery.rename_collection(mosaic_id, name, tags, done, failed)
 
-    def _confirm_delete(self, title: str, text: str, detail: str) -> bool:
-        box = QMessageBox(self.mosaic_picker if self._picker_open() else self.iface.mainWindow())
+    def _confirm_delete(self, title: str, text: str, detail: str, parent=None) -> bool:
+        box = QMessageBox(parent or (self.mosaic_picker if self._picker_open() else self.iface.mainWindow()))
         box.setIcon(QMessageBox.Icon.Warning)
         box.setWindowTitle(title)
         box.setText(text)

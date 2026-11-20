@@ -316,6 +316,23 @@ class Session(QObject):
                 on_error(error.message)
         self.api.update_project(project_id, name, description, done, failed)
 
+    def delete_project(self, project_id: str, on_done: Callable[[Optional[bool]], None],
+                       on_error: Callable[[str], None]) -> None:
+        """Delete a project with its processings. On success the project leaves the session's list; if it is the
+        open one the default project opens. `on_done` gets whether the default project opened: None when the
+        deleted project was not open. On a refusal `on_error` gets the server's message and nothing changes."""
+        def done(_answer) -> None:
+            self.projects = [p for p in self.projects if p.id != project_id]
+            opened = None
+            if self.project is not None and self.project.id == project_id:
+                opened = self.open_default_project(project_id)
+            on_done(opened)
+
+        def failed(error: ApiError) -> None:
+            if error.kind != "auth":                    # the session's: it renews or signs out, and says so
+                on_error(error.message)
+        self.api.delete_project(project_id, done, failed)
+
     def _set_project(self, project: Project) -> None:
         self.project = project
         self.settings.setValue("project_id", project.id)

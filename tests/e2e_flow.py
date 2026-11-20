@@ -1086,8 +1086,8 @@ def check_rename_project(iface, plugin, state):
                                                "users": [{"email": "ana@example.com", "role": "contributor"}]}
         window = open_window()
         check(all(tile_of(i) is not None and tile_of(i).more_button is not None for i in ("project-2", "project-7"))
-              and [a.text() for a in tile_of("project-2").menu().actions()] == ["Rename…"],
-              "an own project and a project the user owns in a share have a ⋯ menu with Rename…")
+              and [a.text() for a in tile_of("project-2").menu().actions()] == ["Rename…", "Delete…"],
+              "an own project and a project the user owns in a share have a ⋯ menu with Rename… and Delete…")
         check(tile_of("project-1").more_button is None and tile_of("project-1").menu().actions() == [],
               "the default project has none")
         check(tile_of("project-9").more_button is None and tile_of("project-10").more_button is None,
@@ -1216,6 +1216,263 @@ def check_rename_project(iface, plugin, state):
     state.renamed_projects.clear()
     puts.clear()
     window.close()
+    session.select_project("project-2")
+    wait_until(lambda: session.project.id == "project-2" and session.project.name == "Harbor", 5)
+
+
+def check_delete_project(iface, plugin, state):
+    """spec/002_A § Plugin behaviour, § DELETE /projects/{id}: "Delete…" is in the ⋯ menu of a project the user
+    owns, never of the default project. A confirmation names the project and says its processings go with it;
+    nothing is sent before it is accepted. After the delete the project leaves the window, the pins and the
+    session; the open project is replaced by the default one (spec/005 § Failed requests, "The open project is
+    gone"), and its poll stops. A refusal shows the message of the server and changes nothing. Results already on
+    the map stay. Everything the function changes is restored."""
+    from mapflow_next.core.failures import POLL
+    session, processings = plugin.services[1], plugin.services[2]
+    controller, content = plugin.controller, plugin.dock.content
+    warn, success = Qgis.MessageLevel.Warning, Qgis.MessageLevel.Success
+    deletes = state.delete_project_requests
+    page = r"/projects/project-2/processings/v2/page"
+    listing = r"^/projects/page$"
+
+    def requests(method, pattern):
+        return len([r for r in state.requests if r[0] == method and re.search(pattern, r[1])])
+
+    def open_window():
+        controller.open_projects()
+        window = controller.projects_dialog
+        check(wait_until(lambda: window.isVisible() and not window.loading and len(window.results) == 24, 5),
+              "(the projects window shows its first page)")
+        return window
+
+    def tile_of(project_id):
+        return next((t for t in controller.projects_dialog.tiles if t.project.id == project_id), None)
+
+    def header():
+        return content.project_button.text(), content.project_button.toolTip()
+
+    def lines():
+        return [text for _level, text in iface.bar.messages]
+
+    class Confirm:
+        answer = False
+        asked = []
+
+        def __call__(self, title, text, detail, parent=None):
+            Confirm.asked.append((title, text, detail, parent))
+            return Confirm.answer
+
+    def delete(project_id, answer=True):
+        """The tile's ⋯ menu, Delete…, with the confirmation answering `answer`."""
+        Confirm.answer = answer
+        Confirm.asked.clear()
+        deletes.clear()
+        tile_of(project_id).menu().actions()[1].trigger()
+
+    with state.lock:
+        saved_processings = list(state.processings)
+
+    def restore():
+        state.deleted_projects.clear()
+        with state.lock:
+            state.processings[:] = saved_processings        # a delete drops the processings of its project
+        state.delete_refusal = None
+        state.project_delay = 0
+        state.heal()
+        state.shared_projects.clear()
+        deletes.clear()
+
+    saved_confirm = controller._confirm_delete
+    controller._confirm_delete = Confirm()
+    window = open_window()
+    try:
+        # Offered: the owner, and not the default project, a member or a reader
+        state.shared_projects["project-9"] = {"owners": [{"email": "boss@example.com"}],
+                                              "users": [{"email": "me@example.com", "role": "contributor"}]}
+        state.shared_projects["project-10"] = {"owners": [{"email": "boss@example.com"}],
+                                               "users": [{"email": "ana@example.com", "role": "contributor"}]}
+        window = open_window()
+        check([a.text() for a in tile_of("project-2").menu().actions()] == ["Rename…", "Delete…"]
+              and [a.text() for a in tile_of("project-7").menu().actions()] == ["Rename…", "Delete…"],
+              "the ⋯ menu of an own project offers Delete… below Rename…")
+        check(tile_of("project-1").more_button is None and tile_of("project-1").menu().actions() == [],
+              "the default project has no Delete…")
+        check(tile_of("project-9").more_button is None and tile_of("project-10").more_button is None,
+              "a project where the user is a contributor, or not listed (read only), has none")
+        state.shared_projects.clear()
+        window = open_window()
+        check(session.project.id == "project-2", "(project-2 is the open project)")
+        harbor_layer = old_town_layer()
+        harbor_layer.setName("Harbor result")
+        plugin.layers.add(harbor_layer, processing_id="harbor-run")
+
+        # Cancel: nothing is sent, nothing changes
+        iface.bar.messages.clear()
+        delete("project-7", answer=False)
+        wait_until(lambda: False, 0.4)
+        check(len(Confirm.asked) == 1 and not deletes and tile_of("project-7") is not None
+              and not iface.bar.messages and session.project.id == "project-2",
+              f"cancelling the confirmation sends nothing and leaves the tile and the message bar as they were "
+              f"({deletes})")
+        title, text, detail, parent = Confirm.asked[0]
+        check(title == "Delete project" and "“Field site 07”" in text and "processings" in detail
+              and "deleted with it" in detail and parent is window,
+              f"the confirmation names the project and says its processings are deleted with it ({text!r}, "
+              f"{detail!r})")
+
+        # Another project, and a pinned one: it leaves the window, the pins and the session
+        controller._pin_project("project-8", True)
+        check(tile_of("project-8") is not None and "project-8" in window.pinned, "(project-8 is pinned)")
+        total, shown = window.total, len(window.results)
+        before_header = header()
+        iface.bar.messages.clear()
+        delete("project-7")
+        check(wait_until(lambda: tile_of("project-7") is None, 5) and deletes == ["project-7"]
+              and requests("DELETE", r"^/projects/project-7$") == 1,
+              f"Delete… sends one DELETE /projects/project-7 and the tile leaves ({deletes})")
+        check(all(p.id != "project-7" for p in window.results) and all(p.id != "project-7" for p in session.projects)
+              and window.total == total - 1 and len(window.results) == shown - 1,
+              "…it is gone from the window's list, the session's list and the count")
+        check(session.project.id == "project-2" and header() == before_header and session.project.name == "Harbor",
+              "…and the open project and the header are unchanged")
+        check(any(level == success and (t or "") == "Project “Field site 07” is deleted."
+                  for level, t in iface.bar.messages), f"…and the message bar says so ({lines()})")
+        asked = requests("POST", listing)
+        controller._more_projects()
+        check(wait_until(lambda: not window.loading and len(window.results) == total - 1, 5)
+              and len({p.id for p in window.results}) == total - 1 and requests("POST", listing) == asked + 1
+              and window.total == total - 1,
+              f"the next page follows the shorter list, with no project skipped or repeated "
+              f"({len(window.results)} of {window.total})")
+        delete("project-8")
+        check(wait_until(lambda: tile_of("project-8") is None, 5) and "project-8" not in window.pinned
+              and "project-8" not in controller.pinned_projects() and "project-8" not in state.starred,
+              "a pinned project leaves the pinned section and the pins")
+        controller._query_projects("")
+        check(wait_until(lambda: not window.loading and len(window.results) == 24
+                         and all(p.id not in ("project-7", "project-8") for p in window.results), 5),
+              "a new query does not return the deleted projects: Mapflow has deleted them")
+        restore()
+
+        # The open project: the default project opens, the poll stops, the result on the map stays
+        window = open_window()
+        layers_before = set(QgsProject.instance().mapLayers())
+        iface.bar.messages.clear()
+        asked = requests("POST", listing)
+        delete("project-2")
+        check(wait_until(lambda: session.project.id == "project-1", 5) and deletes == ["project-2"]
+              and "“Harbor”" in Confirm.asked[0][1],
+              "deleting the open project opens the default project")
+        wait_until(lambda: tile_of("project-2") is None and processings.project is not None
+                   and processings.project.id == "project-1" and requests("POST", listing) > asked, 5)
+        check(header()[0] == session.default_project.name and tile_of("project-2") is None
+              and all(p.id != "project-2" for p in session.projects) and processings.project.id == "project-1",
+              f"…the dock header shows it and the project is out of every list ({header()})")
+        check(window.current_id == "project-1" and tile_of("project-1").property("current"),
+              "…and the window marks the default project as the open one")
+        asked_page = requests("POST", page)
+        wait_until(lambda: False, 0.6)
+        check(requests("POST", page) == asked_page and processings.project.id == "project-1",
+              "…the poll of the deleted project stops")
+        check(lines() == ["Project “Harbor” is deleted. The default project is open instead."]
+              and iface.bar.messages[-1][0] == success,
+              f"…one line names the deleted project, and no “gone” line is shown ({lines()})")
+        check(requests("POST", listing) > asked, "…the project list is loaded again")
+        check(set(QgsProject.instance().mapLayers()) == layers_before and plugin.layers.layers_for("harbor-run"),
+              "results already on the map stay")
+        restore()
+        session.select_project("project-2")
+        check(wait_until(lambda: session.project.id == "project-2" and processings.loaded, 5), "(project-2 is back)")
+
+        # Not an owner any more: the menu was built before; the server answers 403 with its message
+        window = open_window()
+        menu = tile_of("project-8").menu()
+        state.shared_projects["project-8"] = {"owners": [{"email": "boss@example.com"}],
+                                              "users": [{"email": "me@example.com", "role": "contributor"}]}
+        Confirm.answer = True
+        iface.bar.messages.clear()
+        menu.actions()[1].trigger()
+        text = "Couldn't delete “Field site 08”: Only the owner can delete the project"
+        check(wait_until(lambda: any(level == warn and text in (t or "") for level, t in iface.bar.messages), 5)
+              and tile_of("project-8") is not None and text in window.note.text.text(),
+              f"a delete that the server refuses for a non-owner shows its message and keeps the project "
+              f"({lines()})")
+        state.shared_projects.clear()
+        # The controller does not even ask when it holds a project the user does not own
+        known = controller._known_project("project-8")
+        owner = known.role
+        known.role = type(owner).contributor
+        Confirm.asked.clear()
+        deletes.clear()
+        controller.delete_project("project-8")
+        wait_until(lambda: False, 0.3)
+        check(not Confirm.asked and not deletes, "a project the user does not own is not asked about")
+        known.role = owner
+
+        # The default project: never deleted, nothing asked or sent
+        controller.delete_project("project-1")
+        wait_until(lambda: False, 0.3)
+        check(not Confirm.asked and not deletes and "project-1" not in state.deleted_projects,
+              "Delete for the default project asks and sends nothing")
+
+        # Refused by the server: its message, the project stays
+        state.delete_refusal = "The project is used by a running job."
+        iface.bar.messages.clear()
+        before_projects = [p.id for p in session.projects]
+        delete("project-7")
+        text = "Couldn't delete “Field site 07”: The project is used by a running job."
+        check(wait_until(lambda: any(level == warn and text in (t or "") for level, t in iface.bar.messages), 5)
+              and window.note.isVisibleTo(window) and text in window.note.text.text(),
+              f"a refusal shows the message of the server, in the message bar and in the window "
+              f"({window.note.text.text()})")
+        check(tile_of("project-7") is not None and [p.id for p in session.projects] == before_projects
+              and session.project.id == "project-2" and "project-7" not in state.deleted_projects,
+              "…and the project stays in the list, and the open project stays open")
+        state.delete_refusal = None
+        state.fail("DELETE", r"/projects/project-7", 503)
+        iface.bar.messages.clear()
+        delete("project-7")
+        check(wait_until(lambda: any(level == warn and "Couldn't delete “Field site 07”:" in (t or "")
+                                     for level, t in iface.bar.messages), 5) and tile_of("project-7") is not None,
+              "a failed request is shown too, and changes nothing")
+        state.heal()
+
+        # The window closes while the DELETE runs: the open project still switches
+        state.project_delay = 0.6
+        iface.bar.messages.clear()
+        delete("project-2")
+        window.close()
+        check(wait_until(lambda: session.project.id == "project-1", 5)
+              and any(level == success and "“Harbor”" in (t or "") for level, t in iface.bar.messages),
+              "a window closed while the DELETE runs doesn't lose the answer")
+        restore()
+        session.select_project("project-2")
+        check(wait_until(lambda: session.project.id == "project-2" and processings.loaded, 5), "(project-2 is back)")
+
+        # The poll of the open project answers 404 before the DELETE does: one switch, one “gone” line
+        window = open_window()
+        state.project_delay = 0.8
+        iface.bar.messages.clear()
+        delete("project-2")
+        state.fail("POST", page, 404)
+        processings.refresh(POLL)
+        check(wait_until(lambda: session.project.id == "project-1", 5)
+              and len([t for t in lines() if "gone or no longer" in (t or "")]) == 1,
+              "(the poll found the project gone first)")
+        check(wait_until(lambda: "project-2" in state.deleted_projects
+                         and any("is deleted." in (t or "") for t in lines()), 5),
+              "(the delete answered after it)")
+        check(session.project.id == "project-1" and len(lines()) == 2 and lines()[-1] == "Project “Harbor” is deleted.",
+              f"…the delete then adds only the plain line, and nothing opens twice ({lines()})")
+    finally:
+        controller._confirm_delete = saved_confirm
+        restore()
+    for project_id in ("project-7", "project-8"):
+        if project_id in controller.pinned_projects():
+            controller._pin_project(project_id, False)
+    plugin.layers.remove(plugin.layers.layers_for("harbor-run"))
+    if controller.projects_dialog is not None:
+        controller.projects_dialog.close()
     session.select_project("project-2")
     wait_until(lambda: session.project.id == "project-2" and session.project.name == "Harbor", 5)
 
@@ -5416,6 +5673,7 @@ def main():
     wait_until(lambda: session.project.id == "project-2", 5)
 
     check_rename_project(iface, plugin, state)
+    check_delete_project(iface, plugin, state)
     check_failed_requests(iface, plugin, state)
     check_upload_timeout(iface, plugin, state)
     check_network_timeout(iface, plugin, state)

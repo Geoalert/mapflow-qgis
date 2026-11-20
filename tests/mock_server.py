@@ -44,6 +44,9 @@ class State:
         self.rename_project_requests = []  # …(id, body) of each such request that reached the route
         self.project_refusal = None        # a message: PUT /projects/{id} answers 409 with it
         self.project_delay = 0             # seconds PUT /projects/{id} waits before it answers
+        self.deleted_projects = set()      # DELETE /projects/{id}
+        self.delete_project_requests = []  # …the ids of those requests that reached the route
+        self.delete_refusal = None         # a message: DELETE /projects/{id} answers 409 with it
         self.shared_projects = {}          # project id → a shareProject dict that replaces the fixture's
         self.no_mosaics = False            # an account without collections
         self.status = None                 # GET /user/status answers this, not fixtures.STATUS (a changed balance)
@@ -112,7 +115,9 @@ class Handler(BaseHTTPRequestHandler):
         with self.state.lock:
             created = list(self.state.created_projects)
             renamed, shared = dict(self.state.renamed_projects), dict(self.state.shared_projects)
-        every = created + [fixtures.PROJECT, fixtures.PROJECT_2] + fixtures.MORE_PROJECTS
+            deleted = set(self.state.deleted_projects)
+        every = [p for p in created + [fixtures.PROJECT, fixtures.PROJECT_2] + fixtures.MORE_PROJECTS
+                 if p["id"] not in deleted]
         return [dict(p, **({"name": renamed[p["id"]][0], "description": renamed[p["id"]][1]}
                            if p["id"] in renamed else {}),
                      **({"shareProject": shared[p["id"]]} if p["id"] in shared else {})) for p in every]
@@ -347,8 +352,31 @@ class Handler(BaseHTTPRequestHandler):
             with self.state.lock:
                 self.state.renamed_projects[match.group(1)] = (name, description)
             return self._send(200, dict(project, name=name, description=description))
+        if method == "DELETE" and match:
+            with self.state.lock:
+                self.state.delete_project_requests.append(match.group(1))
+                refusal = self.state.delete_refusal
+            time.sleep(self.state.project_delay)
+            project = next((p for p in self._projects() if p["id"] == match.group(1)), None)
+            if project is None:
+                return self._send(404, {"code": "NOT_FOUND", "message": "No project"})
+            share = project.get("shareProject")
+            if project.get("isDefault") or (share and fixtures.USER["email"]
+                                            not in [o.get("email") for o in share.get("owners") or []]):
+                return self._send(403, {"code": "FORBIDDEN", "message": "Only the owner can delete the project"})
+            if refusal is not None:
+                return self._send(409, {"code": "ProjectDeleteRefused", "message": refusal})
+            with self.state.lock:
+                self.state.deleted_projects.add(match.group(1))
+                self.state.processings = [p for p in self.state.processings if p["projectId"] != match.group(1)]
+                self.state.starred.discard(match.group(1))
+            return self._send(200, "", "text/plain")
         match = re.fullmatch(r"/projects/([\w-]+)/processings/v2/page", path)
         if method == "POST" and match:
+            with self.state.lock:
+                gone = match.group(1) in self.state.deleted_projects
+            if gone:
+                return self._send(404, {"code": "NOT_FOUND", "message": "No project"})
             with self.state.lock:
                 for item in self.state.processings:
                     if item["status"] == "IN_PROGRESS":
