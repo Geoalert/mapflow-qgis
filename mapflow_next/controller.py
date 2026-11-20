@@ -1559,9 +1559,9 @@ class Controller(QObject):
             self.render_search_results()
         else:
             gone.append("its imagery can't be chosen again here")
-        if self.draft.imagery is None and self.chosen_image is not None:
-            # The row of the catalog image restored for an earlier Run again would run this processing on that
-            # image with one click
+        if self.chosen_image is not None and (self.draft.imagery is None or self.draft.imagery.kind != "catalog"):
+            # The row of the catalog image of an earlier Run again (or search) must not stay when the imagery
+            # restored is something else: one click would run this processing on that image
             self.chosen_image = self._restored_image = None
             self.render_search_results()
         self._imagery_to_choose = self.draft.imagery is None

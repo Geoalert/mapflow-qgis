@@ -84,9 +84,11 @@ class Processings(QObject):
         self._found = _Listing()                # the matches of `terms`: a search is a listing of its own
         self.terms = ""                         # the name search on screen; empty: the full listing is shown
         self.opened: Optional[Processing] = None    # fetched by id for "Show": it is not on the loaded pages
-        self._open_token = 0
-        # The status of each watched processing in the full listing. The search listing never touches it: a
-        # processing that is in both would give two notices.
+        self._open_token = 0                    # moves on every `open()` and on a new project: older answers drop
+        self._opened_refresh = 0                # the newest refresh of `opened`: older answers are dropped
+        # The status of each watched processing in the full listing. Only the full listing writes it and sends
+        # notices. A processing in both lists still gives one notice: the first list that sees the change writes the
+        # final status here, so the second list sends nothing.
         self._last_status: Dict[str, Status] = {}
         self.started_here: Set[str] = set()
         self._poll = QTimer(self)
@@ -102,6 +104,8 @@ class Processings(QObject):
         self._cost_request = 0
         self._gone_id: Optional[str] = None     # the project whose 403 or 404 was reported
         self._deleted: Set[str] = set()         # gone from Mapflow, though a reply in flight may still list it
+        self._restarting: Set[str] = set()      # restarts sent and not answered: no second one for the same processing
+        self._told = False                      # the failure of this round of list requests was said
 
     # ---------- the full listing ----------
 
@@ -205,7 +209,10 @@ class Processings(QObject):
         if terms == self.terms:
             return
         self.terms = terms
+        was_loading = self._found.loading
         self._found.reset()
+        if was_loading:
+            self._settle()                      # its answer is dropped now: it can no longer end a Refresh
         if not self.project:
             return
         self.foundChanged.emit(self.found)
@@ -231,6 +238,8 @@ class Processings(QObject):
         self.refresh(POLL)
         if self.terms and not self._found.failures.stopped:
             self.refresh_search(POLL)
+        if self.opened is not None and not self.opened.is_final:
+            self._refresh_opened()
 
     def _watching(self) -> bool:
         """A processing of a list in use is not final: the poll goes on."""
@@ -242,7 +251,29 @@ class Processings(QObject):
         asked = self.refresh(trigger)
         if self.terms:
             self.refresh_search(trigger)
+        if asked:
+            self._refresh_opened()
         return bool(asked)
+
+    def _refresh_opened(self) -> None:
+        """Ask again for the card fetched by "Show": it is on no list, so no list refresh reaches it. A failure is
+        only logged: the card stays as it was, and the next refresh asks again."""
+        if not self.project or self.opened is None:
+            return
+        self._opened_refresh += 1
+        token, processing_id, project_id = self._opened_refresh, self.opened.id, self.project.id
+
+        def done(fresh: Processing) -> None:
+            if token != self._opened_refresh or not self.project or self.project.id != project_id:
+                return
+            if self.opened is None or self.opened.id != processing_id:
+                return
+            if any(p.id == fresh.id for p in self._full.items):
+                return                          # it is on the loaded pages now: the listed copy is shown
+            self.opened = fresh
+            self.changed.emit(self._full.items)
+
+        self.api.processing(processing_id, done)
 
     @guarded
     def refresh(self, trigger: str) -> bool:
@@ -265,6 +296,7 @@ class Processings(QObject):
             return True
         if not (self._full.loading or self._found.loading):
             self._gone_id = None                # a new round of requests reports a 403 or a 404 again
+            self._told = False                  # ...and a failure again
         listing.loading = True
         project_id, token = self.project.id, listing.token
         # The newest processings, as many as are shown (up to the API's page limit); polling keeps them current
@@ -339,7 +371,7 @@ class Processings(QObject):
         if listing is self._full:
             self._drop_opened_if_listed()
         self._emit(listing)
-        self.refreshed.emit()
+        self._settle()
         if listing.again:
             again, listing.again = listing.again, None
             self._refresh(listing, again)
@@ -353,27 +385,35 @@ class Processings(QObject):
         again, listing.again = listing.again, None
         listing.failed = True
         self._emit(listing)                     # the page leaves "Loading" and says the list did not load
-        self.refreshed.emit()
+        self._settle()
         if self._is_gone(error):
             self._gone(project_id, error)
             return
         # "auth" is the session's: it renews the token (the poll goes on) or signs out and says so (and stops this
         # poll). It is not counted here and tells the user nothing.
+        # With a search shown two lists answer: the round says it once, the first text wins
+        text = ""
         if trigger == POLL:
             outcome = listing.failures.failed(error.kind, error.status)
             if outcome in (ALERT, STOP):
                 text = poll_notice(outcome, "processings search" if listing is self._found else "processings list",
                                    error.message, error.kind)
-                if text:
-                    self.listFailed.emit(text)
         elif error.kind != "auth":
-            self.listFailed.emit(f"Processings didn't load: {error.message}")
+            text = f"Processings didn't load: {error.message}"
+        if text and not self._told:
+            self._told = True
+            self.listFailed.emit(text)
         # Spec 002_B: a refresh that failed for a transient reason, or with a 401, is asked again after one poll
         # interval. A permanent failure is not: the poll resumes when a list loads.
         if keeps_schedule(error.kind, error.status):
             self._schedule()
         if again:
             self._refresh(listing, again)
+
+    def _settle(self) -> None:
+        """`refreshed` when no list is in flight any more: with a search shown the Refresh ends after both answers."""
+        if not (self._full.loading or self._found.loading):
+            self.refreshed.emit()
 
     @staticmethod
     def _is_gone(error: ApiError) -> bool:
@@ -399,12 +439,13 @@ class Processings(QObject):
     def open(self, processing_id: str) -> bool:
         """"Show" in a notice: make the processing's card available. One that is not on the loaded pages (an old
         one) is fetched by id; it is kept apart (`opened`), so it changes neither `total` nor the offset of "Show
-        more". True if a request went out."""
+        more". True if a request went out. Every call drops the answer of an earlier one, also when it sends
+        nothing."""
+        self._open_token += 1
         if not self.project or any(p.id == processing_id for p in self._full.items):
             return False
         if self.opened and self.opened.id == processing_id:
             return False
-        self._open_token += 1
         token, project_id = self._open_token, self.project.id
 
         def done(processing: Processing) -> None:
@@ -470,13 +511,29 @@ class Processings(QObject):
         self.api.start(payload, done, lambda error: self.startFailed.emit(error.message))
 
     def restart(self, processing: Processing) -> None:
+        if processing.id in self._restarting:
+            return
+        self._restarting.add(processing.id)
+
         def done(_answer) -> None:
+            self._restarting.discard(processing.id)
             # Only an accepted restart is watched: a refused one changes nothing, so no false "failed" follows
             self._last_status[processing.id] = Status.in_progress
             self.started_here.add(processing.id)
+            # Every card of it shows the new status at once, with no Restart button, until the refresh answers
+            for holder in (*self._full.items, *self._found.items, *([self.opened] if self.opened else [])):
+                if holder.id == processing.id:
+                    holder.status, holder.percent, holder.messages = Status.in_progress, 0, []
+            self.changed.emit(self._full.items)
+            if self.terms:
+                self.foundChanged.emit(self._found.items)
             self.refresh_shown(LOAD)
 
-        self.api.restart(processing.id, done, self._action_failed)
+        def failed(error: ApiError) -> None:
+            self._restarting.discard(processing.id)
+            self._action_failed(error)
+
+        self.api.restart(processing.id, done, failed)
 
     def delete(self, processing: Processing) -> None:
         def done(_answer) -> None:

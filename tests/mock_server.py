@@ -61,6 +61,7 @@ class State:
         self.hang_seconds = 3              # how long a "hang" holds the request before it closes
         self.restart_refused = None        # (status, code, message): POST /processings/{id}/restart/v2 answers this
         self.page_delay = {}               # terms (lower case) → seconds the processings page waits before it answers
+        #                                    (or before it fails, when fail() applies to it)
 
     def fail(self, method, pattern, what, times=None):
         """Requests of `method` whose path (without /rest) matches the regex `pattern` fail. `what`: an HTTP
@@ -215,6 +216,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._redirect(target or self.path)             # no `to`: back to itself, a loop
         failure = self.state.failure_for(method, path)
         if failure is not None:
+            if method == "POST" and path.endswith("/processings/v2/page"):
+                time.sleep(self.state.page_delay.get(((body or {}).get("terms") or "").lower(), 0))
             return self._fail(failure)
         if method == "GET" and path == "/projects/default":
             return self._send(200, fixtures.PROJECT)

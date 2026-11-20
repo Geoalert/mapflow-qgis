@@ -2010,8 +2010,10 @@ def check_processing_search(iface, content, controller, processings, state):
         controller.on_failed(model(needle))
         press_show()
         wait_until(lambda: False, 0.3)
-        check(not [r for r in state.requests[asked:] if r[0] == "GET" and r[1].startswith("/processings/")],
-              "SHOW: a processing that is already opened is not fetched again")
+        # (opening the tab refreshes the opened card: one GET by id at most, and "Show" itself asks for none)
+        check(len([r for r in state.requests[asked:] if r[0] == "GET" and r[1].startswith("/processings/")]) <= 1
+              and processings.open("search-needle") is False and page.opened.id == "search-needle",
+              "SHOW: a processing that is already opened is not fetched again by “Show”")
         page.addToMap.emit("search-needle")
         check(added == ["search-needle"], f"SHOW: “Add to map” works on the opened card ({added})")
         added.clear()
@@ -2074,6 +2076,209 @@ def check_processing_search(iface, content, controller, processings, state):
         if session.project.id != saved_project:
             session.select_project(saved_project)
             wait_until(lambda: session.project.id == saved_project, 5)
+        reload()
+
+
+def check_opened_card(iface, content, controller, processings, state):
+    """spec/002_B § Plugin behaviour, spec/005 § Failed requests: the card that "Show" fetched by id is kept
+    current: after Restart, Rename and a poll answer it shows the new status and name, and a second Restart is not
+    sent while the first runs. A restart from a search card shows at once. "Show" for a second processing drops the
+    late answer for the first. With a search shown, one failed Refresh gives one "Processings didn't load" line and
+    one stop of the spinner (after both answers), and the poll gives one alert. Everything the function changes is
+    restored."""
+    from mapflow_next.core.models import Processing as ProcessingModel, Status
+    from mapflow_next.ui.processings_page import ProcessingCard
+    page, path = content.processings, "/projects/project-1/processings/v2/page"
+    saved_interval = processings._poll.interval()
+    old = fixtures.processing_json("opened-failed", "FAILED", 0, name="Old failed run")
+    old["messages"] = [{"code": "dataloader.NoDataTile", "parameters": {}}]
+    zebra = fixtures.processing_json("search-restart", "FAILED", 0, name="Zebra restart")
+    fillers = [fixtures.processing_json(f"opened-filler-{n}", "OK", 100, name=f"Filler {n}") for n in range(1, 33)]
+    running = fixtures.processing_json("opened-running", "IN_PROGRESS", -5000, name="Filler running")
+    ids = {item["id"] for item in [old, zebra, running] + fillers}
+    finished, failed_notices, refreshed = [], [], []
+    processings.finished.connect(finished.append)
+    processings.failed.connect(failed_notices.append)
+
+    def count_refreshed():
+        refreshed.append(1)
+
+    processings.refreshed.connect(count_refreshed)
+
+    def card(pid):
+        return next((c for c in page.findChildren(ProcessingCard) if c.processing.id == pid), None)
+
+    def restart_buttons():
+        return [b for b in page.findChildren(QPushButton) if b.text() == "Restart"]
+
+    def posts(pid):
+        return [r for r in state.requests if r[0] == "POST" and r[1] == f"/processings/{pid}/restart/v2"]
+
+    def gets(pid):
+        return [r for r in state.requests if r[0] == "GET" and r[1] == f"/processings/{pid}/v2"]
+
+    def lines():
+        return [text for _level, text in iface.bar.messages]
+
+    def settle():
+        return wait_until(lambda: not processings._full.loading and not processings._found.loading, 5)
+
+    def reload():
+        processings.opened = None
+        page.search.clear()
+        page.refresh_button.click()
+        wait_until(lambda: not page.refreshing, 5)
+        settle()
+
+    def search(text):
+        page.search.setText(text)
+        return wait_until(lambda: processings.terms == text and processings._found.loaded
+                          and not processings._found.loading, 5)
+
+    def press_show():
+        button = next(b for b in iface.bar.widgets[-1].findChildren(QPushButton) if b.text() == "Show")
+        button.click()
+
+    def tick_until(done):
+        for _ in range(8):
+            if done():
+                return True
+            processings._tick()
+            settle()
+            wait_until(lambda: False, 0.3)
+        return done()
+
+    state.page_delay = {}
+    state.processings = [old, zebra] + state.processings + fillers + [running]
+    processings._poll.setInterval(60000)        # the checks tick by hand
+    try:
+        reload()
+        check(wait_until(lambda: processings.get("opened-running") is not None, 5)
+              and processings.get("opened-failed") is None and processings.get("search-restart") is None,
+              "OPENED: the old processings are not on the loaded pages, and one is running")
+
+        # Restart from the opened card: one request, the card shows the new status, the poll keeps it current
+        controller.open_processing("opened-failed")
+        check(wait_until(lambda: page.opened is not None and page.opened.id == "opened-failed", 5)
+              and card("opened-failed") is not None and card("opened-failed").processing.status is Status.failed
+              and len(restart_buttons()) == 1,
+              "OPENED: “Show” fetches the old failed processing, and its card offers Restart")
+        fetched = len(gets("opened-failed"))
+        page.restart.emit("opened-failed")
+        page.restart.emit("opened-failed")
+        check(wait_until(lambda: len(posts("opened-failed")) >= 1 and card("opened-failed") is not None
+                         and card("opened-failed").processing.status is Status.in_progress, 5),
+              "OPENED: after Restart the opened card shows the processing in progress")
+        wait_until(lambda: False, 0.4)
+        check(len(posts("opened-failed")) == 1 and not restart_buttons(),
+              f"OPENED: …a second Restart while it runs sends nothing ({len(posts('opened-failed'))}), and the "
+              f"card has no Restart button")
+        check(len(gets("opened-failed")) > fetched, "OPENED: …and the card was fetched again after the restart")
+        check(tick_until(lambda: card("opened-failed") is not None
+                         and card("opened-failed").processing.status is Status.ok),
+              "OPENED: a poll answer brings the opened card to OK")
+        check(not [p for p in failed_notices + finished if p.id == "opened-failed"],
+              "OPENED: …and the opened card gives no notice")
+
+        # Rename of the opened card
+        fetched = len(gets("opened-failed"))
+        processings.rename(processings.opened, "Renamed run", "")
+        check(wait_until(lambda: card("opened-failed") is not None and card("opened-failed").processing.name
+                         == "Renamed run", 5) and len(gets("opened-failed")) > fetched,
+              "OPENED: after Rename the opened card shows the new name")
+
+        # Restart from a search card shows at once, before the list answer
+        reload()
+        check(search("zebra") and [p.id for p in processings.found] == ["search-restart"],
+              "SEARCH CARD: the search finds the old failed processing")
+        if page.expanded != "search-restart":
+            page._toggle("search-restart")
+        check(card("search-restart") is not None and len(restart_buttons()) == 1,
+              "SEARCH CARD: its card offers Restart")
+        state.page_delay = {"zebra": 1.0}
+        page.restart.emit("search-restart")
+        page.restart.emit("search-restart")
+        check(wait_until(lambda: card("search-restart") is not None
+                         and card("search-restart").processing.status is Status.in_progress, 0.8),
+              "SEARCH CARD: after Restart the card shows in progress before the refreshed list comes")
+        check(not restart_buttons() and len(posts("search-restart")) == 1,
+              "SEARCH CARD: …with no Restart button, and one request")
+        state.page_delay = {}
+        settle()
+        check(tick_until(lambda: card("search-restart") is not None
+                         and card("search-restart").processing.status is Status.ok),
+              "SEARCH CARD: …and a poll answer brings it to OK")
+
+        # "Show" for A (not loaded), then at once for B (loaded): the late answer for A changes nothing
+        reload()
+        controller.on_failed(ProcessingModel.from_api(old))
+        press_show()
+        controller.on_failed(ProcessingModel.from_api(running))
+        press_show()
+        wait_until(lambda: False, 1.0)
+        check(processings.opened is None and page.opened is None and page.expanded == "opened-running",
+              f"OPENED TOKEN: “Show” for a loaded processing drops the answer for the one asked before "
+              f"({processings.opened})")
+
+        # A failed Refresh under a search: one line, one stop of the spinner, after both answers
+        reload()
+        check(search("zebra"), "REFRESH: a search is shown")
+        state.page_delay = {"zebra": 1.0}
+        state.fail("POST", path, 503)
+        since, refreshed[:] = len(iface.bar.messages), []
+        page.refresh_button.click()
+        check(wait_until(lambda: not processings._full.loading, 3), "REFRESH: the full list answers first")
+        wait_until(lambda: False, 0.7)
+        check(processings._found.loading and page.refreshing,
+              "REFRESH: …the spinner goes on while the search answer is on its way")
+        check(wait_until(lambda: not processings._found.loading and not page.refreshing, 5),
+              "REFRESH: …and stops after the second answer")
+        wait_until(lambda: False, 0.3)
+        said = [t for t in lines()[since:] if (t or "").startswith("Processings didn't load")]
+        check(len(said) == 1 and len(refreshed) == 1,
+              f"REFRESH: one failed Refresh gives one message and one `refreshed` ({said}, {len(refreshed)})")
+        state.heal()
+        state.page_delay = {}
+
+        # The poll under a search, both lists failing: one alert
+        processings.refresh_shown(LOAD)
+        settle()
+        check(processings._full.failures.count == 0 and processings._found.failures.count == 0,
+              "POLL: both lists load again")
+        since = len(iface.bar.messages)
+        state.fail("POST", path, 503)
+        for _ in range(config.POLL_FAILURES_BEFORE_ALERT):
+            processings._tick()
+            settle()
+        alerts = [t for t in lines()[since:] if "Mapflow is not answering" in (t or "")]
+        check(len(alerts) == 1, f"POLL: both lists failing give one alert ({alerts})")
+        check(processings._full.failures.count == processings._found.failures.count
+              == config.POLL_FAILURES_BEFORE_ALERT, "POLL: …and both lists counted every failure")
+        state.heal()
+        processings.refresh_shown(LOAD)
+        settle()
+        check(processings._full.failures.count == 0 and processings._found.failures.count == 0,
+              "POLL: …and the counts return to 0 when they load")
+
+        # A search cleared while the Refresh is in flight: the spinner stops
+        state.page_delay = {"zebra": 1.0}
+        page.refresh_button.click()
+        check(wait_until(lambda: not processings._full.loading, 3) and processings._found.loading,
+              "REFRESH: the search answer is on its way")
+        page.search.clear()
+        check(wait_until(lambda: not page.refreshing, 3), "REFRESH: clearing the search stops the spinner")
+        wait_until(lambda: False, 1.2)
+        check(not processings.found and processings.terms == "",
+              "REFRESH: …and the late answer of the old search changes nothing")
+    finally:
+        processings.finished.disconnect(finished.append)
+        processings.failed.disconnect(failed_notices.append)
+        processings.refreshed.disconnect(count_refreshed)
+        state.heal()
+        state.page_delay = {}
+        processings._poll.stop()
+        processings._poll.setInterval(saved_interval)
+        state.processings = [p for p in state.processings if p["id"] not in ids]
         reload()
 
 
@@ -2958,6 +3163,7 @@ def main():
     check_review_link(content, controller, processings, links, state, started)
     check_restart(iface, content, controller, processings, state)
     check_processing_search(iface, content, controller, processings, state)
+    check_opened_card(iface, content, controller, processings, state)
 
     # Download the area (AOI)
     import mapflow_next.controller as controller_module
@@ -4176,6 +4382,27 @@ def main():
         state.status = None
     check(wait_until(lambda: (session.refresh_status(), session.status.remaining_credits == 1240)[1], 5),
           "…the original balance is restored for the next checks")
+
+    # Run again on a catalog image, then on imagery that is not that image: the first image's row does not stay
+    content.processings.duplicate.emit("cat-1")
+    check(controller.chosen_image is not None and controller.chosen_image.id == "10300100ABCDEF01"
+          and controller.draft.imagery.kind == "catalog",
+          "“Run again” on a catalog image has the image's row in the form")
+    content.processings.duplicate.emit("old-1")
+    rows, selected = controller._imagery_rows(session.status, True)
+    check(controller.chosen_image is None and controller.draft.imagery is not None
+          and controller.draft.imagery.kind == "provider" and not any(r.key == "catalog" for r in rows)
+          and selected == "provider:mapbox",
+          f"“Run again” on a provider processing restores the provider and leaves no row of the catalog image "
+          f"({selected}, {[r.key for r in rows]})")
+    content.processings.duplicate.emit("cat-1")
+    check(controller.chosen_image is not None, "…(the catalog image is chosen again)")
+    content.processings.duplicate.emit(one_image_run)
+    check(wait_until(lambda: controller.draft.imagery is not None and controller.draft.imagery.kind == "my_imagery",
+                     5), "“Run again” on a My imagery image restores it")
+    rows, selected = controller._imagery_rows(session.status, True)
+    check(controller.chosen_image is None and not any(r.key == "catalog" for r in rows) and selected != "catalog",
+          f"…and leaves no row of the catalog image ({selected}, {[r.key for r in rows]})")
     processings.items = [p for p in processings.items if p.id not in ("cat-1", "custom-1")]
 
     # duplicate → run again: the area comes from Mapflow (GET /processings/{id}/aois answers a list)
