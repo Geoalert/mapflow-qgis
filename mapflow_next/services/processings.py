@@ -10,7 +10,7 @@ from ..api.client import MapflowApi
 from ..api.http import ApiError
 from ..config import COST_DEBOUNCE_MS, POLL_FAILURES_BEFORE_ALERT, POLL_INTERVAL_MS, PROCESSINGS_PAGE_SIZE
 from ..core.draft import RunDraft
-from ..core.failures import ALERT, LOAD, POLL, STOP, PollFailures, is_transient, poll_notice, stronger
+from ..core.failures import ALERT, LOAD, POLL, STOP, PollFailures, keeps_schedule, poll_notice, stronger
 from ..core.models import Processing, Project, Status
 from ..core.guard import guarded
 
@@ -199,8 +199,8 @@ class Processings(QObject):
         if self._is_gone(error):
             self._gone(project_id, error)
             return
-        transient = is_transient(error.kind, error.status)
-        # "auth" is the session's: it renews the token or signs out, and says so
+        # "auth" is the session's: it renews the token (the poll goes on) or signs out and says so (and stops this
+        # poll). It is not counted here and tells the user nothing.
         if trigger == POLL:
             outcome = self._poll_failures.failed(error.kind, error.status)
             if outcome in (ALERT, STOP):
@@ -209,9 +209,9 @@ class Processings(QObject):
                     self.listFailed.emit(text)
         elif error.kind != "auth":
             self.listFailed.emit(f"Processings didn't load: {error.message}")
-        # Spec 002_B: a refresh that failed for a transient reason is asked again after one poll interval. A
-        # permanent failure is not: the poll resumes when a list loads.
-        if transient:
+        # Spec 002_B: a refresh that failed for a transient reason, or with a 401, is asked again after one poll
+        # interval. A permanent failure is not: the poll resumes when a list loads.
+        if keeps_schedule(error.kind, error.status):
             self._schedule()
         if again:
             self.refresh(again)

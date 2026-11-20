@@ -619,6 +619,176 @@ def check_result_conversion(iface, plugin):
     results.failed.disconnect(on_failed)
 
 
+def check_poll_auth(iface, plugin, state, browser):
+    """spec/005 § Failed requests: a 401 is the session's. A timer's request that got one keeps its schedule, is not
+    counted and says nothing; the session renews the token (the poll goes on) or signs out, says so once, and then
+    no poll timer runs. Starts and ends signed out; the timer intervals and the test processing are restored."""
+    from mapflow_next.api import auth
+    from mapflow_next.core.failures import POLL
+    session, processings, imagery = plugin.services[1], plugin.services[2], plugin.services[3]
+    controller, content = plugin.controller, plugin.dock.content
+    warn = Qgis.MessageLevel.Warning
+
+    def lines(since):
+        return [text for level, text in iface.bar.messages[since:] if level == warn]
+
+    def requests(method, pattern):
+        return len([r for r in state.requests if r[0] == method and re.search(pattern, r[1])])
+
+    def sign_in_browser():
+        content.sign_in.browserRequested.emit()
+        browse(browser.opened[-1])
+        status, back = browse(browser.opened[-1])
+        browse(back)
+        return wait_until(lambda: session.state == "signed_in" and session.project is not None
+                          and processings.loaded, 8)
+
+    last_page = [""]
+
+    def page():
+        if session.project is not None:
+            last_page[0] = rf"/projects/{session.project.id}/processings/v2/page"
+        return last_page[0]
+
+    def expired_said():
+        return "session has expired" in content.sign_in.error.text.text()
+
+    def nothing_runs(label):
+        wait_until(lambda: False, 0.3)
+        timers = [processings._poll.isActive(), session._timer.isActive(), session._refresh_timer.isActive(),
+                  controller._mosaic_refresh.isActive()]
+        check(not any(timers), f"{label}: no poll timer runs after the sign-out ({timers})")
+        seen = len(state.requests)
+        wait_until(lambda: False, 0.5)
+        check(len(state.requests) == seen and not processings._loading,
+              f"{label}: …and no request goes out ({len(state.requests) - seen} new)")
+
+    def add_running():
+        """A processing that stays in progress for many answers (the mock advances every one by 50 %)."""
+        with state.lock:
+            state.processings.append(dict(fixtures.processing_json("poll-auth", "IN_PROGRESS", -3000, name="Poll auth"),
+                                          projectId=session.project.id))
+        processings.refresh(POLL)
+        wait_until(lambda: any(p.id == "poll-auth" for p in processings.items), 5)
+
+    told = []
+    session.error.connect(told.append)
+    saved_status_interval = session._timer.interval()
+    saved_poll_interval = processings._poll.interval()
+    try:
+        state.heal()
+        check(sign_in_browser(), "a 401 check: signed in with the browser")
+        add_running()
+        processings._poll.setInterval(150)
+
+        # (a) the list answers 401 once: the token renews, the next tick loads the list, the poll goes on
+        before, bearer, asked = len(iface.bar.messages), session.http.bearer, requests("POST", page())
+        session._forced_refresh_at = 0.0
+        state.fail("POST", page(), 401, times=1)
+        wait_until(lambda: not processings._loading, 3)
+        processings._poll.stop()                    # as when its tick has just fired: only the answer can start it
+        processings.refresh(POLL)
+        check(wait_until(lambda: session.http.bearer != bearer, 5) and session.state == "signed_in",
+              "401: the processings list that got a 401 makes the session renew the token and stay signed in")
+        check(wait_until(lambda: requests("POST", page()) >= asked + 4 and processings.loaded
+                         and not processings.load_failed, 5),
+              "…the next ticks load the list: the poll goes on")
+        check(processings._poll_failures.count == 0 and not processings._poll_failures.stopped
+              and not lines(before) and not content.sign_in.error.isVisible() and processings._poll.isActive(),
+              f"…the 401 is not counted and says nothing ({lines(before)})")
+
+        # (b) the account status
+        session._timer.setInterval(50)
+        session._forced_refresh_at = 0.0
+        state.fail("GET", "/user/status", 401, times=1)
+        before, bearer = len(iface.bar.messages), session.http.bearer
+        asked = requests("GET", "/user/status")
+        session._timer.start()
+        check(wait_until(lambda: requests("GET", "/user/status") >= asked + 4, 5),
+              "401: the account status keeps asking after a 401")
+        check(wait_until(lambda: session.http.bearer != bearer, 5) and session.state == "signed_in",
+              "…and the session renewed the token")
+        check(session._status_poll.count == 0 and wait_until(lambda: not session._status_pending, 2)
+              and session._timer.isActive() and not lines(before),
+              f"…it is not counted, says nothing, and the timer runs ({lines(before)})")
+        session._timer.stop()
+        session._timer.setInterval(saved_status_interval)
+
+        # (c) the collections refresh
+        def mosaic_tick():
+            imagery._mosaics_at = 0.0
+            controller._mosaic_refresh.timeout.emit()
+            return wait_until(lambda: not imagery.loading_mosaics, 5)
+
+        wait_until(lambda: session.state == "signed_in" and not session._refreshing, 5)
+        session._forced_refresh_at = 0.0
+        state.fail("GET", r"/rasters/mosaic/page", 401, times=1)
+        before, bearer = len(iface.bar.messages), session.http.bearer
+        mosaic_tick()
+        check(wait_until(lambda: session.http.bearer != bearer and not session._refreshing, 5)
+              and imagery._mosaics_poll.count == 0 and not imagery._mosaics_poll.stopped and not lines(before)
+              and controller._mosaic_refresh.isActive() and session.state == "signed_in",
+              f"401: the collections refresh is not counted, says nothing and keeps its timer ({lines(before)})")
+        mosaic_tick()
+        check(imagery.mosaics_loaded and not imagery.mosaics_failed, "…and the next tick loads the collections")
+
+        # (d) a second 401 within a minute: the session signs out, says so once, and nothing runs
+        wait_until(lambda: not session._refreshing and processings.loaded and not processings._loading, 5)
+        session._forced_refresh_at = time.time()
+        said, asked = len(told), requests("POST", page())
+        state.fail("POST", page(), 401, times=1)
+        processings.refresh(POLL)
+        check(wait_until(lambda: session.state == "signed_out", 5) and expired_said()
+              and len([t for t in told[said:] if "session has expired" in t]) == 1
+              and not auth.load_refresh_token(session.config),
+              "401: a second 401 within a minute signs out, says “Your Mapflow session has expired” once, and "
+              "forgets the sign-in")
+        nothing_runs("a second 401")
+        check(requests("POST", page()) == asked + 1, "…and the processings list sent nothing after the 401")
+
+        # (e) the renewal fails
+        with state.lock:
+            state.processings[:] = [p for p in state.processings if p["id"] != "poll-auth"]
+        state.heal()
+        check(sign_in_browser(), "a 401 check: signed in with the browser again")
+        add_running()
+        session._forced_refresh_at = 0.0
+        with state.lock:
+            state.refresh_tokens.clear()
+        said, asked = len(told), requests("POST", page())
+        state.fail("POST", page(), 401, times=1)
+        processings.refresh(POLL)
+        check(wait_until(lambda: session.state == "signed_out", 5) and expired_said()
+              and len([t for t in told[said:] if "session has expired" in t]) == 1,
+              "401: a renewal that fails signs out and says “Your Mapflow session has expired” once")
+        nothing_runs("a failed renewal")
+        check(requests("POST", page()) == asked + 1, "…and the processings list sent nothing after the 401")
+
+        # (f) token sign-in: a 401 signs out
+        with state.lock:
+            state.processings[:] = [p for p in state.processings if p["id"] != "poll-auth"]
+        state.heal()
+        content.sign_in.tokenSubmitted.emit(mock_server.TOKEN)
+        check(wait_until(lambda: session.state == "signed_in" and session.project is not None
+                         and processings.loaded, 8), "a 401 check: signed in with the API token")
+        add_running()
+        said, asked = len(told), requests("POST", page())
+        state.fail("POST", page(), 401, times=1)
+        processings.refresh(POLL)
+        check(wait_until(lambda: session.state == "signed_out", 5) and expired_said()
+              and len([t for t in told[said:] if "session has expired" in t]) == 1,
+              "401: with the API token a 401 signs out and says “Your Mapflow session has expired” once")
+        nothing_runs("a 401 with the API token")
+        check(requests("POST", page()) == asked + 1, "…and the processings list sent nothing after the 401")
+    finally:
+        session.error.disconnect(told.append)
+        state.heal()
+        with state.lock:
+            state.processings[:] = [p for p in state.processings if p["id"] != "poll-auth"]
+        session._timer.setInterval(saved_status_interval)
+        processings._poll.setInterval(saved_poll_interval)
+
+
 def check_failed_requests(iface, plugin, state):
     """spec/005 § Failed requests: the rule follows what triggered the request. A user's request shows its failure
     at once; a one-off load tells once and clears what it marked as pending; a timer's request drops a transient
@@ -1534,6 +1704,8 @@ def main():
     content.sign_in.cancelRequested.emit()
     check(session.state == "signed_out" and not content.sign_in.cancel.isVisible()
           and browse(mock_server.REDIRECT_URI)[0] == 0, "Cancel stops waiting and closes the listener")
+
+    check_poll_auth(iface, plugin, state, browser)
 
     # ---------- API token ----------
     # wrong token first: a friendly error, still signed out

@@ -62,7 +62,7 @@ class State:
 
     def fail(self, method, pattern, what, times=None):
         """Requests of `method` whose path (without /rest) matches the regex `pattern` fail. `what`: an HTTP
-        status (503, 403, 404, 400), "drop" (the connection closes with no answer) or "hang" (no answer for
+        status (401, 503, 403, 404, 400), "drop" (the connection closes with no answer) or "hang" (no answer for
         `hang_seconds`). `times`: how many requests fail, or None until `heal()`."""
         with self.lock:
             self.failures.append({"method": method, "pattern": re.compile(pattern), "what": what, "left": times})
@@ -125,7 +125,8 @@ class Handler(BaseHTTPRequestHandler):
             time.sleep(self.state.hang_seconds)
             self.close_connection = True
             return
-        messages = {503: "Service unavailable", 403: "No access", 404: "Not found", 400: "Bad request"}
+        messages = {401: "Session expired", 503: "Service unavailable", 403: "No access", 404: "Not found",
+                    400: "Bad request"}
         return self._send(what, {"code": f"HTTP_{what}", "message": messages.get(what, "Failure")})
 
     def _authorized(self):

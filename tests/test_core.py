@@ -905,6 +905,18 @@ def test_transient_and_permanent_failures():
     assert not any(is_transient(kind, None) for kind in ("auth", "plugin", "cancelled"))
 
 
+def test_a_timer_keeps_its_schedule_through_a_401():
+    from mapflow_next.core.failures import DROP, PollFailures, keeps_schedule
+    assert keeps_schedule("auth", 401)
+    for kind, status in (("server", 503), ("timeout", None), ("offline", None), ("proxy", None), ("client", None)):
+        assert keeps_schedule(kind, status), kind
+    for kind, status in (("forbidden", 403), ("not_found", 404), ("client", 400), ("plugin", None),
+                         ("cancelled", None)):
+        assert not keeps_schedule(kind, status), kind
+    poll = PollFailures(3)
+    assert poll.failed("auth", 401) == DROP and poll.count == 0 and not poll.stopped
+
+
 def test_strongest_trigger_wins():
     from mapflow_next.core.failures import LOAD, POLL, USER, stronger
     assert stronger(POLL, LOAD) == LOAD and stronger(LOAD, USER) == USER and stronger(USER, POLL) == USER

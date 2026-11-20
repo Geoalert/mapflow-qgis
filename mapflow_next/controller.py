@@ -97,12 +97,12 @@ class Controller(QObject):
         self._mosaic_render.setSingleShot(True)
         self._mosaic_render.setInterval(150)
         self._mosaic_render.timeout.connect(self._render_mosaics)
-        # Collections made in Mapflow Web show up here: asked for again now and then while the panel is open
+        # Collections made in Mapflow Web show up here: asked for again now and then while the panel is open. The
+        # timer runs only while signed in: sign-out ends it with the other poll timers.
         self._mosaic_refresh = QTimer(self)
         self._mosaic_refresh.setInterval(config.MOSAICS_REFRESH_MS)
         self._mosaic_refresh.timeout.connect(
             guarded(lambda: self._refresh_mosaics(config.MOSAICS_REFRESH_MS / 1000 - 1, poll=True)))
-        self._mosaic_refresh.start()
         self.content.imagery.my_data_url = session.config.my_data_url
         self._connect()
 
@@ -290,6 +290,7 @@ class Controller(QObject):
             sign_in.set_busy(True, waiting_browser=self.session.browser.active)
         elif state == SIGNED_OUT:
             sign_in.set_busy(False)
+            self._mosaic_refresh.stop()
             self.processings.stop()
             self.processings.set_project(None)
             # Sign-out aborts requests in flight, and aborted requests report nothing back
@@ -311,6 +312,8 @@ class Controller(QObject):
         elif state == SIGNED_IN:
             sign_in.set_busy(False)
             sign_in.clear()
+            if not self._mosaic_refresh.isActive():
+                self._mosaic_refresh.start()
             self.content.set_account(self.session.email)
             self.content.set_project(self.session.project)
             self.content.show_signed_in()

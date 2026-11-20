@@ -26,6 +26,12 @@ def is_transient(kind: str, status: Optional[int] = None) -> bool:
     return kind in TRANSIENT_KINDS or (kind == "client" and status is None)
 
 
+def keeps_schedule(kind: str, status: Optional[int] = None) -> bool:
+    """A timer's request that failed in a way asking again may fix, or that the session decides: a 401 makes the
+    session renew the token (the poll goes on) or sign out (which stops every timer)."""
+    return is_transient(kind, status) or kind == "auth"
+
+
 def stronger(first: Optional[str], second: Optional[str]) -> Optional[str]:
     """The trigger the user feels most: USER over LOAD over POLL. A refresh asked for while another is in flight
     is sent with this one."""
