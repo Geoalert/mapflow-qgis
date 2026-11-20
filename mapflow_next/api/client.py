@@ -8,9 +8,10 @@ from __future__ import annotations
 from typing import Callable, List, Optional
 from urllib.parse import quote, urlencode
 
-from ..config import PROCESSINGS_PAGE_SIZE, PROJECTS_PAGE_SIZE, RESULT_TIMEOUT_S, SEARCH_PAGE_SIZE
-from ..core.models import (CatalogImage, Mosaic, MosaicImage, Processing, Project, StorageLimits, UserStatus,
-                           aois_geojson)
+from ..config import (IMAGE_DOWNLOAD_TIMEOUT_S, PROCESSINGS_PAGE_SIZE, PROJECTS_PAGE_SIZE, RESULT_TIMEOUT_S,
+                      SEARCH_PAGE_SIZE)
+from ..core.models import (CatalogImage, ImageDownload, Mosaic, MosaicImage, Processing, Project, StorageLimits,
+                           UserStatus, aois_geojson)
 from .http import Http
 
 OnError = Optional[Callable]
@@ -216,6 +217,19 @@ class MapflowApi:
     def delete_image(self, image_id: str, on_done: Callable[[object], None], on_error: OnError = None) -> None:
         """One image of a collection; the collection stays, even empty (DELETE rasters/image/{id})."""
         self.http.delete(f"rasters/image/{image_id}", on_success=on_done, on_error=on_error)
+
+    def image_download_link(self, image_id: str, on_done: Callable[[ImageDownload], None],
+                            on_error: OnError = None) -> None:
+        """The presigned address of an image's original file (GET rasters/image/{id}/download)."""
+        self.http.get(f"rasters/image/{image_id}/download", on_error=on_error,
+                      on_success=lambda d: on_done(ImageDownload.from_api(d if isinstance(d, dict) else {})))
+
+    def download_image_file(self, url: str, target: str, on_done: Callable[[str], None], on_error: OnError = None,
+                            on_progress: Optional[Callable] = None) -> None:
+        """The file behind a presigned address, streamed to `target`. The address is another host's: the request
+        carries no Mapflow credentials. It has a long timeout of silence, for files of several GB."""
+        self.http.download(url, target, on_success=on_done, on_error=on_error, timeout=IMAGE_DOWNLOAD_TIMEOUT_S,
+                           on_progress=on_progress, authorize=False)
 
     def validate_image(self, metadata: dict, on_done: Callable[[dict], None], on_error: OnError = None) -> None:
         """Ask Mapflow whether an image is acceptable before uploading it (POST rasters/validate-image-metadata,

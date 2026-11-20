@@ -1836,3 +1836,67 @@ def test_only_the_report_button_opens_the_report_dialog():
                      rule_report_dialog_is_opened_only_by_the_plugin(path.read_text(encoding="utf-8"))]
     assert not problems, "\n".join(problems)
     assert "ReportDialog" in (PLUGIN / "plugin.py").read_text(encoding="utf-8")
+
+
+# ---------- download an original image (spec/002_C § GET /rasters/image/{image_id}/download) ----------
+
+@pytest.mark.parametrize("data, expected", [
+    ({"id": "i"}, True),                                       # the field is absent: downloadable
+    ({"id": "i", "available_for_download": None}, True),       # null counts as absent
+    ({"id": "i", "available_for_download": True}, True),
+    ({"id": "i", "available_for_download": False}, False),
+])
+def test_image_is_downloadable_unless_the_api_says_not(data, expected):
+    from mapflow_next.core.models import MosaicImage
+    assert MosaicImage.from_api(data).available_for_download is expected
+
+
+def test_image_download_link_from_the_answer():
+    from mapflow_next.core.models import ImageDownload
+    link = ImageDownload.from_api({"download_url": "https://s3.example/a?sig=1", "filename": "a.tif",
+                                   "expires_in": 3600})
+    assert (link.url, link.filename, link.expires_in) == ("https://s3.example/a?sig=1", "a.tif", 3600)
+    empty = ImageDownload.from_api({})
+    assert (empty.url, empty.filename, empty.expires_in) == ("", "", 0)
+    assert ImageDownload.from_api({"download_url": None, "filename": None, "expires_in": None}).url == ""
+
+
+@pytest.mark.parametrize("name, expected", [
+    ("beirut_0.5m.tif", "beirut_0.5m.tif"),
+    ("../../etc/passwd", "passwd"),
+    ("C:\\Users\\me\\scene.tif", "scene.tif"),
+    ("dir/sub\\scene.tif", "scene.tif"),
+    ("a\x00b\x1f.tif", "ab.tif"),
+    ('we<ir>d:"na|me?*.tif', "weirdname.tif"),
+    ("  ..scene.tif.. ", "scene.tif"),
+    ("..", "image.tif"),
+    ("", "image.tif"),
+    ("dir/", "image.tif"),
+    ("   ", "image.tif"),
+])
+def test_safe_filename_keeps_only_a_plain_name(name, expected):
+    from mapflow_next.core.filenames import safe_filename
+    assert safe_filename(name, "image.tif") == expected
+
+
+def test_safe_filename_cleans_its_fallback_too_and_never_returns_empty():
+    from mapflow_next.core.filenames import safe_filename
+    assert safe_filename("", "../other.tif") == "other.tif"
+    assert safe_filename("..", "") == "download"
+    assert safe_filename(None, None) == "download"
+
+
+@pytest.mark.parametrize("step, status, expected", [
+    ("link", 403, "This image can't be downloaded."),
+    ("link", 404, "The image wasn't found. It may have been deleted."),
+    ("link", 409, "The image isn't ready for download yet. Try again later."),
+    ("file", 403, "The download link was refused or has expired. Try again."),
+    ("file", 404, "The download link was refused or has expired. Try again."),
+    ("file", 409, "the fallback"),
+    ("link", 500, "the fallback"),
+    ("link", None, "the fallback"),
+    ("file", None, "the fallback"),
+])
+def test_image_download_failure_texts(step, status, expected):
+    from mapflow_next.core.messages import image_download_failure
+    assert image_download_failure(step, status, "the fallback") == expected

@@ -16,7 +16,7 @@ from qgis.core import Qgis, QgsGeometry, QgsProject, QgsVectorLayer
 
 from . import config
 from .api.client import MapflowApi
-from .core import formatting
+from .core import filenames, formatting
 from .core.draft import Coverage, ImageryChoice, Issue, RunDraft
 from .core.failures import USER, project_gone_text
 from .core.guard import guarded
@@ -2003,6 +2003,7 @@ class Controller(QObject):
             picker.createRequested.connect(self.create_collection)
             picker.renameCollectionRequested.connect(self.rename_collection)
             picker.deleteCollectionRequested.connect(self.delete_collection)
+            picker.downloadImageRequested.connect(self.download_image)
             picker.deleteImageRequested.connect(self.delete_image)
             picker.geotiff_layers = lambda: [(layer.id(), layer.name()) for layer in rasters.geotiff_layers()]
             picker.parse_drop = rasters.dropped_geotiffs
@@ -2422,6 +2423,35 @@ class Controller(QObject):
             self.notify(f"Couldn't delete “{filename}”: {message}", Qgis.MessageLevel.Warning)
 
         self.imagery.delete_image(mosaic_id, image_id, done, failed)
+
+    @guarded
+    def download_image(self, mosaic_id: str, image_id: str) -> None:
+        """"Download…" in an image's ⋯ menu: the original file, saved where the user chooses."""
+        image = self.imagery.get_image(mosaic_id, image_id)
+        if image is None or not image.available_for_download:
+            return
+        name = image.filename or image.id
+        if self.imagery.is_downloading(image_id):
+            self.notify(f"“{name}” is already downloading.")
+            return
+
+        def choose(filename: str) -> str:
+            suggested = Path(self.results.output_dir) / filenames.safe_filename(filename, image.filename)
+            parent = self.mosaic_picker if self._picker_open() else self.iface.mainWindow()
+            path, _ = QFileDialog.getSaveFileName(parent, "Download the image", str(suggested))
+            if path:
+                self._picker_note(f"Downloading “{name}”…")
+            return path
+
+        def done(path: str) -> None:
+            self._picker_note(f"Image saved to {path}")
+            self.notify(f"Image saved to {path}", Qgis.MessageLevel.Success)
+
+        def failed(message: str) -> None:
+            self._picker_note(f"Couldn't download “{name}”: {message}", "error")
+            self.notify(f"Couldn't download “{name}”: {message}", Qgis.MessageLevel.Warning)
+
+        self.imagery.download_image(image_id, choose, done, failed)
 
     def _ask_duplicate(self, files: List[str], collection: str) -> str:
         """A collection already has these files: "upload" them again, "skip" them, or "cancel" the upload."""

@@ -38,6 +38,7 @@ class MosaicPicker(QDialog):
     createRequested = pyqtSignal()              # "Create collection"
     renameCollectionRequested = pyqtSignal(str)   # mosaic id
     deleteCollectionRequested = pyqtSignal(str)   # mosaic id
+    downloadImageRequested = pyqtSignal(str, str)   # mosaic id, image id
     deleteImageRequested = pyqtSignal(str, str)   # mosaic id, image id
     queryChanged = pyqtSignal(str)              # the search box, once typing pauses ("" = the listing again)
     moreRequested = pyqtSignal(str)             # "Show more": the next page of the search (or of the listing, "")
@@ -337,8 +338,10 @@ class MosaicPicker(QDialog):
                     ink=tokens()["err_fg"])
         return menu
 
-    def image_menu(self, mosaic_id: str, image_id: str) -> QMenu:
+    def image_menu(self, mosaic_id: str, image_id: str, downloadable: bool = True) -> QMenu:
         menu = QMenu(self)
+        if downloadable:
+            menu_action(menu, "download", "Download…", lambda: self.downloadImageRequested.emit(mosaic_id, image_id))
         menu_action(menu, "trash", "Delete from the collection…",
                     lambda: self.deleteImageRequested.emit(mosaic_id, image_id), ink=tokens()["err_fg"])
         return menu
@@ -420,8 +423,9 @@ class MosaicPicker(QDialog):
         row.addWidget(use, 0, Qt.AlignmentFlag.AlignVCenter)
         more = tool("more", "More actions", "plain", 16)
         more.setObjectName(f"more:{image.id}")
-        more.clicked.connect(
-            guarded(lambda *_, iid=image.id, anchor=more: self._popup(self.image_menu(mosaic_id, iid), anchor)))
+        more.clicked.connect(guarded(
+            lambda *_, iid=image.id, anchor=more, ok=image.available_for_download:
+            self._popup(self.image_menu(mosaic_id, iid, ok), anchor)))
         row.addWidget(more, 0, Qt.AlignmentFlag.AlignVCenter)
         card.add(row)
         return card

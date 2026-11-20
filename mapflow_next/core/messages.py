@@ -157,3 +157,17 @@ def describe(code: Optional[str], params: Optional[Dict[str, Any]] = None, messa
     if message and details:
         return f"{message} ({details})"
     return message or details or GENERIC
+
+
+_LINK_FAILURES = {403: "This image can't be downloaded.",
+                  404: "The image wasn't found. It may have been deleted.",
+                  409: "The image isn't ready for download yet. Try again later."}
+_FILE_FAILURES = {403: "The download link was refused or has expired. Try again.",
+                  404: "The download link was refused or has expired. Try again."}
+
+
+def image_download_failure(step: str, status: Optional[int], fallback: str) -> str:
+    """The line for a failed image download. `step` is "link" (Mapflow's request for the address) or "file" (the
+    request to that address). Other statuses, and the failures that have none (network, timeout, disk), keep
+    `fallback`, which already says the cause in plain words."""
+    return (_LINK_FAILURES if step == "link" else _FILE_FAILURES).get(status or 0, fallback)

@@ -28,7 +28,7 @@ The plugin covers the work that belongs next to the map. Each tab has its scenar
   collection or one image in it, or add imagery right there: upload GeoTIFFs, from files or from the project's
   GeoTIFF layers — several at once, or dragged from the Layers panel or the file manager — into the selected
   collection, or into a new one when none is selected. You can also create a
-  collection with a name and tags, rename a collection (its name and tags), and delete a collection or an image from its ⋯ menu. Files are checked before upload: bands, CRS, size, that they match each
+  collection with a name and tags, rename a collection (its name and tags), download an original image, and delete a collection or an image from its ⋯ menu. Files are checked before upload: bands, CRS, size, that they match each
   other, and, for an existing collection, that they fit it.
   The imagery's extent becomes the area, and its preview goes on the map.
 - **Layers panel › Use a layer in Mapflow.** Right-click a polygon layer for "Use as AOI in Mapflow", or a
@@ -194,8 +194,8 @@ every Mapflow user. The plugin links to the right page wherever it leaves someth
 | Processings list, results on the map, rename, delete, run again | **Kept** | Results belong in QGIS |
 | Imagery search in the catalog | **Kept** | Footprints are judged on the map |
 | Upload a GeoTIFF to My imagery | **Kept**: into a new or an existing collection, from one or several files or layers | Your imagery is made in QGIS and processed from there |
-| My imagery collections: create, delete, add or delete images | **Kept**: the My imagery window and its ⋯ menus | Adding imagery and clearing out what was added by mistake belong where the imagery is chosen |
-| My imagery: rename a collection or an image, download originals, storage usage | **Mapflow Web** › [My data](https://app.mapflow.ai/my-data) ("Manage collections in Mapflow Web") | File management, not mapping |
+| My imagery collections: create, rename, delete, add, download or delete images | **Kept**: the My imagery window and its ⋯ menus | Adding imagery and clearing out what was added by mistake belong where the imagery is chosen |
+| My imagery: rename an image, storage usage | **Mapflow Web** › [My data](https://app.mapflow.ai/my-data) ("Manage collections in Mapflow Web") | File management, not mapping |
 | Create a project | **Kept**: New project in the Projects window | Starting new work shouldn't need a trip to the browser |
 | Projects: rename, delete, share | **Mapflow Web** › the project ("Share project in Mapflow Web" and the share icon in the Projects window) | Done rarely, and sharing needs the team's members and roles. The plugin creates, switches, searches and pins projects |
 | Review: accept or send back results | **Mapflow Web** (the processing links there) | Review is a step of its own, with its own page, after the processing; the plugin shows that a processing needs it |

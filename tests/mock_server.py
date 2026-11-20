@@ -64,6 +64,14 @@ class State:
         self.hang_seconds = 3              # how long a "hang" holds the request before it closes
         self.memory = None                 # GET /rasters/memory answers this, not fixtures.MEMORY (other limits)
         self.restart_refused = None        # (status, code, message): POST /processings/{id}/restart/v2 answers this
+        self.image_bytes = bytes((n * 7 + n // 251) % 256 for n in range(1024 * 1024))   # the body of a download
+        self.download_mode = "ok"          # "ok" | "truncated" (half the body, then the connection closes) |
+        #                                    "slow" (small chunks, `download_chunk_delay` apart) | "stall" (some bytes,
+        #                                    then silence for `hang_seconds`) | "forbidden" (403 XML, as S3's)
+        self.download_chunk_delay = 0.5    # seconds between the chunks of a "slow" download
+        self.download_chunks = 10          # the number of chunks of a "slow" download
+        self.not_downloadable = set()      # image ids listed with available_for_download: false
+        self.download_links = []           # image ids GET rasters/image/{id}/download was asked for
         self.page_delay = {}               # terms (lower case) → seconds the processings page waits before it answers
         #                                    (or before it fails, when fail() applies to it)
 
@@ -203,6 +211,39 @@ class Handler(BaseHTTPRequestHandler):
                 return self._issue()
         return self._send(404, {"error": "not_found"})
 
+    def _image_body(self):
+        """The file behind a presigned URL, as `download_mode` says."""
+        body, mode = self.state.image_bytes, self.state.download_mode
+        if mode == "forbidden":
+            return self._send(403, "<Error><Code>AccessDenied</Code><Message>Request has expired</Message></Error>",
+                              "application/xml")
+        self.send_response(200)
+        self.send_header("Content-Type", "image/tiff")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        try:
+            if mode == "truncated":
+                self.wfile.write(body[:len(body) // 2])
+                self.wfile.flush()
+                self.close_connection = True
+                return
+            if mode == "stall":
+                self.wfile.write(body[:len(body) // 4])
+                self.wfile.flush()
+                time.sleep(self.state.hang_seconds)
+                self.close_connection = True
+                return
+            if mode == "slow":
+                step = -(-len(body) // self.state.download_chunks)
+                for start in range(0, len(body), step):
+                    self.wfile.write(body[start:start + step])
+                    self.wfile.flush()
+                    time.sleep(self.state.download_chunk_delay)
+                return
+            self.wfile.write(body)
+        except OSError:       # the client went away (an aborted download)
+            self.close_connection = True
+
     def _route(self, method):
         path = self.path.split("?")[0].replace("/rest", "", 1)
         if path.startswith(OIDC):
@@ -215,6 +256,8 @@ class Handler(BaseHTTPRequestHandler):
             self.state.requests.append((method, path, body, dict(self.headers)))
         if method == "GET" and path == "/open/preview.png":     # a public picture: no sign-in
             return self._send(200, PNG, "image/png")
+        if method == "GET" and path.startswith("/open/image/"):   # a presigned URL: no sign-in
+            return self._image_body()
         if not self._authorized():
             return
         if path == "/redirect":                                 # answers 302 to the `to` query value
@@ -484,7 +527,21 @@ class Handler(BaseHTTPRequestHandler):
                 self.state.image_requests = getattr(self.state, "image_requests", 0) + 1
             images = [fixtures.mosaic_image(f"{match.group(1)}-i{n}", match.group(1), name, base)
                       for n, name in enumerate(names)]
+            for image in images:
+                if image["id"] in self.state.not_downloadable:
+                    image["available_for_download"] = False
             return self._send(200, [i for i in images if i["id"] not in self.state.deleted_images])
+        match = re.fullmatch(r"/rasters/image/([\w-]+)/download", path)
+        if method == "GET" and match:
+            with self.state.lock:
+                self.state.download_links.append(match.group(1))
+            for mosaic_id, names in {**fixtures.MOSAIC_IMAGES, **self.state.extra_images}.items():
+                for n, name in enumerate(names):
+                    if match.group(1) == f"{mosaic_id}-i{n}":
+                        return self._send(200, {"download_url": f"http://127.0.0.1:{self.server.server_address[1]}"
+                                                                f"/open/image/{match.group(1)}",
+                                                "filename": name, "expires_in": 3600})
+            return self._send(404, {"detail": {"code": "IMAGE_NOT_FOUND", "message": "Image not found"}})
         match = re.fullmatch(r"/rasters/image/([\w-]+)", path)
         if method == "GET" and match:
             base = f"http://127.0.0.1:{self.server.server_address[1]}/rest"

@@ -46,6 +46,9 @@ TIMEOUT_S = 30
 RESULT_TIMEOUT_S = 600
 # An upload may be silent for an hour: the timer restarts while bytes move, so a slow, healthy one is not cut
 UPLOAD_TIMEOUT_S = 3600
+# …and so may the download of an original image: seconds of silence, restarted whenever bytes arrive, so a
+# download of several GB is not cut while it moves and only a stalled one ends
+IMAGE_DOWNLOAD_TIMEOUT_S = 3600
 # What an upload may be when Mapflow's answer (GET rasters/memory) is missing; the account's own limits replace them
 UPLOAD_LIMIT_BYTES = 2 * 1024 ** 3
 MAX_SIDE_PIXELS = 30_000

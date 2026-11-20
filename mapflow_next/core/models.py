@@ -595,6 +595,7 @@ class MosaicImage:
     size_bytes: int = 0
     pixel_size: Optional[float] = None
     footprint_wkt: str = ""
+    available_for_download: bool = True       # absent or null in the API's answer counts as true
 
     @classmethod
     def from_api(cls, data: dict) -> "MosaicImage":
@@ -606,4 +607,19 @@ class MosaicImage:
                    filename=data.get("filename") or "", preview_s=data.get("preview_url_s") or "",
                    preview_l=data.get("preview_url_l") or "", uploaded=parse_datetime(data.get("uploaded_at")),
                    size_bytes=int(_num(data.get("file_size"))),
-                   pixel_size=_num(pixel) if pixel is not None else None, footprint_wkt=data.get("footprint") or "")
+                   pixel_size=_num(pixel) if pixel is not None else None, footprint_wkt=data.get("footprint") or "",
+                   available_for_download=data.get("available_for_download") is None
+                   or bool(data.get("available_for_download")))
+
+
+@dataclass
+class ImageDownload:
+    """The answer of GET rasters/image/{id}/download: a presigned address of the original file."""
+    url: str = ""
+    filename: str = ""
+    expires_in: int = 0               # seconds
+
+    @classmethod
+    def from_api(cls, data: dict) -> "ImageDownload":
+        return cls(url=str(data.get("download_url") or ""), filename=str(data.get("filename") or ""),
+                   expires_in=int(_num(data.get("expires_in"))))

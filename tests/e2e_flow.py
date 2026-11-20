@@ -2382,6 +2382,207 @@ def check_upload_timeout(iface, plugin, state):
         wait_until(lambda: not http._pending, 5)
 
 
+def slow_download(state, imagery, target, told):
+    """Start a download of the image m-2-i0 that takes about five seconds, through the service (no window needed),
+    and wait until the body is arriving on disk."""
+    state.download_mode, state.download_chunk_delay = "slow", 0.5
+    imagery.download_image("m-2-i0", lambda _name: str(target), lambda path: told.append(("done", path)),
+                           lambda message: told.append(("error", message)))
+    http = imagery.api.http
+    return wait_until(lambda: any(item.sink is not None and item.sink.size() > 0 for item in http._pending.values()), 5)
+
+
+def check_download_image(iface, plugin, state, picker):
+    """spec/002_C § Client-side download: "Download…" in an image's ⋯ menu (only when it is available for
+    download), the save dialog, the body streamed to a temporary file that replaces the target when complete, and a
+    plain message for each failure. A test never lists the folder while a download runs: the temporary file's
+    directory entry depends on the platform (O_TMPFILE). Everything the function changes is restored."""
+    import mapflow_next.api.client as client_module
+    import mapflow_next.controller as controller_module
+    controller, imagery = plugin.controller, plugin.services[3]
+    http = plugin.services[1].http
+    warn, success = Qgis.MessageLevel.Warning, Qgis.MessageLevel.Success
+    folder = Path(tempfile.mkdtemp(prefix="mapflow-image-"))
+    target = folder / "saved.tif"
+    link = "/rasters/image/m-2-i0/download"
+    asked, answer = [], {"path": str(target)}
+
+    def save_dialog(*args, **_kwargs):
+        asked.append(args[2] if len(args) > 2 else "")
+        return answer["path"], ""
+
+    def file_requests():
+        return [r for r in state.requests if r[1] == "/open/image/m-2-i0"]
+
+    def link_requests():
+        return [r for r in state.requests if r[1] == link]
+
+    def note():
+        return picker.upload_note.text.text()
+
+    def download(wait=True):
+        """"Download…" of the image m-2-i0 from its menu; waits until nothing is downloading."""
+        before = len(iface.bar.messages)
+        picker.image_menu("m-2", "m-2-i0").actions()[0].trigger()
+        if wait:
+            wait_until(lambda: not imagery.is_downloading("m-2-i0") and len(iface.bar.messages) > before, 15)
+        return list(iface.bar.messages[before:])
+
+    def settle(seconds=0.3):
+        wait_until(lambda: False, seconds)
+
+    picker.open_collection("m-2")
+    check(wait_until(lambda: imagery.get_image("m-2", "m-2-i0") is not None, 5), "the collection m-2 shows its image")
+    image = imagery.get_image("m-2", "m-2-i0")
+    saved_dialog, saved_timeout = controller_module.QFileDialog.getSaveFileName, client_module.IMAGE_DOWNLOAD_TIMEOUT_S
+    saved_popup = picker.__dict__.get("_popup")
+    controller_module.QFileDialog.getSaveFileName = staticmethod(save_dialog)
+    try:
+        # The menu: Download… only when the image is available for download (absent field: it is)
+        check(image.available_for_download
+              and [a.text() for a in picker.image_menu("m-2", "m-2-i0").actions()]
+              == ["Download…", "Delete from the collection…"],
+              "an image without the available_for_download field offers Download… and Delete")
+        state.not_downloadable.add("m-2-i0")
+        imagery.load_images("m-2", force=True)
+        check(wait_until(lambda: not imagery.get_image("m-2", "m-2-i0").available_for_download, 5),
+              "an image listed with available_for_download: false is not downloadable")
+        menus = []
+        picker._popup = lambda menu, _anchor: menus.append([a.text() for a in menu.actions()])
+        picker.findChild(QToolButton, "more:m-2-i0").click()
+        check(menus == [["Delete from the collection…"]], f"…and its ⋯ menu offers Delete only ({menus})")
+        links = len(link_requests())
+        controller.download_image("m-2", "m-2-i0")
+        settle()
+        check(not asked and len(link_requests()) == links and not imagery.is_downloading("m-2-i0"),
+              "an image that is not available for download is not downloaded: no request, no dialog")
+        state.not_downloadable.discard("m-2-i0")
+        imagery.load_images("m-2", force=True)
+        check(wait_until(lambda: imagery.get_image("m-2", "m-2-i0").available_for_download, 5),
+              "(the image is downloadable again)")
+        if saved_popup is None:
+            del picker._popup
+        else:
+            picker._popup = saved_popup
+
+        # Success: the dialog suggests the file name; the file equals the body; the credentials stay home
+        shown = download()
+        check(asked and asked[-1].endswith("beirut_0.5m.tif"),
+              f"the save dialog suggests the image's file name ({asked[-1:]})")
+        check(target.read_bytes() == state.image_bytes, "the file at the chosen path holds the image")
+        check((success, f"Image saved to {target}") in shown and note() == f"Image saved to {target}",
+              f"the message bar and the window say \"Image saved to {{path}}\" ({shown})")
+        check(files_under(folder) == ["saved.tif"], f"the folder holds the target only ({files_under(folder)})")
+        check(link_requests() and any(k.lower() == "authorization" for k in link_requests()[-1][3])
+              and file_requests() and not any(k.lower() == "authorization" for k in file_requests()[-1][3]),
+              "Mapflow's request carries the credentials; the request for the file does not, on the API's own host")
+        target.unlink()
+
+        # The body is on disk while it arrives; a long download is not cut by the timeout, a stalled one is
+        client_module.IMAGE_DOWNLOAD_TIMEOUT_S = 2
+        told = []
+        check(slow_download(state, imagery, target, told),
+              "the body of a slow download is on disk before it ends (the plugin does not hold it)")
+        check(not target.exists() or target.read_bytes() != state.image_bytes,
+              "…and the target is not there before the end")
+        check(wait_until(lambda: told, 15) and told == [("done", str(target))]
+              and target.read_bytes() == state.image_bytes,
+              f"a download longer than its timeout completes while bytes arrive ({told})")
+        target.unlink()
+        state.download_mode = "stall"
+        shown = download()
+        check(any(level == warn and "did not answer in time" in text for level, text in shown)
+              and not target.exists() and files_under(folder) == [],
+              f"a stalled download ends with the timeout message, and leaves no file ({shown}, "
+              f"{files_under(folder)})")
+        client_module.IMAGE_DOWNLOAD_TIMEOUT_S = saved_timeout
+        state.download_mode = "ok"
+
+        # 409 on the link: the reason, no request for the file, no dialog, no file
+        asked.clear()
+        state.fail("GET", r"/rasters/image/.+/download", 409)
+        files_asked = len(file_requests())
+        shown = download()
+        state.heal()
+        reason = "The image isn't ready for download yet. Try again later."
+        check(any(level == warn and reason in text for level, text in shown) and reason in note()
+              and len(file_requests()) == files_asked and not asked and files_under(folder) == [],
+              f"409 says the image isn't ready, sends no request for the file and asks nothing ({shown})")
+        for status, text in ((403, "This image can't be downloaded."),
+                             (404, "The image wasn't found. It may have been deleted.")):
+            state.fail("GET", r"/rasters/image/.+/download", status)
+            shown = download()
+            state.heal()
+            check(any(level == warn and text in message for level, message in shown),
+                  f"{status} on the link says: {text} ({shown})")
+
+        # A download that breaks keeps the old file, and leaves no other
+        target.write_bytes(b"old bytes")
+        state.download_mode = "truncated"
+        shown = download()
+        settle()
+        check(any(level == warn for level, _text in shown) and target.read_bytes() == b"old bytes"
+              and files_under(folder) == ["saved.tif"],
+              f"a broken download leaves the old file as it was, and no other ({shown}, {files_under(folder)})")
+        target.unlink()
+
+        # The file step refused: the link may have expired
+        state.download_mode = "forbidden"
+        shown = download()
+        check(any(level == warn and "The download link was refused or has expired. Try again." in text
+                  for level, text in shown) and files_under(folder) == [],
+              f"403 on the presigned address says the link expired ({shown})")
+        state.download_mode = "ok"
+
+        # A target that can't be opened: the reason, and no request
+        answer["path"] = str(folder / "missing" / "saved.tif")
+        files_asked = len(file_requests())
+        shown = download()
+        check(any(level == warn and "Can't write" in text for level, text in shown)
+              and len(file_requests()) == files_asked and files_under(folder) == []
+              and not (folder / "missing").exists(),
+              f"a target that can't be opened gives the reason and sends no request ({shown})")
+
+        # Cancel in the dialog: nothing is sent or said, and the image can be downloaded again
+        answer["path"] = ""
+        files_asked, before = len(file_requests()), len(iface.bar.messages)
+        download(wait=False)
+        settle()
+        check(len(file_requests()) == files_asked and len(iface.bar.messages) == before
+              and not imagery.is_downloading("m-2-i0") and files_under(folder) == [],
+              "Cancel in the save dialog sends nothing, says nothing and frees the image")
+        answer["path"] = str(target)
+        shown = download()
+        check(target.exists() and (success, f"Image saved to {target}") in shown,
+              "…and the next download works")
+        target.unlink()
+
+        # Two clicks on the same image: one download
+        state.download_mode, state.download_chunk_delay = "slow", 0.2
+        links = len(link_requests())
+        before = len(iface.bar.messages)
+        download(wait=False)
+        wait_until(lambda: imagery.is_downloading("m-2-i0"), 2)
+        download(wait=False)
+        check(wait_until(lambda: not imagery.is_downloading("m-2-i0") and target.exists(), 15)
+              and len(link_requests()) == links + 1
+              and any("already downloading" in text for _level, text in iface.bar.messages[before:]),
+              "a second click while the image downloads says so and sends no second request")
+        target.unlink()
+    finally:
+        controller_module.QFileDialog.getSaveFileName = saved_dialog
+        client_module.IMAGE_DOWNLOAD_TIMEOUT_S = saved_timeout
+        state.download_mode, state.download_chunk_delay = "ok", 0.5
+        state.not_downloadable.discard("m-2-i0")
+        state.heal()
+        if saved_popup is None:
+            picker.__dict__.pop("_popup", None)
+        else:
+            picker._popup = saved_popup
+    wait_until(lambda: not http._pending or all(item.sink is None for item in http._pending.values()), 5)
+    check(not any(item.sink is not None for item in http._pending.values()), "no download is left pending")
+
+
 def check_rename_collection(iface, plugin, state, picker):
     """spec/002_C § PUT /rasters/mosaic/{id}: "Rename…" in a collection's ⋯ menu (name and tags) sends the PUT and
     the new name shows without a full reload: in the picker's rows (listing and search), its title and target
@@ -2417,8 +2618,9 @@ def check_rename_collection(iface, plugin, state, picker):
     # The menus: a collection can be renamed, an image can't (Mapflow Web does that)
     picker.open_collection("m-2")
     check([a.text() for a in picker.collection_menu().actions()] == ["Rename…", "Delete collection…"]
-          and [a.text() for a in picker.image_menu("m-2", "m-2-i0").actions()] == ["Delete from the collection…"],
-          "a collection's ⋯ menu offers Rename… and Delete; an image's offers Delete only")
+          and [a.text() for a in picker.image_menu("m-2", "m-2-i0").actions()]
+          == ["Download…", "Delete from the collection…"],
+          "a collection's ⋯ menu offers Rename… and Delete; an image's offers Download… and Delete")
 
     # The dialog: the name and the tags, prefilled; no empty name
     dialog = CollectionDialog(title="Rename collection", action="Save", name="Beirut", tags=["a", "b"])
@@ -3242,10 +3444,14 @@ def main():
     files_before = files_under(out_dir)
     saved_convert, shown = conversion.convert_geojson, len(iface.bar.messages)
     conversion.convert_geojson = waiting_conversion(entered, left)
+    download_dir = Path(tempfile.mkdtemp(prefix="mapflow-image-"))
+    downloading = []
     try:
         converting = processing_done("conv-unload")
         results_now.add_to_map(converting)
         check(wait_until(lambda: entered, 5), "a conversion runs when the plugin is unloaded")
+        check(slow_download(state, plugin.services[3], download_dir / "unload.tif", downloading),
+              "an image download runs when the plugin is unloaded")
         stopping = time.time()
         plugin.unload()
         took = time.time() - stopping
@@ -3254,7 +3460,11 @@ def main():
               f"({sorted(set(files_under(out_dir)) - set(files_before))})")
         wait_until(lambda: False, 0.3)
         check(not told and len(iface.bar.messages) == shown, "…and nothing is told about it afterwards")
+        check(not downloading and files_under(download_dir) == [],
+              f"unload stops the image download: nothing is told, no file stays ({downloading}, "
+              f"{files_under(download_dir)})")
     finally:
+        state.download_mode = "ok"
         conversion.convert_geojson = saved_convert
     plugin = classFactory(iface)
     plugin.initGui()
@@ -3269,9 +3479,18 @@ def main():
     imagery_now = plugin.services[3]
     controller.starting, imagery_now.uploading = True, True        # a start and an upload in flight
     imagery_now._images_loading.add("m-1")
+    sign_out_dir, signing_out = Path(tempfile.mkdtemp(prefix="mapflow-image-")), []
+    check(slow_download(state, imagery_now, sign_out_dir / "out.tif", signing_out),
+          "an image download runs when the user signs out")
     session.sign_out()
     check(wait_until(lambda: session.state == "signed_out") and not auth.load_refresh_token(session.config),
           "signing out forgets the browser sign-in")
+    wait_until(lambda: False, 0.5)
+    state.download_mode = "ok"
+    check(not signing_out and files_under(sign_out_dir) == [] and not imagery_now._downloads
+          and not any(item.sink is not None for item in session.http._pending.values()),
+          f"signing out stops the image download: nothing is told, no file stays ({signing_out}, "
+          f"{files_under(sign_out_dir)})")
     check(not controller.starting and not imagery_now.uploading and not imagery_now._images_loading,
           "…and what was in flight isn't left busy for the next sign-in (Run, uploads, image lists)")
 
@@ -4497,15 +4716,15 @@ def main():
         check(wait_until(lambda: len(picker._thumbs) == 1, 5), "the new collection shows its uploaded image")
         menu = picker.image_menu(jetty.id, image_id)
         check(picker.findChild(QToolButton, f"more:{image_id}") is not None
-              and [a.text() for a in menu.actions()] == ["Delete from the collection…"],
-              "each image has a ⋯ menu with Delete (no extra large buttons)")
-        menu.actions()[0].trigger()
+              and [a.text() for a in menu.actions()] == ["Download…", "Delete from the collection…"],
+              "each image has a ⋯ menu with Download and Delete (no extra large buttons)")
+        menu.actions()[1].trigger()
         check(not state.deleted_images and confirms[-1][1] == "Delete “centre.tif” from “Jetty”?",
               f"deleting an image asks first; Cancel deletes nothing ({confirms[-1:]})")
         answer_del["value"] = True
         controller.draft.imagery = controller_module.ImageryChoice.from_mosaic(jetty.id, "Jetty", image_id,
                                                                                "centre.tif")
-        picker.image_menu(jetty.id, image_id).actions()[0].trigger()
+        picker.image_menu(jetty.id, image_id).actions()[1].trigger()
         check(wait_until(lambda: image_id in state.deleted_images and not picker._thumbs
                          and any("no images yet" in w.text() for w in picker.findChildren(QLabel) if w.isVisible()), 5)
               and "stays, empty" in confirms[-1][2]
@@ -4526,6 +4745,7 @@ def main():
         controller._confirm_delete = saved_confirm
         controller.draft.imagery = imagery_kept
     check_rename_collection(iface, plugin, state, picker)
+    check_download_image(iface, plugin, state, picker)
     state.list_uploads = False
     state.extra_mosaics, state.extra_images = [], {}
     imagery_service.load_mosaics()

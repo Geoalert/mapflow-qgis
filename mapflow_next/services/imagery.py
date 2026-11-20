@@ -12,7 +12,8 @@ from ..api.client import MapflowApi
 from ..api.http import ApiError
 from ..config import MOSAICS_PAGE_SIZE, POLL_FAILURES_BEFORE_ALERT
 from ..core.failures import ALERT, STOP, PollFailures, poll_notice
-from ..core.models import CatalogImage, Mosaic, MosaicImage, StorageLimits
+from ..core.messages import image_download_failure
+from ..core.models import CatalogImage, ImageDownload, Mosaic, MosaicImage, StorageLimits
 
 # A refresh reloads the listing in one request up to this many; collections loaded beyond stay as they are
 MAX_RELOAD = 200
@@ -69,6 +70,8 @@ class Imagery(QObject):
         self.found_loading = False
         self.found_failed = False
         self._found_id = 0
+        self._downloads: Set[str] = set()       # ids of the images being downloaded
+        self._download_epoch = 0                # moves when the downloads stop: an answer of an older one is dropped
 
     def search(self, geometry: dict, date_from: date, date_to: date, max_cloud: Optional[float],
                min_off_nadir: Optional[float], max_off_nadir: Optional[float],
@@ -347,6 +350,8 @@ class Imagery(QObject):
         self._search_id += 1
         self._listing_id += 1
         self._found_id += 1
+        self._downloads.clear()
+        self._download_epoch += 1
         self._forget_failures()
 
     def stop(self) -> None:
@@ -557,6 +562,51 @@ class Imagery(QObject):
             self.load_mosaics()                     # its size changes
 
         self.api.delete_image(image_id, done, lambda error: on_error(error.message))
+
+    def is_downloading(self, image_id: str) -> bool:
+        return image_id in self._downloads
+
+    def download_image(self, image_id: str, choose_path: Callable[[str], str], on_done: Callable[[str], None],
+                       on_error: Callable[[str], None]) -> None:
+        """An image's original file: Mapflow gives an address, `choose_path(filename)` asks the user where to save
+        (an empty answer is a Cancel: nothing happens and nobody is told), and the file is streamed there.
+        `on_done` gets the path, `on_error` the reason. After `reset_busy` or `stop` nothing is called back."""
+        epoch = self._download_epoch
+        self._downloads.add(image_id)
+
+        def end() -> bool:
+            """False: the downloads were stopped meanwhile, so this answer is not for anyone."""
+            if epoch != self._download_epoch:
+                return False
+            self._downloads.discard(image_id)
+            return True
+
+        def failed(step: str):
+            def report(error: ApiError) -> None:
+                if end():
+                    on_error(image_download_failure(step, error.status, error.message))
+            return report
+
+        def saved(path: str) -> None:
+            if end():
+                on_done(path)
+
+        def linked(link: ImageDownload) -> None:
+            if epoch != self._download_epoch:
+                return
+            if not link.url.startswith(("http://", "https://")):     # `Http` would read it as a path of the API
+                if end():
+                    on_error("Mapflow sent no download address for this image.")
+                return
+            path = choose_path(link.filename)
+            if epoch != self._download_epoch:       # a sign-out came while the dialog was open
+                return
+            if not path:
+                self._downloads.discard(image_id)
+                return
+            self.api.download_image_file(link.url, path, saved, failed("file"))
+
+        self.api.image_download_link(image_id, linked, failed("link"))
 
     def create_collection(self, name: str, tags: List[str], on_done: Callable[[str], None],
                           on_error: Callable[[str], None]) -> None:

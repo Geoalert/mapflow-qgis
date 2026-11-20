@@ -149,6 +149,7 @@ class _Pending:
     hops: int = 0                 # redirects followed so far
     redirect_refused: str = ""    # why a redirect was not followed
     aborted: bool = False         # the plugin aborted the reply (`abort`, `abort_all`); any other abort is not its own
+    write_error: str = ""         # why the sink refused the body; the reply was aborted for it
     response: str = ""            # the start of a decoded text or JSON answer: a report names it if the callback fails
 
 
@@ -187,14 +188,18 @@ class Http(QObject):
 
     def download(self, path: str, target: str, on_success: Optional[Callback] = None,
                  on_error: Optional[Callback] = None, timeout: Optional[int] = None,
-                 on_progress: Optional[Callback] = None) -> int:
-        """Stream the body to `target` (atomic: the file appears only when complete)."""
+                 on_progress: Optional[Callback] = None, authorize: bool = True) -> int:
+        """Stream the body to `target` (atomic: the file appears only when complete). A `target` that can't be
+        opened fails at once, before any request. `authorize=False`: the request never carries Mapflow credentials,
+        whatever its origin."""
+        if self._stopped:
+            return 0
         sink = QSaveFile(target)
         if not sink.open(QIODevice.OpenModeFlag.WriteOnly):
             self._fail(on_error, ApiError("client", f"Can't write {target}: {sink.errorString()}"))
             return 0
         return self._send("GET", path, on_success=on_success, on_error=on_error, timeout=timeout,
-                          parse="file", sink=sink, on_progress=on_progress)
+                          parse="file", sink=sink, on_progress=on_progress, authorize=authorize)
 
     def upload(self, path: str, file_path: str, on_success: Optional[Callback] = None,
                on_error: Optional[Callback] = None, on_progress: Optional[Callback] = None) -> int:
@@ -330,8 +335,18 @@ class Http(QObject):
     @guarded
     def _drain(self, key: int) -> None:
         pending = self._pending.get(key)
-        if pending and pending.sink is not None and not _is_redirect(pending.reply):   # a redirect's body is no result
-            pending.sink.write(pending.reply.readAll())
+        if (pending and pending.sink is not None and not pending.write_error
+                and not _is_redirect(pending.reply)):      # a redirect's body is no result
+            if (_status_of(pending.reply) or 0) >= 400:     # an error's body is small and `_read` ignores it
+                return
+            data = pending.reply.readAll()
+            if pending.sink.write(data) != len(data):
+                # A full disk shows now, not after the last byte of several GB. `abort` ends the reply at once and
+                # `_finished` removes the pending entry, so nothing of `pending` is touched after it.
+                pending.write_error = pending.sink.errorString() or "the disk write failed"
+                pending.aborted = True
+                pending.reply.abort()
+                return
             if pending.timer:
                 pending.timer.start()   # data is flowing: restart the inactivity timer
 
@@ -423,6 +438,12 @@ class Http(QObject):
             QgsMessageLog.logMessage(f"{error.kind} {status} {pending.url}: redirect refused: {reason}",
                                      PLUGIN_NAME, Qgis.MessageLevel.Warning)
             return False, error
+        if pending.write_error:
+            pending.sink.cancelWriting()
+            error = ApiError("client", f"Can't save the file: {pending.write_error}", status, url=pending.url)
+            QgsMessageLog.logMessage(f"{error.kind} {status} {pending.url}: {pending.write_error}",
+                                     PLUGIN_NAME, Qgis.MessageLevel.Warning)
+            return False, error
         if reply.error() != QNetworkReply.NetworkError.NoError or pending.timed_out:
             body = "" if pending.sink is not None else bytes(reply.readAll()).decode("utf-8", "replace")
             if pending.sink is not None:
@@ -439,9 +460,11 @@ class Http(QObject):
                 self.unauthorized.emit()
             return False, error
         if pending.sink is not None:
-            pending.sink.write(reply.readAll())
-            if not pending.sink.commit():
-                return False, ApiError("client", f"Can't save the file: {pending.sink.errorString()}")
+            data = reply.readAll()
+            if pending.sink.write(data) != len(data) or not pending.sink.commit():
+                reason = pending.sink.errorString()
+                pending.sink.cancelWriting()
+                return False, ApiError("client", f"Can't save the file: {reason}")
             return True, pending.sink.fileName()
         raw = bytes(reply.readAll())
         if pending.parse == "bytes":
