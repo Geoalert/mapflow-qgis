@@ -117,6 +117,13 @@ class SignInPage(QWidget):
         footer.addWidget(link("Plugin guide", config.DOCS_URL))
         footer.addStretch(1)
         layout.addLayout(footer)
+        # a row of its own: three links do not fit the 352 px of a narrow dock
+        self.terms = link("Terms of use", config.TERMS_URL)
+        terms_row = QHBoxLayout()
+        terms_row.setSpacing(16)
+        terms_row.addWidget(self.terms)
+        terms_row.addStretch(1)
+        layout.addLayout(terms_row)
 
     def _toggle_more(self, show=None) -> None:
         visible = (not self.token_box.isVisible()) if show is None else bool(show)

@@ -3993,6 +3993,11 @@ def main():
     content.sign_in.more.click()
     check(not content.sign_in.token_box.isVisible(), "clicking it again folds the token field away")
     shot(content, "01-sign-in", QSize(400, 880))
+    links.opened.clear()
+    content.sign_in.terms.click()
+    check(links.opened == ["https://mapflow.ai/terms-of-use-en.pdf"],
+          f"the sign-in page's \"Terms of use\" link opens the terms of use ({links.opened})")
+    links.opened.clear()
 
     # ---------- browser sign-in ----------
     from mapflow_next.api import auth

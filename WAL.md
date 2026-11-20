@@ -45,7 +45,7 @@ describes the state after the chain; each step makes the code match it, and upda
 [ready-for-review] Rename a project — `spec/002_A`
 [ready-for-review] Delete a project — `spec/002_A`
 [ready-for-review] Forced upgrade when the backend expects a higher major version — `spec/002_api.md` § Versioning policy
-[ ] Terms of use link on the sign-in page
+[ready-for-review] Terms of use link on the sign-in page
 [ ] XYZ/TMS layers that QGIS already has as an imagery source — `spec/001`. Needs its own spec text for the source parameters before the code
 [ ] Planned processings in the Processings tab, with a "search processing" mark; a click opens Mapflow Web — `spec/002_F` § Plugin behaviour in Mapflow Next
 

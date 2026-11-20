@@ -31,6 +31,7 @@ SIGN_UP_URL = WEB_URL
 PROJECTS_URL = f"{WEB_URL}/en/projects"    # sharing happens here (project card ⋯ → Share)
 TEAM_URL = f"{WEB_URL}/en/team"            # to verify: the docs name the Team page but not its address
 DOCS_URL = "https://docs.mapflow.ai/api/qgis_mapflow.html"
+TERMS_URL = "https://mapflow.ai/terms-of-use-en.pdf"
 MODELS_DOCS_URL = "https://docs.mapflow.ai/userguides/pipelines.html"
 CUSTOM_MODELS_URL = "https://mapflow.ai/custom-models"
 RELEASES_URL = "https://github.com/Geoalert/mapflow-qgis/releases"

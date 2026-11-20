@@ -9,7 +9,7 @@ from mapflow_next.core.messages import describe
 from mapflow_next.core.models import (BillingType, DataProvider, Model, Processing, Project, Role, Status,
                                       UserStatus)
 from mapflow_next.core.scenarios import Catalogue, match_model, resolve, scenario_for_model
-from mapflow_next.config import RESOURCES, Config, load_config
+from mapflow_next.config import RESOURCES, TERMS_URL, Config, load_config
 from mapflow_next.core import oauth
 
 from .fixtures import BUILDINGS, FOREST, MULTI, ROADS, OPEN_DATA, MAPBOX, PROJECT, STATUS, processing_json
@@ -301,6 +301,11 @@ def test_sign_in_override_wins_in_every_environment(env):
     config = load_config(type("S", (), {"value": lambda self, k, d=None: settings.get(k, d)})())
     assert config.token_url == "http://localhost:9/oidc/token"
     assert config.authorize_url == "http://localhost:9/oidc/auth"
+
+
+def test_terms_of_use_address():
+    assert TERMS_URL == "https://mapflow.ai/terms-of-use-en.pdf"
+    assert TERMS_URL.startswith("https://")
 
 
 def test_pkce_and_authorize_url():

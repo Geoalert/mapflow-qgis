@@ -51,6 +51,49 @@ def shot(widget, name, size=None):
         widget.grab().save(str(SHOTS / f"{name}.png"))
 
 
+class Opened:
+    """Takes `https` links instead of the system browser, so a check reads the address a link opens."""
+
+    def __init__(self):
+        from PyQt6.QtCore import QObject, QUrl, pyqtSlot
+        from PyQt6.QtGui import QDesktopServices
+        self.urls = []
+        outer = self
+
+        class Handler(QObject):
+            @pyqtSlot(QUrl)
+            def handle(self, url):
+                outer.urls.append(url.toString())
+
+        self._handler = Handler()
+        QDesktopServices.setUrlHandler("https", self._handler, "handle")
+
+    def close(self):
+        from PyQt6.QtGui import QDesktopServices
+        QDesktopServices.unsetUrlHandler("https")
+
+
+TERMS = "https://mapflow.ai/terms-of-use-en.pdf"
+
+
+def check_terms_link(sign_in, label):
+    """The sign-in page's "Terms of use" link shows, fits the page, and opens the terms address on a click."""
+    terms = getattr(sign_in, "terms", None)
+    check(terms is not None and terms.isVisible() and terms.text().startswith("Terms of use"),
+          f"{label}: the sign-in page shows the \"Terms of use\" link")
+    if terms is None:
+        return
+    right = terms.mapTo(sign_in, QPoint(terms.width(), 0)).x()
+    check(0 <= terms.mapTo(sign_in, QPoint(0, 0)).x() and right <= sign_in.width(),
+          f"{label}: the link is not cut off ({right} of {sign_in.width()} px)")
+    opened = Opened()
+    try:
+        terms.click()
+        check(opened.urls == [TERMS], f"{label}: the link opens the terms of use ({opened.urls})")
+    finally:
+        opened.close()
+
+
 def spin(ms=50):
     QTest.qWait(ms)
 
@@ -115,6 +158,7 @@ def _dock():
         others.click()
         spin()
     shot(content, "q6-01-sign-in")
+    check_terms_link(sign_in, "light theme")
     content.set_account("me@example.com")
     content.set_credits("1,240", "Credits left")
     content.set_project(project)
@@ -554,10 +598,15 @@ def _dark():
         if hasattr(theme, name):
             setattr(theme, name, None)
     content = DockContent(catalogue)
+    content.show()
+    shot(content, "q6-12-dark-sign-in", QSize(400, 880))
+    check(theme.is_dark() and theme.tokens()["link"] == "#90cdf4"
+          and theme.tokens()["link"] != theme.tokens()["subtle"],
+          "dark theme: the link colour differs from the page background")
+    check_terms_link(content.sign_in, "dark theme")
     content.set_account("me@example.com")
     content.set_project(project)
     content.show_signed_in()
-    content.show()
     shot(content, "q6-12-dark", QSize(400, 880))
     check(True, "the dock renders with a dark palette")
 
