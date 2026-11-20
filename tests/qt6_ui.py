@@ -437,6 +437,18 @@ def _projects():
     QTest.keyClick(tile, Qt.Key.Key_Return)
     tile.pin_button.click()
     check(len(chosen) == 2 and pinned, "a tile opens by click and by Enter; the pin works")
+    renamed = recorder(dialog.renameRequested)
+    by_id = {t.project.id: t for t in dialog.tiles}
+    check(by_id["project-1"].more_button is None and by_id["project-2"].more_button is not None
+          and [a.text() for a in by_id["project-2"].menu().actions()] == ["Rename…"],
+          "the default project has no ⋯ menu; an own project's offers Rename…")
+    by_id["project-2"].menu().actions()[0].trigger()
+    check(renamed == [("project-2",)], f"Rename… asks to rename the project ({renamed})")
+    dialog.project_renamed("project-2", "Harbor east", "New yards")
+    check(any(t.project.id == "project-2" and t.project.name == "Harbor east" for t in dialog.tiles),
+          "a renamed project shows its new name")
+    dialog.set_note("warn", "Couldn't rename")
+    check(dialog.note.isVisibleTo(dialog), "a note shows in the window")
     dialog.close()
 
 

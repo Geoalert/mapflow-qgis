@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import time
-from typing import List, Optional
+from typing import Callable, List, Optional
 
 from qgis.PyQt.QtCore import QObject, QTimer, pyqtSignal
 
@@ -299,6 +299,22 @@ class Session(QObject):
             if fallback is not None:
                 self._set_project(fallback)
         self.api.project(project_id, self.email, self._set_project, failed)
+
+    def rename_project(self, project_id: str, name: str, description: str, on_done: Callable[[str], None],
+                       on_error: Callable[[str], None]) -> None:
+        """Save a new name and description. On success every copy of the project that the session holds takes
+        them and `on_done` gets the old name; on a refusal `on_error` gets the server's message."""
+        def done(_answer) -> None:
+            known = [p for p in (self.project, self.default_project, *self.projects) if p and p.id == project_id]
+            old = known[0].name if known else name
+            for project in {id(p): p for p in known}.values():
+                project.name, project.description = name, description
+            on_done(old)
+
+        def failed(error: ApiError) -> None:
+            if error.kind != "auth":                    # the session's: it renews or signs out, and says so
+                on_error(error.message)
+        self.api.update_project(project_id, name, description, done, failed)
 
     def _set_project(self, project: Project) -> None:
         self.project = project

@@ -5,15 +5,16 @@ from typing import Dict, List, Optional
 
 from qgis.PyQt.QtCore import QSize, Qt, QTimer, QUrl, pyqtSignal
 from qgis.PyQt.QtGui import QDesktopServices, QKeySequence
-from qgis.PyQt.QtWidgets import (QDialog, QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QScrollArea, QShortcut,
-                                 QSizePolicy, QVBoxLayout, QWidget)
+from qgis.PyQt.QtWidgets import (QDialog, QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QMenu, QScrollArea,
+                                 QShortcut, QSizePolicy, QVBoxLayout, QWidget)
 
 from .. import config
 from ..core import formatting
 from ..core.models import Project, Role
 from . import icons
 from .theme import stylesheet, tokens
-from .widgets import Callout, ElidedLabel, FocusRing, Pill, button, clear_layout, event_pos, label, link, tool
+from .widgets import (Callout, ElidedLabel, FocusRing, Pill, button, clear_layout, event_pos, label, link, menu_action,
+                      tool)
 from ..core.guard import guarded
 
 GAP = 14
@@ -33,10 +34,12 @@ def _stat(icon_name: str, text: str, ink: str) -> QHBoxLayout:
 
 
 class ProjectTile(FocusRing, QFrame):
-    """One project: name, description, numbers, sharing; pin and share buttons. Click to open."""
+    """One project: name, description, numbers, sharing; pin and share buttons, and a ⋯ menu for its owner.
+    Click to open."""
     clicked = pyqtSignal(str)
     pinToggled = pyqtSignal(str, bool)
     shareRequested = pyqtSignal(str)
+    renameRequested = pyqtSignal(str)
 
     def __init__(self, project: Project, current: bool, pinned: bool, parent: Optional[QWidget] = None):
         super().__init__(parent)
@@ -105,7 +108,20 @@ class ProjectTile(FocusRing, QFrame):
         share.clicked.connect(guarded(lambda *_: self.shareRequested.emit(project.id)))
         self.share_button = share
         bottom.addWidget(share)
+        self.more_button = None
+        if project.can_edit:
+            more = tool("more", "More actions", "plain", 15)
+            more.clicked.connect(guarded(lambda *_: self.menu().exec(more.mapToGlobal(more.rect().bottomLeft()))))
+            self.more_button = more
+            bottom.addWidget(more)
         layout.addLayout(bottom)
+
+    def menu(self) -> QMenu:
+        """The actions on this project; the Rename… item is built by the same rule that shows the button."""
+        menu = QMenu(self)
+        if self.project.can_edit:
+            menu_action(menu, "edit", "Rename…", lambda: self.renameRequested.emit(self.project.id))
+        return menu
 
     @guarded
     def mouseReleaseEvent(self, event) -> None:
@@ -129,6 +145,7 @@ class ProjectsDialog(QDialog):
     pinToggled = pyqtSignal(str, bool)
     shareRequested = pyqtSignal(str)
     createRequested = pyqtSignal()
+    renameRequested = pyqtSignal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -192,6 +209,9 @@ class ProjectsDialog(QDialog):
         self.scroll.setWidget(body)
         outer.addWidget(self.scroll, 1)
 
+        self.note = Callout("info", "")                  # what a project action answered; empty hides it
+        self.note.setVisible(False)
+        outer.addWidget(self.note)
         foot = QHBoxLayout()
         foot.addWidget(label("Pinned projects stay on top: they are your starred projects in Mapflow Web. "
                              "Sharing and roles are managed there.", "meta", wrap=True), 1)
@@ -205,12 +225,25 @@ class ProjectsDialog(QDialog):
 
     def set_state(self, current_id: Optional[str], pinned_ids: List[str]) -> None:
         self.current_id, self.pinned_ids = current_id, list(pinned_ids)
+        self.set_note("info", "")
         self._render()
 
     def set_loading(self, loading: bool) -> None:
         self.loading = loading
         if loading:
             self.failed_text = ""
+            self.set_note("info", "")
+        self._render()
+
+    def set_note(self, kind: str, text: str) -> None:
+        self.note.set(kind, text)
+        self.note.setVisible(bool(text))
+
+    def project_renamed(self, project_id: str, name: str, description: str) -> None:
+        """A project was renamed in Mapflow: its tiles, pinned or listed, show the new name and description."""
+        for project in [*self.results, *self.pinned.values()]:
+            if project.id == project_id:
+                project.name, project.description = name, description
         self._render()
 
     def set_failed(self, text: str) -> None:
@@ -250,6 +283,7 @@ class ProjectsDialog(QDialog):
             tile.clicked.connect(self.projectChosen.emit)
             tile.pinToggled.connect(self.pinToggled.emit)
             tile.shareRequested.connect(self.shareRequested.emit)
+            tile.renameRequested.connect(self.renameRequested.emit)
             grid.addWidget(tile, index // columns, index % columns)
             self.tiles.append(tile)
         self.body.addLayout(grid)

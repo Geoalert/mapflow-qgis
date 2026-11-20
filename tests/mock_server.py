@@ -40,6 +40,11 @@ class State:
         self.catalog_many = False          # the catalog answers with 60 images, in pages
         self.extra_mosaics = []            # collections added while the test runs (an empty one)
         self.created_projects = []         # POST /projects
+        self.renamed_projects = {}         # PUT /projects/{id}: project id → (name, description)
+        self.rename_project_requests = []  # …(id, body) of each such request that reached the route
+        self.project_refusal = None        # a message: PUT /projects/{id} answers 409 with it
+        self.project_delay = 0             # seconds PUT /projects/{id} waits before it answers
+        self.shared_projects = {}          # project id → a shareProject dict that replaces the fixture's
         self.no_mosaics = False            # an account without collections
         self.status = None                 # GET /user/status answers this, not fixtures.STATUS (a changed balance)
         self.many_mosaics = 0              # this many more collections, listed after the fixtures' (for paging)
@@ -106,7 +111,11 @@ class Handler(BaseHTTPRequestHandler):
     def _projects(self):
         with self.state.lock:
             created = list(self.state.created_projects)
-        return created + [fixtures.PROJECT, fixtures.PROJECT_2] + fixtures.MORE_PROJECTS
+            renamed, shared = dict(self.state.renamed_projects), dict(self.state.shared_projects)
+        every = created + [fixtures.PROJECT, fixtures.PROJECT_2] + fixtures.MORE_PROJECTS
+        return [dict(p, **({"name": renamed[p["id"]][0], "description": renamed[p["id"]][1]}
+                           if p["id"] in renamed else {}),
+                     **({"shareProject": shared[p["id"]]} if p["id"] in shared else {})) for p in every]
 
     def _mosaics(self):
         """Every collection of the account, newest first, as the data catalog lists them."""
@@ -318,6 +327,26 @@ class Handler(BaseHTTPRequestHandler):
             if project:
                 return self._send(200, project)
             return self._send(404, {"code": "NOT_FOUND", "message": "No project"})
+        if method == "PUT" and match:
+            with self.state.lock:
+                self.state.rename_project_requests.append((match.group(1), body))
+                refusal = self.state.project_refusal
+            time.sleep(self.state.project_delay)
+            project = next((p for p in self._projects() if p["id"] == match.group(1)), None)
+            name = ((body or {}).get("name") or "").strip()
+            if project is None:
+                return self._send(404, {"code": "NOT_FOUND", "message": "No project"})
+            if not name:
+                return self._send(400, {"code": "INVALID_BODY", "message": "Invalid value for: body"})
+            share = project.get("shareProject")
+            if share and fixtures.USER["email"] not in [o.get("email") for o in share.get("owners") or []]:
+                return self._send(403, {"code": "FORBIDDEN", "message": "Only the owner can rename the project"})
+            if refusal is not None:
+                return self._send(409, {"code": "ProjectNameRefused", "message": refusal})
+            description = (body or {}).get("description")
+            with self.state.lock:
+                self.state.renamed_projects[match.group(1)] = (name, description)
+            return self._send(200, dict(project, name=name, description=description))
         match = re.fullmatch(r"/projects/([\w-]+)/processings/v2/page", path)
         if method == "POST" and match:
             with self.state.lock:

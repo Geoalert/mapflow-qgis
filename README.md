@@ -42,7 +42,7 @@ The plugin covers the work that belongs next to the map. Each tab has its scenar
   Mapflow Web, the default project opens.
 - **Processings › Get the results into QGIS.** Finished results load as styled layers: GeoPackage files,
   or vector tiles for a quick look. Results can also be saved as GeoJSON.
-- **Projects › Work in a team project.** Create a project, switch projects, search and pin them, and see
+- **Projects › Work in a team project.** Create a project, switch projects, rename a project you own (not the default one), search and pin them, and see
   which are shared and what your role allows.
 
 Managing data, projects and the team happens in [Mapflow Web](https://app.mapflow.ai), and the plugin
@@ -162,6 +162,7 @@ That is the rule; today the controller also holds the run form's state itself. `
   and whether they're shared.
   - Search by name on the server, and load more with "Show more".
   - Pin projects to the top. Pins are Mapflow Web's starred projects, so they follow the account.
+  - Rename a project you own, from the ⋯ menu of its tile: its name and description. The default project can't be renamed.
   - Share a project, or open the team page, in Mapflow Web.
 - **Zoom:** basemaps offer z17–z21, with the scenario's zoom preselected and marked ★.
 - **My imagery:**
@@ -197,7 +198,8 @@ every Mapflow user. The plugin links to the right page wherever it leaves someth
 | My imagery collections: create, rename, delete, add, download or delete images | **Kept**: the My imagery window and its ⋯ menus | Adding imagery and clearing out what was added by mistake belong where the imagery is chosen |
 | My imagery: rename an image, storage usage | **Mapflow Web** › [My data](https://app.mapflow.ai/my-data) ("Manage collections in Mapflow Web") | File management, not mapping |
 | Create a project | **Kept**: New project in the Projects window | Starting new work shouldn't need a trip to the browser |
-| Projects: rename, delete, share | **Mapflow Web** › the project ("Share project in Mapflow Web" and the share icon in the Projects window) | Done rarely, and sharing needs the team's members and roles. The plugin creates, switches, searches and pins projects |
+| Rename a project | **Kept**: the ⋯ menu of a project tile in the Projects window (the owner; not the default project) | A name is fixed where the project is picked |
+| Projects: delete, share | **Mapflow Web** › the project ("Share project in Mapflow Web" and the share icon in the Projects window) | Done rarely, and sharing needs the team's members and roles. The plugin creates, renames, switches, searches and pins projects |
 | Review: accept or send back results | **Mapflow Web** (the processing links there) | Review is a step of its own, with its own page, after the processing; the plugin shows that a processing needs it |
 | Balance and top-up, API tokens | **Mapflow Web** › [Account](https://app.mapflow.ai/account/balance) ("Top up" in the run form) | Payments and keys stay with the account |
 | Planned processings (search templates) and their areas | **Not yet** | Left out of the first release to keep it to the main flow |

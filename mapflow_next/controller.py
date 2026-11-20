@@ -405,6 +405,7 @@ class Controller(QObject):
             dialog.pinToggled.connect(self._pin_project)
             dialog.shareRequested.connect(self._share_project)
             dialog.createRequested.connect(self.create_project)
+            dialog.renameRequested.connect(self.rename_project)
             self.projects_dialog = dialog
         dialog = self.projects_dialog
         dialog.search.blockSignals(True)
@@ -513,6 +514,45 @@ class Controller(QObject):
         self.api.create_project(name, description, self.session.email, created,
                                 lambda error: self.notify(f"The project wasn't created: {error.message}",
                                                           Qgis.MessageLevel.Warning))
+
+    def _known_project(self, project_id: str):
+        """The project with this id, as the projects window or the session holds it."""
+        dialog = self.projects_dialog
+        held = [*(dialog.results if dialog else []), *(dialog.pinned.values() if dialog else []), self.session.project]
+        return next((p for p in held if p is not None and p.id == project_id), None)
+
+    @guarded
+    def rename_project(self, project_id: str) -> None:
+        """The name and description of a project, saved with PUT /projects/{id}. The list is not asked again:
+        the tiles and the dock header take the new values, so the order and a name filter apply at the next
+        query."""
+        project = self._known_project(project_id)
+        if project is None or not project.can_edit:         # the role changed under a menu that was already open
+            return
+        dialog = RenameDialog(project.name, project.description, self.projects_dialog or self.iface.mainWindow(),
+                              title="Rename project", action="Save", what="project")
+        if not dialog.exec():
+            return
+        name, description = dialog.values()
+        old = project.name
+        if not name or (name, description) == (old, project.description):
+            return
+
+        def done(old_name: str) -> None:
+            if self.projects_dialog is not None:
+                self.projects_dialog.project_renamed(project_id, name, description)
+            if self.session.project is not None and self.session.project.id == project_id:
+                self.content.set_project(self.session.project)
+                self.render_processings()                   # the Start tab names the project too
+            self.notify(f"Project “{old_name}” is renamed to “{name}”.", Qgis.MessageLevel.Success)
+
+        def failed(message: str) -> None:
+            text = f"Couldn't rename “{old}”: {message}"
+            self.notify(text, Qgis.MessageLevel.Warning)
+            if self.projects_dialog is not None:
+                self.projects_dialog.set_note("warn", text)
+
+        self.session.rename_project(project_id, name, description, done, failed)
 
     @guarded
     def _choose_project(self, project_id: str) -> None:

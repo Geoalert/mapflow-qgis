@@ -42,7 +42,7 @@ describes the state after the chain; each step makes the code match it, and upda
 [ready-for-review] Upload limits and free storage from `GET /rasters/memory` — `spec/002_C` § Storage Endpoints
 [ready-for-review] Rename a collection — `spec/002_C`
 [ready-for-review] Download an original image — `spec/002_C` § Client-side download
-[ ] Rename a project — `spec/002_A`
+[ready-for-review] Rename a project — `spec/002_A`
 [ ] Delete a project — `spec/002_A`
 [ ] Forced upgrade when the backend expects a higher major version — `spec/002_api.md` § Versioning policy
 [ ] Terms of use link on the sign-in page

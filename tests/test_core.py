@@ -117,6 +117,24 @@ def test_project_roles():
     assert not Project.from_api(shared, "").role.can_run
 
 
+def test_rename_is_for_the_owner_and_never_for_the_default_project():
+    """spec/002_A § Plugin behaviour: rename and delete are offered to the project's owner, never for the default
+    project."""
+    me = "me@example.com"
+    own = Project.from_api(dict(PROJECT, isDefault=False, shareProject=None), me)
+    assert own.role is Role.owner and own.can_edit
+    listed = dict(PROJECT, isDefault=False, shareProject={"owners": [{"email": "ME@example.com"}], "users": []})
+    assert Project.from_api(listed, me).can_edit
+    for role in ("contributor", "maintainer", "readonly"):
+        shared = dict(PROJECT, isDefault=False, shareProject={"owners": [{"email": "boss@example.com"}],
+                                                              "users": [{"email": me, "role": role}]})
+        assert not Project.from_api(shared, me).can_edit, role
+    stranger = dict(PROJECT, isDefault=False, shareProject={"owners": [], "users": [{"email": "a@b.c"}]})
+    assert not Project.from_api(stranger, me).can_edit
+    default = Project.from_api(dict(PROJECT, isDefault=True), me)
+    assert default.role is Role.owner and default.is_default and not default.can_edit
+
+
 def test_restart_is_for_failed_and_cancelled_and_for_roles_that_may_run():
     """spec/002_B § Plugin behaviour: Restart is offered for a failed or a cancelled processing, to every role
     that may run one."""

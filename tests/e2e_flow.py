@@ -1030,6 +1030,196 @@ def check_poll_auth(iface, plugin, state, browser):
         processings._poll.setInterval(saved_poll_interval)
 
 
+def check_rename_project(iface, plugin, state):
+    """spec/002_A § Plugin behaviour, § PUT /projects/{id}: "Rename…" is in a ⋯ menu on the tile of a project the
+    user owns, never on the default project or a project shared with the user as a member. The dialog edits the
+    name and the description; Save sends the PUT; the tiles and the dock header show the new name without asking
+    for the list again. An empty name is refused in the dialog; a refusal shows the server's message and leaves the
+    old name; a closed window doesn't lose the answer. Everything the function changes is restored."""
+    import mapflow_next.controller as controller_module
+    from mapflow_next.ui.rename_dialog import RenameDialog
+    session, processings = plugin.services[1], plugin.services[2]
+    controller, content = plugin.controller, plugin.dock.content
+    warn, success = Qgis.MessageLevel.Warning, Qgis.MessageLevel.Success
+    puts = state.rename_project_requests
+
+    def open_window():
+        controller.open_projects()
+        window = controller.projects_dialog
+        check(wait_until(lambda: window.isVisible() and not window.loading and len(window.results) == 24, 5),
+              "(the projects window shows its first page)")
+        return window
+
+    def tile_of(project_id):
+        return next((t for t in controller.projects_dialog.tiles if t.project.id == project_id), None)
+
+    def header():
+        return content.project_button.text(), content.project_button.toolTip()
+
+    class Fake:
+        answer = None
+        made = []
+
+        def __init__(self, *args, **kwargs):
+            Fake.made.append((args, kwargs))
+
+        def exec(self):
+            return 0 if Fake.answer is None else 1
+
+        def values(self):
+            return Fake.answer
+
+    def rename(project_id, answer):
+        """The tile's ⋯ menu, Rename…, with the dialog answering `answer` (None: cancelled)."""
+        Fake.answer = answer
+        tile_of(project_id).menu().actions()[0].trigger()
+
+    harbor = ("Harbor", "Port and storage yards, quarterly updates")
+    field_7 = ("Field site 07", "Survey area 7")
+    saved_dialog = controller_module.RenameDialog
+    window = open_window()
+    try:
+        # Offered: the owner, and not the default project, a member or a reader
+        state.shared_projects["project-9"] = {"owners": [{"email": "boss@example.com"}],
+                                              "users": [{"email": "me@example.com", "role": "contributor"}]}
+        state.shared_projects["project-10"] = {"owners": [{"email": "boss@example.com"}],
+                                               "users": [{"email": "ana@example.com", "role": "contributor"}]}
+        window = open_window()
+        check(all(tile_of(i) is not None and tile_of(i).more_button is not None for i in ("project-2", "project-7"))
+              and [a.text() for a in tile_of("project-2").menu().actions()] == ["Rename…"],
+              "an own project and a project the user owns in a share have a ⋯ menu with Rename…")
+        check(tile_of("project-1").more_button is None and tile_of("project-1").menu().actions() == [],
+              "the default project has none")
+        check(tile_of("project-9").more_button is None and tile_of("project-10").more_button is None,
+              "a project where the user is a contributor, or not listed (read only), has none")
+        opened = []
+        window.projectChosen.connect(opened.append)
+        QTimer.singleShot(300, lambda: QApplication.activePopupWidget() and QApplication.activePopupWidget().close())
+        tile_of("project-2").more_button.click()          # the menu pops up and blocks until it is closed
+        check(not opened, "the ⋯ button opens the menu and not the project")
+        state.shared_projects.clear()
+
+        # The open project: the PUT, and the new name in the header, the tile and every copy
+        controller_module.RenameDialog = Fake
+        window = open_window()
+        check(session.project.id == "project-2", "(project-2 is the open project)")
+        iface.bar.messages.clear()
+        puts.clear()
+        rename("project-2", ("Harbor east", "New yards"))
+        check(wait_until(lambda: session.project.name == "Harbor east", 5)
+              and puts == [("project-2", {"name": "Harbor east", "description": "New yards"})]
+              and Fake.made[-1][1].get("title") == "Rename project" and Fake.made[-1][0][:2] == harbor,
+              f"Rename… sends PUT /projects/project-2 with the name and the description ({puts}); "
+              "the dialog starts with the current ones")
+        listed = next((p for p in session.projects if p.id == "project-2"), None)
+        check(header()[0] == "Harbor east" and "Harbor east" in header()[1]
+              and tile_of("project-2").project.name == "Harbor east" and processings.project.name == "Harbor east"
+              and (listed is None or listed.name == "Harbor east")
+              and "Recent in Harbor east" in content.start.recent_title.text(),
+              f"…the dock header, the tile, the session and the Start tab show it ({header()})")
+        check(any(level == success and "Project “Harbor” is renamed to “Harbor east”." in (text or "")
+                  for level, text in iface.bar.messages), "…and the message bar says so")
+        asked = len([r for r in state.requests if r[1] == "/projects/page"])
+        controller._query_projects("")
+        check(wait_until(lambda: not window.loading and any(p.name == "Harbor east" and p.description == "New yards"
+                                                            for p in window.results), 5)
+              and len([r for r in state.requests if r[1] == "/projects/page"]) == asked + 1,
+              "a new query returns the new name: Mapflow has it")
+
+        # A project that is not open, and a pinned one
+        rename("project-7", ("Field east", "Survey area 7"))
+        check(wait_until(lambda: tile_of("project-7") is not None and tile_of("project-7").project.name == "Field east",
+                         5) and header()[0] == "Harbor east" and session.project.name == "Harbor east",
+              "a project that isn't open shows the new name on its tile and leaves the header alone")
+        controller._pin_project("project-8", True)
+        check(tile_of("project-8") is not None and "project-8" in window.pinned, "(project-8 is pinned)")
+        rename("project-8", ("Field pinned", "Survey area 8"))
+        check(wait_until(lambda: tile_of("project-8").project.name == "Field pinned"
+                         and window.pinned["project-8"].name == "Field pinned", 5),
+              "a pinned project shows the new name in the pinned section")
+
+        # Nothing to send: an empty name, a cancelled dialog, no change
+        puts.clear()
+        rename("project-7", ("", "x"))
+        rename("project-7", None)
+        rename("project-7", ("Field east", "Survey area 7"))
+        wait_until(lambda: False, 0.3)
+        check(not puts, "an empty name, a cancelled dialog or no change send nothing")
+        real = RenameDialog("Harbor east", "", None, title="Rename project", action="Save", what="project")
+        real.name.clear()
+        empty = not real.save.isEnabled()
+        real.name.setText("   ")
+        check(empty and not real.save.isEnabled(), "the dialog refuses an empty name, and a name of spaces")
+        real.close()
+
+        # Refused: the server's message, the old name stays
+        state.project_refusal = "A project with this name already exists."
+        iface.bar.messages.clear()
+        rename("project-2", ("Field east", "New yards"))
+        text = "Couldn't rename “Harbor east”: A project with this name already exists."
+        check(wait_until(lambda: any(level == warn and text in (t or "") for level, t in iface.bar.messages), 5)
+              and window.note.isVisibleTo(window) and text in window.note.text.text(),
+              f"a refusal shows the message of the server, in the message bar and in the window "
+              f"({window.note.text.text()})")
+        check(header()[0] == "Harbor east" and tile_of("project-2").project.name == "Harbor east"
+              and session.project.name == "Harbor east" and state.renamed_projects["project-2"][0] == "Harbor east",
+              "…and the old name stays everywhere")
+        state.project_refusal = None
+        state.fail("PUT", r"/projects/project-7", 403)
+        iface.bar.messages.clear()
+        rename("project-7", ("Field west", ""))
+        check(wait_until(lambda: any(level == warn and "Couldn't rename “Field east”:" in (t or "")
+                                     for level, t in iface.bar.messages), 5)
+              and tile_of("project-7").project.name == "Field east", "a 403 is shown too, and changes nothing")
+        state.heal()
+
+        # Not an owner any more: the menu was built before; the server answers 403 with its message
+        menu = tile_of("project-8").menu()
+        state.shared_projects["project-8"] = {"owners": [{"email": "boss@example.com"}],
+                                              "users": [{"email": "me@example.com", "role": "contributor"}]}
+        Fake.answer = ("Field other", "")
+        iface.bar.messages.clear()
+        menu.actions()[0].trigger()
+        check(wait_until(lambda: any(level == warn and "Only the owner can rename the project" in (t or "")
+                                     for level, t in iface.bar.messages), 5)
+              and tile_of("project-8").project.name == "Field pinned",
+              "a rename that the server refuses for a non-owner shows its message")
+        state.shared_projects.clear()
+
+        # The window closed while the PUT runs: the header still takes the name
+        state.project_delay = 0.6
+        iface.bar.messages.clear()
+        rename("project-2", ("Harbor west", "New yards"))
+        window.close()
+        check(wait_until(lambda: session.project.name == "Harbor west" and header()[0] == "Harbor west", 5)
+              and any(level == success and "“Harbor west”" in (t or "") for level, t in iface.bar.messages),
+              "a window closed while the PUT runs doesn't lose the new name")
+        state.project_delay = 0
+
+        # Restore the names, through the same flow, and the state of the mock
+        window = open_window()
+        rename("project-2", harbor)
+        rename("project-7", field_7)
+        rename("project-8", ("Field site 08", "Survey area 8"))
+        check(wait_until(lambda: session.project.name == "Harbor" and tile_of("project-7").project.name
+                         == "Field site 07" and tile_of("project-8").project.name == "Field site 08", 5),
+              "the names are renamed back")
+    finally:
+        controller_module.RenameDialog = saved_dialog
+        state.project_delay = 0
+        state.project_refusal = None
+        state.heal()
+        state.shared_projects.clear()
+    if "project-8" in controller.pinned_projects():
+        controller._pin_project("project-8", False)
+        wait_until(lambda: "project-8" not in state.starred, 3)
+    state.renamed_projects.clear()
+    puts.clear()
+    window.close()
+    session.select_project("project-2")
+    wait_until(lambda: session.project.id == "project-2" and session.project.name == "Harbor", 5)
+
+
 def check_failed_requests(iface, plugin, state):
     """spec/005 § Failed requests: the rule follows what triggered the request. A user's request shows its failure
     at once; a one-off load tells once and clears what it marked as pending; a timer's request drops a transient
@@ -5225,6 +5415,7 @@ def main():
     session.select_project("project-2")
     wait_until(lambda: session.project.id == "project-2", 5)
 
+    check_rename_project(iface, plugin, state)
     check_failed_requests(iface, plugin, state)
     check_upload_timeout(iface, plugin, state)
     check_network_timeout(iface, plugin, state)

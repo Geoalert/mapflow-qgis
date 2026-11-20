@@ -4,7 +4,7 @@
     - Installs next to the 3.x Mapflow plugin. Its settings are not carried over: sign in again, and set the output folder again if you changed it
     - Its own Mapflow toolbar, and Check for updates in the plugin's menu (Plugins › Mapflow Next)
     - Dock panel with Start, Processings and Imagery sources tabs; a scenario gallery with 16 ready-made setups built on Mapflow models
-    - Projects window: search, pin, see what's in each project and who it's shared with
+    - Projects window: search, pin, rename a project you own, see what's in each project and who it's shared with
     - Zoom z17–z21 with the scenario's recommended zoom; pick one image from a My imagery collection, whose extent becomes the area
     - Sign in with Mapflow in the browser and stay signed in across restarts; an API token as a fallback; both kept in the QGIS authentication database
     - Live cost estimate before every run; results load as styled GeoPackage layers or vector tiles

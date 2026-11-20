@@ -319,6 +319,11 @@ class Project:
         return self.members > 0 or self.role is not Role.owner
 
     @property
+    def can_edit(self) -> bool:
+        """Rename and delete are offered to the owner, never for the default project (spec/002_A)."""
+        return self.role is Role.owner and not self.is_default
+
+    @property
     def processings_count(self) -> int:
         return self.total if self.total is not None else self.succeeded + self.failed + self.in_progress
 

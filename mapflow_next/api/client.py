@@ -79,6 +79,12 @@ class MapflowApi:
         self.http.post("projects", body, on_error=on_error,
                        on_success=lambda d: on_done(Project.from_api(d or {}, email)))
 
+    def update_project(self, project_id: str, name: str, description: str, on_done: Callable[[object], None],
+                       on_error: OnError = None) -> None:
+        """PUT /projects/{id}. The answer is not read: the caller keeps the values it sent."""
+        self.http.put(f"projects/{project_id}", {"name": name, "description": description},
+                      on_success=on_done, on_error=on_error)
+
     def project(self, project_id: str, email: str, on_done: Callable[[Project], None],
                 on_error: OnError = None) -> None:
         self.http.get(f"projects/{project_id}", on_error=on_error,
