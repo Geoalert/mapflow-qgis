@@ -296,6 +296,7 @@ class ProjectsDialog(QDialog):
         if self._columns and self._column_count() != self._columns:
             self._render()
 
+    @guarded(default=QSize(-1, -1))
     def sizeHint(self) -> QSize:
         return QSize(900, 640)
 

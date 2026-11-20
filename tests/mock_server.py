@@ -289,6 +289,12 @@ class Handler(BaseHTTPRequestHandler):
                 time.sleep(delay)               # outside state.lock: the server is threaded
             return self._send(200, {"results": page, "total": len(items), "count": len(page)})
         match = re.fullmatch(r"/processings/([\w-]+)/v2", path)
+        if method == "GET" and match:
+            with self.state.lock:
+                item = next((p for p in self.state.processings if p["id"] == match.group(1)), None)
+            if item is None:
+                return self._send(404, {"code": "NOT_FOUND", "message": "No processing"})
+            return self._send(200, item)
         if method == "PUT" and match:
             with self.state.lock:
                 item = next((p for p in self.state.processings if p["id"] == match.group(1)), None)

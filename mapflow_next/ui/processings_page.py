@@ -160,6 +160,7 @@ class ProcessingsPage(QWidget):
     startRequested = pyqtSignal()
     refreshRequested = pyqtSignal()
     moreRequested = pyqtSignal()
+    openWebApp = pyqtSignal()               # the footer link: the controller opens Mapflow Web of the session
     searchChanged = pyqtSignal(str)         # the trimmed text, once typing pauses (at once when it is empty)
 
     def __init__(self, parent=None):
@@ -177,7 +178,9 @@ class ProcessingsPage(QWidget):
         self.loading_more = False
         self.total = 0
         self.terms = ""                             # the terms the list shown answers (the field may be ahead)
+        self.opened: Optional[Processing] = None    # a processing fetched by id: not on the loaded pages
         self._scroll_pending: Optional[str] = None
+        self._scroll_waits: Optional[str] = None    # an id being fetched: scrolled to once its card is shown
         self.provider_names: Dict[str, str] = {}
         self.mosaic_names: Dict[str, str] = {}
         self.ratings: Dict[str, int] = {}           # processing id → the rating sent from here
@@ -250,7 +253,7 @@ class ProcessingsPage(QWidget):
         empty_layout.addWidget(start, 0, Qt.AlignmentFlag.AlignHCenter)
         footer = QHBoxLayout()
         footer.setContentsMargins(16, 0, 16, 10)
-        footer.addWidget(link("Statistics and sharing in Mapflow Web", config.WEB_URL))
+        footer.addWidget(link("Statistics and sharing in Mapflow Web", on_click=lambda: self.openWebApp.emit()))
         footer.addStretch(1)
         outer.addLayout(footer)
 
@@ -317,9 +320,14 @@ class ProcessingsPage(QWidget):
 
     def set_items(self, items: List[Processing], in_map: set, busy: set, can_manage: bool, loading: bool = False,
                   total: int = 0, loading_more: bool = False, loaded: bool = True, failed: bool = False,
-                  can_run: bool = True, terms: str = "") -> None:
+                  can_run: bool = True, terms: str = "", opened: Optional[Processing] = None) -> None:
         """`loaded`: a list of this project came back. `failed`: the last answer was a failure. The "no
-        processings" text needs a successful answer with no items. `terms`: the search the list answers."""
+        processings" text needs a successful answer with no items. `terms`: the search the list answers.
+        `opened`: a processing that is not among `items` and has its card above them. It is no part of the counts
+        or of "Show more"."""
+        self.opened = opened
+        if opened is not None and opened.id == self._scroll_waits:
+            self._scroll_pending, self._scroll_waits = opened.id, None
         self.items, self.in_map, self.busy, self.can_manage = items, in_map, busy, can_manage
         self.loading, self.total, self.loading_more = loading, max(total, len(items)), loading_more
         self.loaded, self.failed, self.can_run, self.terms = loaded, failed, can_run, terms
@@ -327,12 +335,13 @@ class ProcessingsPage(QWidget):
             self.expanded = items[0].id
         self._render()
 
-    def expand(self, processing_id: str) -> None:
-        """Open one processing: shown, expanded and scrolled to."""
+    def expand(self, processing_id: str, fetching: bool = False) -> None:
+        """Open one processing: shown, expanded and scrolled to. `fetching`: its card is not here yet (it is being
+        fetched by id), so the scroll waits for it."""
         self.expanded = processing_id
         self.filter = "all"
         self.chip_buttons["all"].setChecked(True)
-        self._scroll_pending = processing_id
+        self._scroll_pending, self._scroll_waits = (None, processing_id) if fetching else (processing_id, None)
         if self.search.text():
             self.search.clear()                 # or the search may hide it: the full list is asked for at once
         self._render()
@@ -343,17 +352,17 @@ class ProcessingsPage(QWidget):
         if card is not None:
             self.scroll.ensureWidgetVisible(card, 0, 40)
 
+    def _passes(self, p: Processing) -> bool:
+        if self.filter == "running":
+            return p.is_running
+        if self.filter == "done":
+            return p.is_done and not p.needs_review
+        if self.filter == "attention":
+            return p.status is Status.failed or p.needs_review
+        return True
+
     def _visible(self) -> List[Processing]:
-        result = []
-        for p in self.items:
-            if self.filter == "running" and not p.is_running:
-                continue
-            if self.filter == "done" and not (p.is_done and not p.needs_review):
-                continue
-            if self.filter == "attention" and not (p.status is Status.failed or p.needs_review):
-                continue
-            result.append(p)
-        return result
+        return [p for p in self.items if self._passes(p)]
 
     def _render(self) -> None:
         self.list.removeWidget(self.empty)
@@ -364,7 +373,9 @@ class ProcessingsPage(QWidget):
         for key, text in FILTERS:
             self.chip_buttons[key].setText(f"{text} {counts[key]}" if counts[key] else text)
         visible = self._visible()
-        for processing in visible:
+        # Above the cards: it is on none of the loaded pages, so its place among them is not known
+        extra = self.opened if self.opened is not None and self._passes(self.opened) else None
+        for processing in ([extra] if extra else []) + visible:
             card = ProcessingCard(processing, source_text(processing, self.provider_names, self.mosaic_names),
                                   processing.id in self.in_map, processing.id in self.busy,
                                   processing.id == self.expanded, self)
@@ -385,7 +396,7 @@ class ProcessingsPage(QWidget):
         self.start_button.setVisible(self.loaded and not self.failed and not self.loading and not self.items
                                      and not self.terms)
         self.list.addWidget(self.empty)
-        self.empty.setVisible(not visible)
+        self.empty.setVisible(not visible and extra is None)
         if visible and partial:
             # Older processings, one page at a time. The status filters apply to the loaded ones; with
             # nothing shown, a button whose pages may show nothing either would read as broken.

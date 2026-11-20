@@ -37,7 +37,7 @@ The plugin covers the work that belongs next to the map. Each tab has its scenar
   angle and how much of the area an image covers, look at the footprints on the map, and use an image in
   the run form. When an image is chosen, the area is clipped to its footprint, and an area outside it blocks Run.
 - **Processings › Follow the work and its history.** Progress updates on its own. Filter by status, search
-  the whole project by name, load older processings, rename them, run one again with the same settings,
+  the whole project by name (the list below keeps updating while you search), load older processings, rename them, run one again with the same settings,
   or delete it. A list that fails to load says so instead of looking empty; if the project is deleted in
   Mapflow Web, the default project opens.
 - **Processings › Get the results into QGIS.** Finished results load as styled layers: GeoPackage files,

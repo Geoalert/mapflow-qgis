@@ -160,9 +160,10 @@ class Controller(QObject):
         page.delete.connect(self.delete)
         page.openWeb.connect(self.open_in_web)
         page.rate.connect(self.rate)
+        page.openWebApp.connect(guarded(lambda: QDesktopServices.openUrl(QUrl(self.session.config.web_url))))
         page.downloadAoi.connect(self.download_aoi)
         page.startRequested.connect(guarded(c.open_start))
-        page.refreshRequested.connect(guarded(lambda: p.refresh(USER) or page.set_refreshing(False)))
+        page.refreshRequested.connect(guarded(lambda: p.refresh_shown(USER) or page.set_refreshing(False)))
         p.refreshed.connect(guarded(lambda: page.set_refreshing(False)))
         p.rated.connect(self.on_rated)
         page.moreRequested.connect(guarded(p.load_more))
@@ -187,6 +188,7 @@ class Controller(QObject):
         imagery_page.moreResults.connect(self.more_results)
 
         p.changed.connect(self.on_processings)
+        p.foundChanged.connect(guarded(lambda *_: self.render_processings()))
         p.started.connect(self.on_started)
         p.startFailed.connect(self.on_start_failed)
         p.finished.connect(self.on_finished)
@@ -549,7 +551,7 @@ class Controller(QObject):
             if self.content.imagery.current_tab() == imagery_tabs.MINE:
                 self._refresh_mosaics()
         if tab == PROCESSINGS:
-            self.processings.refresh(USER)      # the user opened the tab and waits for the list
+            self.processings.refresh_shown(USER)    # the user opened the tab and waits for the list
 
     # ---------- scenarios ----------
 
@@ -1338,18 +1340,23 @@ class Controller(QObject):
     def render_processings(self) -> None:
         project = self.session.project
         in_map = self.results.in_map()
-        busy = {p.id for p in self.processings.items if self.results.is_busy(p.id)}
+        p = self.processings
+        searching = bool(p.terms)
+        known = [*p.items, *p.found, *([p.opened] if p.opened else [])]
+        busy = {x.id for x in known if self.results.is_busy(x.id)}
         self.content.processings.mosaic_names = self.imagery.mosaic_names()
-        self.content.processings.ratings = {**{p.id: p.rating for p in self.processings.items if p.rating},
-                                            **self._ratings()}
-        self.content.processings.set_items(self.processings.items, in_map, busy,
-                                           project.role.can_manage if project else False,
-                                           loading=self.processings.loading, total=self.processings.total,
-                                           loading_more=self.processings.loading_more,
-                                           loaded=self.processings.loaded, failed=self.processings.load_failed,
+        self.content.processings.ratings = {**{x.id: x.rating for x in known if x.rating}, **self._ratings()}
+        # The page shows the matches while a search is on. Everything else (the Start tab, the notices) reads the
+        # full listing, which stays loaded.
+        shown = (p.found, p.found_total, p.found_loading, p.found_loading_more, p.found_loaded,
+                 p.found_failed) if searching else (p.items, p.total, p.loading, p.loading_more, p.loaded,
+                                                    p.load_failed)
+        self.content.processings.set_items(shown[0], in_map, busy, project.role.can_manage if project else False,
+                                           loading=shown[2], total=shown[1], loading_more=shown[3],
+                                           loaded=shown[4], failed=shown[5],
                                            can_run=project.role.can_run if project else False,
-                                           terms=self.processings.terms)
-        self.content.start.set_recent(project.name if project else "", self.processings.items, in_map)
+                                           terms=p.terms, opened=None if searching else p.opened)
+        self.content.start.set_recent(project.name if project else "", p.items, in_map)
 
     @guarded
     def on_finished(self, processing: Processing) -> None:
@@ -1365,8 +1372,14 @@ class Controller(QObject):
     @guarded
     def on_failed(self, processing: Processing) -> None:
         self.notify(f"“{processing.name}” failed. See the reason in Processings.", Qgis.MessageLevel.Warning,
-                    action=("Show", lambda: (self.content.go(PROCESSINGS),
-                                             self.content.processings.expand(processing.id))))
+                    action=("Show", lambda: self.open_processing(processing.id)))
+
+    @guarded
+    def open_processing(self, processing_id: str) -> None:
+        """"Show" in a notice: the processing's card, fetched by id when it is not on the loaded pages."""
+        self.content.go(PROCESSINGS)
+        fetching = self.processings.open(processing_id)
+        self.content.processings.expand(processing_id, fetching=fetching)    # this clears the search field
 
     @guarded
     def add_to_map(self, processing_id: str) -> None:
@@ -1546,6 +1559,11 @@ class Controller(QObject):
             self.render_search_results()
         else:
             gone.append("its imagery can't be chosen again here")
+        if self.draft.imagery is None and self.chosen_image is not None:
+            # The row of the catalog image restored for an earlier Run again would run this processing on that
+            # image with one click
+            self.chosen_image = self._restored_image = None
+            self.render_search_results()
         self._imagery_to_choose = self.draft.imagery is None
         if gone:
             # My imagery is restored later (its collection may need looking up) and says so itself

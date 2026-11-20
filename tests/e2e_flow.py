@@ -1555,6 +1555,19 @@ def check_review_link(content, controller, processings, links, state, started):
         review_button().click()
         check(links.opened == [f"https://duty.mapflow.ai/projects/project-1?processing={pid}"],
               f"REVIEW LINK: with no override, the environment's web address applies ({links.opened})")
+
+        # the footer link of the page opens the web address of the session configuration too
+        footer = next((b for b in page.findChildren(QPushButton)
+                       if b.text().startswith("Statistics and sharing in Mapflow Web")), None)
+        links.opened.clear()
+        footer.click()
+        check(links.opened == ["https://duty.mapflow.ai"],
+              f"REVIEW LINK: the footer link opens the environment's web address ({links.opened})")
+        session.config = dataclasses.replace(saved_config, web="https://web.example.test/")
+        links.opened.clear()
+        footer.click()
+        check(links.opened == ["https://web.example.test"],
+              f"REVIEW LINK: …and the overridden one ({links.opened})")
     finally:
         session.config = saved_config
         item["reviewStatus"] = None
@@ -1689,18 +1702,29 @@ def check_processing_search(iface, content, controller, processings, state):
     """spec/002_B § Plugin behaviour: the search sends `terms` to Mapflow, so it covers the whole project and not
     only the pages loaded. It waits for typing to pause. "Show more" and the poll keep the terms; an answer for an
     older text changes nothing; a search with no match, or one that failed, does not say the project is empty; a
-    cleared field asks for the full list at once. Everything the function changes is restored."""
-    from mapflow_next.core.models import Status
+    cleared field shows the full listing at once. The search is a listing of its own: the full listing stays loaded
+    and keeps its poll, and the Start tab, the notices and the automatic add to map read it. "Show" in a notice
+    fetches a processing that is not on the loaded pages. Everything the function changes is restored."""
+    from mapflow_next.core.models import Processing as ProcessingModel, Status
     from mapflow_next.ui.processings_page import ProcessingCard
+    from mapflow_next.ui.start_page import _MiniCard
     page, path = content.processings, "/projects/project-1/processings/v2/page"
-    saved_interval = processings._poll.interval()
+    session = controller.session
+    saved_interval, saved_project = processings._poll.interval(), session.project.id
     needle = fixtures.processing_json("search-needle", "OK", 100, name="Needle deep")
     bulk = [fixtures.processing_json(f"search-bulk-{n}", "OK", 100, name=f"Bulk {n}") for n in range(1, 35)]
     running = fixtures.processing_json("search-running", "IN_PROGRESS", -1000, name="Bulk running")
     slow = fixtures.processing_json("search-slow", "OK", 100, name="Slow survey")
+    late = fixtures.processing_json("search-late", "IN_PROGRESS", -300, name="Late run")
+    failing = fixtures.processing_json("search-failing", "IN_PROGRESS", -300, name="Failing run")
+    other = dict(fixtures.processing_json("search-other", "OK", 100, name="Other project run"), projectId="project-2")
     extra = [needle] + bulk + [running, slow]
-    ids = {item["id"] for item in extra}
+    ids = {item["id"] for item in extra + [late, failing, other]}
     warn = Qgis.MessageLevel.Warning
+    finished, failed_notices, added = [], [], []
+    processings.finished.connect(finished.append)
+    processings.failed.connect(failed_notices.append)
+    controller.results.add_to_map = lambda processing: added.append(processing.id)
 
     def bodies():
         return [r[2] for r in state.requests if r[0] == "POST" and r[1] == path]
@@ -1714,13 +1738,40 @@ def check_processing_search(iface, content, controller, processings, state):
     def full_total():
         return len([p for p in state.processings if p["projectId"] == "project-1"])
 
+    def gets(pid):
+        return [r for r in state.requests if r[0] == "GET" and r[1] == f"/processings/{pid}/v2"]
+
+    def recent():
+        return [card.processing_id for card in content.start.findChildren(_MiniCard)]
+
+    def lines():
+        return [text for _level, text in iface.bar.messages]
+
     def reload():
+        processings.opened = None
         page.search.clear()
         page.refresh_button.click()
         wait_until(lambda: not page.refreshing, 5)
 
+    def press_show():
+        button = next(b for b in iface.bar.widgets[-1].findChildren(QPushButton) if b.text() == "Show")
+        button.click()
+
+    def model(item):
+        return ProcessingModel.from_api(item)
+
+    def same_full():
+        """The full listing holds the same processings as when it was loaded, and counts the same."""
+        return [p.id for p in processings.items] == [p.id for p in full] and processings.total == total
+
+    def search(text, count=None):
+        page.search.setText(text)
+        return wait_until(lambda: processings.terms == text and not processings._found.loading
+                          and (count is None or len(processings.found) == count), 5)
+
     state.page_delay = {}
-    state.processings = [needle] + state.processings + bulk + [running, slow]
+    full, total = [], 0
+    state.processings = [needle] + state.processings + bulk + [running, slow, other]
     processings._poll.setInterval(60000)        # the flow leaves a short one: polls would blur the request counts
     try:
         reload()
@@ -1728,6 +1779,7 @@ def check_processing_search(iface, content, controller, processings, state):
               "SEARCH: the full list loads: the first 30 of the project")
         check(processings.get("search-needle") is None and not any(b.get("terms") for b in bodies()),
               "SEARCH: the oldest processing is not on the loaded pages, and no request has carried terms")
+        full, total = list(processings.items), processings.total
 
         # the whole project, after a pause
         page.search.setText("needle")
@@ -1737,11 +1789,28 @@ def check_processing_search(iface, content, controller, processings, state):
               "SEARCH: after the pause one request carries the terms, from offset 0")
         check(wait_until(lambda: names() == ["Needle deep"], 3),
               f"SEARCH: the page shows the processing that was not on the loaded pages ({names()})")
+        check([p.name for p in processings.found] == ["Needle deep"] and processings.found_total == 1
+              and same_full(),
+              "SEARCH: the matches are a listing of their own: the full listing is neither emptied nor changed")
+
+        # an action on a card that only the search shows
+        page.addToMap.emit("search-needle")
+        check(added == ["search-needle"], f"SEARCH: “Add to map” works on a processing that only the search holds "
+                                          f"({added})")
+        added.clear()
+
+        # a cleared field shows the full listing at once, from memory
+        asked = len(bodies())
+        page.search.clear()
+        check(len(names()) == 30 and len(page.items) == 30 and all(a is b for a, b in zip(page.items, full))
+              and processings.terms == "" and not processings.found and not page._debounce.isActive(),
+              f"SEARCH: a cleared field shows the same first 30 in the same event-loop turn ({len(names())})")
+        wait_until(lambda: False, 0.5)
+        check(len(bodies()) == asked and page.terms == "" and page.more_button is not None
+              and f"30 of {total}" in page.more_button.text(),
+              "SEARCH: …with no request, and “Show more” counts the full listing")
 
         # typing: one request for the burst
-        page.search.clear()
-        wait_until(lambda: len(processings.items) == 30, 5)
-        asked = len(bodies())
         for text in ("b", "bu", "bul", "bulk"):
             page.search.setText(text)
             wait_until(lambda: False, 0.03)
@@ -1749,7 +1818,7 @@ def check_processing_search(iface, content, controller, processings, state):
         wait_until(lambda: False, 0.6)
         sent = [(b.get("terms"), b.get("offset"), b.get("limit")) for b in bodies()[asked:]]
         check([s[0] for s in sent] == ["bulk"], f"SEARCH: …with the final text, none for the keys before it ({sent})")
-        check(wait_until(lambda: len(names()) == 30 and processings.total == 35, 5),
+        check(wait_until(lambda: len(names()) == 30 and processings.found_total == 35, 5),
               "SEARCH: 30 of the 35 matches show")
 
         # no local filter of the loaded rows
@@ -1770,36 +1839,51 @@ def check_processing_search(iface, content, controller, processings, state):
               "SEARCH: “Show more” sends the terms, from the offset of the rows shown")
         check(wait_until(lambda: len(names()) == 35, 5) and all("Bulk" in n for n in names()),
               "SEARCH: …and the page shows all 35 matches, and only them")
+        check(same_full() and len(processings.found) == 35,
+              "SEARCH: …and the full listing has no row of it")
 
-        # the poll keeps the terms
+        # the poll: one tick asks the full listing and the search; a finished processing is one notice
         running["status"], running["percentCompleted"] = "IN_PROGRESS", -200
-        processings.refresh(LOAD)
+        processings.refresh_shown(LOAD)
         check(wait_until(lambda: processings.get("search-running") is not None
-                         and processings.get("search-running").status is Status.in_progress, 5),
-              "SEARCH: a running processing is on the searched pages")
+                         and processings.get("search-running").status is Status.in_progress
+                         and any(p.id == "search-running" and p.status is Status.in_progress
+                                 for p in processings.found), 5),
+              "SEARCH: a running processing is on both listings")
+        finished.clear()
         processings._poll.setInterval(150)
         processings._poll.start()
         asked = len(bodies())
-        check(wait_until(lambda: len(bodies()) >= asked + 2
-                         and all(b.get("terms") == "bulk" and b.get("offset") == 0 for b in bodies()[asked:]), 5),
-              f"SEARCH: the poll sends the terms ({[b.get('terms') for b in bodies()[asked:]]})")
-        check(wait_until(lambda: processings.get("search-running").status is Status.ok, 8),
-              "SEARCH: …and its running processing is loaded as finished")
+        check(wait_until(lambda: any("terms" not in b for b in bodies()[asked:])
+                         and any(b.get("terms") == "bulk" for b in bodies()[asked:]), 5),
+              "SEARCH: one poll tick asks the full listing, with no terms, and the search, with its terms")
+        check(all(b.get("terms") in (None, "bulk") and b.get("offset") == 0 for b in bodies()[asked:]),
+              f"SEARCH: …and the poll keeps the terms and the first page "
+              f"({[b.get('terms') for b in bodies()[asked:]]})")
+        check(wait_until(lambda: all(p.status is Status.ok for p in processings.found if p.id == "search-running")
+                         and processings.get("search-running").status is Status.ok
+                         and next(p for p in processings.items if p.id == "search-running").status is Status.ok, 8),
+              "SEARCH: …its running processing finishes in the search rows and in the full listing")
+        wait_until(lambda: False, 0.5)
+        check([p.id for p in finished] == ["search-running"],
+              f"SEARCH: …and the finish is one notice, not two ({[p.id for p in finished]})")
         processings._poll.setInterval(60000)
         processings._poll.stop()
-        check(wait_until(lambda: len(names()) == 35, 3), "SEARCH: the polls keep the 35 matches")
+        check(len(names()) == 35, "SEARCH: the polls keep the 35 matches")
 
         # an answer for an older text does not replace a newer list
         state.page_delay = {"slow": 1.5}
         page.search.setText("slow")
         check(wait_until(lambda: len(with_terms("slow")) == 1, 3), "SEARCH: the slow request is in flight")
+        check(recent() == [p.id for p in full[:2]] and same_full(),
+              f"SEARCH: while the search request is open the Start tab still shows the full listing ({recent()})")
         page.search.setText("needle")
         check(wait_until(lambda: names() == ["Needle deep"] and processings.terms == "needle", 5),
               "SEARCH: the newer text shows its list while the older request is in flight")
         text = page.empty_text.text()
         wait_until(lambda: False, 2)
         check(names() == ["Needle deep"] and processings.terms == "needle" and page.empty_text.text() == text
-              and [p.name for p in processings.items] == ["Needle deep"],
+              and [p.name for p in processings.found] == ["Needle deep"] and same_full(),
               f"SEARCH: the late answer for the older text changes nothing ({names()})")
         state.page_delay = {}
 
@@ -1816,9 +1900,22 @@ def check_processing_search(iface, content, controller, processings, state):
         check(wait_until(lambda: names() == ["Needle deep"] and processings.terms == "needle", 5),
               "SEARCH: the text changes before the page comes")
         wait_until(lambda: False, 2)
-        check(names() == ["Needle deep"] and [p.name for p in processings.items] == ["Needle deep"]
-              and not processings.loading_more,
+        check(names() == ["Needle deep"] and [p.name for p in processings.found] == ["Needle deep"]
+              and not processings.found_loading_more and same_full(),
               f"SEARCH: the late page adds no row to the newer list ({names()})")
+        state.page_delay = {}
+
+        # a clear while a search request is in flight: the late answer changes nothing
+        state.page_delay = {"slow": 1.5}
+        asked = len(with_terms("slow"))
+        page.search.setText("slow")
+        check(wait_until(lambda: len(with_terms("slow")) == asked + 1, 3), "SEARCH: a slow request is in flight")
+        page.search.clear()
+        check(len(names()) == 30 and processings.terms == "", "SEARCH: the field is cleared at once")
+        wait_until(lambda: False, 2)
+        check(len(names()) == 30 and not processings.found and processings.terms == "" and page.terms == ""
+              and same_full(),
+              f"SEARCH: the late answer after a clear changes nothing ({names()}, {processings.found})")
         state.page_delay = {}
 
         # no match
@@ -1833,12 +1930,121 @@ def check_processing_search(iface, content, controller, processings, state):
               and page.start_button.isVisibleTo(page.empty),
               "SEARCH: …and a project with no processings says that, with “Start mapping”")
         controller.render_processings()
+        check(page.terms == "zzzz-nothing" and same_full(),
+              "SEARCH: …and the full listing stays loaded")
+
+        # the full listing keeps its poll, and its notices and the automatic add to map work, under that search
+        check(recent() == [p.id for p in full[:2]],
+              f"SEARCH: the Start tab shows the two newest of the full listing, not the matches ({recent()})")
+        state.processings += [late, failing]
+        processings.refresh_shown(LOAD)
+        check(wait_until(lambda: processings.get("search-late") is not None
+                         and processings.get("search-failing") is not None, 5),
+              "SEARCH: a processing started meanwhile is on the full listing")
+        check(recent() == ["search-failing", "search-late"] and page.terms == "zzzz-nothing"
+              and not processings.found,
+              f"SEARCH: …the Start tab shows it, and the search still has no match ({recent()})")
+        check(content.tab_buttons[1].badge == len([p for p in processings.items if p.is_running]) == 2,
+              f"SEARCH: …and the running badge counts the full listing ({content.tab_buttons[1].badge})")
+        processings.started_here.add("search-late")
+        finished.clear()
+        failed_notices.clear()
+        since = len(iface.bar.messages)
+        failing["status"] = "FAILED"
+        processings._poll.setInterval(150)
+        processings._poll.start()
+        check(wait_until(lambda: "search-late" in added and [p.id for p in finished] == ["search-late"], 10),
+              f"SEARCH: a processing of the full listing that finishes is added to the map under a search "
+              f"({added}, {[p.id for p in finished]})")
+        check(any("“Late run” is ready. Adding the results to the map…" in (t or "") for t in lines()[since:]),
+              "SEARCH: …with the “is ready” notice")
+        check(wait_until(lambda: [p.id for p in failed_notices] == ["search-failing"], 5)
+              and any("“Failing run” failed." in (t or "") for t in lines()[since:]),
+              "SEARCH: …and a processing that fails gives the “failed” notice")
+        check(page.terms == "zzzz-nothing" and not names() and not processings.found,
+              "SEARCH: …while the page goes on showing the search with no match")
+        processings._poll.setInterval(60000)
+        processings._poll.stop()
+        added.clear()
+        wait_until(lambda: False, 0.3)
+
+        # "Show" in a notice: the card of a processing that is not on the loaded pages is fetched by id
+        reload()
+        check(wait_until(lambda: len(names()) == 30 and processings.total == full_total(), 5),
+              "SHOW: the full listing is loaded again, with the processings started meanwhile")
+        full, total = list(processings.items), processings.total
+        in_page = model(slow)
+        check(processings.get("search-slow") is not None, "SHOW: the newest processing is on the loaded pages")
+        asked = len(state.requests)
+        controller.on_failed(in_page)
+        press_show()
+        check(page.expanded == "search-slow" and processings.opened is None
+              and not [r for r in state.requests[asked:] if r[0] == "GET" and r[1].startswith("/processings/")],
+              "SHOW: a processing on the loaded pages opens its card, and nothing is fetched")
+
+        state.fail("GET", r"/processings/.+/v2", 404)
+        since = len(iface.bar.messages)
+        controller.on_failed(model(needle))
+        press_show()
+        check(wait_until(lambda: any(level == warn and (text or "").startswith("Couldn't open the processing")
+                                     for level, text in iface.bar.messages[since:]), 5),
+              "SHOW: a processing that can't be fetched says so in the message bar")
+        check(processings.opened is None and page.opened is None and len(names()) == 30,
+              "SHOW: …shows no card")
+        state.heal()
+
+        fetched = len(gets("search-needle"))
+        controller.on_failed(model(needle))
+        press_show()
+        check(wait_until(lambda: page.opened is not None and page.opened.id == "search-needle", 5)
+              and len(gets("search-needle")) == fetched + 1,
+              "SHOW: …and nothing is stuck: the processing is fetched by id the next time")
+        first = page.list.itemAt(0).widget()
+        check(isinstance(first, ProcessingCard) and first.processing.id == "search-needle"
+              and page.expanded == "search-needle" and len(names()) == 31,
+              "SHOW: …its card is expanded, above the cards of the loaded pages")
+        check(processings.total == total and len(processings.items) == 30
+              and page.more_button is not None and f"30 of {total}" in page.more_button.text(),
+              "SHOW: …and the count and “Show more” are those of the loaded pages")
+        asked = len(state.requests)
+        controller.on_failed(model(needle))
+        press_show()
+        wait_until(lambda: False, 0.3)
+        check(not [r for r in state.requests[asked:] if r[0] == "GET" and r[1].startswith("/processings/")],
+              "SHOW: a processing that is already opened is not fetched again")
+        page.addToMap.emit("search-needle")
+        check(added == ["search-needle"], f"SHOW: “Add to map” works on the opened card ({added})")
+        added.clear()
+        processings.opened = None
+        controller.render_processings()
+
+        # a processing of another project is refused
+        since = len(iface.bar.messages)
+        controller.on_failed(model(other))
+        press_show()
+        check(wait_until(lambda: (warn, "That processing is in another project.") in iface.bar.messages[since:], 5)
+              and processings.opened is None and page.opened is None and len(names()) == 30,
+              "SHOW: a processing of another project is refused with a message, and shows no card")
+
+        # a search is shown when "Show" is clicked: the field is cleared and the full listing shows
+        check(search("bulk", 30), "SHOW: a search is shown")
+        fetched = len(gets("search-needle"))
+        controller.on_failed(model(needle))
+        press_show()
+        check(page.search.text() == "" and processings.terms == "" and not processings.found,
+              "SHOW: the search field is cleared by “Show”")
+        check(wait_until(lambda: page.opened is not None and page.opened.id == "search-needle"
+                         and len(names()) == 31 and page.expanded == "search-needle", 5)
+              and page.terms == "" and len(gets("search-needle")) == fetched + 1,
+              "SHOW: …and the card of a processing that only the search had found shows with the full listing")
+        processings.opened = None
+        controller.render_processings()
 
         # a failed search says so
         state.fail("POST", r"/projects/project-1/processings/v2/page", 503)
         since = len(iface.bar.messages)
         page.search.setText("needle")
-        check(wait_until(lambda: any(level == warn and text.startswith("Processings didn't load")
+        check(wait_until(lambda: any(level == warn and (text or "").startswith("Processings didn't load")
                                      for level, text in iface.bar.messages[since:]), 5),
               "SEARCH: a search that fails shows the failure in the message bar")
         check(wait_until(lambda: page.empty_text.text() == "Processings didn't load.", 3)
@@ -1846,19 +2052,28 @@ def check_processing_search(iface, content, controller, processings, state):
               f"SEARCH: …and the page says that the list did not load ({page.empty_text.text()!r})")
         state.heal()
 
-        # a cleared field shows the full list at once
-        page.search.clear()
-        asked = len(bodies())
-        check(wait_until(lambda: any("terms" not in b for b in bodies()[asked:]), 0.3),
-              "SEARCH: a cleared field asks for the full list at once, with no terms")
-        check(wait_until(lambda: len(names()) == 30 and processings.total == full_total()
-                         and processings.terms == "", 5),
-              f"SEARCH: …and the page shows the first 30 of {full_total()}")
+        # a new project clears the terms, the matches and the opened card
+        check(search("bulk", 30), "PROJECT: a search is shown")
+        processings.opened = model(needle)
+        session.select_project("project-2")
+        check(wait_until(lambda: session.project.id == "project-2" and processings.loaded, 5)
+              and processings.terms == "" and not processings.found and processings.opened is None
+              and page.search.text() == "" and page.terms == "", "PROJECT: a new project starts with no search")
+        session.select_project(saved_project)
+        check(wait_until(lambda: session.project.id == saved_project and len(processings.items) == 30, 5),
+              "PROJECT: …(the project is back)")
     finally:
+        processings.finished.disconnect(finished.append)
+        processings.failed.disconnect(failed_notices.append)
+        del controller.results.add_to_map
         state.heal()
         state.page_delay = {}
+        processings.started_here.discard("search-late")
         processings._poll.setInterval(saved_interval)
         state.processings = [p for p in state.processings if p["id"] not in ids]
+        if session.project.id != saved_project:
+            session.select_project(saved_project)
+            wait_until(lambda: session.project.id == saved_project, 5)
         reload()
 
 
@@ -3937,12 +4152,14 @@ def main():
           and "17 May 2024" in catalog_row.meta and "cloud 7%" in catalog_row.meta and catalog_row.previewable,
           f"…an image that is among the search results is shown as that result ({catalog_row})")
     plugin.services[3].results = []
-    controller.chosen_image = None
+    # no reset of the chosen image here: Run again on the catalog image above is followed by one that can't restore
+    check(controller.chosen_image is found, "…the form still has the restored image of the Run again before")
     content.processings.duplicate.emit("custom-1")
     controller.on_status(session.status)
     rows, selected = controller._imagery_rows(session.status, True)
-    check(selected is None and not any(r.key == "catalog" for r in rows),
-          "…imagery it can't restore leaves the form with no selected row and no row for a catalog image")
+    check(selected is None and not any(r.key == "catalog" for r in rows) and controller.chosen_image is None,
+          "…imagery it can't restore leaves the form with no selected row, no row for a catalog image and no "
+          "chosen image (so a click can't run it on the image of the Run again before)")
     check(controller.draft.imagery is None
           and any("Choose the imagery" in (m or "") for _l, m in iface.bar.messages),
           "…imagery it can't restore stays empty, with a message, and no default fills it in")

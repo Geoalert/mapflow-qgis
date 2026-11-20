@@ -424,6 +424,7 @@ class RangeSlider(FocusRing, QWidget):
         self.setMinimumHeight(22)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
+    @guarded(default=QSize(-1, -1))
     def sizeHint(self) -> QSize:
         return QSize(120, 22)
 
@@ -559,6 +560,7 @@ class Toggle(FocusRing, QAbstractButton):
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
+    @guarded(default=QSize(-1, -1))
     def sizeHint(self) -> QSize:
         return QSize(36, 20)
 
@@ -707,6 +709,7 @@ class ImageTile(FocusRing, QAbstractButton):
         self.setMinimumHeight(156)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
+    @guarded(default=QSize(-1, -1))
     def sizeHint(self) -> QSize:
         return QSize(170, 156)
 
@@ -868,6 +871,7 @@ class MetaWithNote(QWidget):
     def _one_line(self, width: int) -> bool:
         return self.meta.fontMetrics().horizontalAdvance(self._joined()) + self.block.sizeHint().width() <= width
 
+    @guarded(default=False)
     def hasHeightForWidth(self) -> bool:
         return True
 
@@ -883,10 +887,12 @@ class MetaWithNote(QWidget):
             return max(self._line_height(), block)
         return (self.meta.heightForWidth(width) + self.GAP if self.text else 0) + block
 
+    @guarded(default=QSize(-1, -1))
     def sizeHint(self) -> QSize:
         width = self.meta.fontMetrics().horizontalAdvance(self._joined()) + self.block.sizeHint().width()
         return QSize(width, self.heightForWidth(width))
 
+    @guarded(default=QSize(-1, -1))
     def minimumSizeHint(self) -> QSize:
         width = self.block.sizeHint().width()
         return QSize(width, self.heightForWidth(width))
@@ -955,6 +961,7 @@ class FitLineEdit(QLineEdit):
             self.updateGeometry()
             self.editing.emit(on)
 
+    @guarded(default=QSize(-1, -1))
     def sizeHint(self) -> QSize:
         if self._editing:                           # wider than any row: it gets all the space there is
             return QSize(10_000, super().sizeHint().height())
@@ -962,6 +969,7 @@ class FitLineEdit(QLineEdit):
         # + the field's own 2 px margins on each side and the cursor
         return QSize(self.fontMetrics().horizontalAdvance(text) + 8, super().sizeHint().height())
 
+    @guarded(default=QSize(-1, -1))
     def minimumSizeHint(self) -> QSize:
         return QSize(40, super().minimumSizeHint().height())
 

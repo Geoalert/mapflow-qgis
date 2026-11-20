@@ -51,6 +51,7 @@ class CategoryButton(FocusRing, QAbstractButton):
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setAccessibleName(f"{text}, {count} scenarios")
 
+    @guarded(default=QSize(-1, -1))
     def sizeHint(self) -> QSize:
         return QSize(200, 36)
 

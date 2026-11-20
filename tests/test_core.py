@@ -1223,9 +1223,11 @@ def test_every_entry_point_is_guarded():
 
 
 # Qt calls these methods of a class of the plugin: a `*Event` handler, `event`, an event filter,
-# `heightForWidth`, `QgsTask.finished` and `QgsMapTool.deactivate`. An exception that leaves one opens the raw
-# error dialog of QGIS, as one that leaves a slot.
-QT_VIRTUALS = re.compile(r"^(?:[a-z][A-Za-z]*Event|event|eventFilter|finished|deactivate|heightForWidth)$")
+# the size methods (`sizeHint`, `minimumSizeHint`, `hasHeightForWidth`, `heightForWidth`), `QgsTask.finished` and
+# `QgsMapTool.deactivate`. An exception that leaves one opens the raw error dialog of QGIS, as one that leaves a
+# slot.
+QT_VIRTUALS = re.compile(r"^(?:[a-z][A-Za-z]*Event|event|eventFilter|finished|deactivate|heightForWidth|"
+                         r"hasHeightForWidth|sizeHint|minimumSizeHint)$")
 # `cancel` is called by Qt on a `QgsTask` only: another class may have a `cancel` that Qt never calls.
 QT_TASK_VIRTUALS = {"cancel"}
 
@@ -1268,6 +1270,24 @@ def _has_default(node):
                for d in node.decorator_list)
 
 
+def _default_of(node):
+    """The expression of the `default=` of the decorator `guarded(default=...)`, or None."""
+    import ast
+    for d in node.decorator_list:
+        if isinstance(d, ast.Call) and _is_guarded_decorator(d):
+            for k in d.keywords:
+                if k.arg == "default":
+                    return k.value
+    return None
+
+
+def _is_qsize_call(expr):
+    import ast
+    return isinstance(expr, ast.Call) and (
+        (isinstance(expr.func, ast.Name) and expr.func.id == "QSize")
+        or (isinstance(expr.func, ast.Attribute) and expr.func.attr == "QSize"))
+
+
 def rule_virtual_overrides(source):
     """Every method that Qt calls by name (see QT_VIRTUALS) is decorated with `@guarded`, and one that gives Qt
     a value is decorated with `@guarded(default=...)`: PyQt raises a `TypeError` for a `None` where Qt wants a
@@ -1288,6 +1308,9 @@ def rule_virtual_overrides(source):
             elif _has_result(node) and not _has_default(node):
                 problems.append((node.lineno, f"{where} with a result that is guarded without a default: "
                                               "decorate it with @guarded(default=...)"))
+            elif node.name in ("sizeHint", "minimumSizeHint") and not _is_qsize_call(_default_of(node)):
+                problems.append((node.lineno, f"{where} whose default is not a QSize: PyQt raises a `TypeError` "
+                                              "for another value, so use @guarded(default=QSize(-1, -1))"))
     return problems
 
 
@@ -1350,6 +1373,41 @@ def test_every_qt_virtual_override_is_guarded():
         class A(QWidget):
             @guarded(default=-1)
             def heightForWidth(self, width): return 1
+        """))
+    # a size method gives Qt a QSize (or a bool): its default is a QSize (or False), not None
+    _bites(rule_virtual_overrides, _src("""
+        class A(QWidget):
+            @guarded
+            def sizeHint(self) -> QSize: return QSize(1, 1)
+        """), _src("""
+        class A(QWidget):
+            @guarded(default=QSize(-1, -1))
+            def sizeHint(self) -> QSize: return QSize(1, 1)
+        """))
+    _bites(rule_virtual_overrides, _src("""
+        class A(QWidget):
+            @guarded(default=None)
+            def sizeHint(self) -> QSize: return QSize(1, 1)
+        """), _src("""
+        class A(QWidget):
+            @guarded(default=QSize(-1, -1))
+            def sizeHint(self) -> QSize: return QSize(1, 1)
+        """))
+    _bites(rule_virtual_overrides, _src("""
+        class A(QWidget):
+            def minimumSizeHint(self): return QSize(1, 1)
+        """), _src("""
+        class A(QWidget):
+            @guarded(default=QSize(-1, -1))
+            def minimumSizeHint(self): return QSize(1, 1)
+        """))
+    _bites(rule_virtual_overrides, _src("""
+        class A(QWidget):
+            def hasHeightForWidth(self) -> bool: return True
+        """), _src("""
+        class A(QWidget):
+            @guarded(default=False)
+            def hasHeightForWidth(self) -> bool: return True
         """))
     _bites(rule_virtual_overrides, _src("""
         class A(QgsTask):

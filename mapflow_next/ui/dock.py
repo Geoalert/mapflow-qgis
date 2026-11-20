@@ -52,12 +52,14 @@ class TabButton(FocusRing, QAbstractButton):
         font.setBold(True)
         return font
 
+    @guarded(default=QSize(-1, -1))
     def sizeHint(self) -> QSize:
         """As wide as the icon, label and badge need: tabs with longer labels get more room."""
         metrics = QFontMetrics(self._font())
         badge = (metrics.horizontalAdvance(str(self.badge)) + 16) if self.badge else 0
         return QSize(22 + metrics.horizontalAdvance(self.text()) + badge + 20, 42)
 
+    @guarded(default=QSize(-1, -1))
     def minimumSizeHint(self) -> QSize:
         return QSize(QFontMetrics(self._font()).horizontalAdvance(self.text()) // 2, 42)
 

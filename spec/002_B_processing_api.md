@@ -45,7 +45,12 @@ The processing's area. "Run again" and "Download the area" read it.
 - It is polled **every 6 seconds while a processing on the loaded pages is not final**, and again 6
   seconds after a refresh that failed for a transient reason (`005_interactions.md` § Failed requests).
   Not otherwise.
-- **Search** sends `terms`, so it covers the whole project and not only the pages already loaded.
+- **Search** sends `terms`, so it covers the whole project and not only the pages already loaded. A
+  search is a separate listing with its own pages. The full listing stays loaded and keeps its poll:
+  the Start tab, the notices and the automatic add to map read the full listing, never the search
+  matches. Clearing the search returns to the full listing.
+- "Show" in a notice opens the processing's card. If the processing is not on the loaded pages, the
+  plugin fetches it by id (`GET /processings/{id}/v2`).
 - **Restart** is offered for a failed or a cancelled processing, to every role that may run one.
 
 ## AOI area measurement
