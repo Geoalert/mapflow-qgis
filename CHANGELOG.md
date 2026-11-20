@@ -16,6 +16,7 @@
     - Preview pictures are kept in a private folder, under names that carry no server id; the folder is removed when the plugin unloads
     - A list that fails to load says so instead of looking empty; a refresh that keeps failing tells you once, and the default project opens when the open one is deleted in Mapflow Web
     - An upload that stalls ends with a message after an hour without progress, and the next upload can start
+    - A GeoTIFF that is deleted or becomes unreadable after the check and before its upload ends the upload with a message that names the file, and the next upload can start
     - A large result is converted to GeoPackage in the background: QGIS stays usable, and the task can be cancelled in the Tasks panel
     - An unexpected error shows a “Send a report” button: it opens a window with the details and your comment, and opens your mail program with the report to Mapflow support. Nothing is sent without you
     - Not carried over yet: planned processings (templates), custom XYZ/TMS providers, translations (es, pt, ru, zh; planned for 4.1)

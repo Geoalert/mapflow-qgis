@@ -1612,6 +1612,73 @@ def check_upload_timeout(iface, plugin, state):
         wait_until(lambda: not http._pending, 5)
 
 
+def check_upload_file_vanishes(iface, plugin, state, picked):
+    """spec/006 § A guarded callback is interrupted, not completed: a file that is gone after the local check and
+    before its upload ends the upload with a message that names the file (a Warning, no Critical line), and every
+    upload flag is cleared, so the next upload works. `picked` is the dict that the patched file dialog reads.
+    The file goes inside `Imagery.validate`, which runs after the local check and before the first byte."""
+    imagery, controller = plugin.services[3], plugin.controller
+    page = plugin.dock.content.imagery
+    original = imagery.validate
+    gone = []
+
+    def validate_and_remove(images, on_done):
+        for path in gone:
+            if os.path.exists(path):
+                os.remove(path)
+        original(images, on_done)
+
+    def idle():
+        return (not imagery.uploading and controller.uploading is None and controller._choose_uploaded is None
+                and page.upload_button.isEnabled() and not page.upload_bar.isVisible())
+
+    def vanishes(label, mosaic_id, files, vanished):
+        state.uploads.clear()
+        iface.bar.messages.clear()
+        seen = len(iface.bar.ledger.unexpected())
+        picked["files"] = files
+        gone[:] = [vanished]
+        name = Path(vanished).name
+        controller.upload(mosaic_id)
+        found = wait_until(lambda: any(name in (m or "") for _l, m in iface.bar.messages), 5)
+        check(found, f"UPLOAD GONE ({label}): the message names the file ({iface.bar.messages})")
+        check(len(iface.bar.ledger.unexpected()) == seen,
+              f"UPLOAD GONE ({label}): …and no Critical line is shown")
+        check(wait_until(idle, 3), f"UPLOAD GONE ({label}): …and the upload flags and the page are cleared")
+        check(not state.uploads, f"UPLOAD GONE ({label}): …and nothing was sent ({state.uploads})")
+
+    def next_upload_works(label, mosaic_id, kind):
+        state.uploads.clear()
+        gone.clear()
+        picked["files"] = [make_geotiff(f"after_{label}.tif")]
+        controller.upload(mosaic_id)
+        check(wait_until(lambda: [u[0] for u in state.uploads] == [kind] and idle(), 5),
+              f"UPLOAD GONE ({label}): the next upload works ({state.uploads})")
+
+    imagery.validate = validate_and_remove
+    try:
+        # into an existing collection
+        files = [make_geotiff("vanish_a.tif"), make_geotiff("keep_a.tif")]
+        vanishes("into a collection", "m-1", files, files[0])
+        imagery.validate = original
+        next_upload_works("collection", "m-1", "image")
+        imagery.validate = validate_and_remove
+
+        # several files into a new collection: no empty collection is left behind
+        files = [make_geotiff("vanish_b.tif"), make_geotiff("keep_b.tif")]
+        vanishes("new collection", None, files, files[0])
+        check(not any(u[0] == "create" for u in state.uploads), "UPLOAD GONE (new collection): …no collection made")
+
+        # one file
+        files = [make_geotiff("vanish_c.tif")]
+        vanishes("one file", None, files, files[0])
+        imagery.validate = original
+        next_upload_works("single", None, "new")
+    finally:
+        imagery.validate = original
+        gone.clear()
+
+
 def check_network_timeout(iface, plugin, state):
     """spec/006 § A request ends in exactly one outcome: QGIS's own network timeout aborts a reply that made no
     progress, and the plugin did not ask for that abort. The request ends through `on_error` (a timeout), so the
@@ -2723,6 +2790,7 @@ def main():
         check(wait_until(lambda: [u[0] for u in state.uploads] == ["new"] and controller.uploading is None, 5)
               and any("processed as grayscale" in (m or "") for _l, m in iface.bar.messages),
               f"the check's warnings are shown, and the upload goes on ({state.uploads})")
+        check_upload_file_vanishes(iface, plugin, state, picked)
     finally:
         controller_module.QFileDialog.getOpenFileNames = saved_open
 

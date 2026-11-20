@@ -382,6 +382,8 @@ class Imagery(QObject):
         if self.uploading or not paths:
             return
         self.uploading = True
+        if self._file_sizes(paths) is None:         # before the collection is made, so none stays empty
+            return
 
         def created(data):
             mosaic_id = (data or {}).get("id")
@@ -398,6 +400,21 @@ class Imagery(QObject):
 
         self.api.create_mosaic(name, [], created, failed)
 
+    def _file_sizes(self, paths: List[str]) -> Optional[List[int]]:
+        """The size of each file, or None after the upload ended with a message naming the file that can't be
+        read. It runs after `uploading` is set, inside a callback whose guard would swallow a raise and leave the
+        flag set, so it clears the flag itself."""
+        sizes: List[int] = []
+        for path in paths:
+            try:
+                sizes.append(Path(path).stat().st_size)
+            except OSError as exc:
+                self.uploading = False
+                self.uploadFailed.emit(f"“{Path(path).name}” can't be read: {exc.strerror or 'no access'}. "
+                                       "Nothing was uploaded.")
+                return None
+        return sizes
+
     def upload_into(self, mosaic_id: str, paths: List[str], duplicates_allowed: Optional[Set[str]] = None) -> None:
         """GeoTIFFs added to an existing collection, one after another. `duplicates_allowed`: file names the
         user already agreed to add although the collection has them."""
@@ -411,7 +428,10 @@ class Imagery(QObject):
         """Each file in turn into the collection, progress counted in bytes across them all. A file the
         collection already has is up to the user (on_duplicate): added again, skipped, or the upload stops.
         Any other failure stops there; what is uploaded stays, and the message names the file."""
-        sizes = [Path(p).stat().st_size for p in paths]
+        sizes = self._file_sizes(paths)
+        if sizes is None:
+            self.load_mosaics()         # the collection of upload_many exists, empty
+            return
         total = max(1, sum(sizes))
         allowed = set(allowed or ())
         sent_files: List[str] = []
