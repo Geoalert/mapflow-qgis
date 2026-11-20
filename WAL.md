@@ -30,7 +30,7 @@ describes the state after the chain; each step makes the code match it, and upda
 
 [ready-for-review] Run again on a catalog image shows that image in the run form (Fibery milestone 413: "Run again restores … catalog imagery")
 [ready-for-review] A file that disappears before its upload leaves no upload flag set — `spec/006` § A guarded callback is interrupted
-[ ] "Review this result in Mapflow Web" opens the processing, not the home page
+[ready-for-review] "Review this result in Mapflow Web" opens the processing, not the home page
 
 ## 3. Features
 

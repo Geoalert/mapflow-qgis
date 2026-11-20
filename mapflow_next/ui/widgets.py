@@ -55,12 +55,17 @@ def button(text: str, variant: str = "outline", icon: Optional[str] = None, size
     return widget
 
 
-def link(text: str, url=None, external: bool = True, parent: Optional[QWidget] = None) -> QPushButton:
+def link(text: str, url=None, external: bool = True, on_click: Optional[Callable[[], None]] = None,
+         parent: Optional[QWidget] = None) -> QPushButton:
     """A link button. `url` is an address, or a function that returns one when clicked (for an address
-    that depends on the environment, known only once the plugin has its configuration)."""
-    widget = button(text, "link", external=external and bool(url), parent=parent)
+    that depends on the environment, known only once the plugin has its configuration). `on_click` is
+    called instead when the address is not the widget's to know: the page emits a signal and the controller
+    opens it. It carries the same "↗" mark."""
+    widget = button(text, "link", external=external and bool(url or on_click), parent=parent)
     widget.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
-    if url:
+    if on_click:
+        widget.clicked.connect(guarded(lambda *_: on_click()))
+    elif url:
         if isinstance(url, str):
             widget.setToolTip(url)
         widget.clicked.connect(guarded(lambda *_: QDesktopServices.openUrl(QUrl(url() if callable(url) else url))))

@@ -1512,6 +1512,56 @@ def check_failed_requests(iface, plugin, state):
           "the failure checks leave the session as they found it")
 
 
+def check_review_link(content, controller, processings, links, state, started):
+    """spec/003 § Developer overrides, spec/007 § Layer rules: "Review this result in Mapflow Web" opens the
+    processing in its project, on the web address of the session configuration (the override, else the
+    environment's). The page only emits `openWeb`; the controller builds the URL. The URL is read where the link
+    opens it. Everything the function changes is restored."""
+    import dataclasses
+    session, page, pid = controller.session, content.processings, started["id"]
+    saved_config, item = session.config, next(p for p in state.processings if p["id"] == pid)
+
+    def review_button():
+        return next((b for b in page.findChildren(QPushButton)
+                     if b.text().startswith("Review this result in Mapflow Web")), None)
+
+    def refresh():
+        page.refresh_button.click()
+        wait_until(lambda: not page.refreshing, 5)
+
+    item["reviewStatus"] = {"reviewStatus": "IN_REVIEW"}
+    try:
+        refresh()
+        check(wait_until(lambda: processings.get(pid) and processings.get(pid).needs_review, 5),
+              "REVIEW LINK: a processing in review is loaded as such")
+        page.expand(pid)
+        check(wait_until(lambda: review_button() is not None, 3),
+              "REVIEW LINK: an expanded processing in review shows the link")
+
+        session.config = dataclasses.replace(saved_config, web="https://web.example.test/")
+        links.opened.clear()
+        review_button().click()
+        expected = f"https://web.example.test/projects/project-1?processing={pid}"
+        check(links.opened == [expected], f"REVIEW LINK: opens the processing in its project, on the overridden "
+                                          f"web address ({links.opened})")
+        links.opened.clear()
+        page.openWeb.emit(pid)
+        check(links.opened == [expected], f"REVIEW LINK: the card menu's \"Open in Mapflow Web\" opens the same "
+                                          f"address ({links.opened})")
+
+        session.config = dataclasses.replace(saved_config, web="", env="duty")
+        links.opened.clear()
+        review_button().click()
+        check(links.opened == [f"https://duty.mapflow.ai/projects/project-1?processing={pid}"],
+              f"REVIEW LINK: with no override, the environment's web address applies ({links.opened})")
+    finally:
+        session.config = saved_config
+        item["reviewStatus"] = None
+        refresh()
+        wait_until(lambda: processings.get(pid) and not processings.get(pid).needs_review, 5)
+        links.opened.clear()
+
+
 def check_upload_timeout(iface, plugin, state):
     """spec/005 § Mapflow Backend API, spec/002_C (upload): every request has a timer, and an upload that stalls
     ends through `on_error` as a timeout, with the upload flags cleared so the next upload can start.
@@ -2390,6 +2440,7 @@ def main():
     content.processings.openWeb.emit(started["id"])
     check(links.opened == [f"https://app.mapflow.ai/projects/project-1?processing={started['id']}"],
           f"Open in Mapflow Web opens that processing ({links.opened})")
+    check_review_link(content, controller, processings, links, state, started)
 
     # Download the area (AOI)
     import mapflow_next.controller as controller_module

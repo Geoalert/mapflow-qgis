@@ -125,7 +125,7 @@ class ProcessingCard(Card):
         self.add(row)
 
         if processing.needs_review:
-            self.add(link("Review this result in Mapflow Web", config.WEB_URL))
+            self.add(link("Review this result in Mapflow Web", on_click=lambda: page.openWeb.emit(pid)))
         if processing.is_done:
             self.add(rule())
             rating = QHBoxLayout()
