@@ -20,6 +20,7 @@
     - Preview pictures are kept in a private folder, under names that carry no server id; the folder is removed when the plugin unloads
     - A list that fails to load says so instead of looking empty; a refresh that keeps failing tells you once, and the default project opens when the open one is deleted in Mapflow Web
     - An upload that stalls ends with a message after an hour without progress, and the next upload can start
+    - Uploads follow the file size and image size limits of your account and its free storage, as Mapflow reports them: an account with larger limits is not refused locally, and an upload larger than the free storage is refused before it is sent. If Mapflow does not answer, the plugin says so and uses the standard limits (2 GB, 30,000 px a side)
     - A GeoTIFF that is deleted or becomes unreadable after the check and before its upload ends the upload with a message that names the file, and the next upload can start
     - "Review this result in Mapflow Web" opens that processing in its project, on the web address the plugin is configured for, instead of the home page
     - Restart is offered for a failed or a cancelled processing, to everyone who may run a processing in the project, not only to maintainers and owners. A refused restart shows the message of Mapflow

@@ -12,7 +12,7 @@ from ..api.client import MapflowApi
 from ..api.http import ApiError
 from ..config import MOSAICS_PAGE_SIZE, POLL_FAILURES_BEFORE_ALERT
 from ..core.failures import ALERT, STOP, PollFailures, poll_notice
-from ..core.models import CatalogImage, Mosaic, MosaicImage
+from ..core.models import CatalogImage, Mosaic, MosaicImage, StorageLimits
 
 # A refresh reloads the listing in one request up to this many; collections loaded beyond stay as they are
 MAX_RELOAD = 200
@@ -29,6 +29,8 @@ class Imagery(QObject):
     uploadDone = pyqtSignal(str)              # collection name
     uploadFailed = pyqtSignal(str)
     mosaicsFailed = pyqtSignal(str)           # a listing nobody waited on failed: the line to show ("": none)
+    limitsChanged = pyqtSignal()              # the account's limits were asked for: the answer, or the fallback
+    limitsFailed = pyqtSignal(str)            # they didn't load and the user is told: Mapflow's reason
     notice = pyqtSignal(str)                  # a line for the message bar: a request failed
     imagesFailed = pyqtSignal(str, str, bool)   # mosaic id, the reason, whether to tell the user (once per outage)
 
@@ -44,6 +46,10 @@ class Imagery(QObject):
         self.images: Dict[str, List[MosaicImage]] = {}
         self._images_loading: Set[str] = set()
         self.uploading = False
+        self.limits = StorageLimits()           # GET rasters/memory; all None until it answers: the built-in limits
+        self._limits_at = 0.0                   # when My imagery last asked for it (monotonic)
+        self._limits_loading = False
+        self._limits_alerted = False            # a failure was told and no success since
         # Asked when Mapflow says a collection already has a file: (file name, collection name) →
         # "upload" (add it again), "skip" or "cancel". The controller sets it; without it, the upload stops.
         self.on_duplicate: Optional[Callable[[str, str], str]] = None
@@ -293,9 +299,47 @@ class Imagery(QObject):
         if not self._mosaics_loading and time.monotonic() - self._mosaics_at >= max_age:
             self.load_mosaics(poll)
 
+    def load_limits(self, on_done: Optional[Callable[[StorageLimits], None]] = None, waiting: bool = False) -> None:
+        """Ask for the account's upload limits and free storage. `on_done` gets them, or the built-in ones (all
+        None) when the request fails: an upload goes on either way. `waiting`: an upload waits for the answer, so
+        a failure is told at once; any other failure is told once, until a request succeeds."""
+        answered = False
+
+        def done(limits: StorageLimits) -> None:
+            nonlocal answered
+            answered = True
+            self.limits = limits
+            self._limits_loading = self._limits_alerted = False
+            self.limitsChanged.emit()
+            if on_done:
+                on_done(limits)
+
+        def failed(error: ApiError) -> None:
+            if answered:
+                return              # `on_done` raised after the answer: the http layer reports it, then calls this
+            self._limits_loading = False            # before anything that can raise
+            self.limits = StorageLimits()           # free space of an older answer may be out of date
+            if error.kind != "auth" and (waiting or not self._limits_alerted):
+                self._limits_alerted = self._limits_alerted or not waiting     # an upload's failure is its own
+                self.limitsFailed.emit(error.message)
+            self.limitsChanged.emit()
+            if on_done:
+                on_done(self.limits)
+        self.api.storage_limits(done, failed)
+
+    def refresh_limits(self, max_age: float = 5.0) -> None:
+        """My imagery opens: ask for the limits, unless a request is out or the last answer is younger than
+        `max_age`."""
+        if not self._limits_loading and time.monotonic() - self._limits_at >= max_age:
+            self._limits_at = time.monotonic()
+            self._limits_loading = True
+            self.load_limits()
+
     def reset_busy(self) -> None:
         """After sign-out: requests in flight were aborted and won't call back, so nothing is loading."""
         self.uploading = False
+        self._limits_loading = self._limits_alerted = False
+        self.limits = StorageLimits()
         self.loading_more = False
         self._images_loading.clear()
         self._mosaics_loading = False

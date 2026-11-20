@@ -20,7 +20,7 @@ from .core import formatting
 from .core.draft import Coverage, ImageryChoice, Issue, RunDraft
 from .core.failures import USER, project_gone_text
 from .core.guard import guarded
-from .core.models import BillingType, CatalogImage, Processing, SourceInfo, UserStatus
+from .core.models import BillingType, CatalogImage, Processing, SourceInfo, StorageLimits, UserStatus
 from .core.scenarios import Catalogue, recommended_zoom, resolve, scenario_for_model
 from .qgis_bridge import aoi as aoi_tools
 from .qgis_bridge import message_bar
@@ -204,6 +204,8 @@ class Controller(QObject):
         self.imagery.mosaicsChanged.connect(self.on_mosaics)
         self.imagery.mosaicsFailed.connect(self.on_mosaics_failed)
         self.imagery.imagesFailed.connect(self.on_images_failed)
+        self.imagery.limitsChanged.connect(guarded(self._show_upload_limit))
+        self.imagery.limitsFailed.connect(self.on_limits_failed)
         self.imagery.notice.connect(guarded(lambda text: self.notify(text, Qgis.MessageLevel.Warning)))
         self.imagery.mosaicSearchChanged.connect(
             guarded(lambda query, found: self.mosaic_picker is not None and self.mosaic_picker.set_found(
@@ -543,6 +545,8 @@ class Controller(QObject):
         """`poll`: the timer asks (its failures are counted); a tab or a picker opening is a one-off load."""
         if self.session.state == "signed_in" and self.content.isVisible():
             self.imagery.refresh_mosaics(max_age, poll)
+            if not poll:
+                self.imagery.refresh_limits(max_age)
 
     @guarded
     def on_tab(self, tab: int) -> None:
@@ -1884,6 +1888,16 @@ class Controller(QObject):
         if text:
             self.notify(text, Qgis.MessageLevel.Warning)
 
+    def _show_upload_limit(self) -> None:
+        self.content.imagery.set_upload_limit(self.imagery.limits.max_upload_bytes or config.UPLOAD_LIMIT_BYTES)
+
+    @guarded
+    def on_limits_failed(self, reason: str) -> None:
+        """The account's upload limits didn't load. Uploads go on, with the built-in limits: the line says so."""
+        self.notify(f"Your upload limits didn't load: {reason} The standard limits apply: "
+                    f"{formatting.size_limit(config.UPLOAD_LIMIT_BYTES)} a file, "
+                    f"{config.MAX_SIDE_PIXELS:,} px a side.", Qgis.MessageLevel.Warning)
+
     @guarded
     def on_images_failed(self, mosaic_id: str, text: str, tell: bool) -> None:
         """An image list did not load. A click that waited for it is cleared; the picker says so in its box."""
@@ -2144,15 +2158,43 @@ class Controller(QObject):
 
     def upload_files(self, paths: List[str], name: str = "", choose: bool = False,
                      mosaic_id: Optional[str] = None) -> None:
-        """Check the files, here and with Mapflow, then upload them into the collection `mosaic_id`, or as one
-        new collection. `choose`: use the new collection as the imagery once Mapflow lists it."""
+        """Ask Mapflow for the account's limits, check the files against them, here and with Mapflow, then upload
+        them into the collection `mosaic_id`, or as one new collection. `choose`: use the new collection as the
+        imagery once Mapflow lists it."""
         if not paths or self.uploading is not None or self.imagery.uploading:
             return
-        checked = [rasters.geotiff_metadata(p) for p in paths]
+        # Busy at once: the limits take a round trip, and a second start must not slip in meanwhile
+        self.content.imagery.set_upload(0, "Checking…")
+        if self.mosaic_picker is not None:
+            self.mosaic_picker.set_upload(0, "Checking…")
+        self._upload_progress(0)
+        try:
+            self.imagery.load_limits(lambda limits: self._upload_checked(paths, name, choose, mosaic_id, limits),
+                                     waiting=True)
+        except Exception:
+            self._upload_idle()
+            raise
+
+    def _upload_checked(self, paths: List[str], name: str, choose: bool, mosaic_id: Optional[str],
+                        limits: StorageLimits) -> None:
+        """The limits are known (or the built-in ones apply): check the files, then start. Every way out clears
+        the busy state that `upload_files` set, an exception included."""
+        try:
+            self._upload_start(paths, name, choose, mosaic_id, limits)
+        except Exception:
+            self._upload_idle()
+            if choose and not mosaic_id:
+                self._choose_uploaded = None
+            raise
+
+    def _upload_start(self, paths: List[str], name: str, choose: bool, mosaic_id: Optional[str],
+                      limits: StorageLimits) -> None:
+        checked = [rasters.geotiff_metadata(p, limits.max_upload_bytes or config.UPLOAD_LIMIT_BYTES,
+                                            limits.max_side_pixels or config.MAX_SIDE_PIXELS) for p in paths]
         problem = next((f"{meta['filename']}: {why}" for meta, why in checked if why), "") \
             or (rasters.mixed([meta for meta, _why in checked]) if len(checked) > 1 else "")
         if problem:
-            self._upload_refused(problem)
+            self._upload_refused(problem, busy=True)
             return
         duplicates_allowed: Set[str] = set()
         if mosaic_id:
@@ -2164,6 +2206,7 @@ class Controller(QObject):
             if repeated:
                 choice = self._ask_duplicate([Path(p).name for p in repeated], mosaic.name if mosaic else "")
                 if choice == "cancel":
+                    self._upload_idle()
                     return
                 if choice == "skip":
                     keep = [p not in repeated for p in paths]
@@ -2171,25 +2214,32 @@ class Controller(QObject):
                     checked = [c for c, k in zip(checked, keep) if k]
                     if not paths:
                         self._upload_refused(f"nothing new: “{mosaic.name if mosaic else 'the collection'}” "
-                                             f"already has {', '.join(Path(p).name for p in repeated)}")
+                                             f"already has {', '.join(Path(p).name for p in repeated)}", busy=True)
                         return
                 else:
                     duplicates_allowed = {Path(p).name for p in repeated}
         folder = Path(paths[0]).parent.name
         name = name or (Path(paths[0]).stem if len(paths) == 1 else (folder or Path(paths[0]).stem))
-        self.content.imagery.set_upload(0, "Checking…")
-        if self.mosaic_picker is not None:
-            self.mosaic_picker.set_upload(0, "Checking…")
-        self._upload_progress(0)
+        needed = sum(meta["file_size"] for meta, _why in checked)
+        if limits.free_bytes is not None and needed > limits.free_bytes:
+            free = formatting.size(limits.free_bytes)
+            self._upload_refused(
+                f"“{name}”: it needs {formatting.size(needed)}, and only {free} of your storage is free"
+                if len(paths) == 1 else
+                f"these {len(paths)} files: together they need {formatting.size(needed)}, and only {free} "
+                "of your storage is free", busy=True)
+            return
         self._choose_uploaded = name if choose and not mosaic_id else None
+        if self._choose_uploaded:
+            self.notify(f"Uploading “{name}” to My imagery. It becomes the imagery when it's ready.",
+                        Qgis.MessageLevel.Info, duration=6)
         if not mosaic_id and self._picker_open():
             self._select_in_picker = name           # the new collection is selected once listed
 
         def validated(problems: List[str], warnings: List[str]) -> None:
             if problems:
                 self._choose_uploaded = None
-                self._upload_progress(None)
-                self._upload_refused("; ".join(problems[:3]))
+                self._upload_refused("; ".join(problems[:3]), busy=True)
                 return
             if warnings:
                 self.notify("Mapflow: " + "; ".join(warnings[:3]), Qgis.MessageLevel.Info, duration=8)
@@ -2204,6 +2254,13 @@ class Controller(QObject):
         extra = {"mosaic_id": mosaic_id} if mosaic_id else {}
         self.imagery.validate([(meta["filename"], {**rasters.validation_request(meta), **extra})
                                for meta, _why in checked], validated)
+
+    def _upload_idle(self) -> None:
+        """An upload ends before it sends anything: nothing is busy any more."""
+        self._upload_progress(None)
+        self.content.imagery.set_upload(None)
+        if self.mosaic_picker is not None:
+            self.mosaic_picker.set_upload(None)
 
     # ---------- the Layers panel's Mapflow actions ----------
 
@@ -2238,9 +2295,6 @@ class Controller(QObject):
             return
         self.content.open_run()
         self.upload_layer(layer_id, choose=True)
-        if self._choose_uploaded:
-            self.notify(f"Uploading “{layer.name()}” to My imagery. It becomes the imagery when it's ready.",
-                        Qgis.MessageLevel.Info, duration=6)
 
     @guarded
     def create_collection(self) -> None:
@@ -2352,7 +2406,10 @@ class Controller(QObject):
         clicked = box.clickedButton()
         return "upload" if clicked is upload else "skip" if clicked is skip else "cancel"
 
-    def _upload_refused(self, problem: str) -> None:
+    def _upload_refused(self, problem: str, busy: bool = False) -> None:
+        """`busy`: `upload_files` marked an upload as running; this ends it."""
+        if busy:
+            self._upload_progress(None)
         text = f"Can't upload {problem}."
         self.content.imagery.set_upload(None, text, "error")
         if self.mosaic_picker is not None:

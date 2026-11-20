@@ -531,6 +531,32 @@ class CatalogImage:
             else self.id
 
 
+def _whole(value: Any) -> Optional[int]:
+    """A number of the API as a whole number; None for anything else (null, text, a bool)."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return int(value)
+
+
+@dataclass
+class StorageLimits:
+    """GET rasters/memory: what an upload may be. None means "no value": the built-in limit applies, or, for
+    `free_bytes`, the free space is not known or not limited."""
+    max_upload_bytes: Optional[int] = None
+    max_side_pixels: Optional[int] = None       # maxPixelCount: a limit on a side, as 3.x applied it
+    free_bytes: Optional[int] = None
+
+    @classmethod
+    def from_api(cls, data: Any) -> "StorageLimits":
+        data = data if isinstance(data, dict) else {}
+        upload, side = _whole(data.get("maxUploadFileSize")), _whole(data.get("maxPixelCount"))
+        limit, free = _whole(data.get("memoryLimit")), _whole(data.get("memoryFree"))
+        return cls(max_upload_bytes=upload if upload and upload > 0 else None,
+                   max_side_pixels=side if side and side > 0 else None,
+                   # With the storage not limited, Mapflow sends no limit and no free space
+                   free_bytes=max(0, free) if limit and limit > 0 and free is not None else None)
+
+
 @dataclass
 class Mosaic:
     id: str

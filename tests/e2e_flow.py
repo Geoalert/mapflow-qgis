@@ -138,12 +138,12 @@ def close_modal_later(record, fill=None, delay=300):
     QTimer.singleShot(delay, close)
 
 
-def make_geotiff(name, bands=3, epsg=4326, data_type=None, folder=None):
-    """A tiny georeferenced GeoTIFF."""
+def make_geotiff(name, bands=3, epsg=4326, data_type=None, folder=None, size=4):
+    """A tiny georeferenced GeoTIFF, `size` pixels wide and 4 high."""
     from osgeo import gdal, osr
     folder = folder or tempfile.mkdtemp()
     path = str(Path(folder) / name)
-    raster = gdal.GetDriverByName("GTiff").Create(path, 4, 4, bands, data_type or gdal.GDT_Byte)
+    raster = gdal.GetDriverByName("GTiff").Create(path, size, 4, bands, data_type or gdal.GDT_Byte)
     raster.SetGeoTransform((37.6, 0.0001, 0, 55.75, 0, -0.0001))
     if epsg:
         srs = osr.SpatialReference()
@@ -2382,6 +2382,250 @@ def check_upload_timeout(iface, plugin, state):
         wait_until(lambda: not http._pending, 5)
 
 
+def check_storage_limits(iface, plugin, state, picked):
+    """spec/002_C § Storage Endpoints › Plugin behaviour, spec/005 § Failed requests, spec/006 § A guarded
+    callback is interrupted, not completed: the limits come from GET /rasters/memory when My imagery opens and
+    before an upload; an upload larger than the free space is refused before anything is sent; a failed request
+    leaves nothing pending and the upload goes on with the built-in limits. `picked` is the dict that the patched
+    file dialog reads. Everything the function changes is restored."""
+    from qgis.PyQt.QtWidgets import QLabel
+    import mapflow_next.controller as controller_module
+    from mapflow_next.core.formatting import size, size_limit
+    from mapflow_next.qgis_bridge import rasters
+    from mapflow_next.ui.dock import IMAGERY
+    imagery, controller = plugin.services[3], plugin.controller
+    content = plugin.dock.content
+    page = content.imagery
+    warn = Qgis.MessageLevel.Warning
+    memory = "/rasters/memory"
+    failed_line = "upload limits didn't load"
+
+    def asked(path=memory):
+        return len([r for r in state.requests if r[0] == "GET" and r[1] == path])
+
+    def sent_checks():
+        return len([r for r in state.requests if r[1] == "/rasters/validate-image-metadata"])
+
+    def lines(since, fragment):
+        return [t for level, t in iface.bar.messages[since:] if level == warn and fragment in (t or "")]
+
+    def idle():
+        return (not imagery.uploading and controller.uploading is None and controller._choose_uploaded is None
+                and page.upload_button.isEnabled() and not page.upload_bar.isVisible())
+
+    def upload(files, mosaic_id=None):
+        state.uploads.clear()
+        iface.bar.messages.clear()
+        picked["files"] = files
+        controller.upload(mosaic_id)
+
+    def open_my_imagery():
+        """My imagery opens: the tab, as the user's click does it (a young answer is not asked for again)."""
+        imagery._limits_at = 0.0
+        page.show_tab(MINE)
+        controller.on_tab(IMAGERY)
+
+    def settled():
+        return wait_until(lambda: not imagery._limits_loading, 5)
+
+    def refused(files, says, label):
+        upload(files)
+        found = wait_until(lambda: lines(0, "Can't upload") and idle(), 5)
+        text = " ".join(lines(0, "Can't upload"))
+        check(found and all(fragment in text for fragment in says) and not state.uploads,
+              f"{label}: refused with {says} and nothing is sent ({text!r}, {state.uploads})")
+        return text
+
+    def uploads_ok(files, label):
+        upload(files)
+        check(wait_until(lambda: state.uploads and idle(), 5) and not lines(0, "Can't upload"),
+              f"{label}: the upload goes ({state.uploads})")
+
+    saved_open = controller_module.QFileDialog.getOpenFileNames
+    saved_metadata = controller_module.rasters.geotiff_metadata
+    controller_module.QFileDialog.getOpenFileNames = staticmethod(lambda *a, **k: (picked["files"], ""))
+    state.heal()
+    state.memory = None
+    try:
+        # asked when My imagery opens
+        check(settled(), "STORAGE: no limits request is left pending")
+        before = asked()
+        open_my_imagery()
+        check(wait_until(lambda: asked() == before + 1, 5), "STORAGE: opening My imagery asks GET /rasters/memory")
+        settled()
+        check(imagery.limits.max_upload_bytes == fixtures.MEMORY["maxUploadFileSize"]
+              and imagery.limits.max_side_pixels == fixtures.MEMORY["maxPixelCount"]
+              and imagery.limits.free_bytes == fixtures.MEMORY["memoryFree"],
+              f"…and the service holds the answer ({imagery.limits})")
+        open_my_imagery()
+        wait_until(lambda: False, 0.3)
+        check(asked() == before + 2, "…each time it opens, once (a young answer is reused only within seconds)")
+        imagery._limits_at = time.monotonic()
+        controller._refresh_mosaics()
+        wait_until(lambda: False, 0.3)
+        check(asked() == before + 2, "…and two opens together send one request")
+        imagery._limits_at, imagery._mosaics_at = 0.0, 0.0
+        controller._mosaic_refresh.timeout.emit()
+        wait_until(lambda: False, 0.4)
+        check(asked() == before + 2, "…the collections timer does not ask")
+        imagery._limits_at = 0.0
+        controller.open_mosaic_picker()
+        check(wait_until(lambda: asked() == before + 3, 5), "…the collection picker opening asks too")
+        settled()
+        if controller.mosaic_picker is not None:
+            controller.mosaic_picker.hide()
+
+        # the usage is not shown
+        shown = [w.text() for root in (page, controller.mosaic_picker) if root is not None
+                 for w in root.findChildren(QLabel)]
+        check(not any("Your data" in t or "Free space" in t for t in shown),
+              "STORAGE: the usage (“Your data: X. Free space: Y”) is shown nowhere")
+        check(size_limit(fixtures.MEMORY["maxUploadFileSize"]) in page.upload_limit.text(),
+              f"…the page names the account's file limit ({page.upload_limit.text()!r})")
+
+        # asked before every upload
+        before = asked()
+        uploads_ok([make_geotiff("limits_one.tif")], "STORAGE (first)")
+        uploads_ok([make_geotiff("limits_two.tif")], "STORAGE (second)")
+        check(asked() == before + 2, f"STORAGE: each upload asks GET /rasters/memory first ({asked() - before})")
+
+        # larger limits than the built-in ones accept a file the built-in ones refuse
+        wide = make_geotiff("wide_limits.tif", size=config.MAX_SIDE_PIXELS + 1)
+        uploads_ok([wide], "STORAGE (30,001 px with the account's limit)")
+        state.memory = dict(fixtures.MEMORY, maxPixelCount=config.MAX_SIDE_PIXELS)
+        refused([wide], ["a side", "30,000"], "STORAGE (the account's own pixel limit)")
+        state.memory = dict(fixtures.MEMORY, maxUploadFileSize=10)
+        refused([make_geotiff("fat.tif")], ["larger than 10 B"], "STORAGE (the account's file limit)")
+        state.memory = None
+        sparse = str(Path(tempfile.mkdtemp()) / "huge.tif")
+        try:
+            from osgeo import gdal, osr
+            raster = gdal.GetDriverByName("GTiff").Create(sparse, 28_000, 28_000, 3, gdal.GDT_Byte,
+                                                          ["SPARSE_OK=TRUE", "BIGTIFF=YES"])
+            raster.SetGeoTransform((37.6, 0.0001, 0, 55.75, 0, -0.0001))
+            srs = osr.SpatialReference()
+            srs.ImportFromEPSG(4326)
+            raster.SetProjection(srs.ExportToWkt())
+            raster.FlushCache()
+            raster = None
+            made = os.path.getsize(sparse) > config.UPLOAD_LIMIT_BYTES
+        except Exception as error:                  # no sparse files here: the sub-check is skipped
+            print(f"SKIP the 2.3 GB sparse GeoTIFF: {error}")
+            made = False
+        if made:
+            _meta, why = rasters.geotiff_metadata(sparse)
+            check("larger than 2 GB" in why, f"STORAGE: a file over the built-in 2 GB is refused ({why})")
+            _meta, why = rasters.geotiff_metadata(sparse, max_bytes=10 * 1024 ** 3, max_side=100_000)
+            check(not why, f"…and accepted with the account's larger limits ({why!r})")
+            os.remove(sparse)
+
+        # free space
+        one = make_geotiff("free_one.tif")
+        two = make_geotiff("free_two.tif")
+        each = os.path.getsize(one)
+        state.memory = dict(fixtures.MEMORY, memoryFree=100)
+        checks_before = sent_checks()
+        refused([one], [size(100), "free"], "STORAGE (one file over the free space)")
+        check(sent_checks() == checks_before, "…refused before Mapflow's own check, so before any request about it")
+        check(not [t for _l, t in iface.bar.messages if "Your data" in (t or "")], "…and no usage line")
+        state.memory = dict(fixtures.MEMORY, memoryFree=each + each // 2)
+        refused([one, two], [size(each + each // 2), size(2 * each), "together"],
+                "STORAGE (several files: each fits, the sum does not)")
+        state.memory = dict(fixtures.MEMORY, memoryFree=2 * each)
+        uploads_ok([one, two], "STORAGE (free space equal to the sum)")
+        state.memory = dict(fixtures.MEMORY, memoryFree=0)
+        refused([one], [size(0)], "STORAGE (no free space)")
+        state.memory = dict(fixtures.MEMORY, memoryLimit=None, memoryFree=None)
+        uploads_ok([one], "STORAGE (storage not limited)")
+        state.memory = None
+        uploads_ok([one], "STORAGE (after refusals the next upload works)")
+
+        # an exception after the request leaves nothing busy
+        seen = len(iface.bar.ledger.unexpected())
+
+        def boom(*_args, **_kwargs):
+            raise RuntimeError("storage boom")
+        controller_module.rasters.geotiff_metadata = boom
+        upload([one])
+        check(wait_until(lambda: len(iface.bar.ledger.unexpected()) > seen, 5), "STORAGE: the guard reports a raise")
+        expect_critical(iface, "storage boom", "the guard's lines of a raise after the limits request", count=2)
+        check(wait_until(idle, 3) and not lines(0, failed_line) and not state.uploads,
+              "…and no upload flag is left set, no “limits didn't load” line, and the upload is not started again")
+        controller_module.rasters.geotiff_metadata = saved_metadata
+        uploads_ok([one], "STORAGE (after the raise)")
+
+        # a failed request: told at once, the fallback limits apply, the upload goes on
+        for what in (503, 403, "drop"):
+            state.heal()
+            state.fail("GET", memory, what)
+            iface.bar.messages.clear()
+            upload([make_geotiff("fallback.tif")])
+            check(wait_until(lambda: state.uploads and idle(), 8), f"STORAGE (request fails: {what}): the upload goes")
+            check(len(lines(0, failed_line)) == 1 and "2 GB" in lines(0, failed_line)[0],
+                  f"…the user is told once, with the limits that apply ({lines(0, failed_line)})")
+            check(imagery.limits.max_upload_bytes is None and not imagery._limits_loading,
+                  "…the service holds the fallback and nothing is pending")
+            check(len(iface.bar.ledger.unexpected()) == seen, "…and no Critical line is shown")
+            check("2 GB" in page.upload_limit.text(),
+                  f"…and the page names the built-in limit ({page.upload_limit.text()!r})")
+            refused([wide], ["a side", "30,000"], f"STORAGE (request fails: {what}, 30,001 px)")
+        state.heal()
+
+        # a failed request when My imagery opens: told once per outage; a success clears the memory of it
+        state.fail("GET", memory, 503)
+        iface.bar.messages.clear()
+        loaded = imagery.mosaics_loaded
+        open_my_imagery()
+        settled()
+        wait_until(lambda: False, 0.3)
+        check(len(lines(0, failed_line)) == 1,
+              f"STORAGE (My imagery opens, request fails): one line ({lines(0, failed_line)})")
+        open_my_imagery()
+        settled()
+        wait_until(lambda: False, 0.3)
+        check(len(lines(0, failed_line)) == 1, "…and no second line while it keeps failing")
+        check(not imagery._limits_loading and imagery.mosaics_loaded == loaded and not imagery.loading_mosaics,
+              "…and nothing is left loading")
+        state.heal()
+        open_my_imagery()
+        settled()
+        check(imagery.limits.max_upload_bytes == fixtures.MEMORY["maxUploadFileSize"]
+              and len(lines(0, failed_line)) == 1, "…a success takes the fallback away and says nothing")
+        state.fail("GET", memory, 503)
+        open_my_imagery()
+        settled()
+        wait_until(lambda: False, 0.3)
+        check(len(lines(0, failed_line)) == 2, "…and a later failure says it again")
+        state.heal()
+
+        # sign-out while the request is in flight: the aborted request reports nothing and leaves no flag
+        http = plugin.services[1].http
+        state.fail("GET", memory, "hang", times=1)
+        iface.bar.messages.clear()
+        open_my_imagery()
+        check(imagery._limits_loading, "STORAGE: the request is in flight")
+        imagery.reset_busy()
+        http.abort_all()
+        wait_until(lambda: not http._pending, 5)
+        check(not imagery._limits_loading and imagery.limits.max_upload_bytes is None and not lines(0, failed_line),
+              "…the sign-out's reset clears the flags, forgets the limits and says nothing")
+        state.heal()
+        open_my_imagery()
+        settled()
+        check(imagery.limits.max_upload_bytes == fixtures.MEMORY["maxUploadFileSize"],
+              "…and the next sign-in asks again")
+    finally:
+        controller_module.rasters.geotiff_metadata = saved_metadata
+        controller_module.QFileDialog.getOpenFileNames = saved_open
+        state.memory = None
+        state.heal()
+        http = plugin.services[1].http
+        wait_until(lambda: not http._pending, 5)
+        imagery._limits_at = 0.0
+        imagery.load_mosaics()                      # the sign-out reset above forgot what was listed
+        wait_until(lambda: not imagery.loading_mosaics, 5)
+
+
 def check_upload_file_vanishes(iface, plugin, state, picked):
     """spec/006 § A guarded callback is interrupted, not completed: a file that is gone after the local check and
     before its upload ends the upload with a message that names the file (a Warning, no Critical line), and every
@@ -3703,6 +3947,7 @@ def main():
               and any("processed as grayscale" in (m or "") for _l, m in iface.bar.messages),
               f"the check's warnings are shown, and the upload goes on ({state.uploads})")
         check_upload_file_vanishes(iface, plugin, state, picked)
+        check_storage_limits(iface, plugin, state, picked)
     finally:
         controller_module.QFileDialog.getOpenFileNames = saved_open
 
@@ -3971,7 +4216,8 @@ def main():
             state.uploads.clear()
             picked["files"] = [make_geotiff("north.tif")]
             picker.upload_button.click()
-            check(asked_dup == [(["north.tif"], "Drone survey March")]
+            check(wait_until(lambda: asked_dup and controller.uploading is None, 5)
+                  and asked_dup == [(["north.tif"], "Drone survey March")]
                   and "nothing new" in picker.upload_note.text.text() and not state.uploads,
                   f"a file the collection already has is asked about first; Skip sends nothing ({asked_dup})")
             answer["value"] = "upload"

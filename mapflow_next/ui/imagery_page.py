@@ -363,6 +363,11 @@ class ImageryPage(QWidget):
 
     # ---------- My imagery ----------
 
+    def set_upload_limit(self, max_bytes: int) -> None:
+        """The largest file an upload takes, in the line above the buttons."""
+        self.upload_limit.setText(
+            f"Upload RGB GeoTIFFs, up to {formatting.size_limit(max_bytes)} each, as a new collection.")
+
     def _build_mine(self) -> QWidget:
         page = QWidget()
         page.setObjectName("mfScrollBody")
@@ -371,7 +376,9 @@ class ImageryPage(QWidget):
         layout.setSpacing(12)
         upload = DropCard(margins=(20, 17, 20, 17), spacing=8)     # room inside the dashed line
         upload.add(hbox(label("Your own imagery", "h2"), None, label("Drag GeoTIFF layers or files here", "meta")))
-        upload.add(vbox(4, label("Upload RGB GeoTIFFs, up to 2 GB each, as a new collection.", "meta", wrap=True),
+        self.upload_limit = label("", "meta", wrap=True)
+        self.set_upload_limit(config.UPLOAD_LIMIT_BYTES)
+        upload.add(vbox(4, self.upload_limit,
                         label("It costs no imagery credits to process.", "meta", wrap=True), 4, spacing=0))
         self.drop = DropTarget(upload, lambda mime: self.parse_drop(mime))
         self.upload_button = button("Upload a GeoTIFF", "outline", "upload")

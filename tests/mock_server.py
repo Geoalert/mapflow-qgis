@@ -59,6 +59,7 @@ class State:
         self.pkce_checked = 0
         self.failures = []                 # rules from fail(): requests that answer an error instead
         self.hang_seconds = 3              # how long a "hang" holds the request before it closes
+        self.memory = None                 # GET /rasters/memory answers this, not fixtures.MEMORY (other limits)
         self.restart_refused = None        # (status, code, message): POST /processings/{id}/restart/v2 answers this
         self.page_delay = {}               # terms (lower case) → seconds the processings page waits before it answers
         #                                    (or before it fails, when fail() applies to it)
@@ -422,6 +423,8 @@ class Handler(BaseHTTPRequestHandler):
                     self.state.extra_images[mosaic_id] = ["centre.tif"]     # a footprint the fixtures know
                     return self._send(200, {"id": "img-new", "mosaic_id": mosaic_id})
             return self._send(200, {"id": "img-new", "mosaic_id": "m-new"})
+        if method == "GET" and path == "/rasters/memory":
+            return self._send(200, self.state.memory if self.state.memory is not None else fixtures.MEMORY)
         if method == "GET" and path == "/rasters/mosaic/page":
             # As the data catalog pages them: newest first, name_contains matched against the collection's
             # name and its images' file names, and an empty name_contains refused

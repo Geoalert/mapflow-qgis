@@ -26,6 +26,37 @@ def test_model_prices_and_options():
     assert model.short_name == "Buildings"
 
 
+def test_storage_limits_from_the_memory_answer():
+    """spec/002_C § Storage Endpoints: the two limits replace the built-in ones; free space counts only when
+    Mapflow limits the account's storage."""
+    from mapflow_next.core.models import StorageLimits
+    full = StorageLimits.from_api({"memoryLimit": 10_000, "memoryUsed": 400, "memoryFree": 9_600,
+                                   "maxUploadFileSize": 5_000, "maxPixelCount": 100_000})
+    assert (full.max_upload_bytes, full.max_side_pixels, full.free_bytes) == (5_000, 100_000, 9_600)
+    # null (spec/002_E: limiting off), missing, zero, text and a bool are "no value"
+    for answer in ({}, None, [], "x", {"maxUploadFileSize": None, "maxPixelCount": None},
+                   {"maxUploadFileSize": 0, "maxPixelCount": 0}, {"maxUploadFileSize": "big", "maxPixelCount": True}):
+        empty = StorageLimits.from_api(answer)
+        assert (empty.max_upload_bytes, empty.max_side_pixels, empty.free_bytes) == (None, None, None), answer
+    assert StorageLimits.from_api({"maxUploadFileSize": "5000"}).max_upload_bytes is None     # a text is no number
+    assert StorageLimits.from_api({"maxPixelCount": 7.0}).max_side_pixels == 7
+    # free space is unknown when the storage is not limited, even if a number comes with it
+    for limit in (None, 0):
+        assert StorageLimits.from_api({"memoryLimit": limit, "memoryFree": 500}).free_bytes is None
+    assert StorageLimits.from_api({"memoryLimit": 100, "memoryFree": None}).free_bytes is None
+    assert StorageLimits.from_api({"memoryLimit": 100, "memoryFree": 0}).free_bytes == 0
+    assert StorageLimits.from_api({"memoryLimit": 100, "memoryFree": -5}).free_bytes == 0
+
+
+def test_a_size_limit_prints_without_a_trailing_zero():
+    from mapflow_next.core.formatting import size_limit
+    assert size_limit(2 * 1024 ** 3) == "2 GB"
+    assert size_limit(10 * 1024 ** 3) == "10 GB"
+    assert size_limit(int(2.5 * 1024 ** 3)) == "2.5 GB"
+    assert size_limit(100) == "100 B"
+    assert size_limit(5 * 1024) == "5 KB"
+
+
 def test_model_price_comes_from_price_per_sq_km():
     # As GET /projects/{id} lists 🏠 Buildings: the price in pricePerSqKm, the required blocks at 0
     real = {"id": "48d77088", "name": "🏠 Buildings", "pricePerSqKm": 10,

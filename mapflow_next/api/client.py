@@ -9,7 +9,8 @@ from typing import Callable, List, Optional
 from urllib.parse import quote, urlencode
 
 from ..config import PROCESSINGS_PAGE_SIZE, PROJECTS_PAGE_SIZE, RESULT_TIMEOUT_S, SEARCH_PAGE_SIZE
-from ..core.models import CatalogImage, Mosaic, MosaicImage, Processing, Project, UserStatus, aois_geojson
+from ..core.models import (CatalogImage, Mosaic, MosaicImage, Processing, Project, StorageLimits, UserStatus,
+                           aois_geojson)
 from .http import Http
 
 OnError = Optional[Callable]
@@ -162,6 +163,12 @@ class MapflowApi:
             total = data.get("total")
             on_done(items, int(total) if isinstance(total, (int, float)) else len(items), bool(data.get("has_next")))
         self.http.get(f"rasters/mosaic/page?{urlencode(params)}", on_success=done, on_error=on_error)
+
+    def storage_limits(self, on_done: Callable[[StorageLimits], None], on_error: OnError = None) -> None:
+        """What an upload may be (GET rasters/memory): the file size and pixel limits of the account and its free
+        storage. A short timeout: an upload waits for the answer."""
+        self.http.get("rasters/memory", on_error=on_error, timeout=10,
+                      on_success=lambda d: on_done(StorageLimits.from_api(d)))
 
     def mosaic(self, mosaic_id: str, on_done: Callable[[Mosaic], None], on_error: OnError = None) -> None:
         """One collection by id (GET rasters/mosaic/{id}); a 404 means it was deleted."""

@@ -86,6 +86,11 @@ CATALOG = {"images": [
          [37.58, 55.73], [37.63, 55.73], [37.63, 55.77], [37.58, 55.77], [37.58, 55.73]]]}}],
     "total": 2, "limit": 50, "offset": 0}
 
+# GET /rasters/memory (spec/002_C § Storage Endpoints): limits above the plugin's built-in 2 GB and 30,000 px
+MEMORY = {"memoryLimit": 10 * 1024 ** 3, "memoryUsed": 500 * 1024 ** 2,
+          "memoryFree": 10 * 1024 ** 3 - 500 * 1024 ** 2, "maxUploadFileSize": 10 * 1024 ** 3,
+          "maxPixelCount": 100_000}
+
 MOSAICS = [{"id": "m-1", "name": "Drone survey March", "created_at": "2026-10-01T12:00:00Z", "sizeInBytes": 734003200,
             "footprint": "POLYGON((37.6 55.75, 37.61 55.75, 37.61 55.76, 37.6 55.76, 37.6 55.75))",
             "rasterLayer": {"tileUrl": "https://tiles.example/m-1/{z}/{x}/{y}.png", "tileJsonUrl": ""}, "tags": []},
