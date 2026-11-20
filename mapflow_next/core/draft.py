@@ -139,7 +139,8 @@ class Issue:
 
 @dataclass
 class Coverage:
-    """How the area meets the chosen My imagery. Worked out on the map side (it takes geometry)."""
+    """How the area meets the chosen imagery that has a footprint (My imagery, or one catalog image). Worked
+    out on the map side (it takes geometry)."""
     name: str                                       # the collection or the image
     overlaps: bool
     clipped: Optional[AreaOfInterest] = None        # the part of the area inside the imagery
@@ -154,15 +155,15 @@ class RunDraft:
     name: str = ""
     name_edited: bool = False
     scenario_id: Optional[str] = None
-    coverage: Optional[Coverage] = None             # set for My imagery; None when it doesn't apply
+    coverage: Optional[Coverage] = None             # set for imagery with a footprint; None for basemaps
     description: str = ""
 
     # ---- derived ----
 
     @property
     def processed_area(self) -> Optional[AreaOfInterest]:
-        """What gets processed and billed: for My imagery, the part of the area inside the imagery
-        (as the current plugin does); otherwise the area itself."""
+        """What gets processed and billed: for imagery with a footprint (My imagery, or one catalog image),
+        the part of the area inside the imagery; otherwise the area itself."""
         if self.aoi and self.coverage and self.coverage.overlaps and self.coverage.clipped:
             return self.coverage.clipped
         return self.aoi

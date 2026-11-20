@@ -3117,6 +3117,88 @@ def main():
     wait_until(lambda: controller.server_cost == 70, 3)
     shot(content, "07-run-catalog", QSize(400, 980))
 
+    # One image chosen from the search: the area is clipped to its footprint, as for My imagery
+    def footprint_box(west, east):
+        return {"type": "Polygon", "coordinates": [[[west, 55.735], [east, 55.735], [east, 55.765],
+                                                    [west, 55.765], [west, 55.735]]]}
+    from mapflow_next.core.formatting import km2
+    chosen_before, choice_before = controller.chosen_image, controller.draft.imagery
+    half = CatalogImage.from_api({"id": "clip-half", "providerName": "maxar", "productType": "Image",
+                                  "previewType": "png", "previewUrl": f"{base}/clip-half",
+                                  "footprint": footprint_box(37.58, 37.605)})
+    away = CatalogImage.from_api({"id": "clip-away", "providerName": "maxar", "productType": "Image",
+                                  "previewType": "png", "previewUrl": f"{base}/clip-away",
+                                  "footprint": footprint_box(37.64, 37.66)})
+    plugin.services[3].results = [half, away]
+    controller.use_image("clip-half")
+    draft = controller.draft
+    whole, processed = draft.aoi, draft.processed_area
+    check(draft.coverage is not None and draft.coverage.overlaps and processed is not whole
+          and 0.4 * whole.area_km2 < processed.area_km2 < 0.6 * whole.area_km2,
+          f"an area partly over the chosen catalog image is clipped to its footprint "
+          f"({processed.area_km2:.3f} of {whole.area_km2:.3f} km²)")
+    outline = [point for ring in processed.geometry["coordinates"] for point in ring]
+    check(draft.payload("project-1")["geometry"] == processed.geometry
+          and all(37.595 - 1e-6 <= x <= 37.605 + 1e-6 for x, _y in outline),
+          "…only the part inside the footprint is submitted")
+    check(run.area_value.text() == km2(processed.area_km2)
+          and f"{km2(processed.area_km2)} of {km2(whole.area_km2)} inside the imagery" in run.area_meta.text(),
+          f"…the form shows the clipped area ({run.area_value.text()}; {run.area_meta.text()})")
+    check("Only the part of the area inside “Maxar scene” is processed and billed" in run.area_hint_text.text.text(),
+          f"…and says that only that part is processed and billed ({run.area_hint_text.text.text()!r})")
+    check(wait_until(lambda: any(r[1] == "/processing/cost/v2" and isinstance(r[2], dict)
+                                 and r[2].get("geometry") == processed.geometry for r in state.requests), 5),
+          "…and the cost request carries the clipped geometry, not the whole area")
+    check(not any(i.field == "area" for i in draft.issues(session.project, session.status)),
+          "…the part inside is within the area limit")
+    draft.imagery.min_area_km2 = 1.0
+    check(any(i.field == "imagery" and "sells at least 1.00 km²" in i.text
+              for i in draft.issues(session.project, session.status)),
+          "…and the provider's minimum area is judged on the part inside (the whole area would pass it)")
+    draft.imagery.min_area_km2 = 0.0
+    limit_before = session.project.aoi_area_limit_km2
+    session.project.aoi_area_limit_km2 = (processed.area_km2 + whole.area_km2) / 2
+    check(not any(i.field == "area" for i in draft.issues(session.project, session.status)),
+          "…an area limit between the clipped and the whole area is not exceeded")
+    session.project.aoi_area_limit_km2 = processed.area_km2 / 2
+    check(any(i.field == "area" for i in draft.issues(session.project, session.status)),
+          "…and a limit under the clipped area is")
+    session.project.aoi_area_limit_km2 = limit_before
+
+    controller.use_image("clip-away")
+    check(draft.coverage is not None and not draft.coverage.overlaps and not run.run_button.isEnabled()
+          and run.area_hint.isVisible() and "doesn't overlap “Maxar scene”" in run.area_hint_text.text.text(),
+          "an area that doesn't touch the chosen catalog image's footprint blocks the run, with a warning")
+    check(any("doesn't overlap" in i.text for i in draft.issues(session.project, session.status)),
+          "…the run is blocked until the area overlaps the image")
+    run.area_hint_buttons["imagery_extent"].click()
+    extent_layer = controller.aoi_layer
+    check(extent_layer is not None and extent_layer.name() == "Extent of Maxar scene"
+          and controller.draft.coverage is not None and controller.draft.coverage.overlaps,
+          "“Use the imagery extent” makes the image's footprint the area")
+    run.layerChosen.emit(layer.id())
+    check(controller.draft.coverage is not None and not controller.draft.coverage.overlaps,
+          "…and the first area is outside the image again")
+    run.area_hint_buttons["imagery_extent"].click()
+    check(len(QgsProject.instance().mapLayersByName("Extent of Maxar scene")) == 1,
+          "…and the extent layer is reused, not duplicated")
+
+    controller.on_imagery("provider:mapbox")
+    check(controller.draft.imagery.kind == "provider" and controller.draft.coverage is None
+          and controller.draft.payload("project-1")["geometry"] == controller.draft.aoi.geometry,
+          "a basemap provider has no footprint: the area is submitted whole")
+
+    for leftover in QgsProject.instance().mapLayersByName("Extent of Maxar scene"):
+        QgsProject.instance().removeMapLayer(leftover.id())
+    plugin.services[3].results = []
+    controller.chosen_image, controller.draft.imagery = chosen_before, choice_before
+    run.layerChosen.emit(layer.id())
+    controller.render_search_results()
+    controller.refresh_run()
+    check(controller.draft.aoi.name == "Old town" and controller.draft.coverage is not None
+          and controller.draft.coverage.clipped.area_km2 > 0.99 * controller.draft.aoi.area_km2,
+          "back to the image that covers the whole area: nothing is clipped")
+
     # No collections yet: My imagery still shows in the run form, and offers the upload
     imagery_service = plugin.services[3]
     import mapflow_next.controller as controller_module
@@ -3837,6 +3919,10 @@ def main():
     if wait_until(lambda: controller.draft.aoi is not None, 5):
         body = controller.draft.payload("project-1")["params"]["sourceParams"]["imagerySearch"]
         check(body == restored_params, "…the submitted body has the same image as the form's row")
+        check(controller.chosen_image.footprint is None and controller.draft.coverage is None
+              and controller.draft.processed_area is controller.draft.aoi
+              and not any("overlap" in i.text for i in controller.draft.issues(session.project, session.status)),
+              "…an image with no footprint doesn't clip the area and doesn't block the run")
     # the image is among the search results: the form shows that result, with what the search knows
     import datetime as datetime_module
     found = CatalogImageModel(id="10300100ABCDEF01", provider="Maxar", product_type="Image", zoom=18, cloud=7.0,

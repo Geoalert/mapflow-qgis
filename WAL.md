@@ -38,7 +38,7 @@ describes the state after the chain; each step makes the code match it, and upda
 [ready-for-review] Processing search on the server (`terms`) — `spec/002_B`
 [ready-for-review] Off-nadir range slider 0–30° — `spec/002_D` § What the plugin sends
 [ready-for-review] "Available for me" switch in the imagery search — `spec/002_D`
-[ ] The area is clipped to the footprint of the chosen catalog image — `spec/002_B` § AOI and the imagery footprint
+[ready-for-review] The area is clipped to the footprint of the chosen catalog image — `spec/002_B` § AOI and the imagery footprint
 [ ] Upload limits and free storage from `GET /rasters/memory` — `spec/002_C` § Storage Endpoints
 [ ] Rename a collection — `spec/002_C`
 [ ] Download an original image — `spec/002_C` § Client-side download

@@ -78,7 +78,7 @@ class Controller(QObject):
         self._projects_request = 0
         self._stopped = False                            # set by `stop`: no entry point opens a window again
         self._area_counter = 0
-        self._footprints: Dict[tuple, object] = {}       # My imagery footprints (QgsGeometry), by source
+        self._footprints: Dict[tuple, object] = {}       # My imagery and catalog footprints (QgsGeometry), by source
         self._extent_layers: Dict[tuple, str] = {}       # extent layers made from them: source → layer id
         self._extent_pending = False                     # waiting for image footprints to make the extent
         self._use_pending: Optional[str] = None          # a collection chosen before its image list came
@@ -878,9 +878,12 @@ class Controller(QObject):
     # ---------- My imagery: extent as the area, and the area against the imagery ----------
 
     def _imagery_footprint(self):
-        """(name, footprint, key) of the chosen My imagery: one image's extent, or the collection's
-        (the union of its images once they are loaded). None while it isn't known."""
+        """(name, footprint, key) of the chosen imagery that has a footprint. My imagery: one image's extent,
+        or the collection's (the union of its images once they are loaded). A catalog image: its footprint
+        from the search. None for basemaps, and while the footprint isn't known."""
         choice = self.draft.imagery
+        if choice and choice.kind == "catalog":
+            return self._catalog_footprint(choice)
         if not choice or choice.kind != "my_imagery":
             return None
         if choice.image_ids:
@@ -904,8 +907,23 @@ class Controller(QObject):
             self._footprints[key] = geometry
         return name, geometry, key
 
+    def _catalog_footprint(self, choice):
+        """(name, footprint, key) of the chosen catalog image, from its search result. None when the image has
+        no footprint (one Run again restored, which isn't among the results)."""
+        image = self.chosen_image
+        if image is None or not choice.image_ids or image.id != choice.image_ids[0] or not image.footprint:
+            return None
+        key = ("catalog", image.key)
+        geometry = self._footprints.get(key)
+        if geometry is None:
+            geometry = aoi_tools.catalog_footprint(image.footprint)
+            if geometry is None:
+                return None
+            self._footprints[key] = geometry
+        return choice.label, geometry, key
+
     def _update_coverage(self) -> None:
-        """For My imagery: does the area overlap the imagery, and which part of it is inside."""
+        """For imagery that has a footprint: does the area overlap it, and which part of it is inside."""
         draft = self.draft
         found = self._imagery_footprint() if draft.aoi else None
         if found is None:
@@ -940,7 +958,8 @@ class Controller(QObject):
         return "info", "", ()
 
     def use_imagery_extent(self) -> None:
-        """Make the chosen My imagery's extent the area: a layer the user can edit or replace."""
+        """Make the chosen imagery's extent the area (My imagery, or a catalog image): a layer the user can
+        edit or replace."""
         choice = self.draft.imagery
         found = self._imagery_footprint()
         if found is None:

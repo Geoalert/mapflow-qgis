@@ -762,6 +762,35 @@ def test_my_imagery_coverage():
     assert not any("overlap" in i.text for i in draft.issues(None, None))
 
 
+def test_catalog_coverage():
+    """With one catalog image chosen, only the part of the area inside the image's footprint is processed,
+    measured against the limits and the provider's minimum, and an area outside it blocks the run."""
+    from mapflow_next.core.draft import AreaOfInterest, Coverage
+    project = Project.from_api(PROJECT, "me@example.com")          # aoi_area_limit_km2 == 100
+    draft = _draft(area=150)
+    whole = draft.aoi
+    inside = AreaOfInterest(name=whole.name,
+                            geometry={"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 0]]]},
+                            area_km2=20, max_bbox_km2=25, polygons=1)
+    draft.imagery = ImageryChoice.from_catalog("img-9", "maxar", 18, "Maxar scene")
+    status = UserStatus.from_api(STATUS)
+    assert any(i.field == "area" for i in draft.issues(project, status))      # the whole area is over the limit
+    draft.coverage = Coverage("Maxar scene", True, inside)
+    assert draft.processed_area is inside
+    assert draft.payload("project-1")["geometry"] == inside.geometry
+    assert not any(i.field == "area" for i in draft.issues(project, status))  # the part inside is not
+    # the provider's smallest order is judged on the part inside
+    draft.imagery = ImageryChoice.from_catalog("img-9", "maxar", 18, "Maxar scene", min_area_km2=25)
+    small = [i for i in draft.issues(project, status) if i.field == "imagery"]
+    assert small and "sells at least 25.00 km²" in small[0].text and "20.00 km²" in small[0].text
+    draft.coverage = None
+    assert not [i for i in draft.issues(project, status) if i.field == "imagery"]    # the whole area is above it
+    draft.coverage = Coverage("Maxar scene", False, None)
+    assert draft.processed_area is whole
+    assert any(i.field == "area" and "doesn't overlap “Maxar scene”" in i.text
+               for i in draft.issues(project, status))
+
+
 # ---------- the guard (spec/006 § The guard) ----------
 
 @pytest.fixture

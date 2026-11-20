@@ -35,7 +35,7 @@ The plugin covers the work that belongs next to the map. Each tab has its scenar
   GeoTIFF layer for "Use as imagery in Mapflow": it's uploaded to My imagery and chosen when it's ready.
 - **Imagery sources › Find imagery in the catalog.** Search by area, dates, cloud cover, off-nadir
   angle and how much of the area an image covers, look at the footprints on the map, and use an image in
-  the run form.
+  the run form. When an image is chosen, the area is clipped to its footprint, and an area outside it blocks Run.
 - **Processings › Follow the work and its history.** Progress updates on its own. Filter by status, search
   the whole project by name, load older processings, rename them, run one again with the same settings,
   or delete it. A list that fails to load says so instead of looking empty; if the project is deleted in
