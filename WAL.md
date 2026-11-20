@@ -34,7 +34,7 @@ describes the state after the chain; each step makes the code match it, and upda
 
 ## 3. Features
 
-[ ] Restart for failed and cancelled processings, for every role that may run one — `spec/002_B`
+[ready-for-review] Restart for failed and cancelled processings, for every role that may run one — `spec/002_B`
 [ ] Processing search on the server (`terms`) — `spec/002_B`
 [ ] Off-nadir range slider 0–30° — `spec/002_D` § What the plugin sends
 [ ] "Available for me" switch in the imagery search — `spec/002_D`

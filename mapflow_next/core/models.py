@@ -69,7 +69,7 @@ class Role(str, Enum):
 
     @property
     def can_manage(self) -> bool:
-        """Rename, delete and restart processings."""
+        """Rename and delete processings."""
         return self in (Role.maintainer, Role.owner)
 
 
@@ -344,6 +344,11 @@ class Status(str, Enum):
     @property
     def is_terminal(self) -> bool:
         return self in (Status.ok, Status.failed, Status.refunded, Status.cancelled)
+
+    @property
+    def can_restart(self) -> bool:
+        """The statuses the plugin offers Restart for: failed and cancelled, not in progress or awaiting."""
+        return self in (Status.failed, Status.cancelled)
 
 
 @dataclass

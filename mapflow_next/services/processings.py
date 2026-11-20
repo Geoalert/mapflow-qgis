@@ -273,9 +273,13 @@ class Processings(QObject):
         self.api.start(payload, done, lambda error: self.startFailed.emit(error.message))
 
     def restart(self, processing: Processing) -> None:
-        self._last_status[processing.id] = Status.in_progress
-        self.started_here.add(processing.id)
-        self.api.restart(processing.id, lambda _: self.refresh(LOAD), self._action_failed)
+        def done(_answer) -> None:
+            # Only an accepted restart is watched: a refused one changes nothing, so no false "failed" follows
+            self._last_status[processing.id] = Status.in_progress
+            self.started_here.add(processing.id)
+            self.refresh(LOAD)
+
+        self.api.restart(processing.id, done, self._action_failed)
 
     def delete(self, processing: Processing) -> None:
         def done(_answer) -> None:

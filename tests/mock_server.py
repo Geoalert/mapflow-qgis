@@ -59,6 +59,7 @@ class State:
         self.pkce_checked = 0
         self.failures = []                 # rules from fail(): requests that answer an error instead
         self.hang_seconds = 3              # how long a "hang" holds the request before it closes
+        self.restart_refused = None        # (status, code, message): POST /processings/{id}/restart/v2 answers this
 
     def fail(self, method, pattern, what, times=None):
         """Requests of `method` whose path (without /rest) matches the regex `pattern` fail. `what`: an HTTP
@@ -454,6 +455,21 @@ class Handler(BaseHTTPRequestHandler):
         match = re.fullmatch(r"/rasters/image/([\w-]+)/preview/[sl]", path)
         if method == "GET" and match:
             return self._send(200, PNG, "image/png")
+        match = re.fullmatch(r"/processings/([\w-]+)/restart/v2", path)
+        if method == "POST" and match:
+            with self.state.lock:
+                refused = self.state.restart_refused
+                item = next((p for p in self.state.processings if p["id"] == match.group(1)), None)
+                if refused is None and item is not None and item["status"] in ("FAILED", "CANCELLED"):
+                    item.update(status="IN_PROGRESS", percentCompleted=0, messages=[])
+                    return self._send(200, "", "text/plain")
+            if refused is not None:
+                status, code, message = refused
+                return self._send(status, {"code": code, "message": message})
+            if item is None:
+                return self._send(404, {"code": "NOT_FOUND", "message": "No processing"})
+            return self._send(400, {"code": "BAD_REQUEST", "message": "Only a failed or a cancelled processing "
+                                                                      "can be restarted"})
         match = re.fullmatch(r"/processings/([\w-]+)/rate", path)
         if method == "PUT" and match:
             return self._send(200, "", "text/plain")

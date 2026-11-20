@@ -363,6 +363,7 @@ class Controller(QObject):
                 resolution = resolve(scenario, project.models)
                 self.draft.model, self.draft.options = resolution.model, set(resolution.options)
         self.content.processings.can_manage = project.role.can_manage
+        self.content.processings.can_run = project.role.can_run
         self.refresh_run()
 
     @guarded
@@ -1322,7 +1323,8 @@ class Controller(QObject):
                                            project.role.can_manage if project else False,
                                            loading=self.processings.loading, total=self.processings.total,
                                            loading_more=self.processings.loading_more,
-                                           loaded=self.processings.loaded, failed=self.processings.load_failed)
+                                           loaded=self.processings.loaded, failed=self.processings.load_failed,
+                                           can_run=project.role.can_run if project else False)
         self.content.start.set_recent(project.name if project else "", self.processings.items, in_map)
 
     @guarded
@@ -1376,8 +1378,9 @@ class Controller(QObject):
 
     @guarded
     def restart(self, processing_id: str) -> None:
-        processing = self.processings.get(processing_id)
-        if processing:
+        project, processing = self.session.project, self.processings.get(processing_id)
+        # The button is hidden otherwise: this stops a stale signal, or a status that changed since the last render
+        if project and project.role.can_run and processing and processing.status.can_restart:
             self.processings.restart(processing)
 
     @guarded

@@ -1562,6 +1562,128 @@ def check_review_link(content, controller, processings, links, state, started):
         links.opened.clear()
 
 
+def check_restart(iface, content, controller, processings, state):
+    """spec/002_B § Plugin behaviour: Restart is offered for a failed or a cancelled processing, to every role that
+    may run one (not only to those who may manage), and never for one in progress or awaiting. After a restart
+    the list refreshes and the poll runs again. A refused restart shows the server's message and leaves no false
+    state behind. Everything the function changes is restored."""
+    from mapflow_next.core.models import Role, Status
+    session, page = controller.session, content.processings
+    warn = Qgis.MessageLevel.Warning
+    saved_role, saved_interval = session.project.role, processings._poll.interval()
+    failed_notices = []
+    processings.failed.connect(failed_notices.append)
+    extra = {"cancelled": fixtures.processing_json("restart-cancelled", "CANCELLED", 0, name="Cancelled run"),
+             "awaiting": fixtures.processing_json("restart-awaiting", "AWAITING", 0, name="Awaiting run"),
+             "running": fixtures.processing_json("restart-running", "IN_PROGRESS", -200, name="Running run")}
+    # (-200: the mock adds 50 at each list request, so this one stays in progress for the next few lists)
+
+    def restart_button(pid):
+        page.expand(pid)
+        wait_until(lambda: page.expanded == pid, 2)
+        return next((b for b in page.findChildren(QPushButton) if b.text() == "Restart"), None)
+
+    def menu_texts():
+        return [a.text() for tool in page.findChildren(QToolButton) if tool.menu() for a in tool.menu().actions()]
+
+    def posts(pid):
+        return [r for r in state.requests if r[0] == "POST" and r[1] == f"/processings/{pid}/restart/v2"]
+
+    def lists():
+        return len([r for r in state.requests if r[0] == "POST" and r[1].endswith("/processings/v2/page")])
+
+    def reload():
+        page.refresh_button.click()
+        wait_until(lambda: not page.refreshing, 5)
+
+    def set_role(role):
+        session.project.role = role
+        controller.render_processings()
+
+    def status_of(pid):
+        item = processings.get(pid)
+        return item.status if item else None
+
+    state.restart_refused = None
+    state.processings.extend(extra[k] for k in ("cancelled", "awaiting"))
+    try:
+        reload()
+        check(wait_until(lambda: status_of("restart-cancelled") is Status.cancelled
+                         and status_of("restart-awaiting") is Status.awaiting, 5),
+              "RESTART: a cancelled and an awaiting processing are loaded")
+
+        # not offered: ok, in progress, awaiting
+        for pid, what in (("old-1", "an OK"), ("restart-awaiting", "an awaiting")):
+            check(restart_button(pid) is None, f"RESTART: not offered for {what} processing")
+        state.processings.append(extra["running"])
+        reload()
+        check(status_of("restart-running") is Status.in_progress and restart_button("restart-running") is None,
+              f"RESTART: not offered for a processing in progress ({status_of('restart-running')})")
+
+        # a role that may run but not manage: offered, and Rename and Delete are not
+        set_role(Role.contributor)
+        check(restart_button("old-2") is not None and restart_button("restart-cancelled") is not None,
+              "RESTART: a contributor (may run, may not manage) is offered Restart for a failed and a cancelled one")
+        check("Rename…" not in menu_texts() and "Delete…" not in menu_texts(),
+              f"RESTART: …and Rename and Delete stay for those who manage ({menu_texts()})")
+        # a role that may not run: not offered, and a stale signal sends nothing
+        set_role(Role.readonly)
+        check(restart_button("old-2") is None and restart_button("restart-cancelled") is None,
+              "RESTART: a read-only role is not offered Restart")
+        page.restart.emit("old-2")
+        page.restart.emit("restart-cancelled")
+        wait_until(lambda: False, 0.4)
+        check(not posts("old-2") and not posts("restart-cancelled"),
+              "RESTART: a restart signal for a role that may not run sends no request")
+        for role in (Role.maintainer, Role.owner):
+            set_role(role)
+            check(restart_button("old-2") is not None and restart_button("restart-cancelled") is not None,
+                  f"RESTART: a {role.value} is offered Restart for a failed and a cancelled one")
+
+        # a refused restart: the server's message, nothing else
+        set_role(Role.contributor)
+        state.restart_refused = (403, "FORBIDDEN", "Restart refused: the project is locked")
+        since = len(iface.bar.messages)
+        restart_button("old-2").click()
+        check(wait_until(lambda: (warn, "Restart refused: the project is locked") in iface.bar.messages[since:], 5),
+              "RESTART: a refused restart shows the message of the server in the message bar")
+        wait_until(lambda: False, 0.4)
+        check(status_of("old-2") is Status.failed and not failed_notices and len(posts("old-2")) == 1,
+              "RESTART: …the processing still shows as failed, and no \"failed\" notice follows")
+        state.restart_refused = None
+
+        # failed and cancelled: restarted, the list refreshes, the poll runs again
+        processings._poll.setInterval(150)
+        for pid in ("old-2", "restart-cancelled"):
+            processings._poll.stop()
+            failed_notices.clear()
+            asked = lists()
+            button = restart_button(pid)
+            check(button is not None, f"RESTART: {pid} is offered Restart to a contributor")
+            button.click()
+            check(wait_until(lambda: len(posts(pid)) >= 1 and lists() > asked, 5),
+                  f"RESTART: {pid}: the request is sent and the list refreshes")
+            check(wait_until(lambda: status_of(pid) is Status.in_progress or status_of(pid) is Status.ok, 5)
+                  and wait_until(lambda: processings._poll.isActive() or status_of(pid) is Status.ok, 2),
+                  f"RESTART: {pid} shows as in progress and the poll runs again")
+            check(wait_until(lambda: status_of(pid) is Status.ok, 5),
+                  f"RESTART: {pid}: the poll loads it as finished")
+            wait_until(lambda: False, 0.2)
+            check(not failed_notices, f"RESTART: {pid}: no \"failed\" notice ({failed_notices})")
+    finally:
+        processings.failed.disconnect(failed_notices.append)
+        processings._poll.setInterval(saved_interval)
+        state.restart_refused = None
+        ids = {item["id"] for item in extra.values()}
+        state.processings = [p for p in state.processings if p["id"] not in ids]
+        for item in state.processings:
+            if item["id"] == "old-2":
+                item.update(status="FAILED", percentCompleted=0,
+                            messages=[{"code": "dataloader.NoDataTile", "parameters": {}}])
+        set_role(saved_role)
+        reload()
+
+
 def check_upload_timeout(iface, plugin, state):
     """spec/005 § Mapflow Backend API, spec/002_C (upload): every request has a timer, and an upload that stalls
     ends through `on_error` as a timeout, with the upload flags cleared so the next upload can start.
@@ -2441,6 +2563,7 @@ def main():
     check(links.opened == [f"https://app.mapflow.ai/projects/project-1?processing={started['id']}"],
           f"Open in Mapflow Web opens that processing ({links.opened})")
     check_review_link(content, controller, processings, links, state, started)
+    check_restart(iface, content, controller, processings, state)
 
     # Download the area (AOI)
     import mapflow_next.controller as controller_module

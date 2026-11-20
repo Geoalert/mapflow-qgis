@@ -18,6 +18,7 @@
     - An upload that stalls ends with a message after an hour without progress, and the next upload can start
     - A GeoTIFF that is deleted or becomes unreadable after the check and before its upload ends the upload with a message that names the file, and the next upload can start
     - "Review this result in Mapflow Web" opens that processing in its project, on the web address the plugin is configured for, instead of the home page
+    - Restart is offered for a failed or a cancelled processing, to everyone who may run a processing in the project, not only to maintainers and owners. A refused restart shows the message of Mapflow
     - A large result is converted to GeoPackage in the background: QGIS stays usable, and the task can be cancelled in the Tasks panel
     - An unexpected error shows a “Send a report” button: it opens a window with the details and your comment, and opens your mail program with the report to Mapflow support. Nothing is sent without you
     - Not carried over yet: planned processings (templates), custom XYZ/TMS providers, translations (es, pt, ru, zh; planned for 4.1)

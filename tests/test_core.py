@@ -86,6 +86,19 @@ def test_project_roles():
     assert not Project.from_api(shared, "").role.can_run
 
 
+def test_restart_is_for_failed_and_cancelled_and_for_roles_that_may_run():
+    """spec/002_B § Plugin behaviour: Restart is offered for a failed or a cancelled processing, to every role
+    that may run one."""
+    offered = {status for status in Status if status.can_restart}
+    assert offered == {Status.failed, Status.cancelled}
+    assert not any(s.can_restart for s in (Status.ok, Status.in_progress, Status.awaiting, Status.refunded,
+                                           Status.unprocessed))
+    assert [role for role in Role if role.can_run] == [Role.contributor, Role.maintainer, Role.owner]
+    # A role that may run but not manage: Restart does not depend on can_manage
+    assert Role.contributor.can_run and not Role.contributor.can_manage
+    assert not Role.readonly.can_run and not Role.readonly.can_manage
+
+
 def test_processing_parsing():
     processing = Processing.from_api(processing_json("p1", "OK", 100))
     assert processing.status is Status.ok and processing.is_done and processing.is_final
