@@ -3332,14 +3332,54 @@ def main():
         item = fixtures.processing_json(pid, "OK", 100, name=f"Run {pid}")
         item["params"] = {"sourceParams": source}
         processings.items.insert(0, ProcessingModel.from_api(item))
+    from mapflow_next.core.models import CatalogImage as CatalogImageModel
+    earlier = CatalogImageModel(id="earlier-image", provider="Airbus", zoom=17)
+    controller.chosen_image = earlier
     controller.draft.imagery = controller_module.ImageryChoice.from_mosaic("m-1", "Drone survey March")
     iface.bar.messages.clear()
     content.processings.duplicate.emit("cat-1")
     check(controller.draft.imagery is not None and controller.draft.imagery.kind == "catalog"
           and controller.draft.imagery.image_ids == ["10300100ABCDEF01"],
           "“Run again” on a catalog image chooses the same image, not the imagery chosen before")
+    rows, selected = controller._imagery_rows(session.status, True)
+    catalog_rows = [r for r in rows if r.key == "catalog"]
+    check(selected == "catalog" and len(catalog_rows) == 1 and controller.chosen_image is not earlier
+          and controller.chosen_image.id == "10300100ABCDEF01",
+          "…the form's imagery row is that image (selected), not the image chosen in the search before")
+    check(catalog_rows[0].title == controller._catalog_choice(controller.chosen_image).label
+          and "Maxar" in catalog_rows[0].title and "Airbus" not in catalog_rows[0].title
+          and "z18" in catalog_rows[0].meta and "from the image resolution" not in catalog_rows[0].meta
+          and not catalog_rows[0].previewable,
+          f"…the row shows the processing's provider and zoom, and no eye for an image that is not in the "
+          f"search results ({catalog_rows[0].title!r}, {catalog_rows[0].meta!r})")
+    restored_params = controller.draft.imagery.source_params()["imagerySearch"]
+    check(restored_params == {"dataProvider": "maxar", "imageIds": [controller.chosen_image.id],
+                              "zoom": controller.chosen_image.zoom} and controller.chosen_image.zoom == 18
+          and controller.chosen_image.provider.lower() == restored_params["dataProvider"],
+          f"…and the payload's image is the one the form shows ({restored_params})")
+    if wait_until(lambda: controller.draft.aoi is not None, 5):
+        body = controller.draft.payload("project-1")["params"]["sourceParams"]["imagerySearch"]
+        check(body == restored_params, "…the submitted body has the same image as the form's row")
+    # the image is among the search results: the form shows that result, with what the search knows
+    import datetime as datetime_module
+    found = CatalogImageModel(id="10300100ABCDEF01", provider="Maxar", product_type="Image", zoom=18, cloud=7.0,
+                              acquired=datetime_module.datetime(2024, 5, 17), preview_url="https://x/p.png",
+                              preview_type="png")
+    plugin.services[3].results = [found]
+    controller.chosen_image = earlier
+    content.processings.duplicate.emit("cat-1")
+    rows, selected = controller._imagery_rows(session.status, True)
+    catalog_row = next((r for r in rows if r.key == "catalog"), None)
+    check(controller.chosen_image is found and selected == "catalog" and catalog_row is not None
+          and "17 May 2024" in catalog_row.meta and "cloud 7%" in catalog_row.meta and catalog_row.previewable,
+          f"…an image that is among the search results is shown as that result ({catalog_row})")
+    plugin.services[3].results = []
+    controller.chosen_image = None
     content.processings.duplicate.emit("custom-1")
     controller.on_status(session.status)
+    rows, selected = controller._imagery_rows(session.status, True)
+    check(selected is None and not any(r.key == "catalog" for r in rows),
+          "…imagery it can't restore leaves the form with no selected row and no row for a catalog image")
     check(controller.draft.imagery is None
           and any("Choose the imagery" in (m or "") for _l, m in iface.bar.messages),
           "…imagery it can't restore stays empty, with a message, and no default fills it in")

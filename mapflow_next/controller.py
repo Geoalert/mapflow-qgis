@@ -20,7 +20,7 @@ from .core import formatting
 from .core.draft import Coverage, ImageryChoice, Issue, RunDraft
 from .core.failures import USER, project_gone_text
 from .core.guard import guarded
-from .core.models import BillingType, CatalogImage, Processing, UserStatus
+from .core.models import BillingType, CatalogImage, Processing, SourceInfo, UserStatus
 from .core.scenarios import Catalogue, recommended_zoom, resolve, scenario_for_model
 from .qgis_bridge import aoi as aoi_tools
 from .qgis_bridge import message_bar
@@ -64,6 +64,7 @@ class Controller(QObject):
         self.provider_zoom: Dict[str, int] = {}
         self.preferred_zoom: Optional[int] = None
         self.chosen_image: Optional[CatalogImage] = None
+        self._restored_image: Optional[CatalogImage] = None     # chosen_image when Run again made it (no search data)
         self.server_cost: Optional[int] = None
         self.cost_error = ""
         self.cost_token = 0
@@ -1040,6 +1041,16 @@ class Controller(QObject):
         return ImageryChoice.from_catalog(image.id, image.provider, image.zoom, f"{title} {when}".strip(),
                                           image.min_area_km2)
 
+    def _restored_catalog_image(self, source: SourceInfo) -> CatalogImage:
+        """The image of a processing, for Run again. A search result of the same image (and zoom) knows more than
+        the processing does; without one the image has only what the processing keeps: id, provider and zoom."""
+        image_id = source.image_ids[0]
+        found = next((i for i in self.imagery.results
+                      if i.id == image_id and (source.zoom is None or i.zoom == source.zoom)), None)
+        self._restored_image = None if found else CatalogImage(id=image_id, provider=source.provider,
+                                                               zoom=source.zoom)
+        return found or self._restored_image
+
     # ---------- run form: rendering ----------
 
     def refresh_run(self, keep_name: bool = False) -> None:
@@ -1172,10 +1183,12 @@ class Controller(QObject):
             image = self.chosen_image
             details = [f"{image.acquired.day} {image.acquired:%b %Y}" if image.acquired else "",
                        f"cloud {image.cloud:.0f}%" if image.cloud is not None else "",
-                       f"z{image.zoom} from the image resolution" if image.zoom else ""]
+                       (f"z{image.zoom} · of that processing" if image is self._restored_image
+                        else f"z{image.zoom} from the image resolution") if image.zoom else ""]
             rows.append(ImageryRow(key="catalog", title=self._catalog_choice(image).label,
                                    meta=" · ".join(t for t in details if t) or "From search",
-                                   price="In estimate" if credits_billing else "", removable=True, previewable=True,
+                                   price="In estimate" if credits_billing else "", removable=True,
+                                   previewable=self.imagery.get_result(image.key) is not None,
                                    previewing=self._previewing(choice) if choice and choice.kind == "catalog"
                                    else None))
             if choice and choice.kind == "catalog":
@@ -1499,10 +1512,11 @@ class Controller(QObject):
         elif source.kind == "my_imagery" and (source.mosaic_id or source.image_ids):
             self._restore_my_imagery(source.mosaic_id, source.image_ids[0] if source.image_ids else None,
                                      restoring)
-        elif source.kind == "catalog" and source.image_ids:
-            image_id = source.image_ids[0]
-            self.draft.imagery = ImageryChoice.from_catalog(image_id, source.provider, source.zoom,
-                                                            f"Catalog image · {image_id[:12]}")
+        elif source.kind == "catalog" and source.image_ids and source.image_ids[0]:
+            # The run form's imagery row is built from the chosen image, so it is set with the draft's imagery
+            self.chosen_image = self._restored_catalog_image(source)
+            self.draft.imagery = self._catalog_choice(self.chosen_image)
+            self.render_search_results()
         else:
             gone.append("its imagery can't be chosen again here")
         self._imagery_to_choose = self.draft.imagery is None
