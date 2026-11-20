@@ -69,6 +69,7 @@ class CollectionDialog(QDialog):
         self.create.setEnabled(False)
         self.name.setFocus()
 
+    @guarded
     def keyPressEvent(self, event) -> None:
         # Enter in the tag field adds the tag; it must not press Create as well
         if self.tag.hasFocus() and event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):

@@ -107,11 +107,13 @@ class ProjectTile(FocusRing, QFrame):
         bottom.addWidget(share)
         layout.addLayout(bottom)
 
+    @guarded
     def mouseReleaseEvent(self, event) -> None:
         if event.button() == Qt.MouseButton.LeftButton and self.rect().contains(event_pos(event)):
             self.clicked.emit(self.project.id)
         super().mouseReleaseEvent(event)
 
+    @guarded
     def keyPressEvent(self, event) -> None:
         if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space):
             self.clicked.emit(self.project.id)
@@ -288,6 +290,7 @@ class ProjectsDialog(QDialog):
         self.count.setText(f"{self.total:,} projects" if self.total else (f"{shown}" if shown else ""))
         QTimer.singleShot(0, guarded(lambda: bar.setValue(position)))
 
+    @guarded
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
         if self._columns and self._column_count() != self._columns:

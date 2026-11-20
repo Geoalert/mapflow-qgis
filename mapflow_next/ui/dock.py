@@ -61,6 +61,7 @@ class TabButton(FocusRing, QAbstractButton):
     def minimumSizeHint(self) -> QSize:
         return QSize(QFontMetrics(self._font()).horizontalAdvance(self.text()) // 2, 42)
 
+    @guarded
     def paintEvent(self, event) -> None:
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)

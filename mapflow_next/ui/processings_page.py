@@ -139,6 +139,7 @@ class ProcessingCard(Card):
             rating.addStretch(1)
             self.add(rating)
 
+    @guarded
     def mouseReleaseEvent(self, event) -> None:
         if event.button() == Qt.MouseButton.LeftButton and self.rect().contains(event_pos(event)):
             self.clicked.emit(self.processing.id)

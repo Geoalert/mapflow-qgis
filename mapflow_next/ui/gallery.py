@@ -54,6 +54,7 @@ class CategoryButton(FocusRing, QAbstractButton):
     def sizeHint(self) -> QSize:
         return QSize(200, 36)
 
+    @guarded
     def paintEvent(self, event) -> None:
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -106,6 +107,7 @@ class ScenarioCard(FocusRing, QAbstractButton):
     def set_width(self, width: int) -> None:
         self.setFixedSize(width, self._height(width))
 
+    @guarded
     def paintEvent(self, event) -> None:
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -167,6 +169,7 @@ class ScenarioCard(FocusRing, QAbstractButton):
                          QFontMetrics(font).elidedText(meta, Qt.TextElideMode.ElideRight, inner))
         painter.end()
 
+    @guarded
     def keyPressEvent(self, event) -> None:
         if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
             self.click()
@@ -293,6 +296,7 @@ class GalleryDialog(QDialog):
         self._layout_key = None
         return page
 
+    @guarded(default=False)
     def eventFilter(self, watched, event) -> bool:
         if event.type() == QEvent.Type.Resize:
             if watched is self.scroll.viewport():
@@ -493,6 +497,7 @@ class GalleryDialog(QDialog):
             return
         self.scenarioChosen.emit(self.current.id)
 
+    @guarded
     def keyPressEvent(self, event) -> None:
         if event.key() == Qt.Key.Key_Escape and self.stack.currentIndex() == 1:
             self.back()

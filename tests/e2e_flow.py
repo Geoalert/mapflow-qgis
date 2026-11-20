@@ -605,6 +605,57 @@ def check_result_conversion(iface, plugin):
     finally:
         conversion.convert_geojson = original
 
+    # sign-out, sign-in, the same processing added again while the old task is still stopping: the old task
+    # removes its own files, not the new download or what the new conversion makes of it
+    started.clear()
+    stopped.clear()
+
+    def held_until(release, then=None):
+        """Waits for the cancel (or, with `then`, for `release`), and then returns, as a task does that stops late."""
+        def held(job, is_canceled, feedback, *rest):
+            job.work.parent.mkdir(parents=True, exist_ok=True)
+            job.work.write_bytes(b"partial")
+            started.append(job)
+            while not release.is_set():
+                time.sleep(0.02)
+            if then is not None:
+                return then(job, is_canceled, feedback, *rest)
+            stopped.append(job)
+        return held
+
+    release_old, release_new = threading.Event(), threading.Event()
+    try:
+        late = scenario("conv-late", held_until(release_old))
+        check(wait_until(lambda: started, 5), "a conversion runs when the user signs out")
+        old_task = results._tasks.get(late.id)
+        results.reset()
+        conversion.convert_geojson = held_until(release_new, original)
+        again_late = processing_done("conv-late")
+        results.add_to_map(again_late)
+        check(wait_until(lambda: len(started) == 2, 10), "…the same processing is added again after sign-in")
+        new_job = started[1]
+        check(new_job.geojson != started[0].geojson and new_job.geojson.exists(),
+              f"…its download has a file of its own ({started[0].geojson.name}, {new_job.geojson.name})")
+        release_old.set()
+        check(wait_until(lambda: stopped and old_task not in conversion._LIVE, 5),
+              "…and the old task ends")
+        wait_until(lambda: False, 0.3)
+        check(new_job.geojson.exists() and new_job.work.exists() and not started[0].geojson.exists()
+              and not started[0].work.exists(),
+              "…the old task removed its own files, not the new download")
+        release_new.set()
+        check(wait_until(lambda: again_late.id in loaded, 10) and not results.is_busy(again_late.id)
+              and not failures, f"…and the new add finishes ({failures})")
+    finally:
+        release_old.set()
+        release_new.set()
+        conversion.convert_geojson = original
+    for layer in results.layers.layers_for(again_late.id):
+        QgsProject.instance().removeMapLayer(layer.id())
+    check(not [f for f in files_under(out_dir) if f.startswith(".downloads")],
+          "…and nothing stays in .downloads")
+    before = files_under(out_dir)              # the GeoPackage of that add stays
+
     # the same processing converts again after that: the work file of the old task is not in the way
     again = processing_done("conv-signout")
     loaded.clear()
@@ -617,6 +668,87 @@ def check_result_conversion(iface, plugin):
     for layer in results.layers.layers_for(again.id):
         QgsProject.instance().removeMapLayer(layer.id())
     results.failed.disconnect(on_failed)
+
+
+def check_results_loading_flag(iface, plugin):
+    """spec/006 § The guard: the "loading" flag of a processing is cleared on every way out of a load, the
+    synchronous start and the `on_error` fallbacks included. An exception is reported once, the user is told
+    once, and the processing is not left loading. Everything the function changes is restored."""
+    from mapflow_next.config import FILES, TILES
+    from mapflow_next.core.models import Processing
+    from mapflow_next.services.results import GENERIC_FAILURE
+    results = plugin.services[4]
+    layers = results.layers
+    saved_mode = results.settings.value("results_mode", FILES)
+    saved_tile_raster, saved_vector_tiles = layers.tile_raster, layers.vector_tiles
+    failures = []
+
+    def on_failed(processing_id, text):
+        failures.append((processing_id, text))
+    results.failed.connect(on_failed)
+
+    def raising(text):
+        def fail(*args, **kwargs):
+            raise RuntimeError(text)
+        return fail
+
+    data = fixtures.processing_json("flag-tilejson", "OK", 100, name="Forest · flag-tilejson")
+    # the raster's tilejson is not served: the fallback that adds the raster without bounds runs
+    data["rasterLayer"] = {"tileUrl": "https://tiles.example/{z}/{x}/{y}.png",
+                           "tileJsonUrl": "http://127.0.0.1:9/raster.json"}
+    tilejson_failure = Processing.from_api(data)
+    try:
+        results.settings.setValue("results_mode", TILES)
+        layers.tile_raster = raising("tile raster")
+        results.add_to_map(tilejson_failure)
+        check(wait_until(lambda: failures, 5),
+              "LOADING FLAG: a failing fallback of a tilejson request reaches the user")
+        wait_until(lambda: False, 0.3)
+        check(not results.is_busy(tilejson_failure.id) and failures == [(tilejson_failure.id, GENERIC_FAILURE)],
+              f"…the processing is not left loading, and it fails once ({failures})")
+        expect_critical(iface, "tile raster", "the guard's lines of the failing fallback", count=2)
+
+        # the synchronous start
+        failures.clear()
+        layers.vector_tiles = raising("vector tiles")
+        start = Processing.from_api(fixtures.processing_json("flag-start", "OK", 100, name="Forest · flag-start"))
+        results.add_to_map(start)                     # raises nothing: the guard has it
+        check(not results.is_busy(start.id) and failures == [(start.id, GENERIC_FAILURE)],
+              f"LOADING FLAG: an exception in the start of a load clears the flag ({failures})")
+        expect_critical(iface, "vector tiles", "the guard's lines of the failing start", count=2)
+    finally:
+        results.settings.setValue("results_mode", saved_mode)
+        layers.tile_raster, layers.vector_tiles = saved_tile_raster, saved_vector_tiles
+        results.failed.disconnect(on_failed)
+        results.reset()
+
+
+def check_virtual_guard(iface, plugin):
+    """spec/006 § The guard: an exception in a method that Qt calls by name (an event filter that Qt runs for an
+    event, a map tool's `canvasReleaseEvent`) is reported once and does not reach `sys.excepthook`, which is where
+    QGIS opens its raw error dialog."""
+    from mapflow_next.qgis_bridge.draw_tool import PolygonDrawTool
+    from mapflow_next.ui.widgets import HoverTip
+    escaped = []
+    saved_hook = sys.excepthook
+    sys.excepthook = lambda *info: escaped.append(info)
+    widget = QWidget()
+    try:
+        tip = HoverTip(widget, "text")
+        tip.timer = None                                # the filter's next step raises
+        delivered = QApplication.sendEvent(widget, QEvent(QEvent.Type.Enter))
+        check(not escaped, f"VIRTUAL GUARD: an exception in an event filter does not reach the excepthook ({escaped})")
+        check(delivered is not None, "…and the event is still delivered")
+        expect_critical(iface, "attribute 'start'", "the guard's lines of the failing event filter", count=2)
+
+        tool = PolygonDrawTool(iface.canvas)
+        tool.canvasReleaseEvent(object())               # an event without `button()`
+        check(not escaped, f"VIRTUAL GUARD: an exception in canvasReleaseEvent does not escape ({escaped})")
+        expect_critical(iface, "attribute 'button'", "the guard's lines of the failing map tool", count=2)
+        tool.deleteLater()
+    finally:
+        sys.excepthook = saved_hook
+        widget.deleteLater()
 
 
 def check_poll_auth(iface, plugin, state, browser):
@@ -1372,6 +1504,86 @@ def check_upload_timeout(iface, plugin, state):
         wait_until(lambda: not http._pending, 5)
 
 
+def check_network_timeout(iface, plugin, state):
+    """spec/006 § A request ends in exactly one outcome: QGIS's own network timeout aborts a reply that made no
+    progress, and the plugin did not ask for that abort. The request ends through `on_error` (a timeout), so the
+    upload flag and the result's "loading" flag are cleared. An abort that the plugin asks for stays silent.
+    The timeout of QGIS is put back."""
+    from qgis.core import QgsNetworkAccessManager
+    session, imagery, results = plugin.services[1], plugin.services[3], plugin.services[4]
+    http = session.http
+    path = make_geotiff("qgis-timeout.tif")
+    nam = QgsNetworkAccessManager.instance()
+    saved, saved_hang = nam.timeout(), state.hang_seconds
+    state.heal()
+    state.hang_seconds = 6              # the server answers long after QGIS gave up
+    failed, results_failed = [], []
+
+    def on_results_failed(processing_id, text):
+        results_failed.append((processing_id, text))
+    imagery.uploadFailed.connect(failed.append)
+    results.failed.connect(on_results_failed)
+    try:
+        nam.setTimeout(1000)
+        # the direct request: the plugin's own timer is an hour away, so QGIS's timeout is the one that ends it
+        errors, done = [], []
+        state.fail("POST", r"/rasters/mosaic/image", "hang", times=1)
+        started = time.time()
+        http.upload("rasters/mosaic/image?name=qgis-timeout&tags=", path, on_success=done.append,
+                    on_error=errors.append)
+        check(wait_until(lambda: errors, 5),
+              "NETWORK TIMEOUT: an upload that QGIS's timeout aborts ends through on_error")
+        check(len(errors) == 1 and errors[0].kind == "timeout" and not done
+              and time.time() - started < state.hang_seconds and not http._pending,
+              f"…once, as a timeout, and nothing stays pending ({errors})")
+
+        # through the service: the flag is cleared, the next upload starts
+        state.heal()
+        state.uploads.clear()
+        state.fail("POST", r"/rasters/mosaic/image", "hang", times=1)
+        imagery.upload(path, "Cut by QGIS")
+        check(imagery.uploading, "NETWORK TIMEOUT: an upload is under way")
+        check(wait_until(lambda: failed, 5) and not imagery.uploading,
+              f"…and QGIS's timeout clears the upload flag and tells the user ({failed})")
+        state.heal()
+        imagery.upload(path, "After the cut")
+        check(wait_until(lambda: not imagery.uploading
+                         and [u[:2] for u in state.uploads] == [("new", "After the cut")], 8),
+              f"…and the next upload runs ({state.uploads})")
+
+        # a result download: the processing is not left loading
+        state.heal()
+        stalled = processing_done("qgis-timeout")
+        state.fail("GET", r"/processings/[\w-]+/result", "hang", times=1)
+        results.add_to_map(stalled)
+        check(results.is_busy(stalled.id), "NETWORK TIMEOUT: a result download is under way")
+        check(wait_until(lambda: results_failed and not results.is_busy(stalled.id), 5),
+              f"…and QGIS's timeout clears the processing's loading flag ({results_failed})")
+
+        # an abort the plugin asked for says nothing
+        state.heal()
+        silent = []
+        state.fail("POST", r"/rasters/mosaic/image", "hang", times=2)
+        key = http.upload("rasters/mosaic/image?name=abort&tags=", path, on_error=silent.append)
+        http.abort(key)
+        key = http.upload("rasters/mosaic/image?name=abort-all&tags=", path, on_error=silent.append)
+        http.abort_all()
+        wait_until(lambda: False, 1.5)
+        check(not silent and not http._pending,
+              f"NETWORK TIMEOUT: abort and abort_all end the request without on_error ({silent})")
+    finally:
+        nam.setTimeout(saved)
+        imagery.uploadFailed.disconnect(failed.append)
+        results.failed.disconnect(on_results_failed)
+        state.hang_seconds = saved_hang
+        state.heal()
+        http.abort_all()
+        wait_until(lambda: not http._pending, 5)
+        imagery.reset_busy()
+        results.reset()
+    check(nam.timeout() == saved, "NETWORK TIMEOUT: QGIS's timeout is put back")
+
+
 def plugin_timers(roots):
     """Every QTimer that is a child of a root, the roots included. The services and the controller have no
     parent, so each is searched on its own."""
@@ -2051,6 +2263,8 @@ def main():
     shot(content, "05-processings-done", QSize(400, 880))
     check_the_guard(iface, plugin, url, settings, state)
     check_result_conversion(iface, plugin)
+    check_results_loading_flag(iface, plugin)
+    check_virtual_guard(iface, plugin)
     check_credentials_origin(iface, plugin, state, url)
 
     # imagery search: the Area drop-down is the run's area
@@ -3208,6 +3422,7 @@ def main():
 
     check_failed_requests(iface, plugin, state)
     check_upload_timeout(iface, plugin, state)
+    check_network_timeout(iface, plugin, state)
 
     # ---------- account menu: Settings and Sign out ----------
     menu_actions = {a.text(): a for a in content.account_menu.actions()}

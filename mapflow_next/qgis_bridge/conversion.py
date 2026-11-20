@@ -14,6 +14,7 @@ from typing import Callable, Dict, List, Optional, Set
 
 from qgis.core import (QgsCoordinateTransformContext, QgsFeedback, QgsTask, QgsVectorFileWriter, QgsVectorLayer)
 
+from ..core.guard import guarded
 from .compat import TASK_CAN_CANCEL
 
 GEOMETRY_TYPES = ("Polygon", "LineString", "Point")
@@ -164,6 +165,7 @@ class ConvertTask(QgsTask):
         self.feedback.cancel()                  # first: a write in progress checks the feedback, not the task
         super().cancel()
 
+    @guarded
     def finished(self, ok: bool) -> None:
         """GUI thread. The cleanup comes before anything that can raise: the callback is reported by the guard,
         and what it interrupts is not completed (spec/006)."""

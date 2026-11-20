@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import functools
+import secrets
 from pathlib import Path
 from typing import Callable, Dict, Optional
 
@@ -77,6 +78,10 @@ class Results(QObject):
         if not processing.is_done or processing.id in self._busy:
             return
         self._set_busy(processing.id, True)
+        self._continuing(processing)(self._load)(processing)
+
+    def _load(self, processing: Processing) -> None:
+        """The synchronous part of `add_to_map`: it starts the requests that the steps below continue."""
         if self.mode == TILES:
             vector = self.layers.vector_tiles(processing)
             if vector is None:
@@ -100,9 +105,12 @@ class Results(QObject):
                 else:
                     with_extent(extent)
 
+            @self._continuing(processing)
+            def tilejson_failed(_error):
+                self._area_extent(processing, with_extent)
+
             if processing.vector_tilejson_url:
-                self.api.tilejson(processing.vector_tilejson_url, from_tilejson,
-                                  lambda _error: self._area_extent(processing, with_extent))
+                self.api.tilejson(processing.vector_tilejson_url, from_tilejson, tilejson_failed)
             else:
                 self._area_extent(processing, with_extent)
             return
@@ -113,7 +121,9 @@ class Results(QObject):
         except OSError as exc:
             self._fail(processing, f"Can't write to {folder}: {exc.strerror}. Pick another folder in Settings.")
             return
-        target = str(downloads / f"{processing.id}.geojson")
+        # A name per add: a cancelled conversion removes its own download, and must not meet the download of
+        # a later add of the same processing
+        target = str(downloads / f"{processing.id}-{secrets.token_hex(4)}.geojson")
 
         @self._continuing(processing)
         def converted(task: ConvertTask):
@@ -143,8 +153,7 @@ class Results(QObject):
             self._tasks[processing.id] = task
             QgsApplication.taskManager().addTask(task)
 
-        self.api.download_result(processing.id, target, downloaded,
-                                 lambda error: self._fail(processing, f"Results didn't download: {error.message}"))
+        self.api.download_result(processing.id, target, downloaded, self._download_failed(processing))
 
     def _with_imagery(self, processing: Processing, vectors: list) -> None:
         """Add the source imagery under the results (its extent comes from the tilejson), then zoom."""
@@ -170,18 +179,25 @@ class Results(QObject):
                                            bounds_extent((tilejson or {}).get("bounds")),
                                            int((tilejson or {}).get("maxzoom") or 21)))
 
-        if processing.raster_tilejson_url:
-            self.api.tilejson(processing.raster_tilejson_url, with_extent,
-                              lambda _error: finish(self.layers.tile_raster(processing.raster_tile_url, name)))
-        else:
+        @self._continuing(processing)
+        def without_extent(_error=None):
             finish(self.layers.tile_raster(processing.raster_tile_url, name))
+
+        if processing.raster_tilejson_url:
+            self.api.tilejson(processing.raster_tilejson_url, with_extent, without_extent)
+        else:
+            without_extent()
 
     def _area_extent(self, processing: Processing, then: Callable[[Optional[QgsRectangle]], None]) -> None:
         """The bounding box of the processing's area (EPSG:3857), from Mapflow; None if it can't be had."""
         @self._continuing(processing)
         def done(collection: dict):
             then(features_extent(collection))
-        self.api.processing_aois(processing.id, done, lambda _error: then(None))
+
+        @self._continuing(processing)
+        def failed(_error):
+            then(None)
+        self.api.processing_aois(processing.id, done, failed)
 
     def save_geojson(self, processing: Processing, path: str, done: Callable[[str], None]) -> None:
         self._set_busy(processing.id, True)
@@ -191,14 +207,20 @@ class Results(QObject):
             self._set_busy(processing.id, False)
             done(saved)
 
-        self.api.download_result(processing.id, path, ok,
-                                 lambda error: self._fail(processing, f"Results didn't download: {error.message}"))
+        self.api.download_result(processing.id, path, ok, self._download_failed(processing))
+
+    def _download_failed(self, processing: Processing):
+        @self._continuing(processing)
+        def failed(error):
+            self._fail(processing, f"Results didn't download: {error.message}")
+        return failed
 
     def _continuing(self, processing: Processing):
-        """Decorator for a step that an HTTP callback hands on to. `_busy` is set from `add_to_map` until the
-        last step ends, so an exception in any step must clear it, or the processing stays "loading" until
-        sign-out. The exception is reported through the guard and not raised again: `Http` would otherwise run
-        the request's `on_error`, a fallback that continues the load after the flag was cleared."""
+        """Decorator for a step of a load: the synchronous start (`_load`) and every callback an HTTP request
+        hands on to, `on_error` ones included. `_busy` is set from `add_to_map` until the last step ends, so an
+        exception in any step must clear it, or the processing stays "loading" until sign-out. The exception is
+        reported through the guard and not raised again: `Http` would otherwise run the request's `on_error`, a
+        fallback that continues the load after the flag was cleared."""
         def decorate(step):
             @functools.wraps(step)
             def run(*args):

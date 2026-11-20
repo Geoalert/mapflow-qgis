@@ -70,13 +70,18 @@ def _positional_limit(fn) -> Optional[int]:
     return limit
 
 
-def guarded(fn):
-    """Wrap `fn` so that an `Exception` is reported and swallowed (`None` is returned). Use it as `@guarded`
-    on a method, or as `guarded(lambda ...)` / `guarded(other.method)` at a connection site.
+def guarded(fn=None, *, default=None):
+    """Wrap `fn` so that an `Exception` is reported and swallowed (`default`, which is `None` unless given, is
+    returned). Use it as `@guarded` on a method, or as `guarded(lambda ...)` / `guarded(other.method)` at a
+    connection site. A virtual method of Qt that has a result needs the `default` of the type Qt expects:
+    `@guarded(default=False)` on an event filter, because PyQt raises a `TypeError` for a `None` where it wants
+    a `bool`.
 
     Arguments beyond what `fn` takes are dropped. PyQt retries a plain slot with fewer arguments when the
     signal sends more than the slot takes (`lambda: ...` on `clicked(bool)`); a `*args` wrapper would hide
     that retry, and the resulting `TypeError` would be reported as a failure."""
+    if fn is None:
+        return functools.partial(guarded, default=default)
     limit = _positional_limit(fn)
 
     @functools.wraps(fn)
@@ -85,5 +90,5 @@ def guarded(fn):
             return fn(*(args if limit is None else args[:limit]), **kwargs)
         except Exception as exc:  # noqa: BLE001 - the last line of defence for Qt entry points
             report(exc, getattr(fn, "__qualname__", repr(fn)))
-            return None
+            return default
     return wrapper

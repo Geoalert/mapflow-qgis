@@ -182,6 +182,7 @@ class DropTarget(QObject):
         widget.setAcceptDrops(True)
         widget.installEventFilter(self)
 
+    @guarded(default=False)
     def eventFilter(self, obj, event) -> bool:
         kind = event.type()
         if kind in (QEvent.Type.DragEnter, QEvent.Type.DragMove, QEvent.Type.Drop):
@@ -212,6 +213,7 @@ class HoverTip(QObject):
         self.timer.timeout.connect(self._show)
         widget.installEventFilter(self)
 
+    @guarded(default=False)
     def eventFilter(self, obj, event) -> bool:
         kind = event.type()
         if kind == QEvent.Type.ToolTip:             # the children's come up here too: ours instead
@@ -233,6 +235,7 @@ class Combo(QComboBox):
     """A drop-down for scrolling pages: the mouse wheel over it scrolls the page instead of changing the
     value. Its list, once opened, takes the wheel as usual (the list gets those events, not the combo)."""
 
+    @guarded
     def wheelEvent(self, event) -> None:
         event.ignore()                          # left to the parent: the scroll area scrolls
 
@@ -267,6 +270,7 @@ class DropCard(Card):
             set_prop(self, "hover", event.type() == QEvent.Type.HoverEnter)
         return super().event(event)
 
+    @guarded
     def paintEvent(self, event) -> None:
         super().paintEvent(event)
         half = self.WIDTH / 2
@@ -382,11 +386,13 @@ class FocusRing:
     ring around what was just clicked. Mixed in before the Qt class; the property `focusring` is for QSS."""
     _keyboard_focus = False
 
+    @guarded
     def focusInEvent(self, event) -> None:
         self._keyboard_focus = event.reason() in KEYBOARD_FOCUS
         set_prop(self, "focusring", self._keyboard_focus)
         super().focusInEvent(event)
 
+    @guarded
     def focusOutEvent(self, event) -> None:
         self._keyboard_focus = False
         set_prop(self, "focusring", False)
@@ -408,6 +414,7 @@ class Toggle(FocusRing, QAbstractButton):
     def sizeHint(self) -> QSize:
         return QSize(36, 20)
 
+    @guarded
     def paintEvent(self, event) -> None:
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -555,6 +562,7 @@ class ImageTile(FocusRing, QAbstractButton):
     def sizeHint(self) -> QSize:
         return QSize(170, 156)
 
+    @guarded
     def paintEvent(self, event) -> None:
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -673,11 +681,13 @@ class OptionRow(QFrame):
         pixmap.setDevicePixelRatio(scale)
         self.dot.setPixmap(pixmap)
 
+    @guarded
     def mouseReleaseEvent(self, event) -> None:
         if event.button() == Qt.MouseButton.LeftButton and self.rect().contains(event_pos(event)):
             self.clicked.emit()
         super().mouseReleaseEvent(event)
 
+    @guarded
     def keyPressEvent(self, event) -> None:
         if event.key() in (Qt.Key.Key_Space, Qt.Key.Key_Return, Qt.Key.Key_Enter):
             self.clicked.emit()
@@ -745,6 +755,7 @@ class MetaWithNote(QWidget):
             picture.setContentsMargins(0, top, 0, 0)
             self.updateGeometry()                   # the block may be a pixel taller now
 
+    @guarded
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
         self._line_up_icon()
@@ -778,10 +789,12 @@ class FitLineEdit(QLineEdit):
         self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         self.textChanged.connect(guarded(lambda *_: self._editing or self.updateGeometry()))
 
+    @guarded
     def focusInEvent(self, event) -> None:
         super().focusInEvent(event)
         self._set_editing(True)
 
+    @guarded
     def focusOutEvent(self, event) -> None:
         super().focusOutEvent(event)
         self.setCursorPosition(0)                   # a long name shows from its start again
@@ -820,10 +833,12 @@ class ElidedLabel(QLabel):
     def full_text(self) -> str:
         return self._full
 
+    @guarded
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
         self._elide()
 
+    @guarded
     def changeEvent(self, event) -> None:
         super().changeEvent(event)
         if event.type() in (QEvent.Type.FontChange, QEvent.Type.StyleChange):

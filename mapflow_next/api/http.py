@@ -40,7 +40,8 @@ PLUGIN_FAILED_TEXT = ("Mapflow answered, but the plugin could not process the an
 @dataclass
 class ApiError:
     # auth | forbidden | not_found | client | server | offline | proxy | timeout | cancelled | plugin
-    # (plugin: the answer was fine, the caller's code failed on it)
+    # (plugin: the answer was fine, the caller's code failed on it; cancelled: the plugin asked for the abort
+    # itself, and nobody is told)
     kind: str
     message: str                  # ready to show
     status: Optional[int] = None
@@ -86,7 +87,7 @@ def parse_error_body(body: str):
 def classify(qt_error: int, status: Optional[int], body: str, url: str, timed_out: bool) -> ApiError:
     code, message, params = parse_error_body(body)
     readable = describe(code, params, message) if (code or message) else ""
-    if timed_out:
+    if timed_out or qt_error == QNetworkReply.NetworkError.TimeoutError:
         return ApiError("timeout", "Mapflow did not answer in time. Try again.", status, url=url, body=body)
     if qt_error == QNetworkReply.NetworkError.OperationCanceledError:
         return ApiError("cancelled", "Request cancelled.", status, url=url)
@@ -145,6 +146,7 @@ class _Pending:
     sent: int = 0                 # bytes of an upload sent so far, as the last progress said
     hops: int = 0                 # redirects followed so far
     redirect_refused: str = ""    # why a redirect was not followed
+    aborted: bool = False         # the plugin aborted the reply (`abort`, `abort_all`); any other abort is not its own
     response: str = ""            # the start of a decoded text or JSON answer: a report names it if the callback fails
 
 
@@ -213,10 +215,12 @@ class Http(QObject):
     def abort(self, request_id: int) -> None:
         pending = self._pending.get(request_id)
         if pending:
+            pending.aborted = True
             pending.reply.abort()
 
     def abort_all(self) -> None:
         for pending in list(self._pending.values()):
+            pending.aborted = True
             pending.reply.abort()
 
     def stop(self) -> None:
@@ -421,7 +425,11 @@ class Http(QObject):
             body = "" if pending.sink is not None else bytes(reply.readAll()).decode("utf-8", "replace")
             if pending.sink is not None:
                 pending.sink.cancelWriting()
-            error = classify(reply.error(), status, body, without_query(reply.url().toString()), pending.timed_out)
+            # An abort that the plugin did not ask for is QGIS's own network timeout (it aborts a reply that made no
+            # progress): the request ends as a timeout, through `on_error`, as one of the plugin's timer does
+            unasked = (reply.error() == QNetworkReply.NetworkError.OperationCanceledError and not pending.aborted)
+            error = classify(reply.error(), status, body, without_query(reply.url().toString()),
+                             pending.timed_out or unasked)
             QgsMessageLog.logMessage(f"{error.kind} {status} {error.url}: {error.code} {error.body[:500]}",
                                      PLUGIN_NAME, Qgis.MessageLevel.Warning)
             # A request sent with an access token renewed since says nothing about the current sign-in
@@ -463,7 +471,8 @@ class Http(QObject):
     def _fail(self, on_error: Optional[Callback], error: ApiError, reported: bool = False,
               pending: Optional[_Pending] = None) -> None:
         """`reported`: the guard has already told the user, so `failed` does not say it again. `pending` is the
-        request that failed, when there is one: a failing `on_error` is reported with it."""
+        request that failed, when there is one: a failing `on_error` is reported with it. A `cancelled` error is an
+        abort that the plugin asked for: the code that asked is not waiting for an outcome."""
         if error.kind == "cancelled":
             return
         if on_error:

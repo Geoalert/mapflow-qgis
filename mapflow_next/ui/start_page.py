@@ -202,6 +202,7 @@ class _MiniCard(Card):
         row.addLayout(texts, 1)
         self.add(row)
 
+    @guarded
     def mouseReleaseEvent(self, event) -> None:
         if event.button() == Qt.MouseButton.LeftButton and self.rect().contains(event_pos(event)):
             self.clicked.emit(self.processing_id)

@@ -1,4 +1,6 @@
 """Pure-Python tests: API parsing, the run draft (payload, estimate, issues) and scenario matching."""
+import re
+
 import pytest
 from pathlib import Path
 
@@ -759,6 +761,18 @@ def reporter():
     guard._reporter = saved
 
 
+def test_guard_returns_its_default_when_the_call_raises(reporter):
+    from mapflow_next.core.guard import guarded
+
+    @guarded(default=False)
+    def filter_event(value):
+        return 1 / value
+
+    assert filter_event(2) == 0.5
+    assert filter_event(0) is False
+    assert len(reporter) == 1
+
+
 def test_guard_returns_the_value_and_swallows_an_exception(reporter):
     from mapflow_next.core.guard import guarded
 
@@ -1014,6 +1028,8 @@ QT_SLOTS = {
 
 def _is_guarded_decorator(node):
     import ast
+    if isinstance(node, ast.Call):              # @guarded(default=False)
+        node = node.func
     return (isinstance(node, ast.Name) and node.id == "guarded") or \
         (isinstance(node, ast.Attribute) and node.attr == "guarded")
 
@@ -1161,6 +1177,58 @@ def test_every_entry_point_is_guarded():
                 s.connect(self.go)
         """))
     problems = _tree_problems_of(rule_entry_points)
+    assert not problems, "\n".join(problems)
+
+
+# Qt calls these methods of a class of the plugin: a `*Event` handler, an event filter, `QgsTask.finished` and
+# `QgsMapTool.deactivate`. An exception that leaves one opens the raw error dialog of QGIS, as one that leaves a slot.
+QT_VIRTUALS = re.compile(r"^(?:[a-z][A-Za-z]*Event|eventFilter|finished|deactivate)$")
+
+
+def rule_virtual_overrides(source):
+    """Every method that Qt calls by name (see QT_VIRTUALS) is decorated with `@guarded`."""
+    import ast
+    problems = []
+    for cls in ast.walk(ast.parse(source)):
+        if isinstance(cls, ast.ClassDef):
+            for node in cls.body:
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and QT_VIRTUALS.match(node.name) \
+                        and not _is_guarded_def(node):
+                    problems.append((node.lineno, f"`{cls.name}.{node.name}` is a Qt virtual method that is not "
+                                                  "guarded: decorate it with @guarded"))
+    return problems
+
+
+def test_every_qt_virtual_override_is_guarded():
+    _bites(rule_virtual_overrides, _src("""
+        class A(QgsMapTool):
+            def canvasReleaseEvent(self, event): pass
+        """), _src("""
+        class A(QgsMapTool):
+            @guarded
+            def canvasReleaseEvent(self, event): pass
+        """))
+    _bites(rule_virtual_overrides, _src("""
+        class A(QObject):
+            def eventFilter(self, obj, event): return False
+        """), _src("""
+        class A(QObject):
+            @guarded(default=False)
+            def eventFilter(self, obj, event): return False
+        """))
+    _bites(rule_virtual_overrides, _src("""
+        class A(QgsTask):
+            def finished(self, ok): pass
+        """), _src("""
+        class A(QgsTask):
+            @guarded
+            def finished(self, ok): pass
+        """))
+    _bites(rule_virtual_overrides, "class A:\n    def deactivate(self): pass\n",
+           "class A:\n    @guarded\n    def deactivate(self): pass\n")
+    # a method of another name, and a function outside a class, are not Qt's
+    assert not rule_virtual_overrides("class A:\n    def paint(self): pass\ndef keyPressEvent(e): pass\n")
+    problems = _tree_problems_of(rule_virtual_overrides)
     assert not problems, "\n".join(problems)
 
 
