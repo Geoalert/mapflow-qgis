@@ -46,9 +46,11 @@ The processing's area. "Run again" and "Download the area" read it.
   seconds after a refresh that failed for a transient reason (`005_interactions.md` § Failed requests).
   Not otherwise.
 - **Search** sends `terms`, so it covers the whole project and not only the pages already loaded. A
-  search is a separate listing with its own pages. The full listing stays loaded and keeps its poll:
-  the Start tab, the notices and the automatic add to map read the full listing, never the search
-  matches. Clearing the search returns to the full listing.
+  search is a separate listing with its own pages. The full listing stays loaded, and the Start tab
+  reads the full listing, never the search matches. Clearing the search returns to the full listing.
+- The poll watches every processing that is not final: on the full listing, on the search listing and
+  on the card that "Show" opened. Each of them gives the same notice and the same automatic add to
+  map, once.
 - "Show" in a notice opens the processing's card. If the processing is not on the loaded pages, the
   plugin fetches it by id (`GET /processings/{id}/v2`).
 - **Restart** is offered for a failed or a cancelled processing, to every role that may run one.

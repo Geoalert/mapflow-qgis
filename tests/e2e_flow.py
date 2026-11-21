@@ -2320,8 +2320,9 @@ def check_processing_search(iface, content, controller, processings, state):
     only the pages loaded. It waits for typing to pause. "Show more" and the poll keep the terms; an answer for an
     older text changes nothing; a search with no match, or one that failed, does not say the project is empty; a
     cleared field shows the full listing at once. The search is a listing of its own: the full listing stays loaded
-    and keeps its poll, and the Start tab, the notices and the automatic add to map read it. "Show" in a notice
-    fetches a processing that is not on the loaded pages. Everything the function changes is restored."""
+    and keeps its poll, and the Start tab reads it. The poll watches the full listing, the search listing and the
+    opened card: each gives the notice once, whichever sees the change first. "Show" in a notice fetches a
+    processing that is not on the loaded pages. Everything the function changes is restored."""
     from mapflow_next.core.models import Processing as ProcessingModel, Status
     from mapflow_next.ui.processings_page import ProcessingCard
     from mapflow_next.ui.start_page import _MiniCard
@@ -2336,7 +2337,10 @@ def check_processing_search(iface, content, controller, processings, state):
     failing = fixtures.processing_json("search-failing", "IN_PROGRESS", -300, name="Failing run")
     other = dict(fixtures.processing_json("search-other", "OK", 100, name="Other project run"), projectId="project-2")
     extra = [needle] + bulk + [running, slow]
-    ids = {item["id"] for item in extra + [late, failing, other]}
+    solo = fixtures.processing_json("search-solo", "OK", 100, name="Solo survey")
+    solo_two = fixtures.processing_json("search-solo-two", "OK", 100, name="Solo second")
+    live = fixtures.processing_json("search-live", "IN_PROGRESS", -5000, name="Live run")
+    ids = {item["id"] for item in extra + [late, failing, other, solo, solo_two, live]}
     warn = Qgis.MessageLevel.Warning
     finished, failed_notices, added = [], [], []
     processings.finished.connect(finished.append)
@@ -2388,7 +2392,7 @@ def check_processing_search(iface, content, controller, processings, state):
 
     state.page_delay = {}
     full, total = [], 0
-    state.processings = [needle] + state.processings + bulk + [running, slow, other]
+    state.processings = [solo, solo_two, needle] + state.processings + bulk + [running, slow, other]
     processings._poll.setInterval(60000)        # the flow leaves a short one: polls would blur the request counts
     try:
         reload()
@@ -2585,6 +2589,70 @@ def check_processing_search(iface, content, controller, processings, state):
         added.clear()
         wait_until(lambda: False, 0.3)
 
+        # the search listing gives notices too: two processings that only the search holds (they are the oldest)
+        reload()
+        check(processings.get("search-solo") is None and processings.get("search-solo-two") is None
+              and not processings._full.active,
+              "SEARCH NOTICES: the two old processings are not on the loaded pages, and those pages are all final")
+        solo.update(status="IN_PROGRESS", percentCompleted=-200)
+        solo_two.update(status="IN_PROGRESS", percentCompleted=-200)
+        finished.clear()
+        failed_notices.clear()
+        since = len(iface.bar.messages)
+        check(search("solo", 2) and all(p.status is Status.in_progress for p in processings.found),
+              "SEARCH NOTICES: the search finds both, in progress")
+        processings._poll.stop()
+        processings.refresh_shown(LOAD)
+        check(wait_until(lambda: not processings._full.loading and not processings._found.loading, 5)
+              and processings._found.active and not processings._full.active and processings._poll.isActive(),
+              "SEARCH NOTICES: the matches run and the loaded pages are final: the poll continues")
+        solo_two["status"] = "FAILED"
+        for _ in range(8):
+            if any(p.id == "search-solo" for p in finished):
+                break
+            processings._tick()
+            wait_until(lambda: not processings._full.loading and not processings._found.loading, 5)
+            wait_until(lambda: False, 0.2)
+        wait_until(lambda: False, 0.4)
+        check([p.id for p in finished] == ["search-solo"] and added == [],
+              f"SEARCH NOTICES: a processing that only the search holds gives one “is ready” notice "
+              f"({[p.id for p in finished]})")
+        check(any("“Solo survey” is ready." in (t or "") for t in lines()[since:]),
+              "SEARCH NOTICES: …in the message bar, with no automatic add to map (it was not started here)")
+        check([p.id for p in failed_notices] == ["search-solo-two"]
+              and any("“Solo second” failed." in (t or "") for t in lines()[since:]),
+              f"SEARCH NOTICES: …and one that fails gives one “failed” notice ({[p.id for p in failed_notices]})")
+        stale = model(dict(solo, status="IN_PROGRESS", percentCompleted=0))
+        processings._note(stale)
+        processings._note(model(solo))
+        processings._tick()
+        wait_until(lambda: not processings._full.loading and not processings._found.loading, 5)
+        wait_until(lambda: False, 0.3)
+        check([p.id for p in finished] == ["search-solo"] and processings._last_status["search-solo"] is Status.ok,
+              "SEARCH NOTICES: an older answer in progress does not give the notice a second time")
+        controller.on_failed(failed_notices[0])
+        press_show()
+        check(wait_until(lambda: page.opened is not None and page.opened.id == "search-solo-two", 5)
+              and page.expanded == "search-solo-two",
+              "SEARCH NOTICES: the “failed” notice has a “Show” action that opens the card")
+        processings._poll.stop()
+
+        # a search whose matches are final, with a processing of the full listing running: the poll continues
+        processings.opened = None
+        state.processings.append(live)
+        live.update(status="IN_PROGRESS", percentCompleted=-5000)
+        reload()
+        check(search("needle", 1) and not processings._found.active, "SEARCH POLL: the matches are all final")
+        processings._poll.stop()
+        processings.refresh_shown(LOAD)
+        check(wait_until(lambda: not processings._full.loading and not processings._found.loading, 5)
+              and processings._full.active and processings._poll.isActive(),
+              "SEARCH POLL: …a processing of the full listing runs: the poll continues")
+        processings._poll.stop()
+        state.processings.remove(live)
+        added.clear()
+        reload()
+
         # "Show" in a notice: the card of a processing that is not on the loaded pages is fetched by id
         reload()
         check(wait_until(lambda: len(names()) == 30 and processings.total == full_total(), 5),
@@ -2705,17 +2773,21 @@ def check_opened_card(iface, content, controller, processings, state):
     sent while the first runs. A restart from a search card shows at once. "Show" for a second processing drops the
     late answer for the first. With a search shown, one failed Refresh gives one "Processings didn't load" line and
     one stop of the spinner (after both answers), and the poll gives one alert. Everything the function changes is
-    restored."""
+    restored. The opened card gives the notice, once, and keeps the poll running while it is not final."""
     from mapflow_next.core.models import Processing as ProcessingModel, Status
     from mapflow_next.ui.processings_page import ProcessingCard
     page, path = content.processings, "/projects/project-1/processings/v2/page"
     saved_interval = processings._poll.interval()
+    added = []
+    controller.results.add_to_map = lambda processing: added.append(processing.id)
     old = fixtures.processing_json("opened-failed", "FAILED", 0, name="Old failed run")
     old["messages"] = [{"code": "dataloader.NoDataTile", "parameters": {}}]
     zebra = fixtures.processing_json("search-restart", "FAILED", 0, name="Zebra restart")
     fillers = [fixtures.processing_json(f"opened-filler-{n}", "OK", 100, name=f"Filler {n}") for n in range(1, 33)]
     running = fixtures.processing_json("opened-running", "IN_PROGRESS", -5000, name="Filler running")
-    ids = {item["id"] for item in [old, zebra, running] + fillers}
+    fresh_run = fixtures.processing_json("opened-fresh", "IN_PROGRESS", -5000, name="Old running run")
+    doomed = fixtures.processing_json("opened-doomed", "IN_PROGRESS", -5000, name="Old doomed run")
+    ids = {item["id"] for item in [old, zebra, running, fresh_run, doomed] + fillers}
     finished, failed_notices, refreshed = [], [], []
     processings.finished.connect(finished.append)
     processings.failed.connect(failed_notices.append)
@@ -2769,7 +2841,7 @@ def check_opened_card(iface, content, controller, processings, state):
         return done()
 
     state.page_delay = {}
-    state.processings = [old, zebra] + state.processings + fillers + [running]
+    state.processings = [doomed, fresh_run, old, zebra] + state.processings + fillers + [running]
     processings._poll.setInterval(60000)        # the checks tick by hand
     try:
         reload()
@@ -2797,8 +2869,18 @@ def check_opened_card(iface, content, controller, processings, state):
         check(tick_until(lambda: card("opened-failed") is not None
                          and card("opened-failed").processing.status is Status.ok),
               "OPENED: a poll answer brings the opened card to OK")
-        check(not [p for p in failed_notices + finished if p.id == "opened-failed"],
-              "OPENED: …and the opened card gives no notice")
+        wait_until(lambda: False, 0.5)
+        check([p.id for p in finished if p.id == "opened-failed"] == ["opened-failed"]
+              and not [p for p in failed_notices if p.id == "opened-failed"]
+              and added.count("opened-failed") == 1,
+              f"OPENED: …and the opened card gives one notice, and one automatic add to map "
+              f"({[p.id for p in finished]}, {added})")
+        for _ in range(3):
+            processings._tick()
+            settle()
+        wait_until(lambda: False, 0.3)
+        check(len([p for p in finished if p.id == "opened-failed"]) == 1 and added.count("opened-failed") == 1,
+              "OPENED: …later polls add nothing")
 
         # Rename of the opened card
         fetched = len(gets("opened-failed"))
@@ -2828,6 +2910,56 @@ def check_opened_card(iface, content, controller, processings, state):
         check(tick_until(lambda: card("search-restart") is not None
                          and card("search-restart").processing.status is Status.ok),
               "SEARCH CARD: …and a poll answer brings it to OK")
+        wait_until(lambda: False, 0.5)
+        check([p.id for p in finished].count("search-restart") == 1 and added.count("search-restart") == 1,
+              f"SEARCH CARD: …and the restart from a search card gives one notice, and one add to map "
+              f"({[p.id for p in finished]}, {added})")
+
+        # An old processing in progress that "Show" opens, while the loaded pages are final: the poll starts for
+        # the card, and its end is one notice
+        running.update(status="OK", percentCompleted=100)
+        fresh_run.update(status="IN_PROGRESS", percentCompleted=-100)
+        reload()
+        processings._poll.stop()
+        check(processings._full.loaded and not processings._full.active and not processings._poll.isActive(),
+              "OPENED POLL: the loaded pages are all final, and nothing is polled")
+        controller.open_processing("opened-fresh")
+        check(wait_until(lambda: processings.opened is not None and processings.opened.id == "opened-fresh", 5),
+              "OPENED POLL: “Show” fetches the old processing in progress")
+        check(processings.opened.status is Status.in_progress and processings._poll.isActive(),
+              "OPENED POLL: …and the poll runs for the card")
+        processings._poll.setInterval(200)
+        processings._poll.start()
+        check(wait_until(lambda: card("opened-fresh") is not None
+                         and card("opened-fresh").processing.status is Status.ok, 8),
+              "OPENED POLL: …and the card follows the processing to OK with no click")
+        wait_until(lambda: False, 0.5)
+        check([p.id for p in finished].count("opened-fresh") == 1 and not any(
+              p.id == "opened-fresh" for p in failed_notices),
+              f"OPENED POLL: …with one notice ({[p.id for p in finished]})")
+        processings._poll.stop()
+        processings._poll.setInterval(60000)
+
+        # An opened card that fails gives one "failed" notice
+        finished.clear()
+        reload()
+        processings._poll.stop()
+        controller.open_processing("opened-doomed")
+        check(wait_until(lambda: processings.opened is not None and processings.opened.id == "opened-doomed"
+                         and processings.opened.status is Status.in_progress, 5),
+              "OPENED FAIL: “Show” fetches the processing in progress again")
+        doomed["status"] = "FAILED"
+        processings._tick()
+        settle()
+        wait_until(lambda: processings.opened is not None and processings.opened.status is Status.failed, 5)
+        for _ in range(3):
+            processings._tick()
+            settle()
+        wait_until(lambda: False, 0.3)
+        check([p.id for p in failed_notices].count("opened-doomed") == 1
+              and not [p for p in finished if p.id == "opened-doomed"],
+              f"OPENED FAIL: the opened card that fails gives one “failed” notice "
+              f"({[p.id for p in failed_notices]})")
 
         # "Show" for A (not loaded), then at once for B (loaded): the late answer for A changes nothing
         reload()
@@ -2894,6 +3026,7 @@ def check_opened_card(iface, content, controller, processings, state):
         processings.finished.disconnect(finished.append)
         processings.failed.disconnect(failed_notices.append)
         processings.refreshed.disconnect(count_refreshed)
+        del controller.results.add_to_map
         state.heal()
         state.page_delay = {}
         processings._poll.stop()

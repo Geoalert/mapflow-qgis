@@ -1435,8 +1435,8 @@ class Controller(QObject):
         busy = {x.id for x in known if self.results.is_busy(x.id)}
         self.content.processings.mosaic_names = self.imagery.mosaic_names()
         self.content.processings.ratings = {**{x.id: x.rating for x in known if x.rating}, **self._ratings()}
-        # The page shows the matches while a search is on. Everything else (the Start tab, the notices) reads the
-        # full listing, which stays loaded.
+        # The page shows the matches while a search is on. The Start tab reads the full listing, which stays loaded;
+        # the notices come from every list the poll watches.
         shown = (p.found, p.found_total, p.found_loading, p.found_loading_more, p.found_loaded,
                  p.found_failed) if searching else (p.items, p.total, p.loading, p.loading_more, p.loaded,
                                                     p.load_failed)

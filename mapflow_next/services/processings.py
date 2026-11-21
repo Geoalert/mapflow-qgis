@@ -80,16 +80,15 @@ class Processings(QObject):
         super().__init__(parent)
         self.api = api
         self.project: Optional[Project] = None
-        self._full = _Listing()                 # the whole project, newest first: what the Start tab, the notices
-        #                                         and the automatic add to map read
+        self._full = _Listing()                 # the whole project, newest first: what the Start tab reads
         self._found = _Listing()                # the matches of `terms`: a search is a listing of its own
         self.terms = ""                         # the name search on screen; empty: the full listing is shown
         self.opened: Optional[Processing] = None    # fetched by id for "Show": it is not on the loaded pages
         self._open_token = 0                    # moves on every `open()` and on a new project: older answers drop
         self._opened_refresh = 0                # the newest refresh of `opened`: older answers are dropped
-        # The status of each watched processing in the full listing. Only the full listing writes it and sends
-        # notices. A processing in both lists still gives one notice: the first list that sees the change writes the
-        # final status here, so the second list sends nothing.
+        # The status of each processing a list or the opened card has shown. Every list and the opened card write it
+        # and send notices. A processing in two places still gives one notice: the first one that sees the change
+        # writes the final status here, so the second sends nothing.
         self._last_status: Dict[str, Status] = {}
         self.started_here: Set[str] = set()
         self._poll = QTimer(self)
@@ -275,8 +274,28 @@ class Processings(QObject):
             self._refresh_opened()
 
     def _watching(self) -> bool:
-        """A processing of a list in use is not final: the poll goes on."""
-        return self._full.active or bool(self.terms and self._found.active and not self._found.failures.stopped)
+        """A processing of the full listing, of the search listing in use, or the opened card is not final: the poll
+        goes on."""
+        return (self._full.active or bool(self.terms and self._found.active and not self._found.failures.stopped)
+                or (self.opened is not None and not self.opened.is_final))
+
+    def _resume_poll(self) -> None:
+        """Start the poll when something watched needs it and it is not running: an old processing in progress that
+        "Show" opened, while the loaded pages are final."""
+        if self._watching() and not self._poll.isActive():
+            self._schedule()
+
+    def _note(self, item: Processing, authority: bool = False) -> None:
+        """The status of a watched processing, from any list or the opened card. The first one that sees it reach a
+        final status gives the notice and writes the status; the others find it written and send nothing. Only the
+        full listing (`authority`) may move a final status back to a running one (a restart in Mapflow Web): an
+        older answer of the search or of the opened card must not, or the next answer would give the notice again."""
+        before = self._last_status.get(item.id)
+        if before is not None and before.is_terminal and not item.status.is_terminal and not authority:
+            return
+        self._last_status[item.id] = item.status
+        if before is not None and not before.is_terminal and item.status.is_terminal:
+            (self.finished if item.status is Status.ok else self.failed).emit(item)
 
     def refresh_shown(self, trigger: str) -> bool:
         """Refresh what the page may show: the full listing, and the search when there is one. False if there is
@@ -303,8 +322,10 @@ class Processings(QObject):
                 return
             if any(p.id == fresh.id for p in self._full.items):
                 return                          # it is on the loaded pages now: the listed copy is shown
+            self._note(fresh)
             self.opened = fresh
             self.changed.emit(self._full.items)
+            self._resume_poll()
 
         self.api.processing(processing_id, done)
 
@@ -365,8 +386,7 @@ class Processings(QObject):
         for item in items:
             if item.id not in known and item.id not in self._deleted:
                 listing.items.append(item)
-                if listing is self._full:
-                    self._last_status.setdefault(item.id, item.status)
+                self._last_status.setdefault(item.id, item.status)
         listing.total = max(total, len(listing.items))
         if listing is self._full:
             self._drop_opened_if_listed()
@@ -394,12 +414,8 @@ class Processings(QObject):
         listing.failures.succeeded()
         complete = len(items) < limit          # fewer than asked for: that is all there is
         items = [p for p in items if p.id not in self._deleted]
-        if listing is self._full:
-            for item in items:
-                before = self._last_status.get(item.id)
-                if before is not None and not before.is_terminal and item.status.is_terminal:
-                    (self.finished if item.status is Status.ok else self.failed).emit(item)
-                self._last_status[item.id] = item.status
+        for item in items:
+            self._note(item, authority=listing is self._full)
         listing.items = [p for p in _merge(items, listing.items, complete) if p.id not in self._deleted]
         listing.total = max(total, len(listing.items))
         listing.active = any(not p.is_final for p in items)
@@ -489,9 +505,11 @@ class Processings(QObject):
             if processing.project_id and processing.project_id != project_id:
                 self.actionFailed.emit("That processing is in another project.")
                 return
+            self._note(processing)
             if not any(p.id == processing.id for p in self._full.items):
                 self.opened = processing
                 self.changed.emit(self._full.items)
+                self._resume_poll()
 
         def failed(error: ApiError) -> None:
             if token == self._open_token and self.project and self.project.id == project_id:
