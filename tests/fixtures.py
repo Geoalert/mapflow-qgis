@@ -67,6 +67,15 @@ def processing_json(pid, status="IN_PROGRESS", percent=0, name="Buildings · Old
             "reviewStatus": None}
 
 
+def planned_json(pid, name, status="Created", project="project-1"):
+    """A planned processing as GET /processings/template/project/{id} sends it (spec/002_F § Template Object)."""
+    return {"id": pid, "name": name, "status": status, "createdAt": "2026-11-01T10:00:00Z", "userId": "u-1",
+            "projectId": project, "activeUntil": "2027-01-01T00:00:00Z", "lastCheckedAt": "2026-11-20T06:00:00Z",
+            "area": {"type": "Polygon",
+                     "coordinates": [[[37.6, 55.75], [37.61, 55.75], [37.61, 55.76], [37.6, 55.75]]]},
+            "newImagesCount": 3}
+
+
 RESULT = {"type": "FeatureCollection", "features": [
     {"type": "Feature", "properties": {"id": i, "class_id": 101, "area": 120.5, "bbox": {"xmin": 0}},
      "geometry": {"type": "Polygon", "coordinates": [[
@@ -85,6 +94,11 @@ CATALOG = {"images": [
      "footprint": {"type": "Polygon", "coordinates": [[
          [37.58, 55.73], [37.63, 55.73], [37.63, 55.77], [37.58, 55.77], [37.58, 55.73]]]}}],
     "total": 2, "limit": 50, "offset": 0}
+
+# GET /rasters/memory (spec/002_C § Storage Endpoints): limits above the plugin's built-in 2 GB and 30,000 px
+MEMORY = {"memoryLimit": 10 * 1024 ** 3, "memoryUsed": 500 * 1024 ** 2,
+          "memoryFree": 10 * 1024 ** 3 - 500 * 1024 ** 2, "maxUploadFileSize": 10 * 1024 ** 3,
+          "maxPixelCount": 100_000}
 
 MOSAICS = [{"id": "m-1", "name": "Drone survey March", "created_at": "2026-10-01T12:00:00Z", "sizeInBytes": 734003200,
             "footprint": "POLYGON((37.6 55.75, 37.61 55.75, 37.61 55.76, 37.6 55.76, 37.6 55.75))",

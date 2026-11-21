@@ -7,6 +7,7 @@ from qgis.PyQt.QtWidgets import QPushButton
 from qgis.core import Qgis
 
 from .. import config
+from ..core.guard import guarded
 
 
 def push(iface, text: str, level=Qgis.MessageLevel.Info, action: Optional[Tuple[str, Callable]] = None,
@@ -16,7 +17,7 @@ def push(iface, text: str, level=Qgis.MessageLevel.Info, action: Optional[Tuple[
     if action:
         widget = bar.createMessage(config.PLUGIN_SHORT_NAME, text)
         button = QPushButton(action[0], widget)
-        button.clicked.connect(lambda *_: action[1]())
+        button.clicked.connect(guarded(lambda *_: action[1]()))
         widget.layout().addWidget(button)
         bar.pushWidget(widget, level, duration)
     else:

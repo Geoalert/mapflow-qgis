@@ -11,13 +11,15 @@ from qgis.PyQt.QtWidgets import (QButtonGroup, QHBoxLayout, QLineEdit, QMenu, QP
 
 from .. import config
 from ..core import formatting
+from ..core.failures import empty_list_text
 from ..core.messages import describe
-from ..core.models import Processing, Status
+from ..core.models import PlannedProcessing, Processing, Status
 from . import icons
 from .start_page import model_icon, status_pill
 from .theme import set_prop, tokens
 from .widgets import (Card, ElidedLabel, Pill, Stars, button, clear_layout, event_pos, label, link, menu_action,
                       rule, tool)
+from ..core.guard import guarded
 
 FILTERS = (("all", "All"), ("running", "Running"), ("done", "Done"), ("attention", "Needs action"))
 
@@ -32,7 +34,8 @@ def source_text(processing: Processing, provider_names: Dict[str, str], mosaic_n
     if source.kind == "catalog":
         return f"{source.provider or 'Catalog'} image"
     if source.kind == "custom":
-        return "Custom imagery"
+        # The host only: an address can carry a key
+        return f"Custom tile layer ({source.host})" if source.host else "Custom tile layer"
     return ""
 
 
@@ -90,19 +93,19 @@ class ProcessingCard(Card):
                 add.setEnabled(False)
             elif in_map:
                 add = button("Show on map", "outline", "layers", size="sm")
-                add.clicked.connect(lambda *_: page.zoomTo.emit(pid))
+                add.clicked.connect(guarded(lambda *_: page.zoomTo.emit(pid)))
             else:
                 add = button("Add to map", "primary", "layers", size="sm")
-                add.clicked.connect(lambda *_: page.addToMap.emit(pid))
+                add.clicked.connect(guarded(lambda *_: page.addToMap.emit(pid)))
             row.addWidget(add, 1)
             save = button("GeoJSON", "outline", "download", size="sm")
             save.setToolTip("Save the results as a GeoJSON file")
             save.setEnabled(not busy)
-            save.clicked.connect(lambda *_: page.saveGeojson.emit(pid))
+            save.clicked.connect(guarded(lambda *_: page.saveGeojson.emit(pid)))
             row.addWidget(save)
-        elif processing.status is Status.failed and page.can_manage:
+        elif processing.status.can_restart and page.can_run:
             restart = button("Restart", "outline", "refresh", size="sm")
-            restart.clicked.connect(lambda *_: page.restart.emit(pid))
+            restart.clicked.connect(guarded(lambda *_: page.restart.emit(pid)))
             row.addWidget(restart)
             row.addStretch(1)
         else:
@@ -123,7 +126,7 @@ class ProcessingCard(Card):
         self.add(row)
 
         if processing.needs_review:
-            self.add(link("Review this result in Mapflow Web", config.WEB_URL))
+            self.add(link("Review this result in Mapflow Web", on_click=lambda: page.openWeb.emit(pid)))
         if processing.is_done:
             self.add(rule())
             rating = QHBoxLayout()
@@ -132,14 +135,46 @@ class ProcessingCard(Card):
             rating.addWidget(label("Your rating" if rated else "Rate the result", "label"))
             stars = Stars(self)
             stars.set_value(rated)
-            stars.rated.connect(lambda value: page.rate.emit(pid, value))   # opens the feedback form
+            stars.rated.connect(guarded(lambda value: page.rate.emit(pid, value)))   # opens the feedback form
             rating.addWidget(stars)
             rating.addStretch(1)
             self.add(rating)
 
+    @guarded
     def mouseReleaseEvent(self, event) -> None:
         if event.button() == Qt.MouseButton.LeftButton and self.rect().contains(event_pos(event)):
             self.clicked.emit(self.processing.id)
+        super().mouseReleaseEvent(event)
+
+
+class PlannedCard(Card):
+    """A planned processing: a mark, the name and the status. It has no actions; a click opens Mapflow Web."""
+    clicked = pyqtSignal(str)
+
+    def __init__(self, planned: PlannedProcessing):
+        super().__init__(margins=(14, 12, 14, 12), spacing=8)
+        self.planned = planned
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setToolTip("Open in Mapflow Web")
+        top = QHBoxLayout()
+        top.setSpacing(8)
+        icon = label("")
+        icon.setPixmap(icons.pixmap("search", tokens()["text"], 18))
+        top.addWidget(icon)
+        top.addWidget(ElidedLabel(planned.name, "title"), 1)
+        if planned.status_text:
+            top.addWidget(Pill(planned.status_text, planned.status_tone))
+        self.add(top)
+        marks = QHBoxLayout()
+        marks.setSpacing(8)
+        marks.addWidget(Pill("Search processing", "gray"))
+        marks.addStretch(1)
+        self.add(marks)
+
+    @guarded
+    def mouseReleaseEvent(self, event) -> None:
+        if event.button() == Qt.MouseButton.LeftButton and self.rect().contains(event_pos(event)):
+            self.clicked.emit(self.planned.id)
         super().mouseReleaseEvent(event)
 
 
@@ -152,24 +187,34 @@ class ProcessingsPage(QWidget):
     duplicate = pyqtSignal(str)
     delete = pyqtSignal(str)
     openWeb = pyqtSignal(str)
+    plannedOpened = pyqtSignal(str)         # a planned processing was clicked: its id
     rate = pyqtSignal(str, int)             # a star was clicked: the feedback form opens, nothing is sent yet
     downloadAoi = pyqtSignal(str)
     startRequested = pyqtSignal()
     refreshRequested = pyqtSignal()
     moreRequested = pyqtSignal()
+    openWebApp = pyqtSignal()               # the footer link: the controller opens Mapflow Web of the session
+    searchChanged = pyqtSignal(str)         # the trimmed text, once typing pauses (at once when it is empty)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("mfPage")
         self.items: List[Processing] = []
+        self.planned: List[PlannedProcessing] = []
         self.expanded: Optional[str] = None
         self.filter = "all"
         self.in_map: set = set()
         self.busy: set = set()
         self.can_manage = True
+        self.can_run = True
         self.loading = False
+        self.loaded, self.failed = True, False
         self.loading_more = False
         self.total = 0
+        self.terms = ""                             # the terms the list shown answers (the field may be ahead)
+        self.opened: Optional[Processing] = None    # a processing fetched by id: not on the loaded pages
+        self._scroll_pending: Optional[str] = None
+        self._scroll_waits: Optional[str] = None    # an id being fetched: scrolled to once its card is shown
         self.provider_names: Dict[str, str] = {}
         self.mosaic_names: Dict[str, str] = {}
         self.ratings: Dict[str, int] = {}           # processing id → the rating sent from here
@@ -191,7 +236,7 @@ class ProcessingsPage(QWidget):
             chip.setProperty("chip", True)
             chip.setCheckable(True)
             chip.setCursor(Qt.CursorShape.PointingHandCursor)
-            chip.clicked.connect(lambda _=False, k=key: self._set_filter(k))
+            chip.clicked.connect(guarded(lambda _=False, k=key: self._set_filter(k)))
             self.chips.addButton(chip)
             self.chip_buttons[key] = chip
             toolbar.addWidget(chip)
@@ -199,15 +244,19 @@ class ProcessingsPage(QWidget):
         toolbar.addStretch(1)
         outer.addLayout(toolbar)
         self.search = QLineEdit(self)
-        self.search.setPlaceholderText("Find by name or model")
+        self.search.setPlaceholderText("Find by name")
         self.search.setClearButtonEnabled(True)
         self.search.addAction(icons.icon("search", tokens()["text2"], 16), QLineEdit.ActionPosition.LeadingPosition)
-        self.search.textChanged.connect(lambda _: self._render())
+        self._debounce = QTimer(self)
+        self._debounce.setSingleShot(True)
+        self._debounce.setInterval(config.PROCESSINGS_SEARCH_DEBOUNCE_MS)
+        self._debounce.timeout.connect(guarded(lambda: self.searchChanged.emit(self.search.text().strip())))
+        self.search.textChanged.connect(guarded(lambda _: self._typed()))
         search_row = QHBoxLayout()
         search_row.setContentsMargins(16, 4, 16, 4)
         search_row.addWidget(self.search, 1)
         refresh = tool("refresh", "Refresh")       # here, so the filter chips keep the full width
-        refresh.clicked.connect(lambda *_: (self.set_refreshing(True), self.refreshRequested.emit()))
+        refresh.clicked.connect(guarded(lambda *_: (self.set_refreshing(True), self.refreshRequested.emit())))
         search_row.addWidget(refresh)
         self.refresh_button = refresh
         outer.addLayout(search_row)
@@ -229,16 +278,16 @@ class ProcessingsPage(QWidget):
         empty_layout = QVBoxLayout(self.empty)
         empty_layout.setContentsMargins(0, 24, 0, 0)
         empty_layout.setSpacing(10)
-        self.empty_text = label("No processings in this project yet.", "lead", wrap=True)
+        self.empty_text = label("Loading processings…", "lead", wrap=True)
         self.empty_text.setAlignment(Qt.AlignmentFlag.AlignCenter)
         start = button("Start mapping", "primary", "play")
-        start.clicked.connect(lambda *_: self.startRequested.emit())
+        start.clicked.connect(guarded(lambda *_: self.startRequested.emit()))
         self.start_button = start
         empty_layout.addWidget(self.empty_text)
         empty_layout.addWidget(start, 0, Qt.AlignmentFlag.AlignHCenter)
         footer = QHBoxLayout()
         footer.setContentsMargins(16, 0, 16, 10)
-        footer.addWidget(link("Statistics and sharing in Mapflow Web", config.WEB_URL))
+        footer.addWidget(link("Statistics and sharing in Mapflow Web", on_click=lambda: self.openWebApp.emit()))
         footer.addStretch(1)
         outer.addLayout(footer)
 
@@ -254,7 +303,7 @@ class ProcessingsPage(QWidget):
         elif self._spin.isActive():
             if time.monotonic() < self._spin_until:
                 QTimer.singleShot(int((self._spin_until - time.monotonic()) * 1000) + 10,
-                                  lambda: self.set_refreshing(False))
+                                  guarded(lambda: self.set_refreshing(False)))
                 return
             self._spin.stop()
             self._angle = 0
@@ -265,6 +314,7 @@ class ProcessingsPage(QWidget):
     def refreshing(self) -> bool:
         return self._spin.isActive()
 
+    @guarded
     def _turn(self) -> None:
         self._angle = (self._angle + 30) % 360
         pixmap = icons.pixmap("refresh", tokens()["primary_ink"], 16)
@@ -274,6 +324,21 @@ class ProcessingsPage(QWidget):
         frame = turned.copy(x, y, side, side)
         frame.setDevicePixelRatio(pixmap.devicePixelRatio())
         self.refresh_button.setIcon(QIcon(frame))
+
+    def _typed(self) -> None:
+        """The text of the field changed: the search goes to Mapflow once typing pauses. Nothing is filtered here."""
+        if self.search.text().strip():
+            self._debounce.start()
+        else:
+            self._debounce.stop()               # nothing to wait for: the full list is asked for at once
+            self.searchChanged.emit("")
+
+    def clear_search(self) -> None:
+        """Empty the field without a search (a new project starts with the full list)."""
+        self._debounce.stop()
+        self.search.blockSignals(True)
+        self.search.clear()
+        self.search.blockSignals(False)
 
     def _set_filter(self, key: str) -> None:
         self.filter = key
@@ -288,22 +353,35 @@ class ProcessingsPage(QWidget):
                 "attention": sum(1 for p in self.items if p.status is Status.failed or p.needs_review)}
 
     def set_items(self, items: List[Processing], in_map: set, busy: set, can_manage: bool, loading: bool = False,
-                  total: int = 0, loading_more: bool = False) -> None:
+                  total: int = 0, loading_more: bool = False, loaded: bool = True, failed: bool = False,
+                  can_run: bool = True, terms: str = "", opened: Optional[Processing] = None,
+                  planned: Optional[List[PlannedProcessing]] = None) -> None:
+        """`loaded`: a list of this project came back. `failed`: the last answer was a failure. The "no
+        processings" text needs a successful answer with no items. `terms`: the search the list answers.
+        `opened`: a processing that is not among `items` and has its card above them. It is no part of the counts
+        or of "Show more". `planned`: the project's planned processings, shown above the cards under "All" and
+        while no search is on."""
+        self.opened = opened
+        self.planned = list(planned or [])
+        if opened is not None and opened.id == self._scroll_waits:
+            self._scroll_pending, self._scroll_waits = opened.id, None
         self.items, self.in_map, self.busy, self.can_manage = items, in_map, busy, can_manage
         self.loading, self.total, self.loading_more = loading, max(total, len(items)), loading_more
+        self.loaded, self.failed, self.can_run, self.terms = loaded, failed, can_run, terms
         if self.expanded is None and items:
             self.expanded = items[0].id
         self._render()
 
-    def expand(self, processing_id: str) -> None:
-        """Open one processing: shown, expanded and scrolled to."""
+    def expand(self, processing_id: str, fetching: bool = False) -> None:
+        """Open one processing: shown, expanded and scrolled to. `fetching`: its card is not here yet (it is being
+        fetched by id), so the scroll waits for it."""
         self.expanded = processing_id
         self.filter = "all"
         self.chip_buttons["all"].setChecked(True)
+        self._scroll_pending, self._scroll_waits = (None, processing_id) if fetching else (processing_id, None)
         if self.search.text():
-            self.search.clear()                 # or the search may hide it
+            self.search.clear()                 # or the search may hide it: the full list is asked for at once
         self._render()
-        QTimer.singleShot(0, lambda: self._scroll_to(processing_id))    # after _render restores the scroll
 
     def _scroll_to(self, processing_id: str) -> None:
         cards = (self.list.itemAt(i).widget() for i in range(self.list.count()))
@@ -311,20 +389,17 @@ class ProcessingsPage(QWidget):
         if card is not None:
             self.scroll.ensureWidgetVisible(card, 0, 40)
 
+    def _passes(self, p: Processing) -> bool:
+        if self.filter == "running":
+            return p.is_running
+        if self.filter == "done":
+            return p.is_done and not p.needs_review
+        if self.filter == "attention":
+            return p.status is Status.failed or p.needs_review
+        return True
+
     def _visible(self) -> List[Processing]:
-        needle = self.search.text().strip().lower()
-        result = []
-        for p in self.items:
-            if self.filter == "running" and not p.is_running:
-                continue
-            if self.filter == "done" and not (p.is_done and not p.needs_review):
-                continue
-            if self.filter == "attention" and not (p.status is Status.failed or p.needs_review):
-                continue
-            if needle and needle not in f"{p.name} {p.model_name}".lower():
-                continue
-            result.append(p)
-        return result
+        return [p for p in self.items if self._passes(p)]
 
     def _render(self) -> None:
         self.list.removeWidget(self.empty)
@@ -335,40 +410,54 @@ class ProcessingsPage(QWidget):
         for key, text in FILTERS:
             self.chip_buttons[key].setText(f"{text} {counts[key]}" if counts[key] else text)
         visible = self._visible()
-        for processing in visible:
+        if not self.terms and self.filter == "all":
+            for planned in self.planned:
+                row = PlannedCard(planned)
+                row.clicked.connect(guarded(lambda planned_id: self.plannedOpened.emit(planned_id)))
+                self.list.addWidget(row)
+        # Above the cards: it is on none of the loaded pages, so its place among them is not known
+        extra = self.opened if self.opened is not None and self._passes(self.opened) else None
+        for processing in ([extra] if extra else []) + visible:
             card = ProcessingCard(processing, source_text(processing, self.provider_names, self.mosaic_names),
                                   processing.id in self.in_map, processing.id in self.busy,
                                   processing.id == self.expanded, self)
             card.clicked.connect(self._toggle)
             self.list.addWidget(card)
         partial = len(self.items) < self.total
-        if self.loading:
-            self.empty_text.setText("Loading processings…")
-        elif not self.items:
-            self.empty_text.setText("No processings in this project yet.")
+        if not self.items:
+            if self.terms and self.loaded and not self.loading and not self.failed:
+                self.empty_text.setText(f"No processings match “{self.terms}”.")
+            else:
+                self.empty_text.setText(empty_list_text("processings", "No processings in this project yet.",
+                                                        self.loaded, self.loading, self.failed))
         elif partial:
             self.empty_text.setText(f"Nothing matches this filter among the latest {len(self.items):,} of "
                                     f"{self.total:,} processings.")
         else:
             self.empty_text.setText("Nothing matches this filter.")
-        self.start_button.setVisible(not self.loading and not self.items)
+        self.start_button.setVisible(self.loaded and not self.failed and not self.loading and not self.items
+                                     and not self.terms)
         self.list.addWidget(self.empty)
-        self.empty.setVisible(not visible)
+        self.empty.setVisible(not visible and extra is None)
         if visible and partial:
-            # Older processings, one page at a time. Filters and search apply to the loaded ones; with
+            # Older processings, one page at a time. The status filters apply to the loaded ones; with
             # nothing shown, a button whose pages may show nothing either would read as broken.
             more = button("Loading…" if self.loading_more else
                           f"Show more · {len(self.items):,} of {self.total:,}", "outline")
             more.setEnabled(not self.loading_more)
-            more.clicked.connect(lambda *_: self.moreRequested.emit())
+            more.clicked.connect(guarded(lambda *_: self.moreRequested.emit()))
             self.more_button = more
             self.list.addWidget(more, 0, Qt.AlignmentFlag.AlignHCenter)
         else:
             self.more_button = None
         self.list.addStretch(1)
         bar.setValue(position)
-        QTimer.singleShot(0, lambda: bar.setValue(position))   # polling re-renders: keep the reader's place
+        QTimer.singleShot(0, guarded(lambda: bar.setValue(position)))   # polling re-renders: keep the reader's place
+        if self._scroll_pending and not self.loading:
+            target, self._scroll_pending = self._scroll_pending, None
+            QTimer.singleShot(0, guarded(lambda: self._scroll_to(target)))     # after the scroll above is restored
 
+    @guarded
     def _toggle(self, processing_id: str) -> None:
         self.expanded = None if self.expanded == processing_id else processing_id
         self._render()

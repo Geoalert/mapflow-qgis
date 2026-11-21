@@ -148,6 +148,13 @@ def footprint(wkts: List[str]) -> Optional[QgsGeometry]:
     return None if _unusable(merged) else _polygons(merged)
 
 
+def catalog_footprint(geometry: Optional[dict]) -> Optional[QgsGeometry]:
+    """A catalog image's footprint (GeoJSON, WGS84) as a valid polygon geometry, as `footprint` returns it.
+    None when it is missing or unusable."""
+    wkt = _geojson_to_wkt(geometry)
+    return footprint([wkt]) if wkt else None
+
+
 def geometry_from_geojson(geometry: dict) -> Optional[QgsGeometry]:
     from osgeo import ogr
     parsed = ogr.CreateGeometryFromJson(json.dumps(geometry)) if geometry else None

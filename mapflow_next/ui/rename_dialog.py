@@ -7,6 +7,7 @@ from qgis.PyQt.QtWidgets import QDialog, QHBoxLayout, QLineEdit, QPlainTextEdit,
 
 from .theme import stylesheet
 from .widgets import button, label
+from ..core.guard import guarded
 
 
 class RenameDialog(QDialog):
@@ -34,15 +35,15 @@ class RenameDialog(QDialog):
         buttons = QHBoxLayout()
         buttons.addStretch(1)
         cancel = button("Cancel", "ghost")
-        cancel.clicked.connect(lambda *_: self.reject())
+        cancel.clicked.connect(guarded(lambda *_: self.reject()))
         self.save = button(action, "primary")
-        self.save.clicked.connect(lambda *_: self.accept())
+        self.save.clicked.connect(guarded(lambda *_: self.accept()))
         self.save.setDefault(True)
         buttons.addWidget(cancel)
         buttons.addWidget(self.save)
         layout.addSpacing(6)
         layout.addLayout(buttons)
-        self.name.textChanged.connect(lambda text: self.save.setEnabled(bool(text.strip())))
+        self.name.textChanged.connect(guarded(lambda text: self.save.setEnabled(bool(text.strip()))))
         self.save.setEnabled(bool(name.strip()))
         self.name.setFocus()
 

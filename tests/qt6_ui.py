@@ -51,6 +51,49 @@ def shot(widget, name, size=None):
         widget.grab().save(str(SHOTS / f"{name}.png"))
 
 
+class Opened:
+    """Takes `https` links instead of the system browser, so a check reads the address a link opens."""
+
+    def __init__(self):
+        from PyQt6.QtCore import QObject, QUrl, pyqtSlot
+        from PyQt6.QtGui import QDesktopServices
+        self.urls = []
+        outer = self
+
+        class Handler(QObject):
+            @pyqtSlot(QUrl)
+            def handle(self, url):
+                outer.urls.append(url.toString())
+
+        self._handler = Handler()
+        QDesktopServices.setUrlHandler("https", self._handler, "handle")
+
+    def close(self):
+        from PyQt6.QtGui import QDesktopServices
+        QDesktopServices.unsetUrlHandler("https")
+
+
+TERMS = "https://mapflow.ai/terms-of-use-en.pdf"
+
+
+def check_terms_link(sign_in, label):
+    """The sign-in page's "Terms of use" link shows, fits the page, and opens the terms address on a click."""
+    terms = getattr(sign_in, "terms", None)
+    check(terms is not None and terms.isVisible() and terms.text().startswith("Terms of use"),
+          f"{label}: the sign-in page shows the \"Terms of use\" link")
+    if terms is None:
+        return
+    right = terms.mapTo(sign_in, QPoint(terms.width(), 0)).x()
+    check(0 <= terms.mapTo(sign_in, QPoint(0, 0)).x() and right <= sign_in.width(),
+          f"{label}: the link is not cut off ({right} of {sign_in.width()} px)")
+    opened = Opened()
+    try:
+        terms.click()
+        check(opened.urls == [TERMS], f"{label}: the link opens the terms of use ({opened.urls})")
+    finally:
+        opened.close()
+
+
 def spin(ms=50):
     QTest.qWait(ms)
 
@@ -67,8 +110,8 @@ print(f"Qt {PyQt6.QtCore.QT_VERSION_STR}, PyQt {PyQt6.QtCore.PYQT_VERSION_STR}")
 
 from mapflow_next import config  # noqa: E402
 from mapflow_next.core.draft import Issue  # noqa: E402
-from mapflow_next.core.models import (CatalogImage, Mosaic, MosaicImage, Processing, Project,  # noqa: E402
-                                      UserStatus)
+from mapflow_next.core.models import (CatalogImage, Mosaic, MosaicImage, PlannedProcessing, Processing,  # noqa: E402
+                                      Project, UserStatus)
 from mapflow_next.core.scenarios import Catalogue  # noqa: E402
 
 from . import fixtures  # noqa: E402
@@ -115,6 +158,7 @@ def _dock():
         others.click()
         spin()
     shot(content, "q6-01-sign-in")
+    check_terms_link(sign_in, "light theme")
     content.set_account("me@example.com")
     content.set_credits("1,240", "Credits left")
     content.set_project(project)
@@ -142,6 +186,30 @@ def _menu():
     actions["Settings…"].trigger()
     actions["Sign out"].trigger()
     check(settings and sign_out, "Settings… and Sign out work on Qt 6 (QAction.triggered passes checked)")
+
+
+@step("dock: upgrade page")
+def _upgrade():
+    from mapflow_next.ui.dock import PAGE_UPGRADE, DockContent
+    content = DockContent(catalogue)
+    content.resize(400, 880)
+    content.show()
+    content.show_upgrade("5.0.0", "4.0.0")
+    page = content.upgrade
+    check(content.stack.currentWidget() is page and content.stack.currentIndex() == PAGE_UPGRADE,
+          "the upgrade page is the current page")
+    check(not content.header.isVisible() and not content.tabs.isVisible() and not content.footer.isVisible(),
+          "header, tabs and footer are hidden on it")
+    text = page.message.text()
+    check("5.0.0" in text and "4.0.0" in text and "Upgrade" in text,
+          f"it names both versions and says to upgrade ({text})")
+    upgrade, sign_out = recorder(page.upgradeRequested), recorder(page.signOutRequested)
+    page.upgrade.click()
+    page.sign_out.click()
+    check(len(upgrade) == 1 and len(sign_out) == 1, "its two buttons emit upgradeRequested and signOutRequested")
+    shot(content, "q6-01c-upgrade")
+    content.show_signed_out()
+    check(content.stack.currentWidget() is content.sign_in, "show_signed_out leaves the upgrade page")
 
 
 @step("run form")
@@ -211,8 +279,43 @@ def _run():
     spin()
     eyes = [b for b in run.findChildren(QToolButton) if b.toolTip() == "Hide the preview" and b.isVisible()]
     check(len(eyes) == 1 and eyes[0].property("on") is True, "the eye shows a preview on the map as on")
+    tiles = rows + [ImageryRow(key="tile:l1", title="Tiles XYZ", meta="zoom 2–17", price="In estimate",
+                               zooms=list(range(2, 18)), zoom=17, group="QGIS tile layers"),
+                    ImageryRow(key="tile:l2", title="Tiles local", meta="Its host is this computer or a private "
+                               "network address. Mapflow cannot reach it.", group="QGIS tile layers",
+                               disabled=True)]
+    run.set_imagery(tiles, "tile:l1")
+    spin()
+    heading = [label.text() for label in run.group_labels]
+    disabled = run._rows[-1]
+    chosen = recorder(run.imageryChosen)
+    disabled.clicked.emit()
+    check(heading == ["QGIS tile layers"] and len(run._rows) == 4 and not disabled.isEnabled()
+          and disabled.toolTip() == disabled.meta.text() and not chosen
+          and not [t for t in run._rows[-2].findChildren(QToolButton) if t.toolTip().startswith("Preview")],
+          "a tile layer is a row under its heading, a disabled one shows its reason and chooses nothing")
+    shot(content, "q6-03b-run-tiles")
     run.set_issues([Issue("area", "Choose an area")], False)
     check(not run.run_button.isEnabled(), "an issue disables Run")
+
+
+@step("tile login alert")
+def _tile_alert():
+    from mapflow_next.ui.tile_login_alert import TEXT, TileLoginAlert
+    box = TileLoginAlert("Tiles XYZ")
+    box.show()
+    check(box.text() == TEXT.replace("{layer}", "Tiles XYZ") and box.send_button.text() == "Send and run"
+          and box.cancel_button.text() == "Cancel" and box.checkbox.text() == "Don't show this again"
+          and box.defaultButton() is box.cancel_button, "the tile login alert shows the text, the buttons and the box")
+    box.checkbox.setChecked(True)
+    box.send_button.click()
+    sent = box.outcome()
+    box = TileLoginAlert("Tiles XYZ")
+    box.show()
+    box.checkbox.setChecked(True)
+    box.cancel_button.click()
+    check(sent == (True, True) and box.outcome() == (False, False),
+          "Send and run keeps the box, Cancel never does")
 
 
 @step("rename dialog")
@@ -234,6 +337,114 @@ def _rename():
           "the name dialog runs modally with exec() and returns the name and description")
 
 
+@step("report dialog")
+def _report_dialog():
+    from urllib.parse import parse_qs, urlsplit
+    from PyQt6.QtCore import QObject, QUrl, pyqtSlot
+    from mapflow_next.core.report import Environment, RequestInfo, technical_text
+    from mapflow_next.ui.report_dialog import ReportDialog
+    from PyQt6.QtGui import QDesktopServices
+
+    class Mail(QObject):
+        def __init__(self):
+            super().__init__()
+            self.opened = []
+
+        @pyqtSlot(QUrl)
+        def handle(self, url):
+            self.opened.append(url.toString(QUrl.ComponentFormattingOption.FullyEncoded))
+
+    mail = Mail()
+    QDesktopServices.setUrlHandler("mailto", mail, "handle")
+    request = RequestInfo("GET", "https://api.example.com/rest/user/status?token=SECRET", 200,
+                          '{"access_token": "AAA", "name": "kept"}')
+    environment = Environment("4.0.0", "4.2.0", "6.8.0", "Linux", "production")
+    technical = technical_text("ValueError: boom", "Traceback (most recent call last):\nValueError: boom",
+                               request, environment)
+    dialog = ReportDialog("ValueError: boom", technical, config.SUPPORT_EMAIL, "4.0.0")
+    dialog.show()
+    shot(dialog, "q6-report-dialog", QSize(600, 560))
+    check(dialog.summary_label.text() == "ValueError: boom", "the report dialog shows the one-line summary")
+    check(dialog.report_view.isReadOnly() and dialog.report_view.toPlainText() == technical
+          and "Request: GET https://api.example.com/rest/user/status\n" in technical
+          and "SECRET" not in technical and "AAA" not in technical,
+          "the technical text is read-only, and has the request without its query and without secrets")
+    check(dialog.report_text() == technical, "without a comment the report is the technical text")
+    dialog.comment.setPlainText("I pressed Run")
+    check(dialog.report_text() == "I pressed Run\n\n" + technical, "the comment goes above the technical text")
+    dialog.send()
+    check(len(mail.opened) == 1 and mail.opened[0].startswith(f"mailto:{config.SUPPORT_EMAIL}?subject=")
+          and parse_qs(urlsplit(mail.opened[0]).query)["body"] == [dialog.report_text().replace("\n", "\r\n")],
+          "Send opens a mailto: link to Mapflow support with the report")
+    dialog.copy()
+    check(QApplication.clipboard().text() == dialog.report_text(), "Copy puts the same text on the clipboard")
+    dialog.close()
+
+
+def _available_for_me(page, searched) -> None:
+    from mapflow_next.ui.widgets import Toggle
+    switch = getattr(page, "available", None)
+    check(isinstance(switch, Toggle) and not switch.isChecked() and switch.accessibleName() == "Available for me",
+          "Search has an \"Available for me\" switch, off by default")
+    check(searched[-1][0].get("hide_unavailable") is False, "Search sends hide_unavailable False by default")
+    sent = len(searched)
+    switch.setChecked(True)
+    check(len(searched) == sent, "moving the switch asks for no search")
+    page.search_button.click()
+    check(len(searched) == sent + 1 and searched[-1][0].get("hide_unavailable") is True,
+          "Search sends hide_unavailable True when the switch is on")
+    switch.setChecked(False)
+    page.search_button.click()
+    check(searched[-1][0].get("hide_unavailable") is False, "…and False again when it is turned off")
+
+
+def _off_nadir(page, searched):
+    from mapflow_next.ui.widgets import RangeSlider
+    nadir = page.nadir
+    check(isinstance(nadir, RangeSlider) and (nadir.low(), nadir.high()) == (0, 30)
+          and (nadir.minimum(), nadir.maximum()) == (0, 30) and page.nadir_value.text() == "0°–30°",
+          "the off-nadir control is a range slider, 0-30 by default, and its label shows both ends")
+    check(nadir.height() >= 20, f"the range slider is tall enough for its handle ({nadir.height()} px)")
+    changes, sent = recorder(nadir.valuesChanged), len(searched)
+    nadir.setValues(10, 25)
+    check(changes == [(10, 25)] and page.nadir_value.text() == "10°–25°" and len(searched) == sent,
+          f"setValues moves both handles, shows both ends, and asks for no search ({changes})")
+    nadir.setValues(10, 25)
+    check(len(changes) == 1, "a value that does not change emits nothing")
+    nadir.setValues(28, 3)
+    check(0 <= nadir.low() <= nadir.high() <= 30, f"values are clamped, low <= high ({nadir.low()}, {nadir.high()})")
+    nadir.setValues(-5, 99)
+    check((nadir.low(), nadir.high()) == (0, 30), "values out of range are clamped to 0-30")
+    nadir.setValues(10, 25)
+    page.search_button.click()
+    check(searched[-1][0]["min_off_nadir"] == 10.0 and searched[-1][0]["max_off_nadir"] == 25.0
+          and len(searched) == sent + 1, "Search sends the range that was set")
+    middle, none = nadir.height() // 2, Qt.KeyboardModifier.NoModifier
+
+    def drag(start, end):
+        QTest.mousePress(nadir, Qt.MouseButton.LeftButton, none, QPoint(start, middle))
+        QTest.mouseMove(nadir, QPoint(end, middle))
+        QTest.mouseRelease(nadir, Qt.MouseButton.LeftButton, none, QPoint(end, middle))
+    drag(nadir.width() - 8, nadir.width() // 2)
+    check(nadir.low() == 10 and 10 <= nadir.high() < 25, f"dragging the high handle lowers it ({nadir.high()})")
+    drag(nadir.width() // 2, 2)
+    check(nadir.low() <= nadir.high() and nadir.low() <= 10,
+          f"a handle never crosses the other ({nadir.low()}, {nadir.high()})")
+    nadir.setValues(10, 25)
+    nadir.setFocus()
+    before = (nadir.low(), nadir.high())
+    QTest.keyClick(nadir, Qt.Key.Key_Left)
+    moved = (nadir.low(), nadir.high())
+    check(sum(abs(a - b) for a, b in zip(before, moved)) == 1,
+          f"the Left key moves a handle by 1 ({before} -> {moved})")
+    QTest.keyClick(nadir, Qt.Key.Key_Home)
+    QTest.keyClick(nadir, Qt.Key.Key_End)
+    check(nadir.low() <= nadir.high() and 0 <= nadir.low() and nadir.high() <= 30,
+          f"Home and End keep the handles in range ({nadir.low()}, {nadir.high()})")
+    check(len(searched) == sent + 1, "no search was asked for while the control moved")
+    nadir.setValues(0, 30)
+
+
 @step("imagery search and My imagery")
 def _imagery():
     from mapflow_next.ui.imagery_page import MINE, SEARCH
@@ -249,6 +460,10 @@ def _imagery():
     page.cloud.setValue(35)
     page.search_button.click()
     check(searched and searched[-1][0]["max_cloud"] == 35.0, "Search sends the slider's cloud cover")
+    check(searched[-1][0]["min_off_nadir"] == 0.0 and searched[-1][0]["max_off_nadir"] == 30.0,
+          "Search sends both ends of the off-nadir range, the full 0-30 by default")
+    _available_for_me(page, searched)
+    _off_nadir(page, searched)
     images = [CatalogImage.from_api(item) for item in fixtures.CATALOG["images"]]
     page.set_results(images, len(images), None)
     spin()
@@ -304,6 +519,19 @@ def _processings():
                 break
     check(rename or not menus, f"the processing menu's Rename works ({len(menus)} menus)")
 
+    page.set_items(items, set(), set(), True, total=30,
+                   planned=[PlannedProcessing.from_api(fixtures.planned_json("tpl-1", "Harbor watch", "Searching"))])
+    spin()
+    layout = [page.list.itemAt(i).widget() for i in range(page.list.count())]
+    kinds = [type(w).__name__ for w in layout if type(w).__name__ in ("PlannedCard", "ProcessingCard")]
+    planned = next((w for w in layout if type(w).__name__ == "PlannedCard"), None)
+    check(kinds[:2] == ["PlannedCard", "ProcessingCard"] and planned is not None
+          and not planned.findChildren(QToolButton), f"a planned processing shows first, with no menu ({kinds[:2]})")
+    opened = recorder(page.plannedOpened)
+    if planned is not None:
+        QTest.mouseClick(planned, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, QPoint(20, 12))
+    check(opened == [("tpl-1",)], f"clicking a planned processing emits its id (mouse position on Qt 6) ({opened})")
+
 
 @step("projects window")
 def _projects():
@@ -325,6 +553,25 @@ def _projects():
     QTest.keyClick(tile, Qt.Key.Key_Return)
     tile.pin_button.click()
     check(len(chosen) == 2 and pinned, "a tile opens by click and by Enter; the pin works")
+    renamed = recorder(dialog.renameRequested)
+    by_id = {t.project.id: t for t in dialog.tiles}
+    check(by_id["project-1"].more_button is None and by_id["project-2"].more_button is not None
+          and [a.text() for a in by_id["project-2"].menu().actions()] == ["Rename…", "Delete…"],
+          "the default project has no ⋯ menu; an own project's offers Rename… and Delete…")
+    by_id["project-2"].menu().actions()[0].trigger()
+    check(renamed == [("project-2",)], f"Rename… asks to rename the project ({renamed})")
+    dialog.project_renamed("project-2", "Harbor east", "New yards")
+    check(any(t.project.id == "project-2" and t.project.name == "Harbor east" for t in dialog.tiles),
+          "a renamed project shows its new name")
+    deleted = recorder(dialog.deleteRequested)
+    by_id["project-2"].menu().actions()[1].trigger()
+    check(deleted == [("project-2",)], f"Delete… asks to delete the project ({deleted})")
+    dialog.project_deleted("project-2")
+    check(all(t.project.id != "project-2" for t in dialog.tiles) and "project-2" not in dialog.pinned_ids
+          and dialog.total == 44 and next(t for t in dialog.tiles if t.project.id == "project-1").more_button is None,
+          "a deleted project leaves the tiles, the pins and the count")
+    dialog.set_note("warn", "Couldn't rename")
+    check(dialog.note.isVisibleTo(dialog), "a note shows in the window")
     dialog.close()
 
 
@@ -399,10 +646,15 @@ def _dark():
         if hasattr(theme, name):
             setattr(theme, name, None)
     content = DockContent(catalogue)
+    content.show()
+    shot(content, "q6-12-dark-sign-in", QSize(400, 880))
+    check(theme.is_dark() and theme.tokens()["link"] == "#90cdf4"
+          and theme.tokens()["link"] != theme.tokens()["subtle"],
+          "dark theme: the link colour differs from the page background")
+    check_terms_link(content.sign_in, "dark theme")
     content.set_account("me@example.com")
     content.set_project(project)
     content.show_signed_in()
-    content.show()
     shot(content, "q6-12-dark", QSize(400, 880))
     check(True, "the dock renders with a dark palette")
 
@@ -497,6 +749,26 @@ def _network():
         check(wait(lambda: "missing" in got or "found" in got)
               and getattr(got.get("missing"), "kind", "") == "not_found",
               f"a 404 becomes a readable “not found” error (QNetworkReply error enums) ({got.get('missing')!r})")
+        # credentials stay with the API's origin: another port gets none, directly or through a redirect
+        other_server, other, other_url = mock_server.start()
+        try:
+            def sent_headers(path):
+                return [{k.lower(): v for k, v in r[3].items()} for r in other.requests if r[1] == path]
+            picture = "/open/preview.png"
+            api.preview(f"{other_url}/open/preview.png", lambda data: got.setdefault("picture", data),
+                        lambda e: got.setdefault("picture_error", e))
+            check(wait(lambda: "picture" in got or "picture_error" in got) and got.get("picture") == mock_server.PNG
+                  and sent_headers(picture) and "authorization" not in sent_headers(picture)[-1],
+                  f"a Bearer request to another port loads the picture with no Authorization header "
+                  f"({got.get('picture_error')})")
+            api.preview(f"redirect?to={other_url}/open/preview.png", lambda data: got.setdefault("hop", data),
+                        lambda e: got.setdefault("hop_error", e))
+            check(wait(lambda: "hop" in got or "hop_error" in got) and got.get("hop") == mock_server.PNG
+                  and len(sent_headers(picture)) == 2 and "authorization" not in sent_headers(picture)[-1],
+                  f"a redirect from the API to another port arrives without Authorization (manual redirect policy "
+                  f"on Qt 6) ({got.get('hop_error')})")
+        finally:
+            other_server.shutdown()
         http.bearer = "expired"
         api.user_status(lambda *_: got.setdefault("ok_with_bad_token", True), lambda e: got.setdefault("denied", e))
         check(wait(lambda: "denied" in got or "ok_with_bad_token" in got)

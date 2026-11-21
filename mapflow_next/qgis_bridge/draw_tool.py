@@ -6,6 +6,7 @@ from qgis.PyQt.QtGui import QColor
 from qgis.core import QgsGeometry, QgsPointXY
 from qgis.gui import QgsMapTool, QgsRubberBand
 
+from ..core.guard import guarded
 from .compat import POLYGON_GEOMETRY
 
 
@@ -32,10 +33,12 @@ class PolygonDrawTool(QgsMapTool):
         self.band.updatePosition()
         self.canvas.refresh()
 
+    @guarded
     def canvasMoveEvent(self, event):
         if self.points:
             self._redraw(event.mapPoint())
 
+    @guarded
     def canvasReleaseEvent(self, event):
         if event.button() == Qt.MouseButton.RightButton:
             self._finish()
@@ -43,9 +46,11 @@ class PolygonDrawTool(QgsMapTool):
         self.points.append(QgsPointXY(event.mapPoint()))
         self._redraw()
 
+    @guarded
     def canvasDoubleClickEvent(self, event):
         self._finish()
 
+    @guarded
     def keyPressEvent(self, event):
         if event.key() == Qt.Key.Key_Escape:
             self.reset()
@@ -70,6 +75,7 @@ class PolygonDrawTool(QgsMapTool):
         self.points = []
         self.band.reset(POLYGON_GEOMETRY)
 
+    @guarded
     def deactivate(self):
         self.reset()
         super().deactivate()

@@ -5,9 +5,11 @@ from qgis.PyQt.QtWidgets import (QButtonGroup, QCheckBox, QDialog, QFileDialog, 
                                  QVBoxLayout)
 
 from .. import config
-from ..services.results import FILES, TILES, default_output_dir
+from ..config import FILES, TILES
+from ..settings import default_output_dir
 from .theme import stylesheet
 from .widgets import Card, button, label, link
+from ..core.guard import guarded
 
 
 class SettingsDialog(QDialog):
@@ -73,17 +75,20 @@ class SettingsDialog(QDialog):
         buttons.addWidget(save)
         layout.addLayout(buttons)
 
+    @guarded
     def _choose_folder(self) -> None:
         folder = QFileDialog.getExistingDirectory(self, "Folder for Mapflow results", self.folder.text())
         if folder:
             self.folder.setText(folder)
 
+    @guarded
     def _save(self) -> None:
         self.settings.setValue("results_mode", TILES if self.tiles.isChecked() else FILES)
         self.settings.setValue("output_dir", self.folder.text())
         self.settings.setValue("auto_load", self.auto.isChecked())
         self.accept()
 
+    @guarded
     def _sign_out(self) -> None:
         self.signed_out = True
         self.accept()

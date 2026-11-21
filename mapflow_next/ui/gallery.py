@@ -14,6 +14,7 @@ from . import icons
 from .start_page import plain, scenario_pixmap
 from .theme import color, is_dark, stylesheet, tokens
 from .widgets import Callout, Card, FocusRing, button, label, link, rounded, vbox
+from ..core.guard import guarded
 
 IMAGE_RATIO = 10 / 16
 LEFT_MIDDLE = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
@@ -50,9 +51,11 @@ class CategoryButton(FocusRing, QAbstractButton):
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setAccessibleName(f"{text}, {count} scenarios")
 
+    @guarded(default=QSize(-1, -1))
     def sizeHint(self) -> QSize:
         return QSize(200, 36)
 
+    @guarded
     def paintEvent(self, event) -> None:
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -105,6 +108,7 @@ class ScenarioCard(FocusRing, QAbstractButton):
     def set_width(self, width: int) -> None:
         self.setFixedSize(width, self._height(width))
 
+    @guarded
     def paintEvent(self, event) -> None:
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -166,6 +170,7 @@ class ScenarioCard(FocusRing, QAbstractButton):
                          QFontMetrics(font).elidedText(meta, Qt.TextElideMode.ElideRight, inner))
         painter.end()
 
+    @guarded
     def keyPressEvent(self, event) -> None:
         if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
             self.click()
@@ -223,7 +228,7 @@ class GalleryDialog(QDialog):
         self.category_buttons: Dict[str, CategoryButton] = {}
         for category in self.catalogue.categories:
             item = CategoryButton(category["label"], len(self.catalogue.in_category(category["id"])), side)
-            item.clicked.connect(lambda _=False, cid=category["id"]: self.show_category(cid))
+            item.clicked.connect(guarded(lambda _=False, cid=category["id"]: self.show_category(cid)))
             self.group.addButton(item)
             self.category_buttons[category["id"]] = item
             layout.addWidget(item)
@@ -285,13 +290,14 @@ class GalleryDialog(QDialog):
         self.cards = {}
         for scenario in self.catalogue.scenarios:
             card = ScenarioCard(scenario, self.pictures[scenario.id], host)
-            card.clicked.connect(lambda _=False, sid=scenario.id: self.open_scenario(sid))
+            card.clicked.connect(guarded(lambda _=False, sid=scenario.id: self.open_scenario(sid)))
             card.hide()
             self.cards[scenario.id] = card
         self.visible: List[ScenarioCard] = []
         self._layout_key = None
         return page
 
+    @guarded(default=False)
     def eventFilter(self, watched, event) -> bool:
         if event.type() == QEvent.Type.Resize:
             if watched is self.scroll.viewport():
@@ -315,6 +321,7 @@ class GalleryDialog(QDialog):
         if not text:
             self.show_category(self.category)
 
+    @guarded
     def _on_search(self, text: str) -> None:
         if not text.strip():
             self.show_category(self.category)
@@ -420,7 +427,7 @@ class GalleryDialog(QDialog):
         self.primary = button("Use this scenario", "primary", "play", size="lg")
         self.primary.clicked.connect(self._use)
         docs = button("Model docs", "outline", "book", size="lg", external=True)
-        docs.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(config.MODELS_DOCS_URL)))
+        docs.clicked.connect(guarded(lambda: QDesktopServices.openUrl(QUrl(config.MODELS_DOCS_URL))))
         actions.addWidget(self.primary)
         actions.addWidget(docs)
         actions.addStretch(1)
@@ -476,11 +483,13 @@ class GalleryDialog(QDialog):
         self.detail_image.setFixedHeight(height)
         self.detail_image.setPixmap(rounded(self.pictures[self.current.id], width, height, 14))
 
+    @guarded
     def back(self) -> None:
         self.stack.setCurrentIndex(0)
         if self.current and self.current.id in self.cards:
             self.cards[self.current.id].setFocus()
 
+    @guarded
     def _use(self) -> None:
         if not self.current:
             return
@@ -489,6 +498,7 @@ class GalleryDialog(QDialog):
             return
         self.scenarioChosen.emit(self.current.id)
 
+    @guarded
     def keyPressEvent(self, event) -> None:
         if event.key() == Qt.Key.Key_Escape and self.stack.currentIndex() == 1:
             self.back()

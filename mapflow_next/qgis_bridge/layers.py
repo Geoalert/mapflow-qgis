@@ -2,22 +2,27 @@
 from __future__ import annotations
 
 import json
+import os
 import re
+import shutil
 import tempfile
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Callable, List, Optional, Tuple
 
 from qgis.core import (QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsCsException, QgsJsonUtils,
                        QgsLayerTreeGroup,
                        QgsMapLayer,
-                       QgsProject, QgsRasterLayer, QgsRectangle, QgsVectorFileWriter, QgsVectorLayer,
+                       QgsProject, QgsRasterLayer, QgsRectangle, QgsVectorLayer,
                        QgsVectorTileLayer)
 
 from qgis.PyQt.QtGui import QImage
 
 from ..config import LAYER_GROUP_NAME, PREVIEW_PROPERTY, PROCESSING_PROPERTY, RESOURCES
+from ..core import filenames
 from ..core.models import Mosaic, Processing
-from . import styles
+from ..core.tile_layers import TileOffer
+from . import styles, tile_layers
+from .conversion import GPKG, ConvertTask, Converted, Job, claimed, work_path
 
 WGS84 = QgsCoordinateReferenceSystem("EPSG:4326")
 WEB_MERCATOR = QgsCoordinateReferenceSystem("EPSG:3857")
@@ -72,13 +77,16 @@ def footprint_corners(geometry: Optional[dict]) -> Optional[List[Tuple[float, fl
 
 
 def bounds_extent(bounds) -> Optional[QgsRectangle]:
-    """A tilejson `bounds` [w, s, e, n] in EPSG:3857, the CRS of tile layers."""
+    """A tilejson `bounds` [w, s, e, n] in EPSG:3857, the CRS of tile layers; None if they cannot be used."""
     try:
         west, south, east, north = [float(v) for v in bounds]
     except (TypeError, ValueError):
         return None
     transform = QgsCoordinateTransform(WGS84, WEB_MERCATOR, QgsProject.instance().transformContext())
-    return transform.transformBoundingBox(QgsRectangle(west, south, east, north))
+    try:
+        return transform.transformBoundingBox(QgsRectangle(west, south, east, north))
+    except QgsCsException:      # bounds beyond the map (latitude past 90°) are unusable data, not a plugin failure
+        return None
 
 
 def extent_is_world(extent: QgsRectangle, crs: Optional[QgsCoordinateReferenceSystem] = None) -> bool:
@@ -116,6 +124,41 @@ class MapLayers:
     def __init__(self, iface, project: Optional[QgsProject] = None):
         self.iface = iface
         self.project = project or QgsProject.instance()
+        self._temp: Optional[Path] = None
+        self._closed = False
+
+    # ---------- session folder ----------
+
+    def temp_folder(self) -> Optional[Path]:
+        """The folder of this session's preview files, made on first use and readable by its owner only.
+        None once the session is closed."""
+        if self._closed:
+            return None
+        if self._temp is None:
+            self._temp = Path(tempfile.mkdtemp(prefix="mapflow_next_"))
+        return self._temp
+
+    def preview_path(self, image_id: str, suffix: str) -> Optional[Path]:
+        """A file of the session folder named after `image_id` (made safe first), or None when there is no
+        folder or the path would not lie directly in it."""
+        folder = self.temp_folder()
+        if folder is None:
+            return None
+        path = folder / f"{filenames.safe_stem(image_id)}{suffix}"
+        return path if path.resolve().parent == folder.resolve() else None
+
+    def close(self) -> None:
+        """End of the session: the preview layers leave the project and the session folder is removed."""
+        self._closed = True
+        folder, self._temp = self._temp, None
+        if folder is None:
+            return
+        prefix = str(folder) + os.sep
+        stale = [layer.id() for layer in list(self.project.mapLayers().values())
+                 if layer.source().startswith(prefix)]
+        for layer_id in stale:
+            self.project.removeMapLayer(layer_id)
+        shutil.rmtree(folder, ignore_errors=True)       # a file still open elsewhere must not break the unload
 
     # ---------- group ----------
 
@@ -187,11 +230,15 @@ class MapLayers:
             layer.setExtent(extent)
         return layer
 
+    @staticmethod
+    def mosaic_layer_name(mosaic_name: str) -> str:
+        return f"My imagery · {mosaic_name}"
+
     def mosaic_layer(self, mosaic: Mosaic) -> Optional[QgsRasterLayer]:
-        return self.tile_raster(mosaic.tile_url, f"My imagery · {mosaic.name}") if mosaic.tile_url else None
+        return self.tile_raster(mosaic.tile_url, self.mosaic_layer_name(mosaic.name)) if mosaic.tile_url else None
 
     def picture_on_footprint(self, data: bytes, footprint: Optional[dict], name: str,
-                             file_stem: str) -> Optional[QgsRasterLayer]:
+                             image_id: str) -> Optional[QgsRasterLayer]:
         """A catalog image's picture preview (PNG or JPEG) stretched over its footprint: its four corners
         when the footprint is a quadrilateral (a turned scene, Orbview), else its bounding box. A preview,
         not a georeferenced image: close enough to judge the scene against the area."""
@@ -200,9 +247,9 @@ class MapLayers:
         if box is None or image.isNull():
             return None
         jpeg = data[:3] == b"\xff\xd8\xff"
-        folder = Path(tempfile.gettempdir()) / "mapflow_next"
-        folder.mkdir(parents=True, exist_ok=True)
-        path = folder / f"{file_stem}.{'jpg' if jpeg else 'png'}"
+        path = self.preview_path(image_id, ".jpg" if jpeg else ".png")
+        if path is None:
+            return None
         path.write_bytes(data)
         corners = footprint_corners(footprint)
         if corners:
@@ -236,14 +283,16 @@ class MapLayers:
         return layer if layer is not None and layer.isValid() else None
 
     def pictures_on_footprints(self, parts: List[Tuple[bytes, Optional[dict]]], name: str,
-                               file_stem: str) -> Optional[QgsRasterLayer]:
+                               image_id: str) -> Optional[QgsRasterLayer]:
         """A preview in several pictures (Roscosmos), each on its own footprint, joined into one layer."""
         from osgeo import gdal
-        placed = [self.picture_on_footprint(data, footprint, name, f"{file_stem}_{index}")
+        placed = [self.picture_on_footprint(data, footprint, name, f"{image_id}_{index}")
                   for index, (data, footprint) in enumerate(parts)]
         if not placed or not all(placed):
             return None
-        path = Path(tempfile.gettempdir()) / "mapflow_next" / f"{file_stem}.vrt"
+        path = self.preview_path(image_id, ".vrt")
+        if path is None:
+            return None
         vrt = gdal.BuildVRT(str(path), [layer.source() for layer in placed])
         if vrt is None:
             return None
@@ -269,6 +318,16 @@ class MapLayers:
         layer.loadNamedStyle(str(RESOURCES / "styles" / "metadata_footprint.qml"))
         return self.add(layer)
 
+    # ---------- tile layers of the project ----------
+
+    def tile_offers(self) -> List[TileOffer]:
+        """The XYZ/TMS layers of the project that can be the imagery of a processing (see `tile_layers`)."""
+        return tile_layers.tile_offers(self.project)
+
+    def tile_credentials(self, layer_id: str) -> Optional[Tuple[str, str]]:
+        """The login and password of one of them, read now (it may ask for QGIS's master password)."""
+        return tile_layers.tile_credentials(layer_id, self.project)
+
     # ---------- results ----------
 
     def vector_tiles(self, processing: Processing) -> Optional[QgsVectorTileLayer]:
@@ -280,73 +339,35 @@ class MapLayers:
         styles.apply(layer, processing.model_name, processing.style_name)
         return layer
 
-    def save_results(self, geojson_path: str, processing: Processing, out_dir: Path) -> List[QgsVectorLayer]:
-        """Write the downloaded GeoJSON to a GeoPackage (one layer per geometry type) and open it.
-        Falls back to the GeoJSON file itself if the GeoPackage can't be written."""
+    def convert_results(self, geojson_path: str, processing: Processing, out_dir: Path,
+                        on_done: Callable[[ConvertTask], None]) -> ConvertTask:
+        """The task that writes the downloaded GeoJSON to a GeoPackage in `out_dir` (see `conversion`). It is not
+        started; `on_done(task)` runs on the GUI thread when it ends. Opening what it made is `open_converted`."""
         out_dir.mkdir(parents=True, exist_ok=True)
-        target = self._unique(out_dir, f"{safe_filename(processing.name)}_{processing.id[:8]}", ".gpkg")
-        _normalise_json_fields(geojson_path)
+        stem = f"{safe_filename(processing.name)}_{processing.id[:8]}"
+        job = Job(geojson=Path(geojson_path), name=processing.name,
+                  work=work_path(Path(geojson_path).parent, processing.id),
+                  target=self._unique(out_dir, stem, ".gpkg"), fallback=self._unique(out_dir, stem, ".geojson"),
+                  transform_context=self.project.transformContext())
+        return ConvertTask(job, on_done)
+
+    @staticmethod
+    def open_converted(converted: Converted, processing: Processing) -> List[QgsVectorLayer]:
+        """The layers of a finished conversion, styled. Runs on the GUI thread: layers are made where they are used."""
         layers: List[QgsVectorLayer] = []
-        options = QgsVectorFileWriter.SaveVectorOptions()
-        options.driverName = "GPKG"
-        first = True
-        for geometry_type in ("Polygon", "LineString", "Point"):
-            source = QgsVectorLayer(f"{geojson_path}|geometrytype={geometry_type}", "source", "ogr")
-            if not source.isValid() or source.featureCount() == 0:
-                continue
-            layer_name = (processing.name if geometry_type == "Polygon"
-                          else f"{processing.name} ({geometry_type.lower()}s)")
-            options.layerName = layer_name
-            options.actionOnExistingFile = (QgsVectorFileWriter.ActionOnExistingFile.CreateOrOverwriteFile if first
-                                            else QgsVectorFileWriter.ActionOnExistingFile.CreateOrOverwriteLayer)
-            error, message, *_ = QgsVectorFileWriter.writeAsVectorFormatV3(
-                source, str(target), self.project.transformContext(), options)
-            if error != QgsVectorFileWriter.WriterError.NoError:
-                return self._open_geojson(geojson_path, processing, out_dir)
-            first = False
-            layer = QgsVectorLayer(f"{target}|layername={layer_name}", layer_name, "ogr")
+        for name in converted.layer_names:
+            source = f"{converted.path}|layername={name}" if converted.kind == GPKG else str(converted.path)
+            layer = QgsVectorLayer(source, name, "ogr")
             if layer.isValid():
                 styles.apply(layer, processing.model_name, processing.style_name)
                 layers.append(layer)
         return layers
 
-    def _open_geojson(self, geojson_path: str, processing: Processing, out_dir: Path) -> List[QgsVectorLayer]:
-        target = self._unique(out_dir, f"{safe_filename(processing.name)}_{processing.id[:8]}", ".geojson")
-        Path(geojson_path).replace(target)
-        layer = QgsVectorLayer(str(target), processing.name, "ogr")
-        if not layer.isValid():
-            return []
-        styles.apply(layer, processing.model_name, processing.style_name)
-        return [layer]
-
     @staticmethod
     def _unique(folder: Path, stem: str, suffix: str) -> Path:
         candidate = folder / f"{stem}{suffix}"
         index = 1
-        while candidate.exists():
+        while candidate.exists() or claimed(candidate):
             candidate = folder / f"{stem}_{index}{suffix}"
             index += 1
         return candidate
-
-
-def _normalise_json_fields(path: str) -> None:
-    """Nested objects (e.g. Open Data `bbox`) become strings: GeoPackage has no JSON type.
-    Very large results skip this (they come from models that return flat attributes)."""
-    try:
-        if Path(path).stat().st_size > 200 * 1024 * 1024:
-            return
-
-        with open(path, "r", encoding="utf-8") as handle:
-            data = json.load(handle)
-    except (OSError, ValueError):
-        return
-    changed = False
-    for feature in data.get("features") or []:
-        properties: Dict = feature.get("properties") or {}
-        for key, value in list(properties.items()):
-            if isinstance(value, (dict, list)):
-                properties[key] = json.dumps(value)
-                changed = True
-    if changed:
-        with open(path, "w", encoding="utf-8") as handle:
-            json.dump(data, handle)

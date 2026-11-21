@@ -62,3 +62,8 @@ def size(num_bytes: int) -> str:
             return f"{value:,.0f} {unit}" if unit in ("B", "KB") else f"{value:,.1f} {unit}"
         value /= 1024
     return f"{num_bytes} B"
+
+
+def size_limit(num_bytes: int) -> str:
+    """A size limit as people say it: "2 GB", not "2.0 GB"."""
+    return size(num_bytes).replace(".0 ", " ")

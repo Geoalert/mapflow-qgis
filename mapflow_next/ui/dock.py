@@ -20,10 +20,12 @@ from .run_page import RunPage
 from .sign_in import SignInPage
 from .start_page import StartPage
 from .theme import color, is_dark, load_fonts, stylesheet, tokens
+from .upgrade_page import UpgradePage
 from .widgets import FocusRing, link, menu_action, tool
+from ..core.guard import guarded
 
 START, PROCESSINGS, IMAGERY = 0, 1, 2
-PAGE_SIGN_IN, PAGE_START, PAGE_RUN, PAGE_PROCESSINGS, PAGE_IMAGERY = range(5)
+PAGE_SIGN_IN, PAGE_START, PAGE_RUN, PAGE_PROCESSINGS, PAGE_IMAGERY, PAGE_UPGRADE = range(6)
 
 
 class TabButton(FocusRing, QAbstractButton):
@@ -51,15 +53,18 @@ class TabButton(FocusRing, QAbstractButton):
         font.setBold(True)
         return font
 
+    @guarded(default=QSize(-1, -1))
     def sizeHint(self) -> QSize:
         """As wide as the icon, label and badge need: tabs with longer labels get more room."""
         metrics = QFontMetrics(self._font())
         badge = (metrics.horizontalAdvance(str(self.badge)) + 16) if self.badge else 0
         return QSize(22 + metrics.horizontalAdvance(self.text()) + badge + 20, 42)
 
+    @guarded(default=QSize(-1, -1))
     def minimumSizeHint(self) -> QSize:
         return QSize(QFontMetrics(self._font()).horizontalAdvance(self.text()) // 2, 42)
 
+    @guarded
     def paintEvent(self, event) -> None:
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -128,7 +133,8 @@ class DockContent(QWidget):
         self.run = RunPage()
         self.processings = ProcessingsPage()
         self.imagery = ImageryPage()
-        for page in (self.sign_in, self.start, self.run, self.processings, self.imagery):
+        self.upgrade = UpgradePage()
+        for page in (self.sign_in, self.start, self.run, self.processings, self.imagery, self.upgrade):
             self.stack.addWidget(page)
         layout.addWidget(self.stack, 1)
         layout.addWidget(self._footer())
@@ -154,17 +160,17 @@ class DockContent(QWidget):
         self.project_button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.project_button.setToolTip("Projects: find, pin and switch projects")
         self.project_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.project_button.clicked.connect(lambda *_: self.projectsRequested.emit())
+        self.project_button.clicked.connect(guarded(lambda *_: self.projectsRequested.emit()))
         row.addWidget(self.project_button, 1)
         self.credits = QToolButton(header)
         self.credits.setProperty("variant", "credits")
         self.credits.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         self.credits.setIcon(icons.icon("coins", tokens()["primary_ink"], 14))
         self.credits.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.credits.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(config.TOP_UP_URL)))
+        self.credits.clicked.connect(guarded(lambda: QDesktopServices.openUrl(QUrl(config.TOP_UP_URL))))
         row.addWidget(self.credits)
         settings = tool("settings", "Settings")
-        settings.clicked.connect(lambda *_: self.settingsRequested.emit())
+        settings.clicked.connect(guarded(lambda *_: self.settingsRequested.emit()))
         row.addWidget(settings)
         self.avatar = QToolButton(header)
         self.avatar.setProperty("variant", "avatar")
@@ -220,7 +226,7 @@ class DockContent(QWidget):
         for index, (text, icon_name) in enumerate((("Start", "home"), ("Processings", "list"),
                                                    ("Imagery sources", "image"))):
             item = TabButton(text, icon_name, bar)
-            item.clicked.connect(lambda *_, i=index: self.go(i))
+            item.clicked.connect(guarded(lambda *_, i=index: self.go(i)))
             self.tab_group.addButton(item, index)
             self.tab_buttons.append(item)
             row.addWidget(item)
@@ -270,7 +276,7 @@ class DockContent(QWidget):
         dot.setDevicePixelRatio(2)
         self.live_dot.setPixmap(dot)
         self.running_link = link("", external=False)
-        self.running_link.clicked.connect(lambda *_: self.go(PROCESSINGS))
+        self.running_link.clicked.connect(guarded(lambda *_: self.go(PROCESSINGS)))
         self.running_bar = QProgressBar(footer)
         self.running_bar.setTextVisible(False)
         self.running_bar.setFixedWidth(56)
@@ -296,6 +302,13 @@ class DockContent(QWidget):
         for widget in (self.header, self.tabs, self.footer):
             widget.setVisible(False)
         self.stack.setCurrentIndex(PAGE_SIGN_IN)
+
+    def show_upgrade(self, expected: str, installed: str) -> None:
+        """Only the upgrade page, with its own Sign out: the header's account menu needs an email that is not known."""
+        for widget in (self.header, self.tabs, self.footer):
+            widget.setVisible(False)
+        self.upgrade.show_versions(expected, installed)
+        self.stack.setCurrentIndex(PAGE_UPGRADE)
 
     def show_signed_in(self) -> None:
         for widget in (self.header, self.tabs, self.footer):

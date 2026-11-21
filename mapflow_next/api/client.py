@@ -1,18 +1,26 @@
 """Mapflow REST endpoints used by the plugin, returning domain objects.
 
-The endpoint set is the current plugin's, minus what the new design leaves out (planned
-processings/templates, custom XYZ providers, review workflow actions).
+The endpoint set is the current plugin's, minus what the new design leaves out (a tile source editor,
+review workflow actions). Of the planned processings (templates) only the project's list is read.
 """
 from __future__ import annotations
 
 from typing import Callable, List, Optional
 from urllib.parse import quote, urlencode
 
-from ..config import PROCESSINGS_PAGE_SIZE, PROJECTS_PAGE_SIZE, RESULT_TIMEOUT_S, SEARCH_PAGE_SIZE
-from ..core.models import CatalogImage, Mosaic, MosaicImage, Processing, Project, UserStatus, aois_geojson
+from ..config import (IMAGE_DOWNLOAD_TIMEOUT_S, PROCESSINGS_PAGE_SIZE, PROJECTS_PAGE_SIZE, RESULT_TIMEOUT_S,
+                      SEARCH_PAGE_SIZE)
+from ..core.models import (CatalogImage, ImageDownload, Mosaic, MosaicImage, PlannedProcessing, Processing, Project,
+                           StorageLimits, UserStatus, aois_geojson, planned_processings)
 from .http import Http
 
 OnError = Optional[Callable]
+
+
+def _has_tile_address(payload: dict) -> bool:
+    """Does the request body carry a QGIS tile layer's address (`userDefined`)? Mapflow's answer to it may
+    repeat the address, so the HTTP client keeps the answer's text out of logs and reports."""
+    return "userDefined" in (((payload or {}).get("params") or {}).get("sourceParams") or {})
 
 
 class MapflowApi:
@@ -35,6 +43,14 @@ class MapflowApi:
 
     def projects(self, email: str, on_done: Callable[[List[Project]], None], on_error: OnError = None) -> None:
         self.projects_page(email, lambda projects, _total: on_done(projects), on_error=on_error)
+
+    def abort(self, request_id: int) -> None:
+        """Cancel a pending request by the id an endpoint method returned."""
+        self.http.abort(request_id)
+
+    def abort_all(self) -> None:
+        """Cancel every pending request."""
+        self.http.abort_all()
 
     def projects_page(self, email: str, on_done: Callable[[List[Project], int], None], on_error: OnError = None,
                       query: str = "", offset: int = 0, limit: int = PROJECTS_PAGE_SIZE) -> int:
@@ -69,6 +85,16 @@ class MapflowApi:
         self.http.post("projects", body, on_error=on_error,
                        on_success=lambda d: on_done(Project.from_api(d or {}, email)))
 
+    def update_project(self, project_id: str, name: str, description: str, on_done: Callable[[object], None],
+                       on_error: OnError = None) -> None:
+        """PUT /projects/{id}. The answer is not read: the caller keeps the values it sent."""
+        self.http.put(f"projects/{project_id}", {"name": name, "description": description},
+                      on_success=on_done, on_error=on_error)
+
+    def delete_project(self, project_id: str, on_done: Callable[[object], None], on_error: OnError = None) -> None:
+        """A project and its processings (DELETE /projects/{id}). The answer is not read."""
+        self.http.delete(f"projects/{project_id}", on_success=on_done, on_error=on_error, parse="text")
+
     def project(self, project_id: str, email: str, on_done: Callable[[Project], None],
                 on_error: OnError = None) -> None:
         self.http.get(f"projects/{project_id}", on_error=on_error,
@@ -77,11 +103,22 @@ class MapflowApi:
     # ---------- processings ----------
 
     def processings(self, project_id: str, on_done: Callable[[List[Processing], int], None],
-                    on_error: OnError = None, limit: int = PROCESSINGS_PAGE_SIZE, offset: int = 0) -> None:
+                    on_error: OnError = None, limit: int = PROCESSINGS_PAGE_SIZE, offset: int = 0,
+                    terms: str = "") -> None:
+        """One page, newest first. `terms` is a name search on the server; empty is not sent."""
         body = {"limit": limit, "offset": offset, "sortBy": "CREATED", "sortOrder": "DESC"}
+        terms = terms.strip()
+        if terms:
+            body["terms"] = terms
         self.http.post(f"projects/{project_id}/processings/v2/page", body, on_error=on_error,
                        on_success=lambda d: on_done([Processing.from_api(p) for p in (d or {}).get("results") or []],
                                                     int((d or {}).get("total") or 0)))
+
+    def planned_processings(self, project_id: str, on_done: Callable[[List[PlannedProcessing]], None],
+                            on_error: OnError = None) -> None:
+        """The project's planned processings, in the order Mapflow sends them."""
+        self.http.get(f"processings/template/project/{project_id}", on_error=on_error,
+                      on_success=lambda d: on_done(planned_processings(d)))
 
     def processing(self, processing_id: str, on_done: Callable[[Processing], None], on_error: OnError = None) -> None:
         self.http.get(f"processings/{processing_id}/v2", on_error=on_error,
@@ -89,12 +126,14 @@ class MapflowApi:
 
     def cost(self, payload: dict, on_done: Callable[[int], None], on_error: OnError = None) -> int:
         return self.http.post("processing/cost/v2", payload, parse="text", on_error=on_error,
-                              on_success=lambda text: on_done(int(float(text.strip().strip('"')))))
+                              on_success=lambda text: on_done(int(float(text.strip().strip('"')))),
+                              sensitive=_has_tile_address(payload))
 
     def start(self, payload: dict, on_done: Callable[[Optional[Processing]], None], on_error: OnError = None) -> None:
         def done(data):
             on_done(Processing.from_api(data) if isinstance(data, dict) and data.get("id") else None)
-        self.http.post("processings/v2", payload, on_success=done, on_error=on_error, timeout=60)
+        self.http.post("processings/v2", payload, on_success=done, on_error=on_error, timeout=60,
+                       sensitive=_has_tile_address(payload))
 
     def restart(self, processing_id: str, on_done: Callable, on_error: OnError = None) -> None:
         self.http.post(f"processings/{processing_id}/restart/v2", on_success=on_done, on_error=on_error)
@@ -129,7 +168,7 @@ class MapflowApi:
 
     def search_catalog(self, request: dict, on_done: Callable[[List[CatalogImage], int], None],
                        on_error: OnError = None, offset: int = 0) -> None:
-        body = {"limit": SEARCH_PAGE_SIZE, "offset": offset, "hideUnavailable": False, **request}
+        body = {"limit": SEARCH_PAGE_SIZE, "offset": offset, **request}
         self.http.post("catalog/meta", body, timeout=60, on_error=on_error,
                        on_success=lambda d: on_done([CatalogImage.from_api(i) for i in (d or {}).get("images") or []],
                                                     int((d or {}).get("total") or 0)))
@@ -149,6 +188,12 @@ class MapflowApi:
             total = data.get("total")
             on_done(items, int(total) if isinstance(total, (int, float)) else len(items), bool(data.get("has_next")))
         self.http.get(f"rasters/mosaic/page?{urlencode(params)}", on_success=done, on_error=on_error)
+
+    def storage_limits(self, on_done: Callable[[StorageLimits], None], on_error: OnError = None) -> None:
+        """What an upload may be (GET rasters/memory): the file size and pixel limits of the account and its free
+        storage. A short timeout: an upload waits for the answer."""
+        self.http.get("rasters/memory", on_error=on_error, timeout=10,
+                      on_success=lambda d: on_done(StorageLimits.from_api(d)))
 
     def mosaic(self, mosaic_id: str, on_done: Callable[[Mosaic], None], on_error: OnError = None) -> None:
         """One collection by id (GET rasters/mosaic/{id}); a 404 means it was deleted."""
@@ -174,6 +219,12 @@ class MapflowApi:
         """An empty My imagery collection (POST /rasters/mosaic {name, tags})."""
         self.http.post("rasters/mosaic", {"name": name, "tags": list(tags)}, on_success=on_done, on_error=on_error)
 
+    def update_mosaic(self, mosaic_id: str, name: str, tags: List[str], on_done: Callable[[object], None],
+                      on_error: OnError = None) -> None:
+        """A collection's name and tags (PUT rasters/mosaic/{id})."""
+        self.http.put(f"rasters/mosaic/{mosaic_id}", {"name": name, "tags": list(tags)},
+                      on_success=on_done, on_error=on_error)
+
     def upload_to_mosaic(self, mosaic_id: str, file_path: str, on_done: Callable[[dict], None],
                          on_error: OnError = None, on_progress: Optional[Callable] = None,
                          allow_duplicate: bool = False) -> None:
@@ -190,6 +241,19 @@ class MapflowApi:
     def delete_image(self, image_id: str, on_done: Callable[[object], None], on_error: OnError = None) -> None:
         """One image of a collection; the collection stays, even empty (DELETE rasters/image/{id})."""
         self.http.delete(f"rasters/image/{image_id}", on_success=on_done, on_error=on_error)
+
+    def image_download_link(self, image_id: str, on_done: Callable[[ImageDownload], None],
+                            on_error: OnError = None) -> None:
+        """The presigned address of an image's original file (GET rasters/image/{id}/download)."""
+        self.http.get(f"rasters/image/{image_id}/download", on_error=on_error,
+                      on_success=lambda d: on_done(ImageDownload.from_api(d if isinstance(d, dict) else {})))
+
+    def download_image_file(self, url: str, target: str, on_done: Callable[[str], None], on_error: OnError = None,
+                            on_progress: Optional[Callable] = None) -> None:
+        """The file behind a presigned address, streamed to `target`. The address is another host's: the request
+        carries no Mapflow credentials. It has a long timeout of silence, for files of several GB."""
+        self.http.download(url, target, on_success=on_done, on_error=on_error, timeout=IMAGE_DOWNLOAD_TIMEOUT_S,
+                           on_progress=on_progress, authorize=False)
 
     def validate_image(self, metadata: dict, on_done: Callable[[dict], None], on_error: OnError = None) -> None:
         """Ask Mapflow whether an image is acceptable before uploading it (POST rasters/validate-image-metadata,

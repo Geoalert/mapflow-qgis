@@ -29,3 +29,11 @@ else:                                                     # QGIS 3.22 – 3.28
     from qgis.core import QgsMapLayerType
     VECTOR_LAYER = QgsMapLayerType.VectorLayer
     RASTER_LAYER = QgsMapLayerType.RasterLayer
+
+# The task flag that lets the user cancel a task in the Tasks panel: Qgis.TaskFlag since 3.36 (and in QGIS 4);
+# QgsTask.Flag before.
+if hasattr(Qgis, "TaskFlag"):
+    TASK_CAN_CANCEL = Qgis.TaskFlag.CanCancel
+else:                                                     # QGIS 3.22 – 3.34
+    from qgis.core import QgsTask
+    TASK_CAN_CANCEL = QgsTask.Flag.CanCancel

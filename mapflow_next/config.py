@@ -10,6 +10,7 @@ PLUGIN_DIR = Path(__file__).parent
 RESOURCES = PLUGIN_DIR / "resources"
 SETTINGS_GROUP = "mapflow_next"
 LAYER_GROUP_NAME = "Mapflow"
+FILES, TILES = "file", "tiles"        # how results arrive: GeoPackage files or vector tiles (Settings, Results)
 # Custom property set on every layer the plugin adds, so a processing's layers can be found again
 PROCESSING_PROPERTY = "mapflow_next/processing_id"
 # Set on an imagery preview layer: which source it shows ("mosaic:<id>", "provider:<name>", "catalog:<id>")
@@ -30,16 +31,28 @@ SIGN_UP_URL = WEB_URL
 PROJECTS_URL = f"{WEB_URL}/en/projects"    # sharing happens here (project card ⋯ → Share)
 TEAM_URL = f"{WEB_URL}/en/team"            # to verify: the docs name the Team page but not its address
 DOCS_URL = "https://docs.mapflow.ai/api/qgis_mapflow.html"
+TERMS_URL = "https://mapflow.ai/terms-of-use-en.pdf"
 MODELS_DOCS_URL = "https://docs.mapflow.ai/userguides/pipelines.html"
 CUSTOM_MODELS_URL = "https://mapflow.ai/custom-models"
 RELEASES_URL = "https://github.com/Geoalert/mapflow-qgis/releases"
 
 POLL_INTERVAL_MS = 6_000          # processings list while something runs
+# Failures of a timer's request in a row before the user is told, once. A first guess: live use moves it.
+POLL_FAILURES_BEFORE_ALERT = 3
 STATUS_INTERVAL_MS = 5_000        # balance and limits, while the Mapflow panel is open
 STATUS_IDLE_INTERVAL_MS = 60_000  # …and while it is closed
 COST_DEBOUNCE_MS = 400            # wait for the form to settle before asking /cost
+PROCESSINGS_SEARCH_DEBOUNCE_MS = 400   # wait for typing to pause before the search goes to the server
 TIMEOUT_S = 30
 RESULT_TIMEOUT_S = 600
+# An upload may be silent for an hour: the timer restarts while bytes move, so a slow, healthy one is not cut
+UPLOAD_TIMEOUT_S = 3600
+# …and so may the download of an original image: seconds of silence, restarted whenever bytes arrive, so a
+# download of several GB is not cut while it moves and only a stalled one ends
+IMAGE_DOWNLOAD_TIMEOUT_S = 3600
+# What an upload may be when Mapflow's answer (GET rasters/memory) is missing; the account's own limits replace them
+UPLOAD_LIMIT_BYTES = 2 * 1024 ** 3
+MAX_SIDE_PIXELS = 30_000
 PROCESSINGS_PAGE_SIZE = 30
 PROJECTS_PAGE_SIZE = 50
 SEARCH_PAGE_SIZE = 50
@@ -51,8 +64,8 @@ MIN_BILLED_AREA_KM2 = 1.0         # areas under 1 km² are billed as 1 km²
 # then sends the browser on to Mapflow Web.
 _AUTH_REALMS = {
     "production": ("auth.mapflow.ai", "mapflow"),
-    "staging": ("auth.mapflow.ai", "mapflow-staging"),
-    "internal": ("auth.mapflow.ai", "mapflow-internal"),
+    "staging": ("auth-staging.mapflow.ai", "mapflow-staging"),
+    "internal": ("auth-internal.mapflow.ai", "mapflow-internal"),
     "duty": ("auth-duty.mapflow.ai", "mapflow-duty"),
 }
 OAUTH_CLIENT_ID = "qgis"

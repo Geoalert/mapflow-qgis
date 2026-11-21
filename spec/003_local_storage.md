@@ -32,6 +32,7 @@ list is gone). A user who moves over signs in again and sets the output folder a
 | `results_mode` | string (`"file"` / `"tiles"`) | How results are added to the map |
 | `output_dir` | string | Folder for saved results. Empty: `<Documents>/Mapflow` |
 | `auto_load` | bool | Add the result of a processing started here to the map when it finishes |
+| `skip_tile_login_alert` | bool | The user ticked "Don't show this again" in the alert that comes before the plugin sends the login and password of a QGIS tile layer (`002_B_processing_api.md` § Imagery from a QGIS tile layer) |
 
 #### Projects and ratings
 | Key | Type | Purpose |

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import time
-from typing import List, Optional
+from typing import Callable, List, Optional
 
 from qgis.PyQt.QtCore import QObject, QTimer, pyqtSignal
 
@@ -10,13 +10,15 @@ from ..api import auth
 from ..api.client import MapflowApi
 from ..api.http import ApiError, Http
 from ..api.oauth import BrowserSignIn, refresh_tokens
-from ..config import STATUS_IDLE_INTERVAL_MS, STATUS_INTERVAL_MS, Config
+from ..config import POLL_FAILURES_BEFORE_ALERT, STATUS_IDLE_INTERVAL_MS, STATUS_INTERVAL_MS, Config
+from ..core.failures import ALERT, STOP, TRANSIENT_KINDS, PollFailures, poll_notice
 from ..core.models import Project, UserStatus
 from ..core.oauth import Tokens
+from ..core.versions import format_version, requires_upgrade
+from ..core.guard import guarded
 
-SIGNED_OUT, SIGNING_IN, SIGNED_IN = "signed_out", "signing_in", "signed_in"
+SIGNED_OUT, SIGNING_IN, SIGNED_IN, UPGRADE_REQUIRED = "signed_out", "signing_in", "signed_in", "upgrade_required"
 BROWSER, TOKEN = "browser", "token"
-_TRANSIENT = ("offline", "proxy", "timeout", "server")
 RETRY_REFRESH_MS = 30_000
 
 
@@ -36,11 +38,15 @@ class Session(QObject):
         self.status: Optional[UserStatus] = None
         self.projects: List[Project] = []
         self.project: Optional[Project] = None
+        self.default_project: Optional[Project] = None    # what Mapflow answered for projects/default at sign-in
         self.tokens: Optional[Tokens] = None
+        self.own_version = http.plugin_version
+        self.expected_version = ""                        # what the backend expects, while the plugin is blocked
         self._silent = False
         self._refreshing = False
         self._forced_refresh_at = 0.0
         self._status_pending = False
+        self._status_poll = PollFailures(POLL_FAILURES_BEFORE_ALERT)
         self._timer = QTimer(self)
         self._timer.setInterval(STATUS_INTERVAL_MS)
         self._timer.timeout.connect(self.refresh_status)
@@ -106,18 +112,23 @@ class Session(QObject):
         for key in ("auth_config_id", "auth_method"):
             self.settings.remove(key)
         self.status, self.project, self.projects, self.method, self.email = None, None, [], None, ""
+        self.default_project = None
         self._set_state(SIGNED_OUT)
 
     def stop(self) -> None:
-        """Plugin unload: stop timers and the sign-in listener, keep the saved sign-in."""
+        """Plugin unload: stop timers and the sign-in listener, abort the pending requests, keep the saved sign-in."""
         self._timer.stop()
         self._refresh_timer.stop()
         self.browser.cancel()
+        self.http.abort_all()
 
     def _clear_credentials(self) -> None:
         self._refresh_timer.stop()
         self._refreshing = False
         self.status, self._status_pending = None, False
+        self._status_poll.succeeded()
+        self.default_project = None
+        self.expected_version = ""
         self.tokens = None
         self.http.bearer = None
         self.http.auth_config_id = None
@@ -127,10 +138,11 @@ class Session(QObject):
         self.http.auth_config_id = config_id
         self.method, self._silent = TOKEN, silent
         self._set_state(SIGNING_IN)
-        self.api.default_project(self._signed_in, self._sign_in_failed)
+        self._start_account()
 
     # ---------- browser sign-in tokens ----------
 
+    @guarded
     def _on_tokens(self, tokens: Tokens) -> None:
         if self.method != BROWSER or self.state == SIGNED_OUT:
             return                                   # cancelled or signed out meanwhile
@@ -142,8 +154,9 @@ class Session(QObject):
             auth.store_refresh_token(self.config, tokens.refresh)
         self._refresh_timer.start(int(tokens.refresh_delay() * 1000))
         if self.state == SIGNING_IN:
-            self.api.default_project(self._signed_in, self._sign_in_failed)
+            self._start_account()
 
+    @guarded
     def refresh_sign_in(self) -> None:
         """Renew the access token before it expires (and after a restart)."""
         if self.method != BROWSER or not self.tokens or not self.tokens.refresh or self._refreshing:
@@ -153,7 +166,7 @@ class Session(QObject):
 
     def _refresh_failed(self, error: ApiError) -> None:
         self._refreshing = False
-        if error.kind in _TRANSIENT:
+        if error.kind in TRANSIENT_KINDS:
             if self.state == SIGNED_IN:
                 self._refresh_timer.start(RETRY_REFRESH_MS)  # keep the session through a network hiccup
             elif self.state == SIGNING_IN:
@@ -168,6 +181,7 @@ class Session(QObject):
             self._clear_credentials()
             self._set_state(SIGNED_OUT)               # the saved sign-in ran out: show the sign-in page
 
+    @guarded
     def _browser_failed(self, message: str) -> None:
         if self.state != SIGNED_IN and self.method == BROWSER:
             self._clear_credentials()
@@ -176,17 +190,42 @@ class Session(QObject):
 
     # ---------- after the credentials are in place ----------
 
-    def _signed_in(self, data: dict) -> None:
-        data = data or {}
-        user = data.get("user") or {}
-        self.email = user.get("email") or (auth.token_login(self.http.auth_config_id) if self.method == TOKEN else "")
+    def _start_account(self) -> None:
+        """Ask which plugin version the backend expects, then load the account. A failed answer, or one that is not
+        a version, does not block the plugin."""
+        self.api.version(self._on_version, on_error=lambda _error: self._load_account())
+
+    def _on_version(self, text: str) -> None:
+        if self.state != SIGNING_IN:
+            return                                       # cancelled or signed out meanwhile
+        if requires_upgrade(self.own_version, text):
+            self.expected_version = format_version(text)
+            self._refresh_timer.stop()                   # blocked: no request leaves the plugin
+            self._remember_sign_in()
+            self._set_state(UPGRADE_REQUIRED)
+            return
+        self._load_account()
+
+    def _load_account(self) -> None:
+        if self.state == SIGNING_IN:
+            self.api.default_project(self._signed_in, self._sign_in_failed)
+
+    def _remember_sign_in(self) -> None:
         self.settings.setValue("auth_method", self.method)
         if self.method == TOKEN:
             self.settings.setValue("auth_config_id", self.http.auth_config_id)
         else:
             self.settings.remove("auth_config_id")
+
+    def _signed_in(self, data: dict) -> None:
+        data = data or {}
+        user = data.get("user") or {}
+        self.email = user.get("email") or (auth.token_login(self.http.auth_config_id) if self.method == TOKEN else "")
+        self._remember_sign_in()
         default = Project.from_api(data, self.email)
         self.projects = [default]
+        self.default_project = default
+        self._status_poll.succeeded()
         self._set_state(SIGNED_IN)
         self.refresh_status()
         self._timer.start()
@@ -213,6 +252,7 @@ class Session(QObject):
                            if method == TOKEN else "Mapflow didn't accept the sign-in. Try again.")
             self.error.emit(message)
 
+    @guarded
     def _on_unauthorized(self) -> None:
         if self.state != SIGNED_IN:
             return
@@ -239,25 +279,40 @@ class Session(QObject):
         if active and self.state == SIGNED_IN:
             self.refresh_status()
 
+    @guarded
     def refresh_status(self) -> None:
-        if self.state != SIGNED_IN or self._status_pending:
+        """The account status is a timer's request wherever it is called from: one count of failures for it. A
+        transient failure is dropped (Http logs it) until the count reaches the alert; a permanent one stops it."""
+        if self.state != SIGNED_IN or self._status_pending or self._status_poll.stopped:
             return
         self._status_pending = True
 
-        def failed(_error) -> None:                     # periodic: stay quiet on errors
-            self._status_pending = False
+        def failed(error: ApiError) -> None:
+            self._status_pending = False                # before anything that can raise
+            outcome = self._status_poll.failed(error.kind, error.status)
+            if outcome == STOP:
+                self._timer.stop()
+            if outcome in (ALERT, STOP):
+                text = poll_notice(outcome, "account status", error.message, error.kind)
+                if text:
+                    self.error.emit(text)
 
         self.api.user_status(self._on_status, on_error=failed)
 
     def _on_status(self, status: UserStatus) -> None:
         self._status_pending = False
+        self._status_poll.succeeded()
         if status == self.status:                       # polled every few seconds: only changes count
             return
         self.status = status
         self.statusChanged.emit(status)
 
     def load_projects(self) -> None:
-        self.api.projects(self.email, self._on_projects, on_error=lambda e: None)
+        """The project list, once, after sign-in. A failure is told once; the list the sign-in holds stays."""
+        def failed(error: ApiError) -> None:
+            if error.kind != "auth":                    # the session's: it renews or signs out, and says so
+                self.error.emit(f"Projects didn't load: {error.message}")
+        self.api.projects(self.email, self._on_projects, on_error=failed)
 
     def _on_projects(self, projects: List[Project]) -> None:
         if projects:
@@ -266,13 +321,56 @@ class Session(QObject):
 
     def select_project(self, project_id: str, fallback: Optional[Project] = None) -> None:
         def failed(error: ApiError):
+            if error.kind != "auth":
+                self.error.emit(error.message)
             if fallback is not None:
                 self._set_project(fallback)
-            else:
-                self.error.emit(error.message)
         self.api.project(project_id, self.email, self._set_project, failed)
+
+    def rename_project(self, project_id: str, name: str, description: str, on_done: Callable[[str], None],
+                       on_error: Callable[[str], None]) -> None:
+        """Save a new name and description. On success every copy of the project that the session holds takes
+        them and `on_done` gets the old name; on a refusal `on_error` gets the server's message."""
+        def done(_answer) -> None:
+            known = [p for p in (self.project, self.default_project, *self.projects) if p and p.id == project_id]
+            old = known[0].name if known else name
+            for project in {id(p): p for p in known}.values():
+                project.name, project.description = name, description
+            on_done(old)
+
+        def failed(error: ApiError) -> None:
+            if error.kind != "auth":                    # the session's: it renews or signs out, and says so
+                on_error(error.message)
+        self.api.update_project(project_id, name, description, done, failed)
+
+    def delete_project(self, project_id: str, on_done: Callable[[Optional[bool]], None],
+                       on_error: Callable[[str], None]) -> None:
+        """Delete a project with its processings. On success the project leaves the session's list; if it is the
+        open one the default project opens. `on_done` gets whether the default project opened: None when the
+        deleted project was not open. On a refusal `on_error` gets the server's message and nothing changes."""
+        def done(_answer) -> None:
+            self.projects = [p for p in self.projects if p.id != project_id]
+            opened = None
+            if self.project is not None and self.project.id == project_id:
+                opened = self.open_default_project(project_id)
+            on_done(opened)
+
+        def failed(error: ApiError) -> None:
+            if error.kind != "auth":                    # the session's: it renews or signs out, and says so
+                on_error(error.message)
+        self.api.delete_project(project_id, done, failed)
 
     def _set_project(self, project: Project) -> None:
         self.project = project
         self.settings.setValue("project_id", project.id)
         self.projectChanged.emit(project)
+
+    def open_default_project(self, gone_id: str) -> bool:
+        """The project `gone_id` is gone: open the default one. False when there is none to open (no default, or
+        the default is the gone one): nothing opens, so nothing loops."""
+        default = self.default_project
+        if default is None or default.id == gone_id:
+            return False
+        self._set_project(default)
+        self.load_projects()
+        return True

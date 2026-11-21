@@ -8,6 +8,7 @@ from .. import config
 from . import icons
 from .theme import is_dark, tokens
 from .widgets import Callout, button, hbox, label, link, rule, vbox
+from ..core.guard import guarded
 
 
 class SignInPage(QWidget):
@@ -70,7 +71,7 @@ class SignInPage(QWidget):
 
         create = button("Create a free account", "outline", external=True, size="lg")
         create.setToolTip(config.SIGN_UP_URL)
-        create.clicked.connect(lambda: _open(config.SIGN_UP_URL))
+        create.clicked.connect(guarded(lambda: _open(config.SIGN_UP_URL)))
         gift = QLabel(body)
         gift.setPixmap(icons.gift_pixmap(tokens()["muted"]))
         credits = hbox(None, gift, label("250 free credits to start", "meta"), None, spacing=5)
@@ -79,7 +80,8 @@ class SignInPage(QWidget):
         self.more = button("Other ways to sign in", "ghost", size="sm")
         self.more.setIcon(icons.icon("chevron-down", tokens()["link"], 14))
         self.more.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
-        self.more.clicked.connect(lambda: self._toggle_more())   # not the slot itself: clicked passes checked=False
+        # not the slot itself: clicked passes checked=False
+        self.more.clicked.connect(guarded(lambda: self._toggle_more()))
         layout.addWidget(self.more, 0, Qt.AlignmentFlag.AlignHCenter)
 
         self.token_box = QWidget(body)
@@ -115,6 +117,13 @@ class SignInPage(QWidget):
         footer.addWidget(link("Plugin guide", config.DOCS_URL))
         footer.addStretch(1)
         layout.addLayout(footer)
+        # a row of its own: three links do not fit the 352 px of a narrow dock
+        self.terms = link("Terms of use", config.TERMS_URL)
+        terms_row = QHBoxLayout()
+        terms_row.setSpacing(16)
+        terms_row.addWidget(self.terms)
+        terms_row.addStretch(1)
+        layout.addLayout(terms_row)
 
     def _toggle_more(self, show=None) -> None:
         visible = (not self.token_box.isVisible()) if show is None else bool(show)
@@ -123,6 +132,7 @@ class SignInPage(QWidget):
         if visible:
             self.token.setFocus()
 
+    @guarded
     def _submit_token(self) -> None:
         token = self.token.text().strip()
         if token:

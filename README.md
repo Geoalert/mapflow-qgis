@@ -28,19 +28,21 @@ The plugin covers the work that belongs next to the map. Each tab has its scenar
   collection or one image in it, or add imagery right there: upload GeoTIFFs, from files or from the project's
   GeoTIFF layers — several at once, or dragged from the Layers panel or the file manager — into the selected
   collection, or into a new one when none is selected. You can also create a
-  collection with a name and tags, and delete a collection or an image from its ⋯ menu. Files are checked before upload: bands, CRS, size, that they match each
+  collection with a name and tags, rename a collection (its name and tags), download an original image, and delete a collection or an image from its ⋯ menu. Files are checked before upload: bands, CRS, size, that they match each
   other, and, for an existing collection, that they fit it.
   The imagery's extent becomes the area, and its preview goes on the map.
 - **Layers panel › Use a layer in Mapflow.** Right-click a polygon layer for "Use as AOI in Mapflow", or a
   GeoTIFF layer for "Use as imagery in Mapflow": it's uploaded to My imagery and chosen when it's ready.
 - **Imagery sources › Find imagery in the catalog.** Search by area, dates, cloud cover, off-nadir
   angle and how much of the area an image covers, look at the footprints on the map, and use an image in
-  the run form.
-- **Processings › Follow the work and its history.** Progress updates on its own. Filter, search, load
-  older processings, rename them, run one again with the same settings, or delete it.
+  the run form. When an image is chosen, the area is clipped to its footprint, and an area outside it blocks Run.
+- **Processings › Follow the work and its history.** Progress updates on its own. Filter by status, search
+  the whole project by name (the list below keeps updating while you search), load older processings, rename them, run one again with the same settings,
+  or delete it. The project's planned processings (search templates) come first, with a "search processing" mark, their name and status; a click opens the project in Mapflow Web. A list that fails to load says so instead of looking empty; if the project is deleted in
+  Mapflow Web, the default project opens.
 - **Processings › Get the results into QGIS.** Finished results load as styled layers: GeoPackage files,
   or vector tiles for a quick look. Results can also be saved as GeoJSON.
-- **Projects › Work in a team project.** Create a project, switch projects, search and pin them, and see
+- **Projects › Work in a team project.** Create a project, switch projects, rename or delete a project you own (not the default one), search and pin them, and see
   which are shared and what your role allows.
 
 Managing data, projects and the team happens in [Mapflow Web](https://app.mapflow.ai), and the plugin
@@ -95,14 +97,18 @@ installed QGIS, `tools/run_in_qgis.py` runs the end-to-end tests with that QGIS'
 mapflow_next/
   plugin.py          QGIS entry: the Mapflow toolbar, the plugin menu, the dock, wiring of the parts below
   controller.py      the flow: connects services (state) to pages (views) and to QGIS
-  config.py          environments, URLs, timings
-  settings.py        QgsSettings under mapflow_next/ (never credentials)
+  config.py          environments, URLs, timings, the result modes
+  settings.py        QgsSettings under mapflow_next/ (never credentials), the default output folder
   core/              pure Python, no Qt: testable without QGIS
     models.py          API responses → Project, Model (workflow def), DataProvider, Processing, …
     draft.py           the run form as data: issues(), estimate(), payload()
     scenarios.py       scenario catalogue and scenario → model matching
     messages.py        readable texts for Mapflow error codes
+    failures.py        what a failed request means by what triggered it: transient or permanent, the poll's count
+    guard.py           the guard: no exception escapes from an entry point Qt calls (no Qt; every layer imports it)
     oauth.py           browser sign-in without Qt: PKCE, the redirect, tokens
+    origin.py          which requests may carry credentials: the API's own scheme, host and port
+    filenames.py       file names made from server ids: a hash, never the id
   api/
     http.py            async HTTP over QgsNetworkAccessManager, error classification
     auth.py            credentials in the QGIS authentication database
@@ -156,6 +162,8 @@ That is the rule; today the controller also holds the run form's state itself. `
   and whether they're shared.
   - Search by name on the server, and load more with "Show more".
   - Pin projects to the top. Pins are Mapflow Web's starred projects, so they follow the account.
+  - Rename a project you own, from the ⋯ menu of its tile: its name and description. The default project can't be renamed.
+  - Delete a project you own, from the same menu, after a confirmation. The processings of the project are deleted with it; results already on the map stay. If it is the open project, the default project opens. The default project can't be deleted.
   - Share a project, or open the team page, in Mapflow Web.
 - **Zoom:** basemaps offer z17–z21, with the scenario's zoom preselected and marked ★.
 - **My imagery:**
@@ -166,10 +174,10 @@ That is the rule; today the controller also holds the run form's state itself. `
   - The imagery's extent becomes the area, and any other area is clipped to the imagery.
   - An area outside the imagery blocks Run, with a way back to the extent.
 - **Imagery search:** the same Area drop-down as on Start, date and slider filters (cloud cover,
-  off-nadir angle, minimum area coverage), and "Clear". Filters apply when you press "Search imagery":
+  off-nadir range, minimum area coverage), the "Available for me" switch, and "Clear". Filters apply when you press "Search imagery":
   the list always shows what the last search returned.
 - **Processings:** pages of 30 with "Show more". Polling refreshes the shown window and leaves older
-  pages in place.
+  pages in place. The planned processings load and refresh with the list; if they fail to load, the rows are hidden with no message.
 - **Live cost:** a local estimate at once, then the figure from `/cost`.
 - **Results:** they go to `Documents/Mapflow` unless you choose another folder. Finished results load
   automatically, which you can turn off. "Run again" restores a processing's settings and its area.
@@ -188,17 +196,21 @@ every Mapflow user. The plugin links to the right page wherever it leaves someth
 | Processings list, results on the map, rename, delete, run again | **Kept** | Results belong in QGIS |
 | Imagery search in the catalog | **Kept** | Footprints are judged on the map |
 | Upload a GeoTIFF to My imagery | **Kept**: into a new or an existing collection, from one or several files or layers | Your imagery is made in QGIS and processed from there |
-| My imagery collections: create, delete, add or delete images | **Kept**: the My imagery window and its ⋯ menus | Adding imagery and clearing out what was added by mistake belong where the imagery is chosen |
-| My imagery: rename a collection or an image, download originals, storage usage | **Mapflow Web** › [My data](https://app.mapflow.ai/my-data) ("Manage collections in Mapflow Web") | File management, not mapping |
+| My imagery collections: create, rename, delete, add, download or delete images | **Kept**: the My imagery window and its ⋯ menus | Adding imagery and clearing out what was added by mistake belong where the imagery is chosen |
+| My imagery: rename an image, storage usage | **Mapflow Web** › [My data](https://app.mapflow.ai/my-data) ("Manage collections in Mapflow Web") | File management, not mapping |
 | Create a project | **Kept**: New project in the Projects window | Starting new work shouldn't need a trip to the browser |
-| Projects: rename, delete, share | **Mapflow Web** › the project ("Share project in Mapflow Web" and the share icon in the Projects window) | Done rarely, and sharing needs the team's members and roles. The plugin creates, switches, searches and pins projects |
+| Rename a project | **Kept**: the ⋯ menu of a project tile in the Projects window (the owner; not the default project) | A name is fixed where the project is picked |
+| Delete a project | **Kept**: the ⋯ menu of a project tile in the Projects window, after a confirmation (the owner; not the default project) | The processings of the project go with it; results already on the map stay |
+| Forced upgrade | **Kept**, as one page: when Mapflow expects a higher major version of the plugin, the dock asks to upgrade and opens the QGIS plugin manager | An old plugin would send requests the backend no longer understands. A higher minor or patch version is not announced |
+| Projects: share | **Mapflow Web** › the project ("Share project in Mapflow Web" and the share icon in the Projects window) | Sharing needs the team's members and roles. The plugin creates, renames, deletes, switches, searches and pins projects |
 | Review: accept or send back results | **Mapflow Web** (the processing links there) | Review is a step of its own, with its own page, after the processing; the plugin shows that a processing needs it |
 | Balance and top-up, API tokens | **Mapflow Web** › [Account](https://app.mapflow.ai/account/balance) ("Top up" in the run form) | Payments and keys stay with the account |
-| Planned processings (search templates) and their areas | **Not yet** | Left out of the first release to keep it to the main flow |
-| Custom XYZ/TMS providers | **Not yet** | Left out of the first release; Mapflow's own basemaps and My imagery cover the main cases |
+| Planned processings (search templates): the list | **Kept**: the Processings tab lists them, with a "search processing" mark; a click opens the project in Mapflow Web | The plugin lists them and does nothing else |
+| Planned processings: create one, its areas and results, pause and resume, run from it, delete it | **Mapflow Web** | Managing a search template is a task of its own; the plugin only shows that one exists |
+| XYZ/TMS tile layers of the QGIS project as imagery | **Kept**, as a fourth kind of imagery: the run form lists them under "QGIS tile layers"; the plugin reads the layer and has no editor for tile sources. A login goes to Mapflow after an alert; a layer on this computer or a private network, with a referer or other headers, or with a non-Basic authentication configuration is listed disabled, with the reason | The tile sources a team already has in QGIS can be mapped without being entered again; Mapflow's servers can read only public addresses and send no custom headers |
 | Translations (es, pt, ru, zh) | **Not yet**: planned for 4.1 | Every text is new, so the 3.x translations don't apply |
 | Settings of the 3.x plugin | **Not migrated** | The two plugins install side by side; sign in and set the output folder again |
-| Georeferenced catalog previews, forced-upgrade dialog, Segment Anything zooms | **Not yet** | Smaller features, after the first release |
+| Georeferenced catalog previews, Segment Anything zooms | **Not yet** | Smaller features, after the first release |
 
 ## To verify against the real API
 
@@ -228,7 +240,7 @@ Tests and lint run in the official `qgis/qgis` Docker images, so only Docker is 
 make test          # both of the two runs below (the gate before review)
 make test-qgis3    # unit + end-to-end tests on QGIS 3 (qgis/qgis:release-3_28)
 make test-qgis4    # the same on QGIS 4 (qgis/qgis:4.2), plus the Qt 6 code check
-make test-core     # pure-Python tests only (30)
+make test-core     # pure-Python tests only (61)
 make lint          # the plugins.qgis.org checks: flake8, bandit, detect-secrets
 make screens       # run the end-to-end flow and rewrite docs/screens/*.png
 ```
@@ -237,11 +249,11 @@ With QGIS or PyQt6 installed, there are local variants:
 
 ```
 make test-local QGIS_PYTHON=/Applications/QGIS-LTR.app/Contents/MacOS/bin/python3
-make test-qt6 QT6_PYTHON=…    # the pages, sign-in and HTTP client on PyQt6 (41 checks)
+make test-qt6 QT6_PYTHON=…    # the pages, sign-in and HTTP client on PyQt6 (42 checks)
 make check-qt6 QT6_PYTHON=…   # Qt enum names and calls that only Qt 5 accepts
 ```
 
-**The end-to-end test** (`tests/e2e_flow.py`, 259 checks) runs a real offscreen QGIS against a mock
+**The end-to-end test** (`tests/e2e_flow.py`, 540 checks) runs a real offscreen QGIS against a mock
 Mapflow API and sign-in server (`tests/mock_server.py`).
 - **Request checks:** the mock rejects request bodies the real API rejects, such as `myImagery` with both
   `mosaicId` and `imageIds`.
@@ -250,11 +262,15 @@ Mapflow API and sign-in server (`tests/mock_server.py`).
 - **The flow:** from there it covers scenarios and the run form, cost and the run itself, and results on
   the map. It also covers imagery search, My imagery, the projects window, processings paging and
   renaming, "Run again", the account menu, unload and dark mode.
+- **Critical messages:** the plugin's guard turns an exception into a Critical line in the message bar and
+  the log. An unexpected Critical message in the bar or the log fails the flow; a check that expects one
+  declares it. A source check in `tests/test_core.py` fails on any `connect` or `QTimer.singleShot` whose
+  callable is not guarded (`@guarded`, or `guarded(...)` at the connection site).
 - **Isolation:** each run gets its own QGIS settings and authentication database in a temporary folder.
 - **Real clicks:** the test clicks the real buttons wherever a bug hid behind a click. For example,
   toggling an option must leave the form's scroll position alone.
 
-CI (`.github/workflows/tests.yml`) runs `test-qgis3`, `test-qgis4` and `lint` on every push to `dev` and
+CI (`.github/workflows/tests.yml`) runs `test-qgis3`, `test-qgis4`, `test-qt6` and `lint` on every push to `dev` and
 `master` and on pull requests. **Releases are made by hand**: `make zip` builds the archive, and a
 maintainer uploads it to the QGIS Plugin Repository. No workflow publishes a release (`.qgis-plugin-ci`
 is kept for the `qgis-plugin-ci` tool, which nothing runs today; `release.yml` in the repository root is

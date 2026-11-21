@@ -10,6 +10,8 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
+from .tile_layers import host_of
+
 
 def parse_datetime(value: Any) -> Optional[datetime]:
     if not value:
@@ -69,7 +71,7 @@ class Role(str, Enum):
 
     @property
     def can_manage(self) -> bool:
-        """Rename, delete and restart processings."""
+        """Rename and delete processings."""
         return self in (Role.maintainer, Role.owner)
 
 
@@ -319,6 +321,11 @@ class Project:
         return self.members > 0 or self.role is not Role.owner
 
     @property
+    def can_edit(self) -> bool:
+        """Rename and delete are offered to the owner, never for the default project (spec/002_A)."""
+        return self.role is Role.owner and not self.is_default
+
+    @property
     def processings_count(self) -> int:
         return self.total if self.total is not None else self.succeeded + self.failed + self.in_progress
 
@@ -345,6 +352,11 @@ class Status(str, Enum):
     def is_terminal(self) -> bool:
         return self in (Status.ok, Status.failed, Status.refunded, Status.cancelled)
 
+    @property
+    def can_restart(self) -> bool:
+        """The statuses the plugin offers Restart for: failed and cancelled, not in progress or awaiting."""
+        return self in (Status.failed, Status.cancelled)
+
 
 @dataclass
 class Message:
@@ -361,6 +373,13 @@ class SourceInfo:
     zoom: Optional[int] = None
     mosaic_id: Optional[str] = None
     image_ids: List[str] = field(default_factory=list)
+    url: str = field(default="", repr=False)    # custom: the tile address the processing was started with
+    source_type: str = ""                       # custom: XYZ | TMS | QUADKEY
+
+    @property
+    def host(self) -> str:
+        """The host of a custom tile address: all that a card shows of it, since an address can carry a key."""
+        return host_of(self.url)
 
     @classmethod
     def from_params(cls, params: Optional[dict]) -> "SourceInfo":
@@ -385,7 +404,11 @@ class SourceInfo:
             return cls("catalog", provider=p.get("dataProvider") or "", zoom=zoom(p.get("zoom")),
                        image_ids=list(p.get("imageIds") or []))
         if source.get("userDefined"):
-            return cls("custom", zoom=zoom(source["userDefined"].get("zoom")))
+            # The login and password of the layer are never read back
+            p = source["userDefined"]
+            url, kind = p.get("url"), p.get("sourceType")
+            return cls("custom", zoom=zoom(p.get("zoom")), url=url if isinstance(url, str) else "",
+                       source_type=kind.upper() if isinstance(kind, str) else "")
         return cls()
 
 
@@ -475,6 +498,39 @@ def aois_geojson(data: Any) -> dict:
     return {"type": "FeatureCollection", "features": features}
 
 
+@dataclass
+class PlannedProcessing:
+    """A planned processing (a search template) of the project, as GET /processings/template/project/{id} lists it.
+    The plugin only shows it: Mapflow Web manages it."""
+    id: str
+    name: str
+    status: str = ""
+    project_id: str = ""
+
+    @classmethod
+    def from_api(cls, data: Dict[str, Any]) -> "PlannedProcessing":
+        return cls(id=str(data.get("id", "")), name=data.get("name") or "", status=str(data.get("status") or ""),
+                   project_id=str(data.get("projectId") or ""))
+
+    @property
+    def status_text(self) -> str:
+        """The backend's status in sentence case: `SEARCHING` reads `Searching`."""
+        return self.status.replace("_", " ").strip().capitalize()
+
+    @property
+    def status_tone(self) -> str:
+        """The kind of the status pill: one of the plain pill kinds."""
+        status = self.status.strip().lower()
+        return "err" if status == "failed" else "run" if status == "searching" else "gray"
+
+
+def planned_processings(data: Any) -> List[PlannedProcessing]:
+    """GET /processings/template/project/{id}: a list of templates. Anything else is an empty list, and an item that
+    is not an object or has no id is skipped."""
+    return [PlannedProcessing.from_api(item) for item in data if isinstance(item, dict) and item.get("id")] \
+        if isinstance(data, list) else []
+
+
 # ---------- imagery catalog and My imagery ----------
 
 @dataclass
@@ -526,6 +582,32 @@ class CatalogImage:
             else self.id
 
 
+def _whole(value: Any) -> Optional[int]:
+    """A number of the API as a whole number; None for anything else (null, text, a bool)."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return int(value)
+
+
+@dataclass
+class StorageLimits:
+    """GET rasters/memory: what an upload may be. None means "no value": the built-in limit applies, or, for
+    `free_bytes`, the free space is not known or not limited."""
+    max_upload_bytes: Optional[int] = None
+    max_side_pixels: Optional[int] = None       # maxPixelCount: a limit on a side, as 3.x applied it
+    free_bytes: Optional[int] = None
+
+    @classmethod
+    def from_api(cls, data: Any) -> "StorageLimits":
+        data = data if isinstance(data, dict) else {}
+        upload, side = _whole(data.get("maxUploadFileSize")), _whole(data.get("maxPixelCount"))
+        limit, free = _whole(data.get("memoryLimit")), _whole(data.get("memoryFree"))
+        return cls(max_upload_bytes=upload if upload and upload > 0 else None,
+                   max_side_pixels=side if side and side > 0 else None,
+                   # With the storage not limited, Mapflow sends no limit and no free space
+                   free_bytes=max(0, free) if limit and limit > 0 and free is not None else None)
+
+
 @dataclass
 class Mosaic:
     id: str
@@ -536,17 +618,20 @@ class Mosaic:
     tile_url: str = ""
     tilejson_url: str = ""
     image_count: Optional[int] = None    # None until known
+    tags: List[str] = field(default_factory=list)
 
     @classmethod
     def from_api(cls, data: dict) -> "Mosaic":
         raster = data.get("rasterLayer") or {}
         summary = data.get("status_summary") or data.get("statusSummary") or {}
         count = summary.get("total", data.get("imagesCount", data.get("images_count")))
+        tags = data.get("tags")
         return cls(id=str(data.get("id", "")), name=data.get("name") or "",
                    image_count=int(_num(count)) if count is not None else None,
                    created=parse_datetime(data.get("created_at")), size_bytes=int(_num(data.get("sizeInBytes"))),
                    footprint_wkt=data.get("footprint") or "", tile_url=raster.get("tileUrl") or "",
-                   tilejson_url=raster.get("tileJsonUrl") or "")
+                   tilejson_url=raster.get("tileJsonUrl") or "",
+                   tags=[t for t in tags if isinstance(t, str) and t] if isinstance(tags, list) else [])
 
 
 @dataclass
@@ -561,6 +646,7 @@ class MosaicImage:
     size_bytes: int = 0
     pixel_size: Optional[float] = None
     footprint_wkt: str = ""
+    available_for_download: bool = True       # absent or null in the API's answer counts as true
 
     @classmethod
     def from_api(cls, data: dict) -> "MosaicImage":
@@ -572,4 +658,19 @@ class MosaicImage:
                    filename=data.get("filename") or "", preview_s=data.get("preview_url_s") or "",
                    preview_l=data.get("preview_url_l") or "", uploaded=parse_datetime(data.get("uploaded_at")),
                    size_bytes=int(_num(data.get("file_size"))),
-                   pixel_size=_num(pixel) if pixel is not None else None, footprint_wkt=data.get("footprint") or "")
+                   pixel_size=_num(pixel) if pixel is not None else None, footprint_wkt=data.get("footprint") or "",
+                   available_for_download=data.get("available_for_download") is None
+                   or bool(data.get("available_for_download")))
+
+
+@dataclass
+class ImageDownload:
+    """The answer of GET rasters/image/{id}/download: a presigned address of the original file."""
+    url: str = ""
+    filename: str = ""
+    expires_in: int = 0               # seconds
+
+    @classmethod
+    def from_api(cls, data: dict) -> "ImageDownload":
+        return cls(url=str(data.get("download_url") or ""), filename=str(data.get("filename") or ""),
+                   expires_in=int(_num(data.get("expires_in"))))
