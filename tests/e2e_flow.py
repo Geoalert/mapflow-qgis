@@ -3049,6 +3049,7 @@ def check_answer_order(iface, content, controller, processings, state):
     restart, for the full listing and for the search listing. The opened card that Mapflow Web deleted leaves
     `opened` and stops its poll with one message; a transient failure is one alert and a retry after one interval.
     Everything the function changes is restored."""
+    from mapflow_next.api.http import ApiError
     from mapflow_next.core.models import Processing as ProcessingModel, Status
     from mapflow_next.ui.processings_page import ProcessingCard
     page = content.processings
@@ -3130,6 +3131,56 @@ def check_answer_order(iface, content, controller, processings, state):
         check([p.id for p in finished] == ["order-a", "order-b"] and added == ["order-a", "order-b"],
               f"ORDER: full OK, then an older search answer in progress: one notice, one add to map "
               f"({[p.id for p in finished]}, {added})")
+        processings._poll.stop()
+
+        # a processing that was final and is restarted in Mapflow Web: the answer of a request sent after the final
+        # one moves it back, and its next finish is a new one. Full listing:
+        run = runs["a"]
+        processings._sent += 1
+        deliver_page(processings, full, [model(run)])
+        check(processings.get("order-a").status is Status.in_progress and len(finished) == 2,
+              "RESTART IN WEB: an answer of a later request moves a final processing to in progress, with no notice")
+        deliver_page(processings, full, [model(dict(run, status="OK", percentCompleted=100))])
+        check([p.id for p in finished] == ["order-a", "order-b", "order-a"]
+              and added == ["order-a", "order-b", "order-a"],
+              f"RESTART IN WEB: …its next finish is one notice and one add to map "
+              f"({[p.id for p in finished]}, {added})")
+        # …the search listing
+        run = runs["b"]
+        processings._sent += 1
+        deliver_page(processings, found, [model(run)])
+        check(next(p for p in processings.found if p.id == "order-b").status is Status.in_progress
+              and len(finished) == 3, "RESTART IN WEB: …the same for the search listing")
+        deliver_page(processings, found, [model(dict(run, status="OK", percentCompleted=100))])
+        check([p.id for p in finished][3:] == ["order-b"] and added[3:] == ["order-b"],
+              f"RESTART IN WEB: …and one notice and one add to map for its next finish ({added})")
+        # …and the opened card
+        opened_run = fixtures.processing_json("order-open", "IN_PROGRESS", -100000, name="Open run")
+        processings.opened = model(opened_run)
+        processings._note(processings.opened, processings._sent)
+        asked = []
+
+        def ask_card(status):
+            """"Show"'s card is refreshed and the server answers with `status`."""
+            processings.api.processing = lambda _pid, done, _failed=None: asked.append(done)
+            try:
+                processings._refresh_opened(LOAD)
+            finally:
+                del processings.api.processing
+            asked.pop()(model(dict(opened_run, status=status, percentCompleted=100 if status == "OK" else 40)))
+
+        before = len(finished)
+        ask_card("OK")
+        ask_card("IN_PROGRESS")
+        check(processings.opened.status is Status.in_progress and len(finished) == before + 1,
+              "RESTART IN WEB: …the opened card goes back to in progress, with no second notice")
+        ask_card("OK")
+        check(processings.opened.status is Status.ok and len(finished) == before + 2
+              and finished[-1].id == "order-open", "RESTART IN WEB: …and its next finish is one notice")
+        processings._note(model(dict(opened_run, status="IN_PROGRESS")), processings._sent)
+        check(processings._last_status["order-open"] is Status.ok and len(finished) == before + 2,
+              "RESTART IN WEB: …an answer of a request sent before the final one changes nothing")
+        processings.opened = None
         processings._poll.stop()
 
         # a list answer sent before the accepted Restart still says FAILED: the full listing
@@ -3219,9 +3270,38 @@ def check_answer_order(iface, content, controller, processings, state):
             processings._tick()
             settle()
         wait_until(lambda: False, 0.3)
-        check(len(gets("order-gone")) == fetched + 1 and not processings._poll.isActive()
+        check(len(gets("order-gone")) == fetched + 1
               and len([t for t in lines()[since:] if "no longer refreshed" in (t or "")]) == 1,
               f"OPENED GONE: …the poll asks for it no more and says nothing more ({len(gets('order-gone'))})")
+
+        # the same tick with the answers handed over by hand: the list answer and the 404 in either order
+        def tick_held():
+            """One poll tick whose list request and card request wait: their answers are handed over by the check."""
+            held = {}
+            processings.api.processings = lambda _pid, done, _failed=None, **_kw: held.update(list=done)
+            processings.api.processing = lambda _pid, _done, failed=None: held.update(gone=failed)
+            try:
+                processings._tick()
+            finally:
+                del processings.api.processings, processings.api.processing
+            return held
+
+        for first in ("list", "gone"):
+            processings._poll.stop()
+            processings._opened_failures.succeeded()
+            processings.opened = model(dict(gone, status="IN_PROGRESS", percentCompleted=40))
+            since = len(iface.bar.messages)
+            held = tick_held()
+            listed = list(processings.items)
+            answers = {"list": lambda: held["list"](listed, len(listed)),
+                       "gone": lambda: held["gone"](ApiError("not_found", "Not found.", 404))}
+            for kind in (first, "gone" if first == "list" else "list"):
+                answers[kind]()
+            said = [t for t in lines()[since:] if "no longer refreshed" in (t or "")]
+            check(not processings._poll.isActive() and processings.opened is None and page.opened is None
+                  and len(said) == 1,
+                  f"OPENED GONE: the {first} answer first, then the other: the poll is stopped, the card is cleared, "
+                  f"one message ({processings._poll.isActive()}, {said})")
 
         # a transient failure for the opened card: one alert, and the poll is asked again after one interval
         controller.open_processing("order-flaky")

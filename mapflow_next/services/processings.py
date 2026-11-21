@@ -90,7 +90,8 @@ class Processings(QObject):
         # and send notices. A processing in two places still gives one notice: the first one that sees the change
         # writes the final status here, so the second sends nothing.
         self._last_status: Dict[str, Status] = {}
-        self._sent = 0                          # list requests sent so far: each answer knows which one it answers
+        self._sent = 0                          # status requests sent so far: an answer knows which one it answers
+        self._final_at: Dict[str, int] = {}     # processing id → `_sent` when an answer last gave it a final status
         self._restarted_at: Dict[str, int] = {}     # processing id → `_sent` when its restart was accepted
         self._opened_failures = PollFailures(POLL_FAILURES_BEFORE_ALERT)    # the failures of the opened card's poll
         self.started_here: Set[str] = set()
@@ -229,6 +230,7 @@ class Processings(QObject):
         self._full.reset()                      # a list still loading for the previous project no longer counts
         self._found.reset()
         self._last_status = {}
+        self._final_at = {}
         self._restarted_at = {}
         self._opened_failures.succeeded()
         self._planned, self._planned_seq = [], self._planned_seq + 1
@@ -290,16 +292,23 @@ class Processings(QObject):
         if self._watching() and not self._poll.isActive():
             self._schedule()
 
-    def _note(self, item: Processing) -> None:
-        """The status of a watched processing, from any list or the opened card. The first one that sees it reach a
-        final status gives the notice and writes the status; the others find it written and send nothing. An answer
-        never moves a final status back to one that is not final, whichever list it comes from, since the answers
-        of one poll tick come back in either order: only an accepted restart does (`restart`)."""
+    def _note(self, item: Processing, sent: int) -> None:
+        """The status of a watched processing, from any list or the opened card; `sent` is the number of the request
+        that the answer belongs to. The first answer that shows it reach a final status gives the notice and writes
+        the status; the others find it written and send nothing. When an answer gives a final status, `_final_at`
+        keeps the newest request number issued by then: an answer that is not final and belongs to a request up to
+        that number may hold an older read of the server (the answers of one poll tick come back in either order), so
+        it is dropped. A request sent later is newer: its answer moves the status back (a restart in Mapflow Web, a
+        rework after a review), and the next finish is a new one. An accepted restart of the plugin writes the status
+        itself (`restart`)."""
         before = self._last_status.get(item.id)
-        if before is not None and before.is_terminal and not item.status.is_terminal:
+        final = item.status.is_terminal
+        if before is not None and before.is_terminal and not final and sent <= self._final_at.get(item.id, self._sent):
             return
         self._last_status[item.id] = item.status
-        if before is not None and not before.is_terminal and item.status.is_terminal:
+        if final:
+            self._final_at[item.id] = self._sent
+        if before is not None and not before.is_terminal and final:
             (self.finished if item.status is Status.ok else self.failed).emit(item)
 
     def _after_restart(self, items: List[Processing], sent: int) -> None:
@@ -331,7 +340,8 @@ class Processings(QObject):
         if not self.project or self.opened is None:
             return
         self._opened_refresh += 1
-        token, processing_id, project_id = self._opened_refresh, self.opened.id, self.project.id
+        self._sent += 1
+        token, processing_id, project_id, sent = self._opened_refresh, self.opened.id, self.project.id, self._sent
 
         def current() -> bool:
             return (token == self._opened_refresh and self.project is not None and self.project.id == project_id
@@ -343,7 +353,7 @@ class Processings(QObject):
             self._opened_failures.succeeded()
             if any(p.id == fresh.id for p in self._full.items):
                 return                          # it is on the loaded pages now: the listed copy is shown
-            self._note(fresh)
+            self._note(fresh, sent)
             self.opened = fresh
             self.changed.emit(self._full.items)
             self._resume_poll()
@@ -358,6 +368,8 @@ class Processings(QObject):
             if outcome == STOP:
                 self.opened = None
                 self.changed.emit(self._full.items)
+                if not self._watching() and not (self._full.failed or (self.terms and self._found.failed)):
+                    self._poll.stop()           # a list answer of this tick may have set it for the card
                 text = poll_notice(outcome, "opened processing", error.message, error.kind)
                 if text:
                     self.listFailed.emit(text)
@@ -436,7 +448,7 @@ class Processings(QObject):
         for item in items:
             if item.id not in known and item.id not in self._deleted:
                 listing.items.append(item)
-                self._last_status.setdefault(item.id, item.status)
+                self._note(item, sent)
         listing.total = max(total, len(listing.items))
         if listing is self._full:
             self._drop_opened_if_listed()
@@ -466,7 +478,7 @@ class Processings(QObject):
         items = [p for p in items if p.id not in self._deleted]
         self._after_restart(items, sent)
         for item in items:
-            self._note(item)
+            self._note(item, sent)
         listing.items = [p for p in _merge(items, listing.items, complete) if p.id not in self._deleted]
         listing.total = max(total, len(listing.items))
         listing.active = any(not p.is_final for p in items)
@@ -548,7 +560,8 @@ class Processings(QObject):
             return False
         if self.opened and self.opened.id == processing_id:
             return False
-        token, project_id = self._open_token, self.project.id
+        self._sent += 1
+        token, project_id, sent = self._open_token, self.project.id, self._sent
 
         def done(processing: Processing) -> None:
             if token != self._open_token or not self.project or self.project.id != project_id:
@@ -556,7 +569,7 @@ class Processings(QObject):
             if processing.project_id and processing.project_id != project_id:
                 self.actionFailed.emit("That processing is in another project.")
                 return
-            self._note(processing)
+            self._note(processing, sent)
             if not any(p.id == processing.id for p in self._full.items):
                 self._opened_failures.succeeded()
                 self.opened = processing
