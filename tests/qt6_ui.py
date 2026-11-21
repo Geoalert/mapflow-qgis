@@ -279,8 +279,43 @@ def _run():
     spin()
     eyes = [b for b in run.findChildren(QToolButton) if b.toolTip() == "Hide the preview" and b.isVisible()]
     check(len(eyes) == 1 and eyes[0].property("on") is True, "the eye shows a preview on the map as on")
+    tiles = rows + [ImageryRow(key="tile:l1", title="Tiles XYZ", meta="zoom 2–17", price="In estimate",
+                               zooms=list(range(2, 18)), zoom=17, group="QGIS tile layers"),
+                    ImageryRow(key="tile:l2", title="Tiles local", meta="Its host is this computer or a private "
+                               "network address. Mapflow cannot reach it.", group="QGIS tile layers",
+                               disabled=True)]
+    run.set_imagery(tiles, "tile:l1")
+    spin()
+    heading = [label.text() for label in run.group_labels]
+    disabled = run._rows[-1]
+    chosen = recorder(run.imageryChosen)
+    disabled.clicked.emit()
+    check(heading == ["QGIS tile layers"] and len(run._rows) == 4 and not disabled.isEnabled()
+          and disabled.toolTip() == disabled.meta.text() and not chosen
+          and not [t for t in run._rows[-2].findChildren(QToolButton) if t.toolTip().startswith("Preview")],
+          "a tile layer is a row under its heading, a disabled one shows its reason and chooses nothing")
+    shot(content, "q6-03b-run-tiles")
     run.set_issues([Issue("area", "Choose an area")], False)
     check(not run.run_button.isEnabled(), "an issue disables Run")
+
+
+@step("tile login alert")
+def _tile_alert():
+    from mapflow_next.ui.tile_login_alert import TEXT, TileLoginAlert
+    box = TileLoginAlert("Tiles XYZ")
+    box.show()
+    check(box.text() == TEXT.replace("{layer}", "Tiles XYZ") and box.send_button.text() == "Send and run"
+          and box.cancel_button.text() == "Cancel" and box.checkbox.text() == "Don't show this again"
+          and box.defaultButton() is box.cancel_button, "the tile login alert shows the text, the buttons and the box")
+    box.checkbox.setChecked(True)
+    box.send_button.click()
+    sent = box.outcome()
+    box = TileLoginAlert("Tiles XYZ")
+    box.show()
+    box.checkbox.setChecked(True)
+    box.cancel_button.click()
+    check(sent == (True, True) and box.outcome() == (False, False),
+          "Send and run keeps the box, Cancel never does")
 
 
 @step("rename dialog")

@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set, Tuple
 
 from .models import BillingType, DataProvider, Model, Project, UserStatus
+from .tile_layers import TileOffer, TileParams, nearest_zoom, user_defined
 
 MIN_BILLED_AREA_KM2 = 1.0
 
@@ -29,8 +30,8 @@ class AreaOfInterest:
 
 @dataclass
 class ImageryChoice:
-    """Where the pixels come from. Exactly one of the three kinds."""
-    kind: str                                   # provider | my_imagery | catalog
+    """Where the pixels come from. Exactly one of the four kinds."""
+    kind: str                                   # provider | my_imagery | catalog | tile
     label: str
     provider: Optional[DataProvider] = None     # kind == provider
     zoom: Optional[int] = None
@@ -38,6 +39,9 @@ class ImageryChoice:
     image_ids: List[str] = field(default_factory=list)   # my_imagery (optional) or catalog
     catalog_provider: Optional[str] = None      # kind == catalog: the image's provider name
     min_area_km2: float = 0.0                   # kind == catalog: the smallest order the image's provider sells
+    tile_layer_id: Optional[str] = None         # kind == tile: the QGIS layer…
+    tile_name: str = ""                         # …its name
+    tile_params: Optional[TileParams] = field(default=None, repr=False)     # …and what is sent for it
 
     @classmethod
     def from_provider(cls, provider: DataProvider, zoom: Optional[int] = None) -> "ImageryChoice":
@@ -62,9 +66,27 @@ class ImageryChoice:
         return cls("catalog", label, image_ids=[image_id], catalog_provider=provider_name, zoom=zoom,
                    min_area_km2=min_area_km2 or 0.0)
 
+    @classmethod
+    def from_tile(cls, offer: TileOffer, zoom: Optional[int] = None) -> "ImageryChoice":
+        """A usable QGIS tile layer, at the offered zoom nearest to `zoom` (18 when it is None)."""
+        zoom = nearest_zoom(offer.params.zooms, zoom)
+        return cls("tile", f"{offer.name} · zoom {zoom}", zoom=zoom, tile_layer_id=offer.layer_id,
+                   tile_name=offer.name, tile_params=offer.params)
+
+    @property
+    def identity(self) -> tuple:
+        """What tells one imagery choice from another (the key of the cost answer)."""
+        source = (self.provider.name if self.provider else self.tile_layer_id if self.kind == "tile"
+                  else self.mosaic_id)
+        kind = self.tile_params.source_type if self.tile_params else ""
+        address = self.tile_params.url if self.tile_params else ""
+        return self.kind, source, kind, address, self.zoom, tuple(self.image_ids)
+
     @property
     def source_name(self) -> str:
         """The imagery's provider as a person reads it."""
+        if self.kind == "tile":
+            return "QGIS tile layer"
         if self.kind == "provider" and self.provider:
             return self.provider.display_name
         if self.kind == "catalog":
@@ -80,7 +102,11 @@ class ImageryChoice:
             return 0.0
         return None
 
-    def source_params(self) -> dict:
+    def source_params(self, credentials: Optional[Tuple[str, str]] = None) -> dict:
+        """The `sourceParams` of the request. `credentials` (login, password) go into a tile layer's
+        `userDefined` and nowhere else."""
+        if self.kind == "tile":
+            return {"userDefined": user_defined(self.tile_params, self.zoom, credentials)}
         if self.kind == "provider":
             return {"dataProvider": {"providerName": self.provider.name, "zoom": str(self.zoom)}}
         if self.kind == "my_imagery":
@@ -103,6 +129,8 @@ def processing_meta(imagery: "ImageryChoice", version: str = "") -> Dict[str, st
         source = imagery.provider.name.lower()
     elif imagery.kind == "my_imagery":
         source = "my imagery"
+    elif imagery.kind == "tile":
+        source = imagery.tile_params.meta_source
     else:
         source = "imagery search"
     meta = {"source-app": "qgis", "source": source}
@@ -246,8 +274,9 @@ class RunDraft:
                                                   f"{status.remaining_area_km2:,.2f} km² left."))
         return found
 
-    def payload(self, project_id: str, version: str = "") -> dict:
-        """The `POST /processings/v2` body (also accepted by `/processing/cost/v2`)."""
+    def payload(self, project_id: str, version: str = "", credentials: Optional[Tuple[str, str]] = None) -> dict:
+        """The `POST /processings/v2` body (also accepted by `/processing/cost/v2`). `credentials`: the login and
+        password of a tile layer, for the start only; the cost request has none."""
         if not (self.model and self.aoi and self.imagery):
             raise ValueError("The draft is incomplete")
         body = {
@@ -255,7 +284,7 @@ class RunDraft:
             "projectId": project_id,
             "wdId": self.model.id,
             "geometry": self.processed_area.geometry,
-            "params": {"sourceParams": self.imagery.source_params()},
+            "params": {"sourceParams": self.imagery.source_params(credentials)},
             "blocks": self.model.blocks_payload(self.options),
             "meta": processing_meta(self.imagery, version),
         }

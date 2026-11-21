@@ -4447,6 +4447,520 @@ def check_network_timeout(iface, plugin, state):
     check(nam.timeout() == saved, "NETWORK TIMEOUT: QGIS's timeout is put back")
 
 
+def check_tile_layers(iface, plugin, state, api_url):
+    """spec/002_B § Imagery from a QGIS tile layer: the XYZ/TMS layers of the project are rows of the run form; the
+    plugin's own layers, WMS layers and other layers are not; a layer it cannot use is disabled with its reason;
+    the request carries `userDefined` for XYZ, TMS and QUADKEY; a layer with a login gives the alert, and the
+    login is sent only after "Send and run"; "Don't show this again" is kept only with "Send and run"; nothing of
+    the layer is stored; no address, login or password reaches a log line, a message, a report or a card; Run
+    again finds the layer. The alert is answered by a stand-in for `Controller._ask_tile_login` (as the
+    confirmation of Delete is), and the dialog class is clicked without `exec()`. Everything the function changes
+    is restored."""
+    from urllib.parse import quote
+    from qgis.core import QgsApplication, QgsAuthMethodConfig, QgsRasterLayer
+    from qgis.PyQt.QtWidgets import QCheckBox, QToolButton
+    from mapflow_next.core import tile_layers as core_tiles
+    from mapflow_next.core.models import CatalogImage, Processing as ProcessingModel
+    from mapflow_next.settings import SKIP_TILE_LOGIN_ALERT
+    from mapflow_next.ui.processings_page import ProcessingCard
+    from mapflow_next.ui.tile_login_alert import TEXT, TileLoginAlert
+
+    session, processings = plugin.services[1], plugin.services[2]
+    controller, content = plugin.controller, plugin.dock.content
+    run, project, manager, settings = content.run, QgsProject.instance(), QgsApplication.authManager(), QgsSettings()
+    flag_key = "mapflow_next/" + SKIP_TILE_LOGIN_ALERT
+    host = "tiles.example.com"
+    login, password = "tile-user-42", "tile-pass-42"          # pragma: allowlist secret
+    cfg_login, cfg_password = "cfg-user-77", "cfg-pass-77"    # pragma: allowlist secret
+    address = f"https://{host}/KEYSECRET99/xyz/{{z}}/{{x}}/{{y}}.png?token=TOK123"
+    secrets = ("KEYSECRET99", "TOK123", login, password, cfg_login, cfg_password, address)
+    created, plugin_layers, invalid = [], [], []
+
+    def tile(name, url, extra="", encode=True):
+        layer = QgsRasterLayer("type=xyz&url=" + (quote(url, safe="") if encode else url) + extra, name, "wms")
+        if not layer.isValid():
+            invalid.append(name)
+        project.addMapLayer(layer)
+        created.append(layer.id())
+        return layer
+
+    def make_config(method, **values):
+        config = QgsAuthMethodConfig()
+        config.setName(f"tile-test-{method}")
+        config.setMethod(method)
+        for key, value in values.items():
+            config.setConfig(key, value)
+        manager.storeAuthenticationConfig(config)
+        return config.id()
+
+    saved = {"imagery": controller.draft.imagery, "aoi": controller.aoi_layer, "model": controller.draft.model,
+             "options": set(controller.draft.options), "image": controller.chosen_image,
+             "restored": controller._restored_image, "ask": controller._ask_tile_login,
+             "items": list(processings.items), "processings": list(state.processings),
+             "flag": settings.value(flag_key), "page": content.stack.currentWidget()}
+    configs_before = set(manager.configIds())
+    layers_before = set(project.mapLayers())
+    basic_id = make_config("Basic", username=cfg_login, password=cfg_password)
+    other_id = make_config("APIHeader", headers="X-Key=1")
+
+    class Ask:
+        answer = (False, False)
+        asked = []
+
+        def __call__(self, layer_name):
+            Ask.asked.append(layer_name)
+            return Ask.answer
+
+    controller._ask_tile_login = Ask()
+    settings.remove(flag_key)
+    wait_until(lambda: False, 0)
+    log_lines = []
+    log = QgsApplication.messageLog()
+    on_log = lambda message, *_: log_lines.append(message)      # noqa: E731
+    signal = log.messageReceivedWithFormat if hasattr(log, "messageReceivedWithFormat") else log.messageReceived
+    signal.connect(on_log)
+
+    xyz_url = f"https://{host}/xyz/{{z}}/{{x}}/{{y}}.png?style=a&v=2"
+    tms_url = f"https://{host}/tms/{{z}}/{{x}}/{{-y}}.png"
+    quad_url = f"https://{host}/quad/{{q}}.jpg"
+    try:
+        # ---------- the layers of the project ----------
+        xyz = tile("Tiles XYZ", xyz_url, "&zmin=2&zmax=17")
+        tms = tile("Tiles TMS", tms_url, "&zmin=0&zmax=19")
+        quad = tile("Tiles QUADKEY", quad_url, "&zmin=0&zmax=25")
+        with_login = tile("Tiles login", f"https://{host}/login/{{z}}/{{x}}/{{y}}.png",
+                          f"&username={login}&password={password}")
+        with_config = tile("Tiles Basic", f"https://{host}/basic/{{z}}/{{x}}/{{y}}.png", f"&authcfg={basic_id}")
+        refused = {
+            "Refused bare": (tile("Refused bare", f"https://{host}/tiles.png"), core_tiles.NO_PLACEHOLDERS),
+            "Refused file": (tile("Refused file", "file:///tmp/{z}/{x}/{y}.png"), core_tiles.NOT_HTTP),
+            "Refused localhost": (tile("Refused localhost", "http://localhost:8080/{z}/{x}/{y}.png"),
+                                  core_tiles.PRIVATE_HOST),
+            "Refused private": (tile("Refused private", "http://192.168.1.5/{z}/{x}/{y}.png"),
+                                core_tiles.PRIVATE_HOST),
+            "Refused referer": (tile("Refused referer", f"https://{host}/r/{{z}}/{{x}}/{{y}}.png",
+                                     "&referer=https://example.org"), core_tiles.HEADERS),
+            "Refused header": (tile("Refused header", f"https://{host}/h/{{z}}/{{x}}/{{y}}.png",
+                                    "&http-header:X-Key=abc"), core_tiles.HEADERS),
+            "Refused config": (tile("Refused config", f"https://{host}/c/{{z}}/{{x}}/{{y}}.png",
+                                    f"&authcfg={other_id}"), core_tiles.NOT_BASIC)}
+        wms = QgsRasterLayer(f"url={api_url}/open/wms&layers=a&styles=&format=image/png&crs=EPSG:3857",
+                             "WMS layer", "wms")
+        project.addMapLayer(wms)
+        created.append(wms.id())
+        preview = plugin.layers.tile_raster(f"https://{host}/plugin/{{z}}/{{x}}/{{y}}.png", "Plugin preview")
+        plugin.layers.add(preview, preview="provider:test")
+        result = tile("Plugin result", f"https://{host}/result/{{z}}/{{x}}/{{y}}.png")
+        result.setCustomProperty("mapflow_next/processing_id", "p-1")
+        created.remove(result.id())
+        plugin_layers += [preview.id(), result.id()]
+        vector = blocks_layer()
+        project.addMapLayer(vector)
+        created.append(vector.id())
+        tiff = QgsRasterLayer(make_geotiff("tile-check.tif"), "GeoTIFF layer", "gdal")
+        project.addMapLayer(tiff)
+        created.append(tiff.id())
+        check(not invalid and wms.isValid() and wms.providerType() == "wms",
+              f"TILE LAYERS: the test layers are valid, the WMS one too ({invalid})")
+        snapshot = {layer.id(): (layer.name(), layer.source(), tuple(layer.customPropertyKeys()))
+                    for layer in (xyz, tms, quad, with_login, with_config)}
+
+        # the form: model, area, the run page open (so that the project's signals change it at once)
+        controller.on_model("wd-buildings")
+        area = old_town_layer()
+        project.addMapLayer(area)
+        created.append(area.id())
+        controller.set_aoi_layer(area)
+        controller.chosen_image = controller._restored_image = None
+        content.open_run()
+        controller.refresh_run()
+        check(content.stack.currentWidget() is run, "TILE LAYERS: the run form is the open page")
+
+        def rows():
+            return controller._imagery_rows(session.status, True)[0]
+
+        def tile_rows():
+            return [r for r in rows() if r.key.startswith("tile:")]
+
+        def ui_titles():
+            return [r.title.text() for r in run._rows]
+
+        def ui_row(name):
+            return next((r for r in run._rows if r.title.text() == name), None)
+
+        def row_of(name):
+            return next((r for r in rows() if r.title == name), None)
+
+        def key_of(layer):
+            return f"tile:{layer.id()}"
+
+        # ---------- which layers are listed ----------
+        usable = ["Tiles XYZ", "Tiles TMS", "Tiles QUADKEY", "Tiles login", "Tiles Basic"]
+        titles = ui_titles()
+        check([r.title for r in tile_rows() if not r.disabled] == sorted(usable, key=str.lower)
+              and all(name in titles for name in usable),
+              f"TILE LAYERS: the tile layers of the project are rows of the run form ({titles})")
+        check(all(name in titles for name in refused) and len(tile_rows()) == len(usable) + len(refused),
+              "…the layers it cannot use too")
+        check(not any(name in titles for name in ("Plugin preview", "Plugin result", "WMS layer", "GeoTIFF layer",
+                                                  "Blocks", "Old town")),
+              "…and no layer the plugin added (a preview, a result), no WMS layer, no vector or GeoTIFF layer")
+        check([label.text() for label in run.group_labels] == ["QGIS tile layers"],
+              "…under the heading “QGIS tile layers”")
+        kinds = []
+        for row in rows():
+            kind = row.key.split(":")[0]
+            if not kinds or kinds[-1] != kind:
+                kinds.append(kind)
+        controller.chosen_image = CatalogImage(id="order-image", provider="Maxar", zoom=18)
+        controller.refresh_run()
+        with_catalog = []
+        for row in rows():
+            kind = row.key.split(":")[0]
+            if not with_catalog or with_catalog[-1] != kind:
+                with_catalog.append(kind)
+        controller.chosen_image = None
+        controller.refresh_run()
+        check(kinds == ["mosaic", "provider", "tile"] and with_catalog == ["mosaic", "provider", "tile", "catalog"],
+              f"TILE LAYERS: the rows are My imagery, the providers, the tile layers, the catalog image "
+              f"({kinds}, {with_catalog})")
+
+        # ---------- disabled layers ----------
+        before_choice = controller.draft.imagery
+        for name, (layer, reason) in refused.items():
+            row, ui = row_of(name), ui_row(name)
+            ok = row is not None and row.disabled and row.meta == reason and ui is not None and not ui.isEnabled() \
+                and ui.meta.text() == reason and ui.toolTip() == reason and not ui.findChildren(QComboBox)
+            controller.on_imagery(key_of(layer))
+            ui.clicked.emit()
+            check(ok and controller.draft.imagery is before_choice,
+                  f"TILE LAYERS: “{name}” is disabled with its reason, and a click chooses nothing ({reason})")
+
+        # ---------- zoom lists ----------
+        def combo_zooms(name):
+            combo = ui_row(name).findChildren(QComboBox)[0]
+            return [combo.itemData(i) for i in range(combo.count())], combo.itemData(combo.currentIndex())
+        check(combo_zooms("Tiles XYZ") == (list(range(2, 18)), 17),
+              f"TILE LAYERS: the zooms are zmin to zmax, the default the nearest to 18 ({combo_zooms('Tiles XYZ')})")
+        check(combo_zooms("Tiles TMS") == (list(range(0, 20)), 18) and
+              combo_zooms("Tiles QUADKEY") == (list(range(0, 22)), 18),
+              "…and none above 21, 18 when it is offered")
+        check(any(isinstance(w, QLabel) and w.text() == "In estimate" for w in ui_row("Tiles XYZ").findChildren(QLabel))
+              and "zoom 2–17" in row_of("Tiles XYZ").meta,
+              "…the price column says the price is in the estimate, the meta line the range")
+
+        # ---------- the list follows the project ----------
+        late = tile("Late tiles", f"https://{host}/late/{{z}}/{{x}}/{{y}}.png")
+        check("Late tiles" in ui_titles(), "TILE LAYERS: a layer that is added is a row at once")
+        late.setName("Late renamed")
+        check("Late renamed" in ui_titles() and "Late tiles" not in ui_titles(),
+              "…a rename changes its row at once")
+        late_id = late.id()
+        project.removeMapLayer(late_id)
+        created.remove(late_id)
+        check("Late renamed" not in ui_titles(), "…a layer that is removed leaves the list at once")
+
+        # ---------- the request: XYZ, TMS, QUADKEY ----------
+        def starts():
+            return [r for r in state.requests if r[0] == "POST" and r[1] == "/processings/v2"]
+
+        def costs():
+            return [r for r in state.requests if r[0] == "POST" and r[1] == "/processing/cost/v2"]
+
+        def start_run():
+            sent = len(starts())
+            controller.run()
+            ok = wait_until(lambda: len(starts()) == sent + 1 and not controller.starting, 8)
+            content.open_run()
+            return starts()[-1][2] if ok else None
+
+        def choose(layer, zoom=None):
+            if zoom is None:
+                controller.on_imagery(key_of(layer))
+            else:
+                controller.on_zoom(key_of(layer), zoom)
+
+        aoi_geometry = controller.draft.aoi.geometry
+        ids_before_run = set(project.mapLayers())
+        for layer, kind, url, zoom, source in ((xyz, "XYZ", xyz_url, 16, "xyz"),
+                                               (tms, "TMS", tms_url.replace("{-y}", "{y}"), 17, "tms"),
+                                               (quad, "QUADKEY", quad_url, None, "quadkey")):
+            costs_before = len(costs())
+            choose(layer, zoom)
+            chosen = controller.draft.imagery
+            check(chosen.kind == "tile" and chosen.tile_layer_id == layer.id()
+                  and controller.draft.coverage is None
+                  and not controller.draft.issues(session.project, session.status),
+                  f"TILE LAYERS: {kind}: the layer is chosen at zoom {chosen.zoom}, with no footprint")
+            check(wait_until(lambda: controller.server_cost == 70 and len(costs()) > costs_before, 6)
+                  and "70" in run.cost_value.text(),
+                  f"…the form shows the cost from POST /processing/cost/v2 ({run.cost_value.text()})")
+            cost_user_defined = costs()[-1][2]["params"]["sourceParams"]["userDefined"]
+            check(cost_user_defined["sourceType"] == kind and "rasterLogin" not in cost_user_defined
+                  and "rasterPassword" not in cost_user_defined, "…whose body has userDefined and no login")
+            eye = [b for b in ui_row(layer.name()).findChildren(QToolButton)
+                   if b.toolTip().startswith(("Preview", "Hide"))]
+            body = start_run()
+            check(body is not None, f"TILE LAYERS: {kind}: the processing starts")
+            if body is None:
+                continue
+            sent_zoom = chosen.zoom
+            expected = {"sourceType": kind, "url": url, "zoom": sent_zoom, "crs": "epsg:3857"}
+            check(body["params"] == {"sourceParams": {"userDefined": expected}}
+                  and body["meta"]["source"] == source and body["geometry"] == aoi_geometry,
+                  f"…the body has userDefined {expected}, meta.source {source!r} and the whole area "
+                  f"({body['params']}, {body['meta']})")
+            check(not eye and set(project.mapLayers()) == ids_before_run,
+                  "…no eye and no preview layer was added by choosing or running")
+        check(not Ask.asked, "TILE LAYERS: a layer without a login gives no alert")
+        check(core_tiles.tile_params(core_tiles.tile_source(xyz.source()))[0].url == xyz_url,
+              "…the decoded address keeps its query")
+
+        # ---------- the area checks of § AOI area limit still apply ----------
+        big = QgsVectorLayer("Polygon?crs=EPSG:4326", "Big area", "memory")
+        feature = QgsFeature()
+        feature.setGeometry(QgsGeometry.fromWkt("POLYGON((37 55, 38 55, 38 56, 37 56, 37 55))"))
+        big.dataProvider().addFeatures([feature])
+        big.updateExtents()
+        project.addMapLayer(big)
+        created.append(big.id())
+        controller.set_aoi_layer(big)
+        controller.refresh_run()
+        sent = len(starts())
+        controller.run()
+        check(any(i.field == "area" and "allows" in i.text
+                  for i in controller.draft.issues(session.project, session.status))
+              and not run.run_button.isEnabled() and len(starts()) == sent,
+              "TILE LAYERS: an area over the plan's limit still blocks a tile layer's run")
+        controller.set_aoi_layer(area)
+        controller.refresh_run()
+
+        # ---------- the alert ----------
+        choose(with_login, 16)
+        check(controller.draft.imagery.tile_params.has_login and run.run_button.isEnabled(),
+              "TILE LAYERS: a layer with a login is chosen")
+        before_image, sent = controller.draft.imagery, len(starts())
+        Ask.asked.clear()
+        Ask.answer = (False, False)
+        controller.run()
+        check(Ask.asked == ["Tiles login"] and len(starts()) == sent and not controller.starting
+              and controller.draft.imagery is before_image and settings.value(flag_key) is None,
+              "TILE LAYERS: a layer with a login gives the alert; Cancel sends nothing and changes nothing")
+        Ask.answer = (False, True)
+        controller.run()
+        check(len(starts()) == sent and settings.value(flag_key) is None,
+              "…Cancel with the box ticked stores nothing either")
+        Ask.answer = (True, False)
+        Ask.asked.clear()
+        body = start_run()
+        sent_login = (body or {}).get("params", {}).get("sourceParams", {}).get("userDefined", {})
+        check(Ask.asked == ["Tiles login"] and sent_login.get("rasterLogin") == login
+              and sent_login.get("rasterPassword") == password and settings.value(flag_key) is None,
+              f"…Send and run sends the login and the password, and stores nothing ({sorted(sent_login)})")
+        Ask.asked.clear()
+        start_run()
+        check(Ask.asked == ["Tiles login"], "…without the box ticked the next run asks again")
+        Ask.answer = (True, True)
+        Ask.asked.clear()
+        body = start_run()
+        check(len(Ask.asked) == 1 and body is not None and str(settings.value(flag_key)).lower() == "true",
+              "…Send and run with the box ticked stores skip_tile_login_alert")
+        Ask.asked.clear()
+        body = start_run()
+        sent_login = (body or {}).get("params", {}).get("sourceParams", {}).get("userDefined", {})
+        check(not Ask.asked and sent_login.get("rasterLogin") == login,
+              "…and the next run gives no alert and still sends the login")
+        settings.remove(flag_key)
+        choose(with_config, 15)
+        Ask.answer = (True, False)
+        Ask.asked.clear()
+        body = start_run()
+        sent_login = (body or {}).get("params", {}).get("sourceParams", {}).get("userDefined", {})
+        check(Ask.asked == ["Tiles Basic"] and sent_login.get("rasterLogin") == cfg_login
+              and sent_login.get("rasterPassword") == cfg_password,
+              "…a Basic authentication configuration gives the alert too, and its login is sent")
+
+        # the dialog class: its text, buttons and box, clicked without exec()
+        box = TileLoginAlert('My "layer"')
+        box.show()
+        check(box.text() == TEXT.replace("{layer}", 'My "layer"') and box.text() == (
+            'Mapflow needs the login and the password of the layer "My "layer"" to read its tiles. The plugin sends '
+            'them to Mapflow with the processing. Members of the project can read them.'),
+              f"TILE LOGIN ALERT: the text is the spec's ({box.text()})")
+        check(box.send_button.text() == "Send and run" and box.cancel_button.text() == "Cancel"
+              and box.defaultButton() is box.cancel_button and box.escapeButton() is box.cancel_button
+              and box.checkbox.text() == "Don't show this again" and not box.checkbox.isChecked()
+              and isinstance(box.checkBox(), QCheckBox) and ("http" not in box.text()),
+              "…the buttons are Send and run and Cancel (the default), the box is “Don't show this again”, "
+              "and there is no address")
+        box.checkbox.setChecked(True)
+        box.cancel_button.click()
+        check(box.outcome() == (False, False), "…Cancel with the box ticked stores nothing")
+        box = TileLoginAlert("Tiles")
+        box.show()
+        box.checkbox.setChecked(True)
+        box.send_button.click()
+        check(box.outcome() == (True, True), "…Send and run with the box ticked says to stop asking")
+        box = TileLoginAlert("Tiles")
+        box.show()
+        box.send_button.click()
+        check(box.outcome() == (True, False), "…Send and run alone sends and asks again next time")
+
+        # ---------- nothing is stored ----------
+        stored = [key for key in settings.allKeys() if any(x in str(settings.value(key)) for x in secrets + (host,))]
+        check(not stored and set(manager.configIds()) == configs_before | {basic_id, other_id},
+              f"TILE LAYERS: no address, login or password in QgsSettings ({stored}) or in the authentication "
+              "database")
+        check(all(snapshot[layer.id()] == (layer.name(), layer.source(), tuple(layer.customPropertyKeys()))
+                  for layer in (xyz, tms, quad, with_login, with_config)),
+              "…and the layers of the project keep their name, source and properties")
+
+        # ---------- an address, a login or a password never leaks ----------
+        settings.remove(flag_key)
+        del log_lines[:]
+        state.tile_refusal = (400, "source-validator.UrlBlacklisted",
+                              f"The specified basemap {address} is forbidden for {login}:{password}",
+                              {"url": address})
+        iface.bar.messages.clear()
+        choose(with_login, 14)
+        check(wait_until(lambda: bool(controller.cost_error), 6), "TILE LEAKS: the cost check is refused")
+        cost_text = run.cost_formula.text() + controller.cost_error
+        Ask.answer = (True, False)
+        controller.run()
+        check(wait_until(lambda: not controller.starting and any("didn't start" in (m or "")
+                                                                 for _l, m in iface.bar.messages), 6),
+              "TILE LEAKS: the start is refused")
+        expect_critical(iface, "didn't start", "TILE LEAKS: the refusal is a Critical line", count=1)
+        wait_until(lambda: False, 0.1)
+        texts = log_lines + [m or "" for _l, m in iface.bar.messages] + [cost_text, run.issues.text.text()]
+        leaked = [x for x in secrets if any(x in text for text in texts)]
+        check(not leaked and any(host in text for text in texts),
+              f"TILE LEAKS: no log line, message or cost line holds the address, the login or the password; the "
+              f"host is there ({leaked})")
+        state.tile_refusal = None
+
+        # a failure of the plugin's code after a start: its report holds none of them
+        def boom(_trigger):
+            raise ValueError("boom")
+        processings.refresh_shown = boom
+        Ask.answer = (True, False)
+        controller.run()
+        check(wait_until(lambda: not controller.starting and report_buttons(iface) == ["Send a report"], 8),
+              "TILE LEAKS: a failing callback after the start gives a Critical line with a report")
+        del processings.refresh_shown
+        reported = press_report(iface, "my comment")
+        expect_critical(iface, "boom", "TILE LEAKS: the failing callback is a Critical line")
+        expect_critical(iface, "didn't start", "TILE LEAKS: …and the start is reported as failed")
+        report = reported["text"]
+        leaked = [x for x in secrets if x in report or x in " ".join(log_lines)]
+        check(not leaked and "Response body:" in report and reported["modal"] == ["ReportDialog"],
+              f"TILE LEAKS: the report holds no address, login or password ({leaked})")
+
+        # ---------- the card ----------
+        def card_texts(pid):
+            card = next((c for c in content.processings.findChildren(ProcessingCard) if c.processing.id == pid), None)
+            return None if card is None else " | ".join(w.text() for w in card.findChildren(QLabel))
+
+        listed = fixtures.processing_json("tile-card", "OK", 100, name="Tile card run")
+        listed["params"] = {"sourceParams": {"userDefined": {
+            "sourceType": "XYZ", "url": address, "zoom": 17, "crs": "epsg:3857", "rasterLogin": login,
+            "rasterPassword": password}}}
+        failed_run = fixtures.processing_json("tile-failed", "FAILED", 0, name="Tile failed run")
+        failed_run["params"] = listed["params"]
+        failed_run["messages"] = [{"code": "source-validator.UrlBlacklisted", "parameters": {"url": address}}]
+        opened = fixtures.processing_json("tile-opened", "OK", 100, name="Tile opened run")
+        opened["params"] = listed["params"]
+        processings.items.insert(0, ProcessingModel.from_api(listed))
+        processings.items.insert(0, ProcessingModel.from_api(failed_run))
+        processings.opened = ProcessingModel.from_api(opened)
+        controller.render_processings()
+        shown = {pid: card_texts(pid) for pid in ("tile-card", "tile-failed", "tile-opened")}
+        check(all(text and f"Custom tile layer ({host})" in text for text in shown.values()),
+              f"TILE CARD: the list, a failed card and the opened card show “Custom tile layer” and the host "
+              f"({shown})")
+        check(not any(x in (text or "") for text in shown.values() for x in secrets)
+              and f"{host}" in (shown["tile-failed"] or ""),
+              "…and never the address, the login or the password; the failed card names the host")
+        processings.items[:] = [p for p in processings.items if not p.id.startswith("tile-")]
+        processings.opened = None
+        controller.render_processings()
+
+        # ---------- Run again ----------
+        def again(pid, url, source_type, zoom):
+            item = fixtures.processing_json(pid, "OK", 100, name=f"Run {pid}")
+            item["params"] = {"sourceParams": {"userDefined": {"sourceType": source_type, "url": url, "zoom": zoom,
+                                                               "crs": "epsg:3857"}}}
+            processings.items.insert(0, ProcessingModel.from_api(item))
+            iface.bar.messages.clear()
+            before = set(project.mapLayers())
+            content.processings.duplicate.emit(pid)
+            wait_until(lambda: controller.draft.aoi is not None and controller.draft.name == f"Run {pid}", 6)
+            for layer_id in set(project.mapLayers()) - before:      # the area layer that Run again adds
+                project.removeMapLayer(layer_id)
+
+        again("tile-again", xyz_url, "XYZ", 16)
+        selected = controller._imagery_rows(session.status, True)[1]
+        check(controller.draft.imagery is not None and controller.draft.imagery.tile_layer_id == xyz.id()
+              and controller.draft.imagery.zoom == 16 and selected == key_of(xyz)
+              and not any("tile layer" in (m or "") for _l, m in iface.bar.messages),
+              "TILE LAYERS: Run again chooses the project layer with the same address and source type, at the "
+              "zoom of the run")
+        again("tile-other-type", xyz_url, "TMS", 16)
+        check(controller.draft.imagery is None and controller._imagery_to_choose
+              and any("QGIS tile layer is not in this project" in (m or "") for _l, m in iface.bar.messages)
+              and any(i.field == "imagery" for i in controller.draft.issues(session.project, session.status))
+              and not run.run_button.isEnabled(),
+              "…another source type for the same address does not match: the form asks for the imagery")
+        again("tile-gone", "https://gone.example.org/{z}/{x}/{y}.png", "XYZ", 17)
+        check(controller.draft.imagery is None and controller._imagery_to_choose
+              and any("QGIS tile layer is not in this project" in (m or "") for _l, m in iface.bar.messages)
+              and controller._imagery_rows(session.status, True)[1] is None and not run.run_button.isEnabled(),
+              "…with no such layer the imagery stays empty, a message names the tile layer, and the run can't start")
+        controller.on_imagery(key_of(xyz))
+        gone_layer = tile("Chosen then removed", f"https://{host}/gone/{{z}}/{{x}}/{{y}}.png")
+        controller.on_imagery(key_of(gone_layer))
+        gone_id = gone_layer.id()
+        project.removeMapLayer(gone_id)
+        created.remove(gone_id)
+        issues = controller.draft.issues(session.project, session.status)
+        check(controller.draft.imagery is not None and controller.draft.imagery.kind == "tile"
+              and not run.run_button.isEnabled() and "no longer in the project" in run.imagery_error.text(),
+              "TILE LAYERS: a chosen layer that is removed stops the run, and says so; no other imagery replaces it "
+              f"({run.imagery_error.text()!r}, {issues})")
+    finally:
+        signal.disconnect(on_log)
+        state.tile_refusal = None
+        state.heal()
+        if "refresh_shown" in vars(processings):
+            del processings.refresh_shown
+        controller._ask_tile_login = saved["ask"]
+        for layer_id in set(project.mapLayers()) - layers_before:
+            project.removeMapLayer(layer_id)
+        for config_id in (basic_id, other_id):
+            manager.removeAuthenticationConfig(config_id)
+        if saved["flag"] is None:
+            settings.remove(flag_key)
+        else:
+            settings.setValue(flag_key, saved["flag"])
+        with state.lock:
+            state.processings[:] = saved["processings"]
+        processings.items[:] = saved["items"]
+        processings.opened = None
+        controller.tile_zoom.clear()
+        controller.draft.model, controller.draft.options = saved["model"], saved["options"]
+        controller.draft.imagery = saved["imagery"]
+        controller.chosen_image, controller._restored_image = saved["image"], saved["restored"]
+        controller._imagery_to_choose = False
+        controller.set_aoi_layer(saved["aoi"] if saved["aoi"] is not None and saved["aoi"].id() in project.mapLayers()
+                                 else None)
+        controller.draft.name, controller.draft.name_edited, controller.draft.description = "", False, ""
+        controller.starting = False
+        controller.refresh_run()
+        controller.render_processings()
+    check(set(project.mapLayers()) == layers_before and set(manager.configIds()) == configs_before,
+          "TILE LAYERS: the layers and the authentication configurations the check made are removed again")
+
+
 def plugin_timers(roots):
     """Every QTimer that is a child of a root, the roots included. The services and the controller have no
     parent, so each is searched on its own."""
@@ -6527,6 +7041,7 @@ def main():
     check_failed_requests(iface, plugin, state)
     check_upload_timeout(iface, plugin, state)
     check_network_timeout(iface, plugin, state)
+    check_tile_layers(iface, plugin, state, url)
 
     # ---------- account menu: Settings and Sign out ----------
     menu_actions = {a.text(): a for a in content.account_menu.actions()}

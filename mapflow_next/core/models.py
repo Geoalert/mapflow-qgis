@@ -10,6 +10,8 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
+from .tile_layers import host_of
+
 
 def parse_datetime(value: Any) -> Optional[datetime]:
     if not value:
@@ -371,6 +373,13 @@ class SourceInfo:
     zoom: Optional[int] = None
     mosaic_id: Optional[str] = None
     image_ids: List[str] = field(default_factory=list)
+    url: str = field(default="", repr=False)    # custom: the tile address the processing was started with
+    source_type: str = ""                       # custom: XYZ | TMS | QUADKEY
+
+    @property
+    def host(self) -> str:
+        """The host of a custom tile address: all that a card shows of it, since an address can carry a key."""
+        return host_of(self.url)
 
     @classmethod
     def from_params(cls, params: Optional[dict]) -> "SourceInfo":
@@ -395,7 +404,11 @@ class SourceInfo:
             return cls("catalog", provider=p.get("dataProvider") or "", zoom=zoom(p.get("zoom")),
                        image_ids=list(p.get("imageIds") or []))
         if source.get("userDefined"):
-            return cls("custom", zoom=zoom(source["userDefined"].get("zoom")))
+            # The login and password of the layer are never read back
+            p = source["userDefined"]
+            url, kind = p.get("url"), p.get("sourceType")
+            return cls("custom", zoom=zoom(p.get("zoom")), url=url if isinstance(url, str) else "",
+                       source_type=kind.upper() if isinstance(kind, str) else "")
         return cls()
 
 

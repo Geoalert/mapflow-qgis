@@ -20,7 +20,8 @@ from qgis.PyQt.QtGui import QImage
 from ..config import LAYER_GROUP_NAME, PREVIEW_PROPERTY, PROCESSING_PROPERTY, RESOURCES
 from ..core import filenames
 from ..core.models import Mosaic, Processing
-from . import styles
+from ..core.tile_layers import TileOffer
+from . import styles, tile_layers
 from .conversion import GPKG, ConvertTask, Converted, Job, claimed, work_path
 
 WGS84 = QgsCoordinateReferenceSystem("EPSG:4326")
@@ -316,6 +317,16 @@ class MapLayers:
         layer.updateExtents()
         layer.loadNamedStyle(str(RESOURCES / "styles" / "metadata_footprint.qml"))
         return self.add(layer)
+
+    # ---------- tile layers of the project ----------
+
+    def tile_offers(self) -> List[TileOffer]:
+        """The XYZ/TMS layers of the project that can be the imagery of a processing (see `tile_layers`)."""
+        return tile_layers.tile_offers(self.project)
+
+    def tile_credentials(self, layer_id: str) -> Optional[Tuple[str, str]]:
+        """The login and password of one of them, read now (it may ask for QGIS's master password)."""
+        return tile_layers.tile_credentials(layer_id, self.project)
 
     # ---------- results ----------
 

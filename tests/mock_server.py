@@ -23,6 +23,26 @@ OIDC = "/auth/realms/mapflow/protocol/openid-connect"
 # An 8×8 green PNG, for image previews
 PNG = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAACXBIWXMAAA9hAAAPYQGoP6dpAAAAFElEQVQImWOM"
                        "6vdjwAaYsIoOWgkA954BR71+LSAAAAAASUVORK5CYII=")  # pragma: allowlist secret (a PNG)
+# What a WMS server answers to GetCapabilities: one layer that QGIS reads as a valid `wms` raster layer (a WMS layer
+# is the tile source that the run form must not list)
+WMS_CAPABILITIES = """<?xml version="1.0" encoding="UTF-8"?>
+<WMS_Capabilities version="1.3.0" xmlns="http://www.opengis.net/wms" xmlns:xlink="http://www.w3.org/1999/xlink">
+<Service><Name>WMS</Name><Title>Test WMS</Title><OnlineResource xlink:href="http://127.0.0.1/open/wms"/></Service>
+<Capability>
+<Request>
+<GetCapabilities><Format>text/xml</Format><DCPType><HTTP><Get><OnlineResource xlink:href="http://127.0.0.1/open/wms?"/>
+</Get></HTTP></DCPType></GetCapabilities>
+<GetMap><Format>image/png</Format><DCPType><HTTP><Get><OnlineResource xlink:href="http://127.0.0.1/open/wms?"/>
+</Get></HTTP></DCPType></GetMap>
+</Request>
+<Layer>
+<Title>Root</Title><CRS>EPSG:3857</CRS><CRS>EPSG:4326</CRS>
+<EX_GeographicBoundingBox><westBoundLongitude>-180</westBoundLongitude><eastBoundLongitude>180</eastBoundLongitude>
+<southBoundLatitude>-85</southBoundLatitude><northBoundLatitude>85</northBoundLatitude></EX_GeographicBoundingBox>
+<Layer queryable="0"><Name>a</Name><Title>Layer A</Title></Layer>
+</Layer>
+</Capability>
+</WMS_Capabilities>"""
 REDIRECT_URI = "http://127.0.0.1:7070/qgis"
 ODD_BOUNDS_ID = "odd-bounds"          # a processing whose tilejson bounds cannot be transformed
 ODD_BOUNDS = [37.595, 91.0, 37.615, 92.0]
@@ -71,6 +91,9 @@ class State:
         self.failures = []                 # rules from fail(): requests that answer an error instead
         self.hang_seconds = 3              # how long a "hang" holds the request before it closes
         self.memory = None                 # GET /rasters/memory answers this, not fixtures.MEMORY (other limits)
+        self.tile_refusal = None           # (status, code, message, params): a cost check or a start of a QGIS tile
+        #                                    layer (`userDefined`) answers this error; the message and the params may
+        #                                    carry the tile address, as the server's own refusals do
         self.restart_refused = None        # (status, code, message): POST /processings/{id}/restart/v2 answers this
         self.image_bytes = bytes((n * 7 + n // 251) % 256 for n in range(1024 * 1024))   # the body of a download
         self.download_mode = "ok"          # "ok" | "truncated" (half the body, then the connection closes) |
@@ -274,6 +297,8 @@ class Handler(BaseHTTPRequestHandler):
             self.state.requests.append((method, path, body, dict(self.headers)))
         if method == "GET" and path == "/open/preview.png":     # a public picture: no sign-in
             return self._send(200, PNG, "image/png")
+        if method == "GET" and path == "/open/wms":             # a public WMS server: no sign-in
+            return self._send(200, WMS_CAPABILITIES, "text/xml")
         if method == "GET" and path.startswith("/open/image/"):   # a presigned URL: no sign-in
             return self._image_body()
         if not self._authorized():
@@ -424,6 +449,11 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, item or {})
         if method == "POST" and path in ("/processing/cost/v2", "/processings/v2") and not valid_processing(body):
             return self._send(400, {"code": "BAD_REQUEST", "message": "Invalid value for: body", "params": None})
+        refusal = self.state.tile_refusal
+        if method == "POST" and path in ("/processing/cost/v2", "/processings/v2") and refusal is not None \
+                and "userDefined" in body["params"]["sourceParams"]:
+            status, code, message, params = refusal
+            return self._send(status, {"code": code, "message": message, "params": params})
         if method == "POST" and path == "/processing/cost/v2":
             return self._send(200, "70", "text/plain")
         match = re.fullmatch(r"/tiles/([\w-]+)\.json", path)
@@ -673,10 +703,29 @@ def valid_processing(body) -> bool:
     mine = source.get("myImagery")
     if mine is not None and (("mosaicId" in mine) == ("imageIds" in mine)):
         return False
+    custom = source.get("userDefined")
+    if custom is not None:
+        present = [name for name in ("imagerySearch", "myImagery", "dataProvider", "userDefined") if name in source]
+        if not _valid_user_defined(custom, present):
+            return False
     meta = body.get("meta") or {}
     if not isinstance(meta, dict) or not all(isinstance(v, str) for v in meta.values()):
         return False
     return all(key in body for key in ("name", "projectId", "geometry", "params"))
+
+
+def _valid_user_defined(custom, present) -> bool:
+    """The backend's UserDefinedParams: a source type in upper case, an address, a zoom, the projection, and the login
+    and password together or not at all; and no other imagery next to it."""
+    if present != ["userDefined"] or not isinstance(custom, dict):
+        return False
+    if custom.get("sourceType") not in ("XYZ", "TMS", "QUADKEY") or not isinstance(custom.get("url"), str):
+        return False
+    zoom = custom.get("zoom")
+    if not isinstance(zoom, int) or isinstance(zoom, bool) or not 0 <= zoom <= 22 or custom.get("crs") != "epsg:3857":
+        return False
+    login = [key for key in ("rasterLogin", "rasterPassword") if key in custom]
+    return login in ([], ["rasterLogin", "rasterPassword"]) and all(isinstance(custom[key], str) for key in login)
 
 
 def auth_url(api_url):

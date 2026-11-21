@@ -207,7 +207,7 @@ every Mapflow user. The plugin links to the right page wherever it leaves someth
 | Balance and top-up, API tokens | **Mapflow Web** › [Account](https://app.mapflow.ai/account/balance) ("Top up" in the run form) | Payments and keys stay with the account |
 | Planned processings (search templates): the list | **Kept**: the Processings tab lists them, with a "search processing" mark; a click opens the project in Mapflow Web | The plugin lists them and does nothing else |
 | Planned processings: create one, its areas and results, pause and resume, run from it, delete it | **Mapflow Web** | Managing a search template is a task of its own; the plugin only shows that one exists |
-| Custom XYZ/TMS providers | **Not yet** | Left out of the first release; Mapflow's own basemaps and My imagery cover the main cases |
+| XYZ/TMS tile layers of the QGIS project as imagery | **Kept**, as a fourth kind of imagery: the run form lists them under "QGIS tile layers"; the plugin reads the layer and has no editor for tile sources. A login goes to Mapflow after an alert; a layer on this computer or a private network, with a referer or other headers, or with a non-Basic authentication configuration is listed disabled, with the reason | The tile sources a team already has in QGIS can be mapped without being entered again; Mapflow's servers can read only public addresses and send no custom headers |
 | Translations (es, pt, ru, zh) | **Not yet**: planned for 4.1 | Every text is new, so the 3.x translations don't apply |
 | Settings of the 3.x plugin | **Not migrated** | The two plugins install side by side; sign in and set the output folder again |
 | Georeferenced catalog previews, Segment Anything zooms | **Not yet** | Smaller features, after the first release |

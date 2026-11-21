@@ -36,7 +36,7 @@ def issue_html(issue: Issue) -> str:
 
 @dataclass
 class ImageryRow:
-    key: str                          # provider:<name> | mosaic | catalog
+    key: str                          # provider:<name> | mosaic | catalog | tile:<layer id>
     title: str
     meta: str = ""
     price: str = ""
@@ -49,6 +49,8 @@ class ImageryRow:
     removable: bool = False
     previewable: bool = False         # an eye shows it on the map (on the selected row)
     previewing: Optional[bool] = None  # its preview is on the map; None: the eye only zooms to it
+    group: str = ""                   # a heading above the first row of a group ("QGIS tile layers")
+    disabled: bool = False            # cannot be chosen: `meta` says why
 
 
 @dataclass
@@ -104,6 +106,7 @@ class RunPage(QWidget):
         self._model_ids: List[str] = []
         self._layer_ids: List[str] = []
         self._rows: List[OptionRow] = []
+        self.group_labels: List[QLabel] = []
         self._rows_key = None
         self._switches: Dict[str, Toggle] = {}
         self._options_key = None
@@ -419,12 +422,28 @@ class RunPage(QWidget):
         self._rows_key = key
         clear_layout(self.rows_box)
         self._rows = []
+        self.group_labels: List[QLabel] = []
         mosaic_row = basemap_row = None
+        group = ""
         for spec in rows:
+            if spec.group != group:
+                group = spec.group
+                if group:
+                    heading = label(group, "meta")
+                    self.group_labels.append(heading)
+                    self.rows_box.addWidget(heading)
             inline_price = spec.key == "mosaic"
             row = OptionRow(spec.title, spec.meta, title_detail=spec.price if inline_price else "")
             chosen = spec.key == selected
             row.set_selected(chosen)
+            if spec.disabled:
+                # The reason is the row's meta line and its tip; there is nothing to click, choose or zoom
+                row.setEnabled(False)
+                row.setToolTip(spec.meta)
+                row.setCursor(Qt.CursorShape.ArrowCursor)
+                self.rows_box.addWidget(row)
+                self._rows.append(row)
+                continue
             if spec.note:
                 row.add_note(spec.note)
             row.clicked.connect(guarded(lambda *_, key=spec.key: self.imageryChosen.emit(key)))

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from functools import partial
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional, Set, Tuple
 
 from qgis.PyQt.QtCore import QObject, QTimer, pyqtSignal
 
@@ -616,8 +616,10 @@ class Processings(QObject):
 
     # ---------- start and actions ----------
 
-    def start(self, draft: RunDraft) -> None:
-        payload = draft.payload(self.project.id, self.api.http.plugin_version)
+    def start(self, draft: RunDraft, credentials: Optional[Tuple[str, str]] = None) -> None:
+        """`credentials`: the login and password of a QGIS tile layer. They are in the request body only: nothing
+        here keeps them."""
+        payload = draft.payload(self.project.id, self.api.http.plugin_version, credentials)
 
         def done(processing: Optional[Processing]):
             if processing:

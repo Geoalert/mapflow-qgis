@@ -1,6 +1,6 @@
 """Mapflow REST endpoints used by the plugin, returning domain objects.
 
-The endpoint set is the current plugin's, minus what the new design leaves out (custom XYZ providers,
+The endpoint set is the current plugin's, minus what the new design leaves out (a tile source editor,
 review workflow actions). Of the planned processings (templates) only the project's list is read.
 """
 from __future__ import annotations
@@ -15,6 +15,12 @@ from ..core.models import (CatalogImage, ImageDownload, Mosaic, MosaicImage, Pla
 from .http import Http
 
 OnError = Optional[Callable]
+
+
+def _has_tile_address(payload: dict) -> bool:
+    """Does the request body carry a QGIS tile layer's address (`userDefined`)? Mapflow's answer to it may
+    repeat the address, so the HTTP client keeps the answer's text out of logs and reports."""
+    return "userDefined" in (((payload or {}).get("params") or {}).get("sourceParams") or {})
 
 
 class MapflowApi:
@@ -120,12 +126,14 @@ class MapflowApi:
 
     def cost(self, payload: dict, on_done: Callable[[int], None], on_error: OnError = None) -> int:
         return self.http.post("processing/cost/v2", payload, parse="text", on_error=on_error,
-                              on_success=lambda text: on_done(int(float(text.strip().strip('"')))))
+                              on_success=lambda text: on_done(int(float(text.strip().strip('"')))),
+                              sensitive=_has_tile_address(payload))
 
     def start(self, payload: dict, on_done: Callable[[Optional[Processing]], None], on_error: OnError = None) -> None:
         def done(data):
             on_done(Processing.from_api(data) if isinstance(data, dict) and data.get("id") else None)
-        self.http.post("processings/v2", payload, on_success=done, on_error=on_error, timeout=60)
+        self.http.post("processings/v2", payload, on_success=done, on_error=on_error, timeout=60,
+                       sensitive=_has_tile_address(payload))
 
     def restart(self, processing_id: str, on_done: Callable, on_error: OnError = None) -> None:
         self.http.post(f"processings/{processing_id}/restart/v2", on_success=on_done, on_error=on_error)

@@ -9,6 +9,9 @@ from qgis.core import QgsSettings
 
 from .config import SETTINGS_GROUP
 
+# The user ticked "Don't show this again" in the alert that comes before the login of a QGIS tile layer is sent
+SKIP_TILE_LOGIN_ALERT = "skip_tile_login_alert"
+
 
 def default_output_dir() -> Path:
     documents = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.DocumentsLocation) or str(Path.home())

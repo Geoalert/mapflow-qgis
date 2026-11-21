@@ -2015,3 +2015,364 @@ def test_format_version_gives_the_clean_text_or_empty():
     assert format_version("5.0.0+b1") == "5.0.0+b1"
     assert format_version("<html>5.0.0</html>") == ""
     assert format_version(None) == ""
+
+
+# ---------- a QGIS tile layer as the imagery (spec/002_B § Imagery from a QGIS tile layer) ----------
+
+def _source(url="https://tiles.example.com/{z}/{x}/{y}.png", **parts):
+    from mapflow_next.core.tile_layers import TileSource
+    return TileSource(url=url, **parts)
+
+
+def _encoded(url):
+    from urllib.parse import quote
+    return quote(url, safe="")
+
+
+def test_a_tile_source_is_read_from_the_layer_source_text():
+    from mapflow_next.core.tile_layers import UNREADABLE, tile_source
+    text = ("type=xyz&url=" + _encoded("https://t.example.com/{z}/{x}/{y}.png?key=a&b=c") +
+            "&zmin=2&zmax=17&username=us%26er&password=p%40ss&authcfg=abc1234&referer=https://r.example.com"
+            "&http-header:X-Key=abc&http-header%3AAccept=x")  # pragma: allowlist secret
+    source = tile_source(text, lambda config_id: "Basic" if config_id == "abc1234" else "")
+    assert source.url == _encoded("https://t.example.com/{z}/{x}/{y}.png?key=a&b=c")
+    assert (source.zmin, source.zmax) == (2, 17)
+    assert (source.login, source.password) == ("us&er", "p@ss")  # pragma: allowlist secret
+    assert source.auth_method == "Basic" and source.referer and source.headers == ("X-Key", "Accept")
+    # an id that QGIS does not know is a configuration the plugin cannot read
+    assert tile_source(text, lambda _id: "").auth_method == UNREADABLE
+    # no zoom range, no login, no configuration
+    plain = tile_source("type=xyz&url=" + _encoded("https://t.example.com/{z}/{x}/{y}.png"))
+    assert (plain.zmin, plain.zmax, plain.login, plain.auth_method, plain.referer, plain.headers) == \
+        (None, None, "", "", False, ())
+    # not an XYZ source: WMS, WMTS, a file
+    assert tile_source("url=https://x/wms&layers=a&styles=&format=image/png&crs=EPSG:3857") is None
+    assert tile_source("contextualWMSLegend=0&crs=EPSG:3857&dpiMode=7&url=https://x/wmts") is None
+    assert tile_source("/data/file.tif") is None
+
+
+def test_a_tile_source_never_shows_in_a_repr():
+    from mapflow_next.core.tile_layers import tile_params
+    source = _source("https://tiles.example.com/secret-key/{z}/{x}/{y}.png", login="the-login",
+                     password="the-pass")  # pragma: allowlist secret
+    params, _ = tile_params(source)
+    for text in (repr(source), repr(params)):
+        for secret in ("secret-key", "the-login", "the-pass", "tiles.example.com"):
+            assert secret not in text
+
+
+def test_xyz_layer_params():
+    from mapflow_next.core.tile_layers import tile_params
+    params, reason = tile_params(_source(zmin=2, zmax=17))
+    assert reason == ""
+    assert (params.source_type, params.url) == ("XYZ", "https://tiles.example.com/{z}/{x}/{y}.png")
+    assert params.zooms == tuple(range(2, 18)) and params.default_zoom == 17
+    assert params.meta_source == "xyz" and params.host == "tiles.example.com" and not params.has_login
+
+
+def test_tms_layer_writes_minus_y_as_y():
+    from mapflow_next.core.tile_layers import tile_params
+    params, reason = tile_params(_source("https://t.example.com/{z}/{x}/{-y}.png"))
+    assert reason == "" and params.source_type == "TMS" and params.meta_source == "tms"
+    assert params.url == "https://t.example.com/{z}/{x}/{y}.png"
+
+
+def test_quadkey_layer_with_q():
+    from mapflow_next.core.tile_layers import tile_params
+    params, reason = tile_params(_source("https://t.example.com/tiles/{q}.jpg"))
+    assert reason == "" and params.source_type == "QUADKEY" and params.meta_source == "quadkey"
+    assert params.url == "https://t.example.com/tiles/{q}.jpg"
+    # {q} wins over x, y and z; a {-y} next to it stays as it is
+    both, _ = tile_params(_source("https://t.example.com/{q}/{z}/{x}/{-y}.jpg"))
+    assert both.source_type == "QUADKEY" and both.url == "https://t.example.com/{q}/{z}/{x}/{-y}.jpg"
+
+
+def test_an_encoded_address_is_decoded_once():
+    from mapflow_next.core.tile_layers import tile_params
+    params, reason = tile_params(_source(_encoded("https://t.example.com/{z}/{x}/{y}.png?key=a&b=c")))
+    assert reason == "" and params.url == "https://t.example.com/{z}/{x}/{y}.png?key=a&b=c"
+    # a literal percent sign (stored as %2525) is kept, not decoded twice
+    kept, _ = tile_params(_source(_encoded("https://t.example.com/{z}/{x}/{y}.png?q=100%25")))
+    assert kept.url == "https://t.example.com/{z}/{x}/{y}.png?q=100%25"
+    # an address that was never encoded reads the same
+    raw, _ = tile_params(_source("https://t.example.com/{z}/{x}/{y}.png"))
+    assert raw.url == "https://t.example.com/{z}/{x}/{y}.png"
+
+
+@pytest.mark.parametrize("url", ["https://t.example.com/tiles.png", "https://t.example.com/{z}/{x}.png",
+                                 "https://t.example.com/{x}/{y}.png", "https://t.example.com/{Z}/{X}/{Y}.png"])
+def test_an_address_without_placeholders_is_refused(url):
+    from mapflow_next.core.tile_layers import NO_PLACEHOLDERS, tile_params
+    assert tile_params(_source(url)) == (None, NO_PLACEHOLDERS)
+
+
+@pytest.mark.parametrize("url", ["file:///tmp/{z}/{x}/{y}.png", "ftp://t.example.com/{z}/{x}/{y}.png",
+                                 "/data/{z}/{x}/{y}.png", "http:///{z}/{x}/{y}.png"])
+def test_an_address_that_is_not_http_is_refused(url):
+    from mapflow_next.core.tile_layers import NOT_HTTP, tile_params
+    assert tile_params(_source(_encoded(url))) == (None, NOT_HTTP)
+
+
+@pytest.mark.parametrize("host", [
+    "localhost", "LOCALHOST.", "app.localhost", "127.0.0.1", "127.1", "0x7f.0.0.1", "2130706433", "0.0.0.0",
+    "10.0.0.5", "172.16.0.1", "172.31.255.1", "192.168.1.1", "169.254.1.1", "100.64.0.1", "[::1]", "[fd00::1]",
+    "[fe80::1]", "[::ffff:127.0.0.1]", "intranet", "tiles.local", "Tiles.LOCAL"])
+def test_a_private_host_is_refused(host):
+    from mapflow_next.core.tile_layers import PRIVATE_HOST, tile_params
+    url = f"http://{host}:8080/{{z}}/{{x}}/{{y}}.png"
+    assert tile_params(_source(url)) == (None, PRIVATE_HOST)
+
+
+@pytest.mark.parametrize("host", ["tiles.example.com", "8.8.8.8", "172.15.0.1", "172.32.0.1", "100.63.255.1",
+                                  "100.128.0.1", "[2001:4860:4860::8888]", "user:pw@tiles.example.com",
+                                  "{s}.tile.example.com"])
+def test_a_public_host_is_offered(host):
+    from mapflow_next.core.tile_layers import tile_params
+    params, reason = tile_params(_source(f"https://{host}/{{z}}/{{x}}/{{y}}.png"))
+    assert reason == "" and params is not None
+
+
+def test_the_private_host_check_sends_no_dns_request(monkeypatch):
+    import socket
+    from mapflow_next.core.tile_layers import private_host, tile_params
+
+    def refuse(*args, **kwargs):
+        raise AssertionError("a DNS request was made")
+    for name in ("getaddrinfo", "gethostbyname", "gethostbyname_ex", "gethostbyaddr", "getfqdn"):
+        monkeypatch.setattr(socket, name, refuse)
+    for host in ("tiles.example.com", "internal.corp.example", "localhost", "10.0.0.1", "127.1", "intranet"):
+        private_host(host)
+        tile_params(_source(f"https://{host}/{{z}}/{{x}}/{{y}}.png"))
+
+
+def test_host_of_takes_the_host_only_and_never_raises():
+    from mapflow_next.core.tile_layers import host_of
+    with_user = "https://User:pw@Tiles.Example.com:8443/{z}/{x}/{y}.png?key=1"  # pragma: allowlist secret
+    assert host_of(with_user) == "tiles.example.com"
+    assert host_of("https://[::1]:80/x") == "::1"
+    for bad in ("", "not an address", "https://[bad/x", "http://a:port/x", "ftp:"):
+        assert isinstance(host_of(bad), str)
+
+
+def test_user_info_and_port_do_not_hide_a_private_host():
+    from mapflow_next.core.tile_layers import PRIVATE_HOST, tile_params
+    url = "https://me:pw@192.168.0.2:8443/{z}/{x}/{y}.png"  # pragma: allowlist secret
+    assert tile_params(_source(url))[1] == PRIVATE_HOST
+
+
+def test_a_referer_or_a_header_is_refused():
+    from mapflow_next.core.tile_layers import HEADERS, tile_params
+    assert tile_params(_source(referer=True)) == (None, HEADERS)
+    assert tile_params(_source(headers=("X-Key",))) == (None, HEADERS)
+
+
+def test_a_login_is_a_username_with_a_password_or_a_basic_configuration():
+    from mapflow_next.core.tile_layers import tile_params
+    assert tile_params(_source(login="u", password="p"))[0].has_login  # pragma: allowlist secret
+    assert tile_params(_source(auth_method="Basic"))[0].has_login
+    assert not tile_params(_source())[0].has_login
+    # a username alone, or a password alone, is not a login that can be sent
+    assert not tile_params(_source(login="u"))[0].has_login
+    assert not tile_params(_source(password="p"))[0].has_login  # pragma: allowlist secret
+
+
+@pytest.mark.parametrize("method", ["APIHeader", "OAuth2", "PKI-PKCS#12", "?"])
+def test_an_authentication_configuration_that_is_not_basic_is_refused(method):
+    from mapflow_next.core.tile_layers import NOT_BASIC, tile_params
+    assert tile_params(_source(auth_method=method)) == (None, NOT_BASIC)
+
+
+def test_the_first_reason_of_the_spec_list_wins():
+    from mapflow_next.core import tile_layers as t
+    every = dict(referer=True, auth_method="OAuth2", zmin=30)
+    assert t.tile_params(_source("https://localhost/x.png", **every))[1] == t.NO_PLACEHOLDERS
+    assert t.tile_params(_source("ftp://localhost/{z}/{x}/{y}", **every))[1] == t.NOT_HTTP
+    assert t.tile_params(_source("https://localhost/{z}/{x}/{y}", **every))[1] == t.PRIVATE_HOST
+    assert t.tile_params(_source(**every))[1] == t.HEADERS
+    assert t.tile_params(_source(auth_method="OAuth2", zmin=30))[1] == t.NOT_BASIC
+    assert t.tile_params(_source(zmin=30))[1] == t.NO_ZOOM
+
+
+def test_the_zooms_offered_follow_the_layer_and_stop_at_21():
+    from mapflow_next.core.tile_layers import NO_ZOOM, tile_params, zoom_choices
+    assert zoom_choices(2, 17) == tuple(range(2, 18))
+    assert zoom_choices(None, None) == tuple(range(0, 19))      # QGIS's own range when the source has none
+    assert zoom_choices(None, 10) == tuple(range(0, 11))
+    assert zoom_choices(5, None) == tuple(range(5, 19))
+    assert zoom_choices(0, 25) == tuple(range(0, 22))           # no zoom above 21
+    assert zoom_choices(-3, 4) == (0, 1, 2, 3, 4)
+    assert zoom_choices(19, 20) == (19, 20) and zoom_choices(22, 25) == () and zoom_choices(10, 5) == ()
+    assert tile_params(_source(zmin=22, zmax=25)) == (None, NO_ZOOM)
+    assert tile_params(_source(zmin=10, zmax=5)) == (None, NO_ZOOM)
+
+
+def test_the_default_zoom_is_18_or_the_nearest_the_form_offers():
+    from mapflow_next.core.tile_layers import nearest_zoom, tile_params
+    assert tile_params(_source(zmin=2, zmax=21))[0].default_zoom == 18
+    assert tile_params(_source(zmin=0, zmax=12))[0].default_zoom == 12
+    assert tile_params(_source(zmin=19, zmax=20))[0].default_zoom == 19
+    assert tile_params(_source(zmin=0, zmax=25))[0].zooms[-1] == 21
+    assert nearest_zoom((17, 18, 19), 18) == 18 and nearest_zoom((10, 11), None) == 11
+    assert nearest_zoom((16, 17, 19, 20), 18) == 19          # a tie goes to the higher zoom
+    assert nearest_zoom((5, 6), 18) == 6 and nearest_zoom((20, 21), 3) == 20
+
+
+def test_user_defined_fields():
+    from mapflow_next.core.tile_layers import tile_params, user_defined
+    xyz = tile_params(_source())[0]
+    assert user_defined(xyz, 17) == {"sourceType": "XYZ", "url": "https://tiles.example.com/{z}/{x}/{y}.png",
+                                     "zoom": 17, "crs": "epsg:3857"}
+    tms = tile_params(_source("https://t.example.com/{z}/{x}/{-y}.png"))[0]
+    assert user_defined(tms, 18)["url"] == "https://t.example.com/{z}/{x}/{y}.png"
+    assert user_defined(tms, 18)["sourceType"] == "TMS"
+    with_login = user_defined(xyz, 17, ("u", "p"))  # pragma: allowlist secret
+    assert with_login["rasterLogin"] == "u" and with_login["rasterPassword"] == "p"  # pragma: allowlist secret
+    # the fields are absent, never empty, unless both exist
+    for login, password in (("", ""), ("u", ""), ("", "p")):
+        body = user_defined(xyz, 17, (login, password))
+        assert "rasterLogin" not in body and "rasterPassword" not in body
+
+
+def test_match_offer_takes_the_same_address_and_source_type():
+    from mapflow_next.core.tile_layers import TileOffer, match_offer, tile_params
+    xyz = tile_params(_source())[0]
+    tms = tile_params(_source("https://tiles.example.com/{z}/{x}/{-y}.png"))[0]
+    refused = TileOffer("c", "Refused", None, "reason")
+    offers = [refused, TileOffer("a", "A", xyz), TileOffer("b", "B", tms)]
+    assert match_offer(offers, xyz.url, "XYZ").layer_id == "a"
+    assert match_offer(offers, tms.url, "tms").layer_id == "b"
+    # the same address with another source type does not match
+    assert match_offer([TileOffer("a", "A", xyz)], xyz.url, "TMS") is None
+    assert match_offer(offers, "https://other.example.com/{z}/{x}/{y}.png", "XYZ") is None
+    assert not refused.usable and offers[1].usable
+
+
+def test_hide_addresses_keeps_the_host_only():
+    from mapflow_next.core.tile_layers import hide_address_params, hide_addresses
+    assert hide_addresses("The basemap https://tiles.example.com/KEY123/{z}/{x}/{y}.png?token=abc is forbidden") == \
+        "The basemap tiles.example.com is forbidden"
+    with_user = "a http://u:pw@h.example.com:81/x and HTTPS://F.example.org/y."  # pragma: allowlist secret
+    assert hide_addresses(with_user) == "a h.example.com and f.example.org"
+    assert hide_addresses("nothing here, 10 km") == "nothing here, 10 km"
+    assert hide_addresses("read s3://bucket/key.tif") == "read s3://bucket/key.tif"
+    assert hide_addresses("see http:///x") == "see an address"
+    assert hide_address_params({"url": "https://t.example.com/KEY/{z}", "n": 3, "list": ["http://a.example.com/k"],
+                                "inner": {"x": "https://b.example.com/k?key=1"}}) == \
+        {"url": "t.example.com", "n": 3, "list": ["a.example.com"], "inner": {"x": "b.example.com"}}
+
+
+def test_server_refusals_show_the_host_and_never_the_address():
+    from mapflow_next.core.messages import describe
+    address = "https://tiles.example.com/KEY123/{z}/{x}/{y}.png?token=abc"
+    text = describe("source-validator.UrlBlacklisted", {"url": address})
+    assert "tiles.example.com" in text and "KEY123" not in text and "token" not in text
+    assert text.startswith("The specified basemap tiles.example.com is forbidden")
+    # a template that names a parse error with the address in it
+    text = describe("source-validator.UrlFormatInvalid", {"parse_error_message": f"bad {address}"})
+    assert "KEY123" not in text and "tiles.example.com" in text
+    # an unknown code: the fallback list of parameters, and the server's own message
+    text = describe("unknown.Code", {"url": address, "zoom": 5})
+    assert "KEY123" not in text and "tiles.example.com" in text and "zoom: 5" in text
+    text = describe("unknown.Code", {}, f"Cannot read {address} (404)")
+    assert "KEY123" not in text and "tiles.example.com" in text
+    text = describe("dataloader.TileNotLoaded", {"tile_location": address, "status": 403})
+    assert "KEY123" not in text and "403" in text
+    # messages without an address are unchanged
+    assert describe("source-validator.ZoomMustBeInteger", {"actual_zoom": "x"}) == \
+        "Zoom must be either empty, or integer, got x"
+
+
+def test_the_setting_key_is_the_one_of_the_spec():
+    from mapflow_next import settings
+    assert settings.SKIP_TILE_LOGIN_ALERT == "skip_tile_login_alert"
+    spec = (Path(__file__).resolve().parents[1] / "spec" / "003_local_storage.md").read_text(encoding="utf-8")
+    assert "`skip_tile_login_alert`" in spec
+
+
+def _tile_choice(url="https://tiles.example.com/{z}/{x}/{y}.png", zoom=None, layer_id="layer-1", name="Tiles",
+                 **parts):
+    from mapflow_next.core.tile_layers import TileOffer, tile_params
+    params, reason = tile_params(_source(url, **parts))
+    assert reason == ""
+    return ImageryChoice.from_tile(TileOffer(layer_id, name, params), zoom)
+
+
+def _tile_draft(imagery):
+    geometry = {"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 0]]]}
+    draft = RunDraft(model=Model.from_api(BUILDINGS), aoi=AreaOfInterest("Old town", geometry, 12.0))
+    draft.imagery = imagery
+    return draft
+
+
+def test_a_tile_choice_takes_the_nearest_zoom_and_names_the_layer():
+    choice = _tile_choice(zoom=None, zmin=2, zmax=14)
+    assert (choice.kind, choice.zoom, choice.tile_layer_id) == ("tile", 14, "layer-1")
+    assert choice.label == "Tiles · zoom 14" and choice.source_name == "QGIS tile layer"
+    assert _tile_choice(zoom=30, zmax=25).zoom == 21 and _tile_choice(zoom=5, zmin=8, zmax=12).zoom == 8
+    assert _tile_choice(zoom=19, zmax=21).zoom == 19
+    assert choice.price_per_km2 is None
+
+
+@pytest.mark.parametrize("url,kind,source,sent", [
+    ("https://t.example.com/{z}/{x}/{y}.png", "XYZ", "xyz", "https://t.example.com/{z}/{x}/{y}.png"),
+    ("https://t.example.com/{z}/{x}/{-y}.png", "TMS", "tms", "https://t.example.com/{z}/{x}/{y}.png"),
+    ("https://t.example.com/{q}.jpg", "QUADKEY", "quadkey", "https://t.example.com/{q}.jpg")])
+def test_tile_layer_payloads(url, kind, source, sent):
+    draft = _tile_draft(_tile_choice(url, zoom=17))
+    body = draft.payload("project-1", "4.0.0")
+    assert body["params"] == {"sourceParams": {"userDefined": {"sourceType": kind, "url": sent, "zoom": 17,
+                                                               "crs": "epsg:3857"}}}
+    assert body["meta"] == {"source-app": "qgis", "source": source, "version": "4.0.0"}
+    assert body["geometry"] == draft.aoi.geometry          # the area is submitted whole
+
+
+def test_tile_layer_payload_with_and_without_the_login():
+    draft = _tile_draft(_tile_choice(zoom=17, login="u", password="p"))  # pragma: allowlist secret
+    plain = draft.payload("project-1")["params"]["sourceParams"]["userDefined"]
+    assert "rasterLogin" not in plain and "rasterPassword" not in plain
+    sent = draft.payload("project-1", credentials=("u", "p"))["params"]["sourceParams"]  # pragma: allowlist secret
+    assert sent["userDefined"]["rasterLogin"] == "u"
+    assert sent["userDefined"]["rasterPassword"] == "p"  # pragma: allowlist secret
+    # the credentials go into userDefined only, and the other kinds ignore them
+    provider = _tile_draft(ImageryChoice.from_provider(DataProvider.from_api(MAPBOX), 18))
+    body = provider.payload("project-1", credentials=("u", "p"))  # pragma: allowlist secret
+    assert body["params"] == {"sourceParams": {"dataProvider": {"providerName": "mapbox", "zoom": "18"}}}
+
+
+def test_a_tile_layer_has_no_known_price_and_no_footprint_rule():
+    draft = _tile_draft(_tile_choice(zoom=17))
+    assert draft.estimate().imagery_price is None and draft.estimate().credits is None
+    assert draft.coverage is None and draft.processed_area is draft.aoi
+    project = Project.from_api(PROJECT)
+    assert draft.issues(project, UserStatus.from_api(STATUS)) == []
+    # the area checks of § AOI area limit still apply
+    big = _tile_draft(_tile_choice(zoom=17))
+    big.aoi.area_km2 = 1000.0
+    assert any(issue.field == "area" and "allows" in issue.text for issue in big.issues(project, None))
+
+
+def test_the_choice_identity_tells_layers_and_zooms_apart():
+    a, b = _tile_choice(zoom=17), _tile_choice(zoom=18)
+    c = _tile_choice(zoom=17, layer_id="layer-2")
+    d = _tile_choice("https://other.example.com/{z}/{x}/{y}.png", zoom=17)
+    assert len({a.identity, b.identity, c.identity, d.identity}) == 4
+    assert a.identity == _tile_choice(zoom=17).identity
+    provider = ImageryChoice.from_provider(DataProvider.from_api(MAPBOX), 18)
+    assert provider.identity != a.identity and provider.identity == \
+        ImageryChoice.from_provider(DataProvider.from_api(MAPBOX), 18).identity
+
+
+def test_a_processing_with_user_defined_imagery_keeps_the_host_and_never_the_login():
+    item = processing_json("p-1")
+    item["params"] = {"sourceParams": {"userDefined": {
+        "sourceType": "tms", "url": "https://t.example.com/KEY/{z}/{x}/{y}.png", "zoom": 17, "crs": "epsg:3857",
+        "rasterLogin": "the-login", "rasterPassword": "the-pass"}}}  # pragma: allowlist secret
+    source = Processing.from_api(item).source
+    assert (source.kind, source.zoom, source.source_type) == ("custom", 17, "TMS")
+    assert source.url == "https://t.example.com/KEY/{z}/{x}/{y}.png" and source.host == "t.example.com"
+    assert "KEY" not in repr(source)                              # the address is not in a repr
+    assert "the-login" not in str(vars(source)) and "the-pass" not in str(vars(source))   # …and the login is not kept
+    # no address at all
+    item["params"] = {"sourceParams": {"userDefined": {"zoom": 12}}}
+    bare = Processing.from_api(item).source
+    assert (bare.kind, bare.url, bare.host) == ("custom", "", "")

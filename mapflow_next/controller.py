@@ -20,6 +20,7 @@ from .core import filenames, formatting
 from .core.draft import Coverage, ImageryChoice, Issue, RunDraft
 from .core.failures import USER, project_deleted_text, project_gone_text
 from .core.guard import guarded
+from .core.tile_layers import TileOffer, match_offer, nearest_zoom
 from .core.models import BillingType, CatalogImage, Processing, SourceInfo, StorageLimits, UserStatus
 from .core.scenarios import Catalogue, recommended_zoom, resolve, scenario_for_model
 from .qgis_bridge import aoi as aoi_tools
@@ -30,6 +31,7 @@ from .qgis_bridge import rasters, updates
 from .services.imagery import Imagery
 from .services.processings import Processings
 from .services.results import Results
+from .settings import SKIP_TILE_LOGIN_ALERT
 from .services.session import SIGNED_IN, SIGNED_OUT, SIGNING_IN, UPGRADE_REQUIRED, Session
 from .ui.dock import IMAGERY, PROCESSINGS, DockContent
 from .ui.gallery import GalleryDialog
@@ -41,11 +43,13 @@ from .ui.feedback_dialog import FeedbackDialog
 from .ui.rename_dialog import RenameDialog
 from .ui.run_page import CostView, ImageryRow
 from .ui.settings_dialog import SettingsDialog
+from .ui.tile_login_alert import ask_tile_login
 from .ui.start_page import plain, scenario_pixmap
 
 VECTOR_FILTER = "Vector files (*.geojson *.json *.gpkg *.shp *.kml *.kmz *.gml);;All files (*)"
 
 
+TILE_GROUP = "QGIS tile layers"          # the heading of the tile layers among the imagery rows
 PROJECTS_WINDOW_PAGE = 24        # eight rows of three tiles
 EXTENT_PROPERTY = "mapflow_next/extent_of"   # on an area layer made from My imagery: the imagery's name
 
@@ -62,6 +66,8 @@ class Controller(QObject):
         self.aoi_layer: Optional[QgsVectorLayer] = None
         self.aoi_selected_only = True
         self.provider_zoom: Dict[str, int] = {}
+        self.tile_zoom: Dict[str, int] = {}              # the zoom chosen per QGIS tile layer id (not kept)
+        self._watched_tiles: Dict[str, object] = {}      # tile layers whose name is watched, by id
         self.preferred_zoom: Optional[int] = None
         self.chosen_image: Optional[CatalogImage] = None
         self._restored_image: Optional[CatalogImage] = None     # chosen_image when Run again made it (no search data)
@@ -255,6 +261,7 @@ class Controller(QObject):
             except TypeError:
                 pass
         self._watch_layer(None)
+        self._unwatch_tile_layers()
         self.stop_drawing()
         for name in ("gallery", "projects_dialog", "mosaic_picker"):
             window = getattr(self, name)
@@ -954,17 +961,79 @@ class Controller(QObject):
             self.use_imagery_extent()
         elif key == "catalog" and self.chosen_image:
             self.draft.imagery = self._catalog_choice(self.chosen_image)
+        elif key.startswith("tile:"):
+            offer = self._tile_offer(key.split(":", 1)[1])
+            if offer is not None and offer.usable:
+                self.draft.imagery = ImageryChoice.from_tile(offer, self.tile_zoom.get(offer.layer_id))
         self.refresh_run()
 
     @guarded
     def on_zoom(self, key: str, zoom: int) -> None:
         name = key.split(":", 1)[1]
+        if key.startswith("tile:"):
+            self.tile_zoom[name] = int(zoom)
+            offer = self._tile_offer(name)
+            if offer is not None and offer.usable:
+                self.draft.imagery = ImageryChoice.from_tile(offer, int(zoom))
+            self.refresh_run()
+            return
         self.provider_zoom[name] = int(zoom)
         status = self.session.status
         provider = next((p for p in status.data_providers if p.name == name), None) if status else None
         if provider:
             self.draft.imagery = ImageryChoice.from_provider(provider, int(zoom))
         self.refresh_run()
+
+    # ---------- QGIS tile layers as imagery ----------
+
+    def _tile_offers(self) -> List[TileOffer]:
+        """The tile layers of the project now, read fresh (the project is the only place they live). Each layer's
+        name is watched, so a rename changes the form's rows."""
+        offers = self.layers.tile_offers()
+        known = {offer.layer_id for offer in offers}
+        for layer_id in [i for i in self._watched_tiles if i not in known]:
+            del self._watched_tiles[layer_id]               # the layer is gone: its signals went with it
+        for layer_id in known - set(self._watched_tiles):
+            layer = QgsProject.instance().mapLayer(layer_id)
+            if layer is not None:
+                layer.nameChanged.connect(self._tile_layer_renamed)
+                self._watched_tiles[layer_id] = layer
+        return offers
+
+    def _tile_offer(self, layer_id: str) -> Optional[TileOffer]:
+        return next((offer for offer in self._tile_offers() if offer.layer_id == layer_id), None)
+
+    def _unwatch_tile_layers(self) -> None:
+        watched, self._watched_tiles = list(self._watched_tiles.values()), {}
+        for layer in watched:
+            try:
+                layer.nameChanged.disconnect(self._tile_layer_renamed)
+            except (TypeError, RuntimeError):               # the layer is already deleted
+                continue
+
+    @guarded
+    def _tile_layer_renamed(self, *args) -> None:
+        if not self._stopped:
+            self.refresh_run()
+
+    def _sync_tile_choice(self, offers: List[TileOffer]) -> str:
+        """The chosen tile layer as the project has it now: its name, zoom range and address are read again.
+        Returns the reason it cannot be used any more ("" when it can). The choice is never replaced by other
+        imagery."""
+        choice = self.draft.imagery
+        offer = next((o for o in offers if o.layer_id == choice.tile_layer_id), None)
+        if offer is None:
+            return f"The layer “{choice.tile_name}” is no longer in the project. Choose the imagery again."
+        if not offer.usable:
+            return f"The layer “{offer.name}” can't be used now. {offer.reason}"
+        fresh = ImageryChoice.from_tile(offer, choice.zoom)
+        if fresh != choice:
+            self.draft.imagery = fresh
+        return ""
+
+    def _ask_tile_login(self, layer_name: str) -> Tuple[bool, bool]:
+        """The alert before a login is sent: (send, skip). A method of its own, so a test can answer it."""
+        return ask_tile_login(layer_name, self.iface.mainWindow())
 
     # ---------- My imagery: extent as the area, and the area against the imagery ----------
 
@@ -1197,7 +1266,8 @@ class Controller(QObject):
         layers = [(layer.id(), layer.name()) for layer in aoi_tools.polygon_layers()]
         run.set_layers(layers, self.draft.aoi.layer_id if self.draft.aoi else None)
         self._update_coverage()
-        issues = self._issues(project, status)
+        offers = self._tile_offers()
+        issues = self._issues(project, status, offers)
         area_issue = next((i.text for i in issues if i.field == "area" and self.draft.aoi), "")
         coverage = self.draft.coverage
         outside = bool(self.draft.aoi and coverage and not coverage.overlaps)
@@ -1220,7 +1290,7 @@ class Controller(QObject):
             run.set_area("", "Pick a polygon layer, draw the area, or use the map view.")
         run.set_area_hint(*self._area_hint(outside, area_issue))
 
-        rows, selected = self._imagery_rows(status, credits_billing)
+        rows, selected = self._imagery_rows(status, credits_billing, offers)
         imagery_issue = next((i.text for i in issues if i.field == "imagery" and self.draft.imagery), "")
         hint = f"Recommended for this scenario: {scenario.best_short}" if scenario and scenario.best_short else ""
         run.set_imagery(rows, selected, hint, imagery_issue)
@@ -1230,8 +1300,13 @@ class Controller(QObject):
         run.set_issues(issues, self.starting)
         self._maybe_request_cost(issues, status)
 
-    def _issues(self, project, status) -> List[Issue]:
+    def _issues(self, project, status, offers: Optional[List[TileOffer]] = None) -> List[Issue]:
+        problem = ""
+        if self.draft.imagery is not None and self.draft.imagery.kind == "tile":
+            problem = self._sync_tile_choice(self._tile_offers() if offers is None else offers)
         issues = self.draft.issues(project, status, self.server_cost)
+        if problem:
+            issues.append(Issue("imagery", problem))
         choice = self.draft.imagery
         mosaic = self.imagery.get_mosaic(choice.mosaic_id) if choice and choice.kind == "my_imagery" else None
         if mosaic is not None and not choice.image_ids and self._empty_collection(mosaic):
@@ -1246,9 +1321,13 @@ class Controller(QObject):
             self._empty_warned = None
         return issues
 
-    def _imagery_rows(self, status: Optional[UserStatus], credits_billing: bool):
-        """My imagery first, then the basemap providers (zoom z17–z21, the scenario's zoom marked), then an
-        image chosen in the catalog search (its zoom follows the image's resolution, as in the current plugin)."""
+    def _imagery_rows(self, status: Optional[UserStatus], credits_billing: bool,
+                      offers: Optional[List[TileOffer]] = None):
+        """My imagery first, then the basemap providers (zoom z17–z21, the scenario's zoom marked), then the tile
+        layers of the QGIS project, then an image chosen in the catalog search (its zoom follows the image's
+        resolution, as in the current plugin)."""
+        if offers is None:
+            offers = self._tile_offers()
         rows = []
         choice = self.draft.imagery
         selected = None
@@ -1292,6 +1371,20 @@ class Controller(QObject):
                                    zooms=provider.zooms, zoom=zoom, recommended_zoom=star,
                                    previewable=bool(provider.preview_url),
                                    previewing=self._previewing(choice) if chosen else None))
+            if chosen:
+                selected = rows[-1].key
+        for offer in offers:
+            if not offer.usable:
+                rows.append(ImageryRow(key=f"tile:{offer.layer_id}", title=offer.name, meta=offer.reason,
+                                       group=TILE_GROUP, disabled=True))
+                continue
+            zooms = offer.params.zooms
+            chosen = bool(choice and choice.kind == "tile" and choice.tile_layer_id == offer.layer_id)
+            zoom = choice.zoom if chosen else nearest_zoom(zooms, self.tile_zoom.get(offer.layer_id))
+            meta = f"zoom {zooms[0]}–{zooms[-1]}" + (f" · {_zoom_meta(zoom)}" if _zoom_meta(zoom) else "")
+            rows.append(ImageryRow(key=f"tile:{offer.layer_id}", title=offer.name, meta=meta,
+                                   price="In estimate" if credits_billing else "", zooms=list(zooms), zoom=zoom,
+                                   group=TILE_GROUP))
             if chosen:
                 selected = rows[-1].key
         if self.chosen_image:
@@ -1355,9 +1448,7 @@ class Controller(QObject):
             return
         area = self.draft.processed_area          # for My imagery, the part inside the imagery
         key = (self.draft.model.id, tuple(sorted(self.draft.options)), area.area_km2,
-               str(area.geometry)[:200], self.draft.imagery.kind,
-               self.draft.imagery.provider.name if self.draft.imagery.provider else self.draft.imagery.mosaic_id,
-               self.draft.imagery.zoom, tuple(self.draft.imagery.image_ids))
+               str(area.geometry)[:200], self.draft.imagery.identity)
         if key == getattr(self, "_cost_key", None):
             return
         self._cost_key = key
@@ -1382,7 +1473,8 @@ class Controller(QObject):
         kind = self.draft.imagery.kind if self.draft.imagery else ""
         return {"my_imagery": "This My imagery collection or image is no longer there. Choose the imagery again.",
                 "catalog": "This catalog image is no longer available. Search the catalog and choose another.",
-                "provider": "This imagery source is no longer available to you. Choose another one."
+                "provider": "This imagery source is no longer available to you. Choose another one.",
+                "tile": "Mapflow can't read this tile layer any more. Choose the imagery again."
                 }.get(kind, "The chosen imagery is no longer available. Choose the imagery again.")
 
     # ---------- run ----------
@@ -1393,9 +1485,25 @@ class Controller(QObject):
         issues = self._issues(project, status)
         if issues or self.starting:
             return
+        credentials = None
+        choice = self.draft.imagery
+        if choice is not None and choice.kind == "tile" and choice.tile_params.has_login:
+            # The login leaves the machine with the processing: the user agrees first, unless they chose not to be
+            # asked again. Cancel changes nothing.
+            if not self.settings.flag(SKIP_TILE_LOGIN_ALERT):
+                send, skip = self._ask_tile_login(choice.tile_name)
+                if not send:
+                    return
+                if skip:
+                    self.settings.setValue(SKIP_TILE_LOGIN_ALERT, True)
+            credentials = self.layers.tile_credentials(choice.tile_layer_id)
+            if credentials is None:
+                self.notify(f"The login of the layer “{choice.tile_name}” could not be read.",
+                            Qgis.MessageLevel.Warning)
+                return
         self.starting = True
         self.content.run.set_issues([], busy=True)
-        self.processings.start(self.draft)
+        self.processings.start(self.draft, credentials)
 
     @guarded
     def on_started(self, processing: Optional[Processing]) -> None:
@@ -1655,6 +1763,14 @@ class Controller(QObject):
             self.chosen_image = self._restored_catalog_image(source)
             self.draft.imagery = self._catalog_choice(self.chosen_image)
             self.render_search_results()
+        elif source.kind == "custom" and source.url:
+            # The QGIS tile layer of the project with the same address and source type
+            offer = match_offer(self._tile_offers(), source.url, source.source_type)
+            if offer is not None:
+                self.draft.imagery = ImageryChoice.from_tile(offer, source.zoom)
+                self.tile_zoom[offer.layer_id] = self.draft.imagery.zoom
+            else:
+                gone.append("its QGIS tile layer is not in this project")
         else:
             gone.append("its imagery can't be chosen again here")
         if self.chosen_image is not None and (self.draft.imagery is None or self.draft.imagery.kind != "catalog"):

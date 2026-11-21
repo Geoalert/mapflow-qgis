@@ -34,7 +34,8 @@ def source_text(processing: Processing, provider_names: Dict[str, str], mosaic_n
     if source.kind == "catalog":
         return f"{source.provider or 'Catalog'} image"
     if source.kind == "custom":
-        return "Custom imagery"
+        # The host only: an address can carry a key
+        return f"Custom tile layer ({source.host})" if source.host else "Custom tile layer"
     return ""
 
 
