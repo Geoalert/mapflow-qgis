@@ -2315,6 +2315,13 @@ def check_restart(iface, content, controller, processings, state):
         reload()
 
 
+def deliver_page(processings, listing, items):
+    """The answer of a list request, handed over as the HTTP layer does: sent after everything done so far, for the
+    state of the listing now. `limit` is the number of items, so the answer is not taken for the whole project."""
+    processings._on_page(listing, processings.project.id, listing.token, max(len(items), 1), processings._sent,
+                         items, len(items))
+
+
 def check_processing_search(iface, content, controller, processings, state):
     """spec/002_B § Plugin behaviour: the search sends `terms` to Mapflow, so it covers the whole project and not
     only the pages loaded. It waits for typing to pause. "Show more" and the poll keep the terms; an answer for an
@@ -2622,9 +2629,9 @@ def check_processing_search(iface, content, controller, processings, state):
         check([p.id for p in failed_notices] == ["search-solo-two"]
               and any("“Solo second” failed." in (t or "") for t in lines()[since:]),
               f"SEARCH NOTICES: …and one that fails gives one “failed” notice ({[p.id for p in failed_notices]})")
-        stale = model(dict(solo, status="IN_PROGRESS", percentCompleted=0))
-        processings._note(stale)
-        processings._note(model(solo))
+        # an older answer, still in progress, arrives after the finish: no second notice (the same for the full
+        # listing: check_answer_order)
+        deliver_page(processings, processings._found, [model(dict(solo, status="IN_PROGRESS", percentCompleted=0))])
         processings._tick()
         wait_until(lambda: not processings._full.loading and not processings._found.loading, 5)
         wait_until(lambda: False, 0.3)
@@ -3026,6 +3033,222 @@ def check_opened_card(iface, content, controller, processings, state):
         processings.finished.disconnect(finished.append)
         processings.failed.disconnect(failed_notices.append)
         processings.refreshed.disconnect(count_refreshed)
+        del controller.results.add_to_map
+        state.heal()
+        state.page_delay = {}
+        processings._poll.stop()
+        processings._poll.setInterval(saved_interval)
+        state.processings = [p for p in state.processings if p["id"] not in ids]
+        reload()
+
+
+def check_answer_order(iface, content, controller, processings, state):
+    """spec/002_B § Plugin behaviour, spec/005 § Failed requests: the answers of one poll tick come back in either
+    order, and an older one never moves a processing from a final status back: one notice and one automatic add to
+    map. A list answer sent before the server accepted a Restart gives no notice, no Restart button and no second
+    restart, for the full listing and for the search listing. The opened card that Mapflow Web deleted leaves
+    `opened` and stops its poll with one message; a transient failure is one alert and a retry after one interval.
+    Everything the function changes is restored."""
+    from mapflow_next.core.models import Processing as ProcessingModel, Status
+    from mapflow_next.ui.processings_page import ProcessingCard
+    page = content.processings
+    saved_interval = processings._poll.interval()
+    added = []
+    controller.results.add_to_map = lambda processing: added.append(processing.id)
+    runs = {n: fixtures.processing_json(f"order-{n}", "IN_PROGRESS", -100000, name=f"Order {n}") for n in "ab"}
+    zulu = fixtures.processing_json("order-zulu", "FAILED", 0, name="Zulu restart")
+    zulu["messages"] = [{"code": "dataloader.NoDataTile", "parameters": {}}]
+    yankee = fixtures.processing_json("order-yankee", "FAILED", 0, name="Yankee restart")
+    gone = fixtures.processing_json("order-gone", "IN_PROGRESS", -100000, name="Gone run")
+    flaky = fixtures.processing_json("order-flaky", "IN_PROGRESS", -100000, name="Flaky run")
+    fillers = [fixtures.processing_json(f"order-filler-{n}", "OK", 100, name=f"Filler {n}") for n in range(1, 33)]
+    ids = {item["id"] for item in [*runs.values(), zulu, yankee, gone, flaky, *fillers]}
+    finished, failed_notices = [], []
+    processings.finished.connect(finished.append)
+    processings.failed.connect(failed_notices.append)
+
+    def model(item):
+        return ProcessingModel.from_api(item)
+
+    def lines():
+        return [text for _level, text in iface.bar.messages]
+
+    def settle():
+        return wait_until(lambda: not processings._full.loading and not processings._found.loading, 5)
+
+    def reload():
+        processings.opened = None
+        page.search.clear()
+        page.refresh_button.click()
+        wait_until(lambda: not page.refreshing, 5)
+        settle()
+
+    def search(text):
+        page.search.setText(text)
+        return wait_until(lambda: processings.terms == text and processings._found.loaded
+                          and not processings._found.loading, 5)
+
+    def card(pid):
+        return next((c for c in page.findChildren(ProcessingCard) if c.processing.id == pid), None)
+
+    def restart_buttons():
+        return [b for b in page.findChildren(QPushButton) if b.text() == "Restart"]
+
+    def posts(pid):
+        return [r for r in state.requests if r[0] == "POST" and r[1] == f"/processings/{pid}/restart/v2"]
+
+    def gets(pid):
+        return [r for r in state.requests if r[0] == "GET" and r[1] == f"/processings/{pid}/v2"]
+
+    state.page_delay = {}
+    # (gone and flaky are the oldest, and the 32 fillers push them off the first page)
+    state.processings = [gone, flaky] + state.processings + fillers + [*runs.values(), zulu, yankee]
+    processings._poll.setInterval(60000)        # the checks tick by hand
+    try:
+        reload()
+        check(all(processings.get(f"order-{n}") is not None and processings.get(f"order-{n}").status is
+                  Status.in_progress for n in "ab"), "ORDER: two processings in progress are loaded")
+        check(search("order") and len(processings.found) >= 2, "ORDER: a search shows them too")
+        full, found = processings._full, processings._found
+
+        # the search answer (OK) first, then the older full-listing answer (in progress), then a full answer (OK)
+        run = runs["a"]
+        processings.started_here.add("order-a")
+        deliver_page(processings, found, [model(dict(run, status="OK", percentCompleted=100))])
+        deliver_page(processings, full, [model(run)])
+        deliver_page(processings, full, [model(dict(run, status="OK", percentCompleted=100))])
+        check([p.id for p in finished] == ["order-a"] and added == ["order-a"] and not failed_notices,
+              f"ORDER: search OK, then an older full answer in progress, then OK: one notice, one add to map "
+              f"({[p.id for p in finished]}, {added})")
+
+        # the other order: the full answer (OK) first, then the older search answer (in progress)
+        run = runs["b"]
+        processings.started_here.add("order-b")
+        deliver_page(processings, full, [model(dict(run, status="OK", percentCompleted=100))])
+        deliver_page(processings, found, [model(run)])
+        deliver_page(processings, found, [model(dict(run, status="OK", percentCompleted=100))])
+        check([p.id for p in finished] == ["order-a", "order-b"] and added == ["order-a", "order-b"],
+              f"ORDER: full OK, then an older search answer in progress: one notice, one add to map "
+              f"({[p.id for p in finished]}, {added})")
+        processings._poll.stop()
+
+        # a list answer sent before the accepted Restart still says FAILED: the full listing
+        reload()
+        if page.expanded != "order-zulu":
+            page._toggle("order-zulu")
+        check(processings.get("order-zulu") is not None and len(restart_buttons()) == 1
+              and processings.get("order-zulu").status is Status.failed,
+              "RESTART ANSWER: a failed processing of the full listing is offered Restart")
+        failed_notices.clear()
+        state.page_delay = {"": 1.2}
+        processings.refresh(LOAD)
+        wait_until(lambda: False, 0.2)
+        page.restart.emit("order-zulu")
+        check(wait_until(lambda: len(posts("order-zulu")) == 1 and processings.get("order-zulu").status
+                         is Status.in_progress, 5), "RESTART ANSWER: the server accepts the restart")
+        state.page_delay = {}
+        seen = []
+
+        def see_zulu(_items):
+            seen.append(processings.get("order-zulu").status)
+
+        processings.changed.connect(see_zulu)
+        check(wait_until(lambda: len(seen) >= 2, 6), "RESTART ANSWER: the old answer of the full listing arrives")
+        wait_until(lambda: False, 0.5)
+        settle()
+        check(Status.failed not in seen and not failed_notices and not restart_buttons()
+              and len(posts("order-zulu")) == 1,
+              f"RESTART ANSWER: …it brings no “failed” status, notice or Restart button, and no second restart "
+              f"({seen}, {failed_notices})")
+        processings.changed.disconnect(see_zulu)
+        processings._poll.stop()
+
+        # …and the search listing
+        reload()
+        check(search("yankee") and [p.id for p in processings.found] == ["order-yankee"],
+              "RESTART ANSWER: the search finds a failed processing")
+        if page.expanded != "order-yankee":
+            page._toggle("order-yankee")
+        check(len(restart_buttons()) == 1, "RESTART ANSWER: its card offers Restart")
+        failed_notices.clear()
+        state.page_delay = {"yankee": 1.2}
+        processings.refresh_search(LOAD)
+        wait_until(lambda: False, 0.2)
+        page.restart.emit("order-yankee")
+        check(wait_until(lambda: len(posts("order-yankee")) == 1 and card("order-yankee") is not None
+                         and card("order-yankee").processing.status is Status.in_progress, 5),
+              "RESTART ANSWER: the server accepts the restart from the search card")
+        state.page_delay = {}
+        seen = []
+
+        def see_yankee(_items):
+            seen.append(processings.get("order-yankee").status)
+
+        processings.foundChanged.connect(see_yankee)
+        check(wait_until(lambda: len(seen) >= 2, 6), "RESTART ANSWER: the old answer of the search arrives")
+        wait_until(lambda: False, 0.5)
+        settle()
+        check(Status.failed not in seen and not failed_notices and not restart_buttons()
+              and len(posts("order-yankee")) == 1,
+              f"RESTART ANSWER: …it brings no “failed” status, notice or Restart button, and no second restart "
+              f"({seen}, {failed_notices})")
+        processings.foundChanged.disconnect(see_yankee)
+        processings._poll.stop()
+
+        # an opened card that Mapflow Web deleted: the poll stops for it, one message
+        state.processings = [p for p in state.processings if p["id"] not in ("order-zulu", "order-yankee")]
+        for run in runs.values():
+            run.update(status="OK", percentCompleted=100)       # the loaded pages are final: only the card is watched
+        reload()
+        check(not processings._full.active and processings.get("order-gone") is None
+              and processings.get("order-flaky") is None,
+              "OPENED GONE: the loaded pages are final, and the two old processings are not on them")
+        controller.open_processing("order-gone")
+        check(wait_until(lambda: processings.opened is not None and processings.opened.id == "order-gone", 5)
+              and page.opened is not None, "OPENED GONE: “Show” fetches a processing in progress")
+        processings._poll.stop()
+        state.processings = [p for p in state.processings if p["id"] != "order-gone"]
+        since, fetched = len(iface.bar.messages), len(gets("order-gone"))
+        processings._tick()
+        settle()
+        check(wait_until(lambda: processings.opened is None and page.opened is None, 5),
+              "OPENED GONE: a 404 for the opened card ends its “opened” state")
+        said = [t for t in lines()[since:] if "no longer refreshed" in (t or "")]
+        check(len(said) == 1 and "opened processing" in said[0], f"OPENED GONE: …with one message ({said})")
+        for _ in range(3):
+            processings._tick()
+            settle()
+        wait_until(lambda: False, 0.3)
+        check(len(gets("order-gone")) == fetched + 1 and not processings._poll.isActive()
+              and len([t for t in lines()[since:] if "no longer refreshed" in (t or "")]) == 1,
+              f"OPENED GONE: …the poll asks for it no more and says nothing more ({len(gets('order-gone'))})")
+
+        # a transient failure for the opened card: one alert, and the poll is asked again after one interval
+        controller.open_processing("order-flaky")
+        check(wait_until(lambda: processings.opened is not None and processings.opened.id == "order-flaky", 5),
+              "OPENED FLAKY: “Show” fetches another processing in progress")
+        state.fail("GET", r"/processings/order-flaky/v2", 503)
+        since = len(iface.bar.messages)
+        for n in range(config.POLL_FAILURES_BEFORE_ALERT):
+            processings._poll.stop()
+            processings._tick()
+            settle()
+            check(wait_until(lambda: processings._opened_failures.count == n + 1, 5),
+                  f"OPENED FLAKY: failure {n + 1} is counted")
+        alerts = [t for t in lines()[since:] if "Mapflow is not answering" in (t or "")]
+        check(len(alerts) == 1 and "opened processing" in alerts[0], f"OPENED FLAKY: …one alert ({alerts})")
+        check(processings.opened is not None and processings._poll.isActive(),
+              "OPENED FLAKY: …the card stays opened and the poll is set to ask again")
+        state.heal()
+        before = processings.opened.percent
+        processings._tick()
+        settle()
+        check(wait_until(lambda: processings._opened_failures.count == 0 and processings.opened is not None
+                         and processings.opened.percent != before, 5),
+              "OPENED FLAKY: …and an answer brings the card up to date and resets the count")
+    finally:
+        processings.finished.disconnect(finished.append)
+        processings.failed.disconnect(failed_notices.append)
         del controller.results.add_to_map
         state.heal()
         state.page_delay = {}
@@ -4802,6 +5025,7 @@ def main():
     check_restart(iface, content, controller, processings, state)
     check_processing_search(iface, content, controller, processings, state)
     check_opened_card(iface, content, controller, processings, state)
+    check_answer_order(iface, content, controller, processings, state)
     check_planned_processings(iface, content, controller, processings, state, links)
 
     # Download the area (AOI)

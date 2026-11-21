@@ -404,7 +404,7 @@ class Handler(BaseHTTPRequestHandler):
             offset, limit = int(body.get("offset") or 0), int(body.get("limit") or 30)
             if limit > 100:
                 return self._send(400, {"code": "BAD_REQUEST", "message": "limit must be at most 100"})
-            page = items[offset:offset + limit]
+            page = [dict(p) for p in items[offset:offset + limit]]      # as it is now: a delayed answer is the old one
             delay = self.state.page_delay.get((terms or "").lower())
             if delay:
                 time.sleep(delay)               # outside state.lock: the server is threaded
