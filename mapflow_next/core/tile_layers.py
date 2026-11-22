@@ -30,7 +30,7 @@ BASIC = "Basic"
 
 NO_PLACEHOLDERS = "Its address has no {x}, {y} and {z}, and no {q}."
 NOT_HTTP = "Its address does not start with http:// or https://."
-PRIVATE_HOST = "Its host is this computer or a private network address. Mapflow cannot reach it."
+PRIVATE_HOST = "Its host is this computer, a private network address or an intranet name. Mapflow cannot reach it."
 HEADERS = "It needs a referer or other HTTP headers. Mapflow cannot send them."
 NOT_BASIC = "It uses an authentication configuration that is not Basic."
 NO_ZOOM = "Its zoom range has no zoom that Mapflow reads (0 to 21)."

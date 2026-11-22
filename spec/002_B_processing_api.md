@@ -124,7 +124,8 @@ The layer stays in the list, disabled, with the reason:
 
 - The address has no `{x}`, `{y}` and `{z}`, and no `{q}`.
 - The address does not start with `http://` or `https://`.
-- The host is this computer or a private network address. Mapflow cannot reach it.
+- The host is this computer, a private network address, or a name without a dot (an intranet name).
+  Mapflow cannot reach it.
 - The layer needs a referer or other HTTP headers. Mapflow cannot send them.
 - The layer uses an authentication configuration that is not Basic.
 
