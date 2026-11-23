@@ -2094,6 +2094,36 @@ def test_the_parts_that_qgis_read_from_its_own_source_text_become_the_fields(ver
     assert params.has_login and source.login == QGIS_READ[version]["username"]
 
 
+# The source text that QGIS 3.24 and later write for the OpenStreetMap connection of the Browser, and the parts that
+# `QgsProviderRegistry.decodeUri("wms", source)` reads from it (tests/e2e_flow.py `check_tile_layers` makes the same
+# layer with QGIS on both versions). The empty `http-header:referer` is no header.
+OSM_WROTE = ("http-header:referer=&type=xyz&url=https://tile.openstreetmap.org/%7Bz%7D/%7Bx%7D/%7By%7D.png"
+             "&zmax=19&zmin=0")
+OSM_READ = {"http-header:referer": "", "type": "xyz",
+            "url": "https://tile.openstreetmap.org/{z}/{x}/{y}.png", "zmax": "19", "zmin": "0"}
+
+
+def test_an_empty_referer_or_header_of_a_qgis_connection_is_not_a_header():
+    from mapflow_next.core.tile_layers import tile_params, tile_source
+    assert OSM_WROTE.startswith("http-header:referer=&type=xyz")
+    source = tile_source(OSM_READ)
+    assert source.headers == () and not source.referer
+    params, reason = tile_params(source)
+    assert reason == "" and params.source_type == "XYZ" and params.zooms == tuple(range(0, 19 + 1)) \
+        and not params.has_login
+    # every empty form is no header: an empty `referer`, empty headers of any name, a blank value
+    empty = dict(OSM_READ, referer="", **{"http-header:X-Key": "", "http-header:Accept": "  ",
+                                          "http-header:other": None})
+    assert tile_params(tile_source(empty))[1] == ""
+
+
+def test_a_referer_or_header_with_a_value_refuses_the_layer():
+    from mapflow_next.core.tile_layers import HEADERS, tile_params, tile_source
+    for extra in ({"http-header:referer": "https://example.org"}, {"referer": "https://example.org"},
+                  {"http-header:X-Key": "abc"}):
+        assert tile_params(tile_source(dict(OSM_READ, **extra))) == (None, HEADERS)
+
+
 def test_a_tile_source_never_shows_in_a_repr():
     from mapflow_next.core.tile_layers import tile_params
     source = _source("https://tiles.example.com/secret-key/{z}/{x}/{y}.png", login="the-login",
@@ -2417,3 +2447,78 @@ def test_a_processing_with_user_defined_imagery_keeps_the_host_and_never_the_log
     item["params"] = {"sourceParams": {"userDefined": {"zoom": 12}}}
     bare = Processing.from_api(item).source
     assert (bare.kind, bare.url, bare.host) == ("custom", "", "")
+
+
+# ---------- the tile source in an answer about a processing never reaches a report, a log line or a message ----------
+
+_USER_DEFINED_ANSWER = {
+    "sourceType": "XYZ", "url": "https://tiles.example.com:8443/KEYPATH77/{z}/{x}/{y}.png?token=TOKQUERY88&v=2",
+    "zoom": 17, "crs": "epsg:3857", "rasterLogin": "the-login-91",
+    "rasterPassword": "the-pass-92"}  # pragma: allowlist secret
+_TILE_SECRETS = ("KEYPATH77", "TOKQUERY88", "the-login-91", "the-pass-92", "{y}.png")
+
+
+def _processing_answer(pid, user_defined=None):
+    item = processing_json(pid)
+    item["params"] = {"sourceParams": {"userDefined": dict(user_defined or _USER_DEFINED_ANSWER)}}
+    return item
+
+
+@pytest.mark.parametrize("shape", ["list", "one", "indented", "cut", "repr"])
+def test_the_tile_source_of_an_answer_is_cut_to_its_host_and_its_login_is_removed(shape):
+    import json
+    from mapflow_next.core.report import hide_tile_source, redact
+    first, second = _processing_answer("p-1"), _processing_answer("p-2")
+    plain = processing_json("p-3")                                      # a processing with no tile source
+    if shape == "one":
+        text = json.dumps(first)
+    elif shape == "repr":
+        text = repr({"results": [first, plain], "total": 2})
+    elif shape == "indented":
+        text = json.dumps({"results": [first, plain, second], "total": 3}, indent=2)
+    else:
+        text = json.dumps({"results": [plain, first, second], "total": 3})
+        if shape == "cut":
+            text = text[:text.index("KEYPATH77") + 4]                    # a text that was cut in the address
+    for hidden in (hide_tile_source(text), redact(text)):
+        assert not [secret for secret in _TILE_SECRETS if secret in hidden]
+        assert "https://tiles.example.com:8443" in hidden
+        assert "p-1" in hidden and "Buildings" in hidden                 # what support needs stays
+    if shape not in ("cut", "repr"):
+        parsed = json.loads(hide_tile_source(text))                      # the shape stays JSON
+        answers = [parsed] if shape == "one" else parsed["results"]
+        for answer in answers:
+            user_defined = answer["params"]["sourceParams"].get("userDefined")
+            if user_defined is None:
+                continue                                                  # the processing with no tile source
+            assert user_defined["url"] == "https://tiles.example.com:8443"
+            assert user_defined["rasterLogin"] == "[removed]" and user_defined["rasterPassword"] == "[removed]"
+            assert user_defined["zoom"] == 17 and user_defined["sourceType"] == "XYZ"
+        with_source = sum("userDefined" in a["params"]["sourceParams"] for a in answers)
+        assert with_source == (1 if shape == "one" else 2)
+
+
+def test_a_text_with_no_tile_source_is_not_changed():
+    import json
+    from mapflow_next.core.report import hide_tile_source
+    text = json.dumps({"results": [processing_json("p-1")], "url": "https://x.example.com/a/b?c=d"})
+    assert hide_tile_source(text) == text
+    assert hide_tile_source("") == ""
+
+
+def test_the_tile_source_is_cut_whatever_the_quotes_and_the_escapes():
+    from mapflow_next.core.report import address_origin, hide_tile_source
+    escaped = r'{"userDefined": {"url": "https:\/\/t.example.com\/KEYPATH77\/{z}.png", "rasterLogin": "us\"er"}}'
+    hidden = hide_tile_source(escaped)
+    assert "KEYPATH77" not in hidden and "us\\" not in hidden and "https://t.example.com" in hidden
+    with_user_info = "https://user:pw@[2001:db8::1]:81/a/b?c"  # pragma: allowlist secret
+    assert address_origin(with_user_info) == "https://[2001:db8::1]:81"
+    assert address_origin("not an address") == "[removed]"
+
+
+def test_a_request_body_with_a_tile_source_is_known_wherever_it_sits():
+    from mapflow_next.core.tile_layers import has_tile_source
+    assert has_tile_source({"params": {"sourceParams": {"userDefined": {"url": "x"}}}})
+    assert has_tile_source({"a": [{"b": {"userDefined": {}}}]})
+    assert not has_tile_source({"params": {"sourceParams": {"dataProvider": {}}}})
+    assert not has_tile_source(None) and not has_tile_source("userDefined") and not has_tile_source([1, {"a": 2}])

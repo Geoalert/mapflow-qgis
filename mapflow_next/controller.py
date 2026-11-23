@@ -242,6 +242,7 @@ class Controller(QObject):
         project = QgsProject.instance()
         project.layersAdded.connect(self.on_layers_changed)
         project.layersRemoved.connect(self.on_layers_removed)
+        project.cleared.connect(self._project_cleared)
 
     def stop(self) -> None:
         """Unload: stop the timers, abort the request of the Projects window, let go of QGIS's project signals, end
@@ -255,7 +256,8 @@ class Controller(QObject):
             self._projects_request = 0
         project = QgsProject.instance()
         for signal, slot in ((project.layersAdded, self.on_layers_changed),
-                             (project.layersRemoved, self.on_layers_removed)):
+                             (project.layersRemoved, self.on_layers_removed),
+                             (project.cleared, self._project_cleared)):
             try:
                 signal.disconnect(slot)
             except TypeError:
@@ -920,6 +922,8 @@ class Controller(QObject):
 
     @guarded
     def on_layers_removed(self, layer_ids) -> None:
+        for layer_id in layer_ids:
+            self._unwatch_tile_layer(layer_id)
         # Compared by the id kept when the layer was chosen: by now the layer object itself is deleted, and an
         # empty layer gives the form no area (draft.aoi) to compare with
         if self._aoi_layer_id is not None and self._aoi_layer_id in layer_ids:
@@ -987,29 +991,43 @@ class Controller(QObject):
     # ---------- QGIS tile layers as imagery ----------
 
     def _tile_offers(self) -> List[TileOffer]:
-        """The tile layers of the project now, read fresh (the project is the only place they live). Each layer's
-        name is watched, so a rename changes the form's rows."""
+        """The tile layers of the project now, read fresh (the project is the only place they live). The name of
+        each offered layer is watched, so a rename changes the form's rows: one connection per layer object,
+        removed when the layer stops being an offer."""
         offers = self.layers.tile_offers()
         known = {offer.layer_id for offer in offers}
         for layer_id in [i for i in self._watched_tiles if i not in known]:
-            del self._watched_tiles[layer_id]               # the layer is gone: its signals went with it
-        for layer_id in known - set(self._watched_tiles):
-            layer = QgsProject.instance().mapLayer(layer_id)
-            if layer is not None:
-                layer.nameChanged.connect(self._tile_layer_renamed)
-                self._watched_tiles[layer_id] = layer
+            self._unwatch_tile_layer(layer_id)
+        project = QgsProject.instance()
+        for layer_id in known:
+            layer = project.mapLayer(layer_id)
+            # `is` and not `==`: a project that is read again gives new layer objects under the same ids
+            if layer is None or self._watched_tiles.get(layer_id) is layer:
+                continue
+            self._unwatch_tile_layer(layer_id)
+            layer.nameChanged.connect(self._tile_layer_renamed)
+            self._watched_tiles[layer_id] = layer
         return offers
 
     def _tile_offer(self, layer_id: str) -> Optional[TileOffer]:
         return next((offer for offer in self._tile_offers() if offer.layer_id == layer_id), None)
 
+    def _unwatch_tile_layer(self, layer_id: str) -> None:
+        layer = self._watched_tiles.pop(layer_id, None)
+        if layer is None:
+            return
+        try:
+            layer.nameChanged.disconnect(self._tile_layer_renamed)
+        except (TypeError, RuntimeError):               # TypeError: not connected; RuntimeError: layer deleted
+            pass
+
     def _unwatch_tile_layers(self) -> None:
-        watched, self._watched_tiles = list(self._watched_tiles.values()), {}
-        for layer in watched:
-            try:
-                layer.nameChanged.disconnect(self._tile_layer_renamed)
-            except (TypeError, RuntimeError):               # the layer is already deleted
-                continue
+        for layer_id in list(self._watched_tiles):
+            self._unwatch_tile_layer(layer_id)
+
+    @guarded
+    def _project_cleared(self, *args) -> None:
+        self._unwatch_tile_layers()             # the layers of the old project are gone; the next list watches anew
 
     @guarded
     def _tile_layer_renamed(self, *args) -> None:
@@ -1323,9 +1341,10 @@ class Controller(QObject):
 
     def _imagery_rows(self, status: Optional[UserStatus], credits_billing: bool,
                       offers: Optional[List[TileOffer]] = None):
-        """My imagery first, then the basemap providers (zoom z17–z21, the scenario's zoom marked), then the tile
-        layers of the QGIS project, then an image chosen in the catalog search (its zoom follows the image's
-        resolution, as in the current plugin)."""
+        """My imagery first, then the basemap providers (zoom z17–z21, the scenario's zoom marked), then an image
+        chosen in the catalog search (its zoom follows the image's resolution, as in the current plugin), then the
+        tile layers of the QGIS project. The catalog row has no group: it goes before the tile layers, so the
+        heading "QGIS tile layers" has only tile layers below it."""
         if offers is None:
             offers = self._tile_offers()
         rows = []
@@ -1373,20 +1392,6 @@ class Controller(QObject):
                                    previewing=self._previewing(choice) if chosen else None))
             if chosen:
                 selected = rows[-1].key
-        for offer in offers:
-            if not offer.usable:
-                rows.append(ImageryRow(key=f"tile:{offer.layer_id}", title=offer.name, meta=offer.reason,
-                                       group=TILE_GROUP, disabled=True))
-                continue
-            zooms = offer.params.zooms
-            chosen = bool(choice and choice.kind == "tile" and choice.tile_layer_id == offer.layer_id)
-            zoom = choice.zoom if chosen else nearest_zoom(zooms, self.tile_zoom.get(offer.layer_id))
-            meta = f"zoom {zooms[0]}–{zooms[-1]}" + (f" · {_zoom_meta(zoom)}" if _zoom_meta(zoom) else "")
-            rows.append(ImageryRow(key=f"tile:{offer.layer_id}", title=offer.name, meta=meta,
-                                   price="In estimate" if credits_billing else "", zooms=list(zooms), zoom=zoom,
-                                   group=TILE_GROUP))
-            if chosen:
-                selected = rows[-1].key
         if self.chosen_image:
             image = self.chosen_image
             details = [f"{image.acquired.day} {image.acquired:%b %Y}" if image.acquired else "",
@@ -1401,6 +1406,20 @@ class Controller(QObject):
                                    else None))
             if choice and choice.kind == "catalog":
                 selected = "catalog"
+        for offer in offers:
+            if not offer.usable:
+                rows.append(ImageryRow(key=f"tile:{offer.layer_id}", title=offer.name, meta=offer.reason,
+                                       group=TILE_GROUP, disabled=True))
+                continue
+            zooms = offer.params.zooms
+            chosen = bool(choice and choice.kind == "tile" and choice.tile_layer_id == offer.layer_id)
+            zoom = choice.zoom if chosen else nearest_zoom(zooms, self.tile_zoom.get(offer.layer_id))
+            meta = f"zoom {zooms[0]}–{zooms[-1]}" + (f" · {_zoom_meta(zoom)}" if _zoom_meta(zoom) else "")
+            rows.append(ImageryRow(key=f"tile:{offer.layer_id}", title=offer.name, meta=meta,
+                                   price="In estimate" if credits_billing else "", zooms=list(zooms), zoom=zoom,
+                                   group=TILE_GROUP))
+            if chosen:
+                selected = rows[-1].key
         return rows, selected
 
     def _previewing(self, choice: Optional[ImageryChoice]) -> Optional[bool]:
@@ -1485,17 +1504,15 @@ class Controller(QObject):
         issues = self._issues(project, status)
         if issues or self.starting:
             return
-        credentials = None
+        credentials, skip_alert = None, False
         choice = self.draft.imagery
         if choice is not None and choice.kind == "tile" and choice.tile_params.has_login:
             # The login leaves the machine with the processing: the user agrees first, unless they chose not to be
             # asked again. Cancel changes nothing.
             if not self.settings.flag(SKIP_TILE_LOGIN_ALERT):
-                send, skip = self._ask_tile_login(choice.tile_name)
+                send, skip_alert = self._ask_tile_login(choice.tile_name)
                 if not send:
                     return
-                if skip:
-                    self.settings.setValue(SKIP_TILE_LOGIN_ALERT, True)
             credentials = self.layers.tile_credentials(choice.tile_layer_id)
             if credentials is None:
                 self.notify(f"The login of the layer “{choice.tile_name}” could not be read.",
@@ -1504,6 +1521,9 @@ class Controller(QObject):
         self.starting = True
         self.content.run.set_issues([], busy=True)
         self.processings.start(self.draft, credentials)
+        if skip_alert:
+            # Stored last: a login that could not be read sends nothing, so it must not turn the alert off
+            self.settings.setValue(SKIP_TILE_LOGIN_ALERT, True)
 
     @guarded
     def on_started(self, processing: Optional[Processing]) -> None:

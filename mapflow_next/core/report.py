@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from typing import Iterable, Optional
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
 REMOVED = "[removed]"
 SUMMARY_LIMIT = 200          # characters of the one-line summary
@@ -59,11 +59,66 @@ _JWT = re.compile(r"\beyJ[\w.-]{8,}")
 _URL_TAIL = re.compile(r"(https?://[^\s?#\"'<>]+)[?#][^\s\"'<>]*", re.IGNORECASE)
 
 
+# ---------- the source of a QGIS tile layer ----------
+# The answers of Mapflow about a processing hold `params.sourceParams.userDefined`: the full address of the layer
+# (a key can sit in its path or its query), `rasterLogin` and maybe `rasterPassword`. `hide_tile_source` is the one
+# filter for them; `redact` applies it, and so does the HTTP layer to every answer text it keeps.
+
+_QUOTED = r"""\"(?:[^"\\]|\\.)*"?|'(?:[^'\\]|\\.)*'?"""
+_USER_DEFINED = re.compile(rf"""(?P<head>["']userDefined["']\s*:\s*\{{)(?P<body>(?:{_QUOTED}|[^{{}}"'])*)""",
+                           re.IGNORECASE)
+_URL_VALUE = re.compile(rf"""(?P<key>["']url["']\s*:\s*)(?P<value>{_QUOTED})""", re.IGNORECASE)
+_RASTER_SECRET = re.compile(
+    rf"""(?P<key>["']?\braster[_-]?(?:login|password)["']?\s*[:=]\s*)"""
+    rf"""(?P<value>\[removed\]|{_QUOTED}|[^\s&,;"'}}\]]+)""",
+    re.IGNORECASE)
+_TILE_WORDS = ("userdefined", "rasterlogin", "rasterpassword", "raster_login", "raster_password", "raster-login",
+               "raster-password")
+
+
+def address_origin(url: str) -> str:
+    """The scheme, host and port of an address, with no user info, path, query or fragment. `[removed]` when
+    the text is not an address."""
+    try:
+        parts = urlsplit(url.replace("\\/", "/").strip())
+        host, port = parts.hostname, parts.port
+    except ValueError:
+        return REMOVED
+    if not parts.scheme or not host:
+        return REMOVED
+    return f"{parts.scheme}://{'[' + host + ']' if ':' in host else host}{f':{port}' if port else ''}"
+
+
+def _quoted_replacement(value: str, replacement: str) -> str:
+    """`replacement` in the quotes that `value` had, so a JSON or repr text stays valid."""
+    return f"{value[0]}{replacement}{value[0]}" if value[:1] in ("'", '"') else replacement
+
+
+def hide_tile_source(text: str) -> str:
+    """`text` with the secrets of a `userDefined` tile source removed, and its shape kept (JSON stays JSON):
+    the value of every `rasterLogin` and `rasterPassword` becomes `[removed]`, and every `url` inside a
+    `userDefined` object is cut to its scheme, host and port. It works on a text that was cut short too."""
+    if not any(word in text.lower() for word in _TILE_WORDS):
+        return text
+
+    def cut_urls(found):
+        def cut(url):
+            value = url.group("value")
+            inner = value[1:-1] if value.endswith(value[0]) and len(value) > 1 else value[1:]
+            return f"{url.group('key')}{_quoted_replacement(value, address_origin(inner))}"
+        return found.group("head") + _URL_VALUE.sub(cut, found.group("body"))
+
+    text = _USER_DEFINED.sub(cut_urls, text)
+    return _RASTER_SECRET.sub(lambda f: f.group("key") + _quoted_replacement(f.group("value"), REMOVED), text)
+
+
 def redact(text: str, secrets: Iterable[str] = ()) -> str:
     """Remove from `text` what must not leave the machine: an `Authorization` header, bearer and basic
-    credentials, the values of keys that name a secret, a JWT, the query string and fragment of every URL, and
+    credentials, the values of keys that name a secret, the login, password and address of a tile layer source
+    (`hide_tile_source`), a JWT, the query string and fragment of every URL, and
     each of `secrets` (literals the caller knows, such as the current access token). It is a pattern filter, not a
     proof: the report is also built from named parts only."""
+    text = hide_tile_source(text)
     text = _URL_TAIL.sub(r"\1", text)
     text = _HEADER.sub(REMOVED, text)
     text = _BEARER.sub(REMOVED, text)

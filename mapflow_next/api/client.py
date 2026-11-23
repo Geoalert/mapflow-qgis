@@ -17,12 +17,6 @@ from .http import Http
 OnError = Optional[Callable]
 
 
-def _has_tile_address(payload: dict) -> bool:
-    """Does the request body carry a QGIS tile layer's address (`userDefined`)? Mapflow's answer to it may
-    repeat the address, so the HTTP client keeps the answer's text out of logs and reports."""
-    return "userDefined" in (((payload or {}).get("params") or {}).get("sourceParams") or {})
-
-
 class MapflowApi:
     def __init__(self, http: Http):
         self.http = http
@@ -126,14 +120,12 @@ class MapflowApi:
 
     def cost(self, payload: dict, on_done: Callable[[int], None], on_error: OnError = None) -> int:
         return self.http.post("processing/cost/v2", payload, parse="text", on_error=on_error,
-                              on_success=lambda text: on_done(int(float(text.strip().strip('"')))),
-                              sensitive=_has_tile_address(payload))
+                              on_success=lambda text: on_done(int(float(text.strip().strip('"')))))
 
     def start(self, payload: dict, on_done: Callable[[Optional[Processing]], None], on_error: OnError = None) -> None:
         def done(data):
             on_done(Processing.from_api(data) if isinstance(data, dict) and data.get("id") else None)
-        self.http.post("processings/v2", payload, on_success=done, on_error=on_error, timeout=60,
-                       sensitive=_has_tile_address(payload))
+        self.http.post("processings/v2", payload, on_success=done, on_error=on_error, timeout=60)
 
     def restart(self, processing_id: str, on_done: Callable, on_error: OnError = None) -> None:
         self.http.post(f"processings/{processing_id}/restart/v2", on_success=on_done, on_error=on_error)

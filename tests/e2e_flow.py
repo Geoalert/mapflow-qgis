@@ -2315,11 +2315,12 @@ def check_restart(iface, content, controller, processings, state):
         reload()
 
 
-def deliver_page(processings, listing, items):
-    """The answer of a list request, handed over as the HTTP layer does: sent after everything done so far, for the
-    state of the listing now. `limit` is the number of items, so the answer is not taken for the whole project."""
-    processings._on_page(listing, processings.project.id, listing.token, max(len(items), 1), processings._sent,
-                         items, len(items))
+def deliver_page(processings, listing, items, sent=None):
+    """The answer of a list request, handed over as the HTTP layer does: by default sent after everything done so
+    far (`sent` is the number of an older request), for the state of the listing now. `limit` is the number of items,
+    so the answer is not taken for the whole project."""
+    processings._on_page(listing, processings.project.id, listing.token, max(len(items), 1),
+                         processings._sent if sent is None else sent, items, len(items))
 
 
 def check_processing_search(iface, content, controller, processings, state):
@@ -3140,6 +3141,7 @@ def check_answer_order(iface, content, controller, processings, state):
         deliver_page(processings, full, [model(run)])
         check(processings.get("order-a").status is Status.in_progress and len(finished) == 2,
               "RESTART IN WEB: an answer of a later request moves a final processing to in progress, with no notice")
+        processings._sent += 1                  # the finish is read by a request sent after the one of the restart
         deliver_page(processings, full, [model(dict(run, status="OK", percentCompleted=100))])
         check([p.id for p in finished] == ["order-a", "order-b", "order-a"]
               and added == ["order-a", "order-b", "order-a"],
@@ -3151,6 +3153,7 @@ def check_answer_order(iface, content, controller, processings, state):
         deliver_page(processings, found, [model(run)])
         check(next(p for p in processings.found if p.id == "order-b").status is Status.in_progress
               and len(finished) == 3, "RESTART IN WEB: …the same for the search listing")
+        processings._sent += 1
         deliver_page(processings, found, [model(dict(run, status="OK", percentCompleted=100))])
         check([p.id for p in finished][3:] == ["order-b"] and added[3:] == ["order-b"],
               f"RESTART IN WEB: …and one notice and one add to map for its next finish ({added})")
@@ -3181,6 +3184,72 @@ def check_answer_order(iface, content, controller, processings, state):
         check(processings._last_status["order-open"] is Status.ok and len(finished) == before + 2,
               "RESTART IN WEB: …an answer of a request sent before the final one changes nothing")
         processings.opened = None
+        processings._poll.stop()
+
+        # A Restart in Mapflow Web between the two server reads of one poll tick: the full-listing request (n+1)
+        # read the final run, the search request (n+2) read the restarted one. One rule holds in both directions
+        # between final and not final: an answer that would change the status back counts only if its request was
+        # sent after the change that is known.
+        def tick_pair():
+            processings._sent += 2
+            return processings._sent - 1, processings._sent
+
+        def finished_ids():
+            return [p.id for p in finished]
+
+        # the answer that saw the restart arrives first
+        run, ok_run = runs["a"], dict(runs["a"], status="OK", percentCompleted=100)
+        notices, adds = len(finished), len(added)
+        full_sent, found_sent = tick_pair()
+        deliver_page(processings, found, [model(run)], found_sent)
+        deliver_page(processings, full, [model(ok_run)], full_sent)
+        check(len(finished) == notices and len(added) == adds
+              and processings._last_status["order-a"] is Status.in_progress
+              and processings.get("order-a").status is Status.in_progress,
+              f"ORDER IN WEB: the restart is seen first, then the older final answer: no false notice, no second "
+              f"add to map ({finished_ids()[notices:]}, {added[adds:]})")
+        processings._sent += 1
+        deliver_page(processings, full, [model(ok_run)])
+        check(finished_ids()[notices:] == ["order-a"] and added[adds:] == ["order-a"],
+              f"ORDER IN WEB: …the real finish gives one notice and one add to map "
+              f"({finished_ids()[notices:]}, {added[adds:]})")
+        # the older final answer arrives first: nothing changes, and the next poll tick sees the restart
+        run, ok_run = runs["b"], dict(runs["b"], status="OK", percentCompleted=100)
+        notices, adds = len(finished), len(added)
+        full_sent, found_sent = tick_pair()
+        deliver_page(processings, full, [model(ok_run)], full_sent)
+        deliver_page(processings, found, [model(run)], found_sent)
+        check(len(finished) == notices and len(added) == adds
+              and processings._last_status["order-b"] is Status.ok,
+              "ORDER IN WEB: the older final answer first, then the restart of the same tick: no notice")
+        processings._sent += 1
+        deliver_page(processings, found, [model(run)])
+        processings._sent += 1
+        deliver_page(processings, found, [model(ok_run)])
+        check(len(finished) == notices + 1 and finished[-1].id == "order-b" and added[adds:] == ["order-b"],
+              f"ORDER IN WEB: …the next tick sees the restart, and the real finish gives one notice and one add to "
+              f"map ({finished_ids()[notices:]}, {added[adds:]})")
+
+        # "Show more": the answer of an older request, for a processing that the plugin knows as restarted
+        more = fixtures.processing_json("order-more", "OK", 100, name="More run")
+        more_ok, more_run = dict(more), dict(more, status="IN_PROGRESS", percentCompleted=40)
+        processings.started_here.add("order-more")
+        processings._sent += 1
+        processings._note(model(more_ok), processings._sent)             # a final status is known
+        notices, adds = len(finished), len(added)
+        older = processings._sent + 1
+        processings._sent = older + 1                                    # the "more" request is older than this one
+        processings._note(model(more_run), processings._sent)            # another list saw the restart
+        processings._on_more(full, processings.project.id, full.token, older, [model(more_ok)], len(full.items) + 1)
+        row = next((p for p in full.items if p.id == "order-more"), None)
+        check(len(finished) == notices and len(added) == adds and row is not None
+              and row.status is Status.in_progress and processings._last_status["order-more"] is Status.in_progress,
+              "ORDER IN WEB: an older “Show more” answer that says final after a restart gives no notice")
+        processings._sent += 1
+        deliver_page(processings, full, [model(more_ok)])
+        check(finished_ids()[notices:] == ["order-more"] and added[adds:] == ["order-more"],
+              f"ORDER IN WEB: …and the real finish gives one notice and one add to map "
+              f"({finished_ids()[notices:]}, {added[adds:]})")
         processings._poll.stop()
 
         # a list answer sent before the accepted Restart still says FAILED: the full listing
@@ -4534,6 +4603,12 @@ def check_tile_source_from_qgis(plugin):
                                        "url": percent_url.replace("{-y}", "{y}"), "qgis_zooms": (2, 17)},
         "referer": {"write": dict(url=xyz_url, referer="https://r.example.com/a?b=c"),
                     "reason": core_tiles.HEADERS, "has": ("referer=",)},
+        "connection with a url only": {"write": dict(url=xyz_url, zmin=0, zmax=19, headers={"referer": ""}),
+                                       "kind": "XYZ", "url": xyz_url, "qgis_zooms": (0, 19),
+                                       "has": ("http-header:referer=", "zmax=19")},
+        "referer header with a value": {"write": dict(url=xyz_url, zmin=0, zmax=19,
+                                                      headers={"referer": "https://r.example.com"}),
+                                        "reason": core_tiles.HEADERS, "has": ("http-header:referer=",)},
         "header": {"write": dict(url=xyz_url, headers={"X-Key": "abc=1", "Accept": "image/png"}),
                    "reason": core_tiles.HEADERS, "has": ("http-header:X-Key=", "http-header:Accept=")},
         "file://": {"write": dict(url="file:///tmp/{z}/{x}/{y}.png"), "reason": core_tiles.NOT_HTTP,
@@ -4639,6 +4714,8 @@ def check_tile_layers(iface, plugin, state, api_url):
     is restored."""
     from qgis.core import QgsApplication, QgsAuthMethodConfig, QgsRasterLayer
     from qgis.PyQt.QtWidgets import QCheckBox, QToolButton
+    from mapflow_next.config import PREVIEW_PROPERTY
+    from mapflow_next.controller import Controller
     from mapflow_next.core import tile_layers as core_tiles
     from mapflow_next.qgis_bridge import tile_layers as bridge_tiles
     from mapflow_next.core.models import CatalogImage, Processing as ProcessingModel
@@ -4655,7 +4732,7 @@ def check_tile_layers(iface, plugin, state, api_url):
     cfg_login, cfg_password = "cfg-user-77", "cfg-pass-77"    # pragma: allowlist secret
     address = f"https://{host}/KEYSECRET99/xyz/{{z}}/{{x}}/{{y}}.png?token=TOK123"
     secrets = ("KEYSECRET99", "TOK123", login, password, cfg_login, cfg_password, address)
-    created, plugin_layers, invalid = [], [], []
+    created, plugin_layers, invalid, patched = [], [], [], []
 
     def tile(name, url, **parts):
         layer = QgsRasterLayer(qgis_xyz_source(url, **parts), name, "wms")
@@ -4712,6 +4789,8 @@ def check_tile_layers(iface, plugin, state, api_url):
         with_login = tile("Tiles login", f"https://{host}/login/{{z}}/{{x}}/{{y}}.png",
                           username=login, password=password)
         with_config = tile("Tiles Basic", f"https://{host}/basic/{{z}}/{{x}}/{{y}}.png", authcfg=basic_id)
+        # the OpenStreetMap connection of the Browser: QGIS writes `http-header:referer=` with no value
+        osm = tile("Tiles OSM", f"https://{host}/osm/{{z}}/{{x}}/{{y}}.png", zmin=0, zmax=19, headers={"referer": ""})
         refused = {
             "Refused bare": (tile("Refused bare", f"https://{host}/tiles.png"), core_tiles.NO_PLACEHOLDERS),
             "Refused file": (tile("Refused file", "file:///tmp/{z}/{x}/{y}.png"), core_tiles.NOT_HTTP),
@@ -4721,6 +4800,9 @@ def check_tile_layers(iface, plugin, state, api_url):
                                 core_tiles.PRIVATE_HOST),
             "Refused referer": (tile("Refused referer", f"https://{host}/r/{{z}}/{{x}}/{{y}}.png",
                                      referer="https://example.org"), core_tiles.HEADERS),
+            "Refused referer header": (tile("Refused referer header", f"https://{host}/rh/{{z}}/{{x}}/{{y}}.png",
+                                            zmin=0, zmax=19, headers={"referer": "https://example.org"}),
+                                       core_tiles.HEADERS),
             "Refused header": (tile("Refused header", f"https://{host}/h/{{z}}/{{x}}/{{y}}.png",
                                     headers={"X-Key": "abc"}), core_tiles.HEADERS),
             "Refused config": (tile("Refused config", f"https://{host}/c/{{z}}/{{x}}/{{y}}.png",
@@ -4744,7 +4826,7 @@ def check_tile_layers(iface, plugin, state, api_url):
         check(not invalid and wms.isValid() and wms.providerType() == "wms",
               f"TILE LAYERS: the test layers are valid, the WMS one too ({invalid})")
         snapshot = {layer.id(): (layer.name(), layer.source(), tuple(layer.customPropertyKeys()))
-                    for layer in (xyz, tms, quad, with_login, with_config)}
+                    for layer in (xyz, tms, quad, with_login, with_config, osm)}
 
         # the form: model, area, the run page open (so that the project's signals change it at once)
         controller.on_model("wd-buildings")
@@ -4776,13 +4858,17 @@ def check_tile_layers(iface, plugin, state, api_url):
             return f"tile:{layer.id()}"
 
         # ---------- which layers are listed ----------
-        usable = ["Tiles XYZ", "Tiles TMS", "Tiles QUADKEY", "Tiles login", "Tiles Basic"]
+        usable = ["Tiles XYZ", "Tiles TMS", "Tiles QUADKEY", "Tiles login", "Tiles Basic", "Tiles OSM"]
         titles = ui_titles()
         check([r.title for r in tile_rows() if not r.disabled] == sorted(usable, key=str.lower)
               and all(name in titles for name in usable),
               f"TILE LAYERS: the tile layers of the project are rows of the run form ({titles})")
         check(all(name in titles for name in refused) and len(tile_rows()) == len(usable) + len(refused),
               "…the layers it cannot use too")
+        check("http-header:referer=" in osm.source() and row_of("Tiles OSM") is not None
+              and not row_of("Tiles OSM").disabled and ui_row("Tiles OSM").isEnabled(),
+              "TILE LAYERS: a layer made from a connection with only a url (an empty `http-header:referer`) is "
+              "listed and usable")
         check(not any(name in titles for name in ("Plugin preview", "Plugin result", "WMS layer", "GeoTIFF layer",
                                                   "Blocks", "Old town")),
               "…and no layer the plugin added (a preview, a result), no WMS layer, no vector or GeoTIFF layer")
@@ -4800,10 +4886,18 @@ def check_tile_layers(iface, plugin, state, api_url):
             kind = row.key.split(":")[0]
             if not with_catalog or with_catalog[-1] != kind:
                 with_catalog.append(kind)
+        widgets = [run.rows_box.itemAt(n).widget() for n in range(run.rows_box.count())]
+        below_heading = [w.title.text() for w in widgets[widgets.index(run.group_labels[0]) + 1:]
+                         if w in run._rows]
+        catalog_title = next(r.title for r in rows() if r.key == "catalog")
+        check(len(run.group_labels) == 1 and below_heading == [r.title for r in tile_rows()]
+              and catalog_title not in below_heading and catalog_title in ui_titles(),
+              f"TILE LAYERS: with a catalog image chosen, the heading “QGIS tile layers” has only tile layers "
+              f"below it ({below_heading})")
         controller.chosen_image = None
         controller.refresh_run()
-        check(kinds == ["mosaic", "provider", "tile"] and with_catalog == ["mosaic", "provider", "tile", "catalog"],
-              f"TILE LAYERS: the rows are My imagery, the providers, the tile layers, the catalog image "
+        check(kinds == ["mosaic", "provider", "tile"] and with_catalog == ["mosaic", "provider", "catalog", "tile"],
+              f"TILE LAYERS: the rows are My imagery, the providers, the catalog image, the tile layers "
               f"({kinds}, {with_catalog})")
 
         # ---------- disabled layers ----------
@@ -4840,6 +4934,55 @@ def check_tile_layers(iface, plugin, state, api_url):
         project.removeMapLayer(late_id)
         created.remove(late_id)
         check("Late renamed" not in ui_titles(), "…a layer that is removed leaves the list at once")
+
+        # ---------- one connection per layer, and none left over ----------
+        # The slot is counted at the class, before the layer is watched, so a connection that is made twice or that
+        # is not removed shows as a call of the slot itself (the slot's own `_stopped` guard hides it otherwise).
+        slot_calls, refreshes = [], []
+        slot_original, refresh_original = Controller._tile_layer_renamed, controller.refresh_run
+
+        def counting_slot(self, *args):
+            slot_calls.append(1)
+            return slot_original(self, *args)
+
+        def counting_refresh(*args, **kwargs):
+            refreshes.append(1)
+            return refresh_original(*args, **kwargs)
+        Controller._tile_layer_renamed = counting_slot
+        controller.refresh_run = counting_refresh
+        patched.append((slot_original, refresh_original))
+        flip = tile("Flip tiles", f"https://{host}/flip/{{z}}/{{x}}/{{y}}.png")
+
+        def rename_counts():
+            slot_calls.clear()
+            refreshes.clear()
+            flip.setName(flip.name() + "+")
+            return len(slot_calls), len(refreshes)
+        check(flip.id() in controller._watched_tiles and rename_counts() == (1, 1),
+              "TILE LAYERS: a layer that is an offer is connected once: a rename refreshes the list once")
+        for turn in (1, 2):
+            flip.setCustomProperty(PREVIEW_PROPERTY, "provider:test")      # it is not an offer any more
+            controller.refresh_run()
+            gone = flip.id() not in controller._watched_tiles and rename_counts() == (0, 0)
+            flip.removeCustomProperty(PREVIEW_PROPERTY)                    # and it is one again
+            controller.refresh_run()
+            back = flip.id() in controller._watched_tiles and rename_counts() == (1, 1)
+            check(gone and back, f"…a layer that stops being an offer is disconnected, and when it is an offer "
+                                 f"again it is connected once (turn {turn})")
+        flip_id = flip.id()
+        project.removeMapLayer(flip_id)
+        created.remove(flip_id)
+        check(flip_id not in controller._watched_tiles, "…a layer that is removed is not watched any more")
+        again_flip = tile("Flip again", f"https://{host}/flip2/{{z}}/{{x}}/{{y}}.png")
+        controller.refresh_run()
+        watched_before = again_flip.id() in controller._watched_tiles
+        project.cleared.emit()
+        check(watched_before and controller._watched_tiles == {},
+              "…a project change lets go of every layer")
+        controller.refresh_run()
+        flip = again_flip
+        check(again_flip.id() in controller._watched_tiles and rename_counts() == (1, 1),
+              "…and a layer is connected once when the list is built again")
 
         # ---------- the request: XYZ, TMS, QUADKEY ----------
         def starts():
@@ -4931,6 +5074,35 @@ def check_tile_layers(iface, plugin, state, api_url):
         controller.run()
         check(len(starts()) == sent and settings.value(flag_key) is None,
               "…Cancel with the box ticked stores nothing either")
+        # the read of the login fails (the master password of the authentication database is refused, say): nothing
+        # is sent, nothing is stored, the form stays, and one plain message names the layer
+        Ask.answer = (True, True)
+        Ask.asked.clear()
+        iface.bar.messages.clear()
+        api_starts = []
+        api_start = controller.api.start
+        controller.api.start = lambda *args, **kwargs: api_starts.append(1) or api_start(*args, **kwargs)
+        controller.layers.tile_credentials = lambda _layer_id: None
+        try:
+            controller.run()
+        finally:
+            del controller.layers.tile_credentials
+            controller.api.__dict__.pop("start", None)
+        unreadable = [m for _l, m in iface.bar.messages if "could not be read" in (m or "")]
+        check(Ask.asked == ["Tiles login"] and not api_starts and len(starts()) == sent and not controller.starting
+              and controller.draft.imagery is before_image and settings.value(flag_key) is None
+              and run.run_button.isEnabled() and len(iface.bar.messages) == 1 and len(unreadable) == 1
+              and "Tiles login" in unreadable[0] and not any(x in unreadable[0] for x in secrets),
+              f"TILE LAYERS: a login that cannot be read sends nothing, stores nothing, leaves the form as it was "
+              f"and gives one message that names the layer ({iface.bar.messages})")
+        # …then the read succeeds: the request goes out with the login, and only now is the box's choice stored
+        Ask.asked.clear()
+        body = start_run()
+        sent_login = (body or {}).get("params", {}).get("sourceParams", {}).get("userDefined", {})
+        check(Ask.asked == ["Tiles login"] and sent_login.get("rasterLogin") == login
+              and str(settings.value(flag_key)).lower() == "true",
+              "…when the login is read, the request goes out and skip_tile_login_alert is stored")
+        settings.remove(flag_key)
         Ask.answer = (True, False)
         Ask.asked.clear()
         body = start_run()
@@ -5037,6 +5209,37 @@ def check_tile_layers(iface, plugin, state, api_url):
         check(not leaked and "Response body:" in report and reported["modal"] == ["ReportDialog"],
               f"TILE LEAKS: the report holds no address, login or password ({leaked})")
 
+        # an answer that lists a processing with a tile source (a list, not a start): its text is kept for a report
+        # if the callback raises, and the report holds no login, no password and no path or query of the address
+        leaky = fixtures.processing_json("tile-leak", "OK", 100, name="Tile leak run")
+        leaky["params"] = {"sourceParams": {"userDefined": {
+            "sourceType": "XYZ", "url": address, "zoom": 17, "crs": "epsg:3857", "rasterLogin": login,
+            "rasterPassword": password}}}
+        leaky["projectId"] = session.project.id
+        with state.lock:
+            kept_processings = list(state.processings)
+            state.processings[:] = [leaky]          # a short answer: a report keeps only the start of a body
+        listing_errors = []
+
+        def listing_raiser(_answer):
+            raise ValueError("boom listing")
+        del log_lines[:]
+        plugin.services[0].post(f"projects/{session.project.id}/processings/v2/page", {"limit": 30, "offset": 0},
+                                on_success=listing_raiser, on_error=listing_errors.append)
+        check(wait_until(lambda: listing_errors and report_buttons(iface) == ["Send a report"], 8),
+              "TILE LEAKS: a list answer with a tile source whose callback raises gives a Critical line with a report")
+        expect_critical(iface, "boom listing", "TILE LEAKS: the failing callback of the list is a Critical line",
+                        count=2)
+        with state.lock:
+            state.processings[:] = kept_processings
+        listing_report = press_report(iface, "my comment")["text"]
+        parts = secrets + ("KEYSECRET99", "TOK123", "/xyz/", "{y}.png", "token=")
+        leaked = [x for x in parts if x in listing_report or x in " ".join(log_lines)]
+        check(not leaked and "Response body:" in listing_report and "tile-leak" in listing_report
+              and host in listing_report,
+              f"TILE LEAKS: the report of a failing callback on a list answer holds the host of the address, and no "
+              f"login, password, path or query of it ({leaked})")
+
         # ---------- the card ----------
         def card_texts(pid):
             card = next((c for c in content.processings.findChildren(ProcessingCard) if c.processing.id == pid), None)
@@ -5109,6 +5312,9 @@ def check_tile_layers(iface, plugin, state, api_url):
               "TILE LAYERS: a chosen layer that is removed stops the run, and says so; no other imagery replaces it "
               f"({run.imagery_error.text()!r}, {issues})")
     finally:
+        for slot_original, _refresh in patched:
+            Controller._tile_layer_renamed = slot_original
+            controller.__dict__.pop("refresh_run", None)
         signal.disconnect(on_log)
         state.tile_refusal = None
         state.heal()
@@ -5225,7 +5431,32 @@ def check_unload(iface, classFactory, state):
         check(any(t.isActive() for t in timers) and http._pending,
               f"unload: timers run and a request is pending before the unload ({len(timers)} timers)")
         dock = fresh.dock
-        fresh.unload()
+        # a tile layer whose name the plugin watches; the slot is counted at the class, so a connection that
+        # outlives the unload shows even though the slot ignores a stopped controller
+        from mapflow_next.controller import Controller
+        from qgis.core import QgsRasterLayer
+        slot_original, slot_calls = Controller._tile_layer_renamed, []
+
+        def counting_slot(self, *args):
+            slot_calls.append(1)
+            return slot_original(self, *args)
+        Controller._tile_layer_renamed = counting_slot
+        watched_layer = QgsRasterLayer(qgis_xyz_source("https://tiles.example.com/{z}/{x}/{y}.png"), "Unload tiles",
+                                       "wms")
+        QgsProject.instance().addMapLayer(watched_layer)
+        try:
+            controller._tile_offers()
+            watched_layer.setName("Unload tiles renamed")
+            check(watched_layer.id() in controller._watched_tiles and slot_calls == [1],
+                  "unload: before the unload a rename of a tile layer reaches the controller once")
+            fresh.unload()
+            slot_calls.clear()
+            watched_layer.setName("Unload tiles renamed again")
+            check(not slot_calls and controller._watched_tiles == {},
+                  f"unload: after the unload a rename of a tile layer calls no plugin code ({slot_calls})")
+        finally:
+            Controller._tile_layer_renamed = slot_original
+            QgsProject.instance().removeMapLayer(watched_layer.id())
         check_unloaded("unload", iface, state, {"windows": windows, "dock": dock, "timers": timers, "http": http,
                                                 "late": late})
         # reload

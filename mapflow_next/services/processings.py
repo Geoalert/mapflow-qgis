@@ -92,6 +92,7 @@ class Processings(QObject):
         self._last_status: Dict[str, Status] = {}
         self._sent = 0                          # status requests sent so far: an answer knows which one it answers
         self._final_at: Dict[str, int] = {}     # processing id → `_sent` when an answer last gave it a final status
+        self._unfinal_at: Dict[str, int] = {}   # processing id → `_sent` when an answer moved it off a final status
         self._restarted_at: Dict[str, int] = {}     # processing id → `_sent` when its restart was accepted
         self._opened_failures = PollFailures(POLL_FAILURES_BEFORE_ALERT)    # the failures of the opened card's poll
         self.started_here: Set[str] = set()
@@ -231,6 +232,7 @@ class Processings(QObject):
         self._found.reset()
         self._last_status = {}
         self._final_at = {}
+        self._unfinal_at = {}
         self._restarted_at = {}
         self._opened_failures.succeeded()
         self._planned, self._planned_seq = [], self._planned_seq + 1
@@ -295,19 +297,32 @@ class Processings(QObject):
     def _note(self, item: Processing, sent: int) -> None:
         """The status of a watched processing, from any list or the opened card; `sent` is the number of the request
         that the answer belongs to. The first answer that shows it reach a final status gives the notice and writes
-        the status; the others find it written and send nothing. When an answer gives a final status, `_final_at`
-        keeps the newest request number issued by then: an answer that is not final and belongs to a request up to
-        that number may hold an older read of the server (the answers of one poll tick come back in either order), so
-        it is dropped. A request sent later is newer: its answer moves the status back (a restart in Mapflow Web, a
-        rework after a review), and the next finish is a new one. An accepted restart of the plugin writes the status
-        itself (`restart`)."""
+        the status; the others find it written and send nothing.
+
+        One rule holds in both directions between "final" and "not final": an answer that would change the status
+        back is applied only if its request was sent after the change that is known. The answers of one poll tick
+        come back in either order, so an older read of the server can arrive after a newer one.
+        - Final, then an answer that is not final: `_final_at` is the newest request number issued by the time an
+          answer last gave a final status. An answer of a request up to that number may be the older read: it is
+          dropped. A request sent later is newer, and its answer moves the status back (a restart in Mapflow Web, a
+          rework after a review).
+        - Not final after a restart that this saw, then an answer that is final: `_unfinal_at` is the newest request
+          number issued by the time that answer was applied. An answer of a request up to that number read the run
+          that the restart ended: it is dropped, and the processing shows what is known (no false notice, and the
+          poll goes on). The next finish is a new one.
+        An accepted restart of the plugin writes the status itself (`restart`)."""
         before = self._last_status.get(item.id)
         final = item.status.is_terminal
         if before is not None and before.is_terminal and not final and sent <= self._final_at.get(item.id, self._sent):
             return
+        if before is not None and not before.is_terminal and final and sent <= self._unfinal_at.get(item.id, -1):
+            item.status, item.percent, item.messages = before, 0, []
+            return
         self._last_status[item.id] = item.status
         if final:
             self._final_at[item.id] = self._sent
+        elif before is not None and before.is_terminal:
+            self._unfinal_at[item.id] = self._sent
         if before is not None and not before.is_terminal and final:
             (self.finished if item.status is Status.ok else self.failed).emit(item)
 

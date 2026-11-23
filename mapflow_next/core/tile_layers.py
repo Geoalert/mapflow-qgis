@@ -105,7 +105,9 @@ def tile_source(parts: Mapping[str, Any],
     for key, value in parts.items():
         key = str(key)
         if key.lower().startswith(HEADER_PREFIX):
-            headers.append(key[len(HEADER_PREFIX):])
+            # QGIS writes `http-header:referer=` with no value for a connection that has none; that sends nothing
+            if value is not None and str(value).strip():
+                headers.append(key[len(HEADER_PREFIX):])
         else:
             values[key.lower()] = "" if value is None else str(value)
     if values.get("type", "").lower() != "xyz":
@@ -115,7 +117,7 @@ def tile_source(parts: Mapping[str, Any],
     return TileSource(url=values.get("path") or values.get("url", ""), zmin=_int(values.get("zmin")),
                       zmax=_int(values.get("zmax")), login=values.get("username", ""),
                       password=values.get("password", ""), auth_method=method, auth_config_id=authcfg,
-                      referer=bool(values.get("referer")), headers=tuple(headers))
+                      referer=bool(values.get("referer", "").strip()), headers=tuple(headers))
 
 
 def _int(value: Optional[str]) -> Optional[int]:
@@ -175,6 +177,16 @@ def user_defined(params: TileParams, zoom: int, credentials: Optional[Tuple[str,
         body["rasterLogin"] = login
         body["rasterPassword"] = password
     return body
+
+
+def has_tile_source(body: Any) -> bool:
+    """Does a request body (JSON, as dicts and lists) hold a `userDefined` tile source anywhere? The answer to such
+    a request may repeat the address and the login."""
+    if isinstance(body, dict):
+        return "userDefined" in body or any(has_tile_source(value) for value in body.values())
+    if isinstance(body, (list, tuple)):
+        return any(has_tile_source(value) for value in body)
+    return False
 
 
 def match_offer(offers: Iterable[TileOffer], url: str, source_type: str) -> Optional[TileOffer]:

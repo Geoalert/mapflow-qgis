@@ -22,8 +22,8 @@ from ..core import guard
 from ..core.guard import guarded
 from ..core.messages import describe
 from ..core.origin import Origin, carries_credentials
-from ..core.report import RequestInfo, without_query
-from ..core.tile_layers import hide_address_params
+from ..core.report import RequestInfo, hide_tile_source, without_query
+from ..core.tile_layers import has_tile_source, hide_address_params
 
 Callback = Callable[..., None]
 
@@ -152,7 +152,7 @@ class _Pending:
     aborted: bool = False         # the plugin aborted the reply (`abort`, `abort_all`); any other abort is not its own
     write_error: str = ""         # why the sink refused the body; the reply was aborted for it
     response: str = ""            # the start of a decoded text or JSON answer: a report names it if the callback fails
-    sensitive: bool = False       # the body holds a tile address or a login: no answer text is kept or reported
+    sensitive: bool = False       # the body holds a `userDefined` tile source: no answer text is kept or reported
 
 
 class Http(QObject):
@@ -257,11 +257,12 @@ class Http(QObject):
               on_error: Optional[Callback] = None, timeout: Optional[int] = None, parse: str = "json",
               sink: Optional[QSaveFile] = None, on_progress: Optional[Callback] = None,
               upload: bool = False, authorize: bool = True,
-              form: Optional[Dict[str, str]] = None, sensitive: bool = False) -> int:
+              form: Optional[Dict[str, str]] = None) -> int:
         """`authorize` says the request may carry credentials; whether it does depends on its origin (`_dispatch`).
-        `sensitive`: the body holds a tile address or a login, and the server's answer may repeat it. The answer's
-        text then reaches no log line and no report, and an error keeps its parameters with the addresses cut to
-        their hosts."""
+        A body that holds a `userDefined` tile source makes the request sensitive: the server's answer may repeat
+        the address and the login, so its text reaches no log line and no report, and an error keeps its
+        parameters with the addresses cut to their hosts. Every other answer text that is kept (a report, a log
+        line) passes through `hide_tile_source` first, as an answer about a processing holds its tile source."""
         if self._stopped:       # silent: the caller is code that outlived the unload, and nobody is left to tell
             return 0
         timeout = TIMEOUT_S if timeout is None else timeout
@@ -279,7 +280,7 @@ class Http(QObject):
         pending = _Pending(None, on_success, on_error, parse, sink=sink, keep=body if upload else None,
                            method=method, url=without_query(url), allow_credentials=authorize, data=data,
                            body=body, upload=upload, on_progress=on_progress, form=form is not None,
-                           timeout=timeout, sensitive=sensitive)
+                           timeout=timeout, sensitive=has_tile_source(body))
         self._pending[key] = pending
         try:
             self._dispatch(key, QUrl(url))
@@ -450,7 +451,8 @@ class Http(QObject):
                                      PLUGIN_NAME, Qgis.MessageLevel.Warning)
             return False, error
         if reply.error() != QNetworkReply.NetworkError.NoError or pending.timed_out:
-            body = "" if pending.sink is not None else bytes(reply.readAll()).decode("utf-8", "replace")
+            body = "" if pending.sink is not None else hide_tile_source(
+                bytes(reply.readAll()).decode("utf-8", "replace"))
             if pending.sink is not None:
                 pending.sink.cancelWriting()
             # An abort that the plugin did not ask for is QGIS's own network timeout (it aborts a reply that made no
@@ -477,7 +479,7 @@ class Http(QObject):
         if pending.parse == "bytes":
             return True, raw
         if not pending.sensitive:
-            pending.response = raw[:RESPONSE_KEPT].decode("utf-8", "replace")
+            pending.response = hide_tile_source(raw.decode("utf-8", "replace"))[:RESPONSE_KEPT]
         if pending.parse == "text":
             return True, raw.decode("utf-8", "replace")
         try:
@@ -485,7 +487,7 @@ class Http(QObject):
         except ValueError as exc:       # JSONDecodeError and UnicodeDecodeError: the body is not the promised JSON
             error = ApiError("server", f"Unexpected response from Mapflow: {exc}", status,
                              url=without_query(reply.url().toString()),
-                             body="" if pending.sensitive else raw[:500].decode("utf-8", "replace"))
+                             body="" if pending.sensitive else hide_tile_source(raw.decode("utf-8", "replace"))[:500])
             QgsMessageLog.logMessage(f"{error.kind} {status} {pending.url}: not JSON: {exc}",
                                      PLUGIN_NAME, Qgis.MessageLevel.Warning)
             return False, error
