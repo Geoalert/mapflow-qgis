@@ -1,16 +1,16 @@
 """The XYZ/TMS tile layers of the QGIS project as imagery (spec/002_B § Imagery from a QGIS tile layer).
 
 A layer is offered when it is a raster layer of the `wms` provider whose source has `type=xyz`. QGIS 3.28 and
-QGIS 4 give the parts in the layer's source text (`url`, `zmin`, `zmax`, `username`, `password`, `authcfg`,
-`referer`, `http-header:<name>`); `core/tile_layers.py` splits and judges it. The plugin sets no property on such
-a layer and stores nothing of it. Nothing here logs an address, a login or a password, and an exception that
-could hold them is caught without its text.
+QGIS 4 write the parts in the layer's source text; `QgsProviderRegistry.decodeUri` gives them decoded as QGIS
+itself reads them (`url`, `zmin`, `zmax`, `username`, `password`, `authcfg`, `referer`, `http-header:<name>`) and
+`core/tile_layers.py` judges them. The plugin sets no property on such a layer and stores nothing of it. Nothing
+here logs an address, a login or a password, and an exception that could hold them is caught without its text.
 """
 from __future__ import annotations
 
 from typing import List, Optional, Tuple
 
-from qgis.core import QgsApplication, QgsAuthMethodConfig, QgsProject, QgsRasterLayer
+from qgis.core import QgsApplication, QgsAuthMethodConfig, QgsProject, QgsProviderRegistry, QgsRasterLayer
 
 from ..config import PREVIEW_PROPERTY, PROCESSING_PROPERTY
 from ..core.tile_layers import BASIC, TileOffer, TileSource, tile_params, tile_source
@@ -30,7 +30,7 @@ def _source_of(layer) -> Optional[TileSource]:
         return None
     if layer.customProperty(PREVIEW_PROPERTY) or layer.customProperty(PROCESSING_PROPERTY):
         return None
-    return tile_source(layer.source(), _auth_method)
+    return tile_source(QgsProviderRegistry.instance().decodeUri("wms", layer.source()), _auth_method)
 
 
 def tile_offers(project: Optional[QgsProject] = None) -> List[TileOffer]:

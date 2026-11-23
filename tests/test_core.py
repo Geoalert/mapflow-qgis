@@ -2024,31 +2024,74 @@ def _source(url="https://tiles.example.com/{z}/{x}/{y}.png", **parts):
     return TileSource(url=url, **parts)
 
 
-def _encoded(url):
-    from urllib.parse import quote
-    return quote(url, safe="")
-
-
-def test_a_tile_source_is_read_from_the_layer_source_text():
+def test_a_tile_source_is_read_from_the_decoded_parts():
     from mapflow_next.core.tile_layers import UNREADABLE, tile_source
-    text = ("type=xyz&url=" + _encoded("https://t.example.com/{z}/{x}/{y}.png?key=a&b=c") +
-            "&zmin=2&zmax=17&username=us%26er&password=p%40ss&authcfg=abc1234&referer=https://r.example.com"
-            "&http-header:X-Key=abc&http-header%3AAccept=x")  # pragma: allowlist secret
-    source = tile_source(text, lambda config_id: "Basic" if config_id == "abc1234" else "")
-    assert source.url == _encoded("https://t.example.com/{z}/{x}/{y}.png?key=a&b=c")
+    parts = {"type": "xyz", "url": "https://t.example.com/{z}/{x}/{y}.png?key=a&b=c", "zmin": "2", "zmax": "17",
+             "username": "us&er", "password": "p@ss",  # pragma: allowlist secret
+             "authcfg": "abc1234", "referer": "https://r.example.com",
+             "http-header:X-Key": "abc", "HTTP-Header:Accept": "x"}
+    source = tile_source(parts, lambda config_id: "Basic" if config_id == "abc1234" else "")
+    assert source.url == "https://t.example.com/{z}/{x}/{y}.png?key=a&b=c"
     assert (source.zmin, source.zmax) == (2, 17)
     assert (source.login, source.password) == ("us&er", "p@ss")  # pragma: allowlist secret
     assert source.auth_method == "Basic" and source.referer and source.headers == ("X-Key", "Accept")
     # an id that QGIS does not know is a configuration the plugin cannot read
-    assert tile_source(text, lambda _id: "").auth_method == UNREADABLE
+    assert tile_source(parts, lambda _id: "").auth_method == UNREADABLE
     # no zoom range, no login, no configuration
-    plain = tile_source("type=xyz&url=" + _encoded("https://t.example.com/{z}/{x}/{y}.png"))
+    plain = tile_source({"type": "xyz", "url": "https://t.example.com/{z}/{x}/{y}.png"})
     assert (plain.zmin, plain.zmax, plain.login, plain.auth_method, plain.referer, plain.headers) == \
         (None, None, "", "", False, ())
     # not an XYZ source: WMS, WMTS, a file
-    assert tile_source("url=https://x/wms&layers=a&styles=&format=image/png&crs=EPSG:3857") is None
-    assert tile_source("contextualWMSLegend=0&crs=EPSG:3857&dpiMode=7&url=https://x/wmts") is None
-    assert tile_source("/data/file.tif") is None
+    assert tile_source({"url": "https://x/wms", "layers": "a", "styles": "", "format": "image/png"}) is None
+    assert tile_source({"contextualWMSLegend": "0", "crs": "EPSG:3857", "url": "https://x/wmts"}) is None
+    assert tile_source({}) is None
+
+
+# What QGIS wrote for one connection (a TMS address with a literal %2F and %25, `+`, `#` and a non-ASCII letter in
+# it, a login with `+`, `&`, `#`, a space and a non-ASCII letter), and the parts QGIS read back with
+# `QgsProviderRegistry.decodeUri("wms", source)`: tests/e2e_flow.py `check_tile_source_from_qgis` makes both on
+# QGIS 3.28.15 and QGIS 4.2.3. The two versions write different texts and read the same address.
+QGIS_WROTE = {
+    "QGIS 3.28": ("type=xyz&url=https://t.example.com/a%2Fb/%7Bz%7D/%7Bx%7D/%7B-y%7D.png?a%3D1+2%26b%3D100%25%26c%3D"
+                  "%C3%BC%23f&zmax=17&zmin=2&username=us+erA&password=p+wA%26%23%20%C3%BC"),
+    "QGIS 4": ("type=xyz&url=https%3A%2F%2Ft.example.com%2Fa%252Fb%2F%7Bz%7D%2F%7Bx%7D%2F%7B-y%7D.png%3Fa%3D1%2B2%26b"
+               "%3D100%2525%26c%3D%C3%BC%23f&zmax=17&zmin=2&username=us%2Ber%2541&password=p%2Bw%2541%26%23%20%C3"
+               "%BC"),
+}
+QGIS_READ = {
+    "QGIS 3.28": {"type": "xyz", "url": "https://t.example.com/a%2Fb/{z}/{x}/{-y}.png?a=1+2&b=100%25&c=\u00fc#f",
+                  "zmax": "17", "zmin": "2", "username": "us+erA",
+                  "password": "p+wA&# \u00fc"},  # pragma: allowlist secret
+    "QGIS 4": {"type": "xyz", "url": "https://t.example.com/a%2Fb/{z}/{x}/{-y}.png?a=1+2&b=100%25&c=\u00fc#f",
+               "zmax": "17", "zmin": "2", "username": "us+er%41",
+               "password": "p+w%41&# \u00fc"},  # pragma: allowlist secret
+}
+
+
+def test_a_file_source_is_refused_as_not_http_in_every_form_qgis_reads_it():
+    from mapflow_next.core.tile_layers import NOT_HTTP, tile_params, tile_source
+    read = {
+        # QGIS 3.28.15 wrote `type=xyz&url=file:///tmp/%7Bz%7D/%7Bx%7D/%7By%7D.png`; it reads no `url`
+        "QGIS 3.28": {"path": "/tmp/{z}/{x}/{y}.png", "type": "xyz"},
+        # QGIS 4.2.3 wrote `type=xyz&url=file%3A%2F%2F%2Ftmp%2F%7Bz%7D%2F%7Bx%7D%2F%7By%7D.png`
+        "QGIS 4": {"path": "/tmp/{z}/{x}/{y}.png", "type": "xyz", "url": "file:///tmp/{z}/{x}/{y}.png"},
+        # QGIS 4.2.3 reading a project file: the braces of the `url` stay encoded
+        "QGIS 4 project file": {"path": "/tmp/{z}/{x}/{y}.png", "type": "xyz", "crs": "EPSG:3857", "format": None,
+                                "url": "file:///tmp/%7Bz%7D/%7Bx%7D/%7By%7D.png"}}
+    for parts in read.values():
+        assert tile_params(tile_source(parts)) == (None, NOT_HTTP)
+
+
+@pytest.mark.parametrize("version", sorted(QGIS_WROTE))
+def test_the_parts_that_qgis_read_from_its_own_source_text_become_the_fields(version):
+    from mapflow_next.core.tile_layers import tile_params, tile_source
+    assert QGIS_WROTE[version].startswith("type=xyz&url=")
+    source = tile_source(QGIS_READ[version])
+    params, reason = tile_params(source)
+    assert reason == "" and params.source_type == "TMS" and params.zooms == tuple(range(2, 18))
+    # the address is not decoded again: %2F and %25 stay as QGIS reads them
+    assert params.url == "https://t.example.com/a%2Fb/{z}/{x}/{y}.png?a=1+2&b=100%25&c=\u00fc#f"
+    assert params.has_login and source.login == QGIS_READ[version]["username"]
 
 
 def test_a_tile_source_never_shows_in_a_repr():
@@ -2087,16 +2130,14 @@ def test_quadkey_layer_with_q():
     assert both.source_type == "QUADKEY" and both.url == "https://t.example.com/{q}/{z}/{x}/{-y}.jpg"
 
 
-def test_an_encoded_address_is_decoded_once():
+def test_the_address_is_used_as_it_is_given():
     from mapflow_next.core.tile_layers import tile_params
-    params, reason = tile_params(_source(_encoded("https://t.example.com/{z}/{x}/{y}.png?key=a&b=c")))
-    assert reason == "" and params.url == "https://t.example.com/{z}/{x}/{y}.png?key=a&b=c"
-    # a literal percent sign (stored as %2525) is kept, not decoded twice
-    kept, _ = tile_params(_source(_encoded("https://t.example.com/{z}/{x}/{y}.png?q=100%25")))
-    assert kept.url == "https://t.example.com/{z}/{x}/{y}.png?q=100%25"
-    # an address that was never encoded reads the same
-    raw, _ = tile_params(_source("https://t.example.com/{z}/{x}/{y}.png"))
-    assert raw.url == "https://t.example.com/{z}/{x}/{y}.png"
+    # the parts are decoded by QGIS: a `%25` and a `%2F` in them are part of the address and stay
+    kept, _ = tile_params(_source("https://t.example.com/a%2Fb/{z}/{x}/{y}.png?q=100%25"))
+    assert kept.url == "https://t.example.com/a%2Fb/{z}/{x}/{y}.png?q=100%25"
+    # an address with a key in its query
+    keyed, _ = tile_params(_source("https://t.example.com/{z}/{x}/{y}.png?key=a&b=c"))
+    assert keyed.url == "https://t.example.com/{z}/{x}/{y}.png?key=a&b=c"
 
 
 @pytest.mark.parametrize("url", ["https://t.example.com/tiles.png", "https://t.example.com/{z}/{x}.png",
@@ -2110,7 +2151,7 @@ def test_an_address_without_placeholders_is_refused(url):
                                  "/data/{z}/{x}/{y}.png", "http:///{z}/{x}/{y}.png"])
 def test_an_address_that_is_not_http_is_refused(url):
     from mapflow_next.core.tile_layers import NOT_HTTP, tile_params
-    assert tile_params(_source(_encoded(url))) == (None, NOT_HTTP)
+    assert tile_params(_source(url)) == (None, NOT_HTTP)
 
 
 @pytest.mark.parametrize("host", [

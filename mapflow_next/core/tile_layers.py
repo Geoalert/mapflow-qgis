@@ -1,15 +1,20 @@
 """A QGIS tile layer as the imagery of a processing (spec/002_B § Imagery from a QGIS tile layer). Pure Python:
 standard library only, no Qt, no qgis, and no network (a host is judged from its text, never looked up).
 
-The bridge reads a layer and hands its source text to `tile_source`. `tile_params` turns the parts into what the
-plugin sends (`TileParams`), or into the reason the layer cannot be used. Nothing here keeps the address, the
-login or the password in a `repr`.
+The bridge hands `tile_source` the parts of a layer source as QGIS reads them. `tile_params` turns them into
+what the plugin sends (`TileParams`), or into the reason the layer cannot be used. Nothing here keeps the
+address, the login or the password in a `repr`.
 
-How QGIS 3.28 and QGIS 4 name the parts of a `wms` layer with `type=xyz`: `url`, `zmin`, `zmax`, `username`,
-`password`, `authcfg`, `referer` and `http-header:<name>`, joined with `&`. The placeholders are `{x}`, `{y}`,
-`{z}`, `{-y}` (TMS) and `{q}` (quadkey). `QgsProviderRegistry.decodeUri` is not used: QGIS 3.28 decodes the
-address only in part (`%7B` but not `%2F`) and QGIS 4 in full, while the layer's own source text is the same on
-both. So the source is split here, and the address is decoded once, as QGIS does.
+The parts, as `QgsProviderRegistry.decodeUri("wms", layer.source())` names them on QGIS 3.28 and on QGIS 4
+(tests/e2e_flow.py `check_tile_source_from_qgis` writes sources with QGIS and reads them back on both): `type`,
+`url`, `zmin`, `zmax`, `username`, `password`, `authcfg`, `referer` and one `http-header:<name>` per header. The
+values come decoded. A `file:` address also has a `path` (and QGIS 3.28 has no `url` for it). The placeholders
+are `{x}`, `{y}`, `{z}`, `{-y}` (TMS) and `{q}` (quadkey). Without `zmin` or `zmax` QGIS builds the zooms 0 to 18.
+
+The text of the source is not split here. QGIS 3.28 and QGIS 4 write the same parts in different encodings: QGIS 4
+encodes every reserved character of the address and the login (`%2F`, `%252F` for a literal `%2F`); QGIS 3.28 leaves
+`/`, `?`, `@` and a literal `%` as they are. No single decoding of the text gives what QGIS reads from both, so the
+bridge asks QGIS to decode it and the address is used exactly as QGIS requests it.
 """
 from __future__ import annotations
 
@@ -17,8 +22,8 @@ import ipaddress
 import re
 import socket
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
-from urllib.parse import unquote, urlsplit
+from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Tuple
+from urllib.parse import urlsplit
 
 XYZ, TMS, QUADKEY = "XYZ", "TMS", "QUADKEY"
 MAX_ZOOM = 21                   # the highest zoom the form offers
@@ -38,8 +43,8 @@ NO_ZOOM = "Its zoom range has no zoom that Mapflow reads (0 to 21)."
 
 @dataclass(frozen=True)
 class TileSource:
-    """The parts of a layer source, as the bridge read them."""
-    url: str = field(default="", repr=False)    # as stored in the source (percent-encoded); `tile_params` decodes it
+    """The parts of a layer source, as the bridge read them. Every value is decoded, as QGIS reads it."""
+    url: str = field(default="", repr=False)
     zmin: Optional[int] = None
     zmax: Optional[int] = None
     login: str = field(default="", repr=False)
@@ -54,7 +59,7 @@ class TileSource:
 class TileParams:
     """What the plugin sends for a usable layer."""
     source_type: str                            # XYZ | TMS | QUADKEY
-    url: str = field(repr=False)                # decoded; `{-y}` is written `{y}` for TMS
+    url: str = field(repr=False)                # `{-y}` is written `{y}` for TMS
     zooms: Tuple[int, ...]
     has_login: bool                             # a login and password, or a Basic authentication configuration
 
@@ -86,33 +91,36 @@ class TileOffer:
 
 # ---------- reading a source ----------
 
-def tile_source(text: str, auth_method_of: Callable[[str], str] = lambda _id: "") -> Optional[TileSource]:
-    """The parts of a layer source `text` (`type=xyz&url=…&zmin=…`), or None when it is not an XYZ source.
+HEADER_PREFIX = "http-header:"
+
+
+def tile_source(parts: Mapping[str, Any],
+                auth_method_of: Callable[[str], str] = lambda _id: "") -> Optional[TileSource]:
+    """The `TileSource` of the decoded `parts` of a layer source (`type`, `url`, `zmin`, …), or None when the
+    source is not an XYZ source. A `file:` source has a `path` (QGIS 3.28 and QGIS 4); its `url` is missing in
+    QGIS 3.28 and has `%7Bz%7D` in a project file read by QGIS 4, so the `path` is the address then.
     `auth_method_of(id)` gives the key of an authentication configuration ("" when QGIS does not know the id)."""
-    parts: Dict[str, str] = {}
+    values: Dict[str, str] = {}
     headers: List[str] = []
-    for item in text.split("&"):
-        key, found, value = item.partition("=")
-        if not found:
-            continue
-        key = unquote(key)
-        if key.lower().startswith("http-header:"):
-            headers.append(key.split(":", 1)[1])
+    for key, value in parts.items():
+        key = str(key)
+        if key.lower().startswith(HEADER_PREFIX):
+            headers.append(key[len(HEADER_PREFIX):])
         else:
-            parts[key.lower()] = value
-    if parts.get("type", "").lower() != "xyz":
+            values[key.lower()] = "" if value is None else str(value)
+    if values.get("type", "").lower() != "xyz":
         return None
-    authcfg = unquote(parts.get("authcfg", ""))
+    authcfg = values.get("authcfg", "")
     method = (auth_method_of(authcfg) or UNREADABLE) if authcfg else ""
-    return TileSource(url=parts.get("url", ""), zmin=_int(parts.get("zmin")), zmax=_int(parts.get("zmax")),
-                      login=unquote(parts.get("username", "")), password=unquote(parts.get("password", "")),
-                      auth_method=method, auth_config_id=authcfg, referer=bool(unquote(parts.get("referer", ""))),
-                      headers=tuple(headers))
+    return TileSource(url=values.get("path") or values.get("url", ""), zmin=_int(values.get("zmin")),
+                      zmax=_int(values.get("zmax")), login=values.get("username", ""),
+                      password=values.get("password", ""), auth_method=method, auth_config_id=authcfg,
+                      referer=bool(values.get("referer")), headers=tuple(headers))
 
 
 def _int(value: Optional[str]) -> Optional[int]:
     try:
-        return int(unquote(value or ""))
+        return int(value or "")
     except ValueError:
         return None
 
@@ -122,7 +130,7 @@ def _int(value: Optional[str]) -> Optional[int]:
 def tile_params(source: TileSource) -> Tuple[Optional[TileParams], str]:
     """(the params, "") for a layer the plugin can use, else (None, the reason). When several reasons apply, the
     first of the spec's list wins: placeholders, scheme, host, referer or headers, authentication, zoom."""
-    url = unquote(source.url)
+    url = source.url
     quadkey = "{q}" in url
     tms = "{-y}" in url
     if not quadkey and not ("{x}" in url and "{z}" in url and ("{y}" in url or tms)):

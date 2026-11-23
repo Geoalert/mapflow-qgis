@@ -4447,6 +4447,187 @@ def check_network_timeout(iface, plugin, state):
     check(nam.timeout() == saved, "NETWORK TIMEOUT: QGIS's timeout is put back")
 
 
+def qgis_xyz_source(url, zmin=None, zmax=None, username="", password="", authcfg="", referer="", headers=None):
+    """The source text that QGIS writes for an XYZ Tiles connection, for `QgsRasterLayer(text, name, "wms")`.
+    `QgsXyzConnection` is not in the Python API of QGIS 3.28 or QGIS 4, so this sets the parts on a
+    `QgsDataSourceUri`, the class that writes the text of a connection (`type`, `url`, `zmin`, `zmax`, the
+    authentication configuration, the login, the referer and the HTTP headers). The text is encoded as the
+    running QGIS encodes it. A part that is None or empty is left out."""
+    from qgis.core import QgsDataSourceUri, QgsHttpHeaders
+    uri = QgsDataSourceUri()
+    uri.setParam("type", "xyz")
+    uri.setParam("url", url)
+    for key, value in (("zmin", zmin), ("zmax", zmax), ("referer", referer)):
+        if value not in (None, ""):
+            uri.setParam(key, str(value))
+    if authcfg:
+        uri.setAuthConfigId(authcfg)
+    if username:
+        uri.setUsername(username)
+    if password:
+        uri.setPassword(password)
+    if headers:
+        http_headers = QgsHttpHeaders()
+        for name, value in headers.items():
+            http_headers.insert(name, value)
+        uri.setHttpHeaders(http_headers)
+    text = uri.encodedUri()
+    return text if isinstance(text, str) else bytes(text).decode()
+
+
+def check_tile_source_from_qgis(plugin):
+    """spec/002_B § Imagery from a QGIS tile layer, on the source text that QGIS itself writes: the sources are made
+    by `qgis_xyz_source` (the writer of an XYZ connection) and by `QgsProviderRegistry.encodeUri("wms")`, never typed
+    in the test. Each becomes a `wms` layer of the project, and the plugin's reading of it is checked: the address
+    (with `/`, `?`, `&`, `=`, a key in the query, `%2F` and `%25`), `zmin` and `zmax` (against the zooms that the
+    QGIS provider builds), the login and password, the Basic authentication configuration, the referer, an HTTP
+    header, and the placeholders `{-y}` and `{q}`. The layers are then saved to a QGIS project file, read back and
+    checked again. No tile is requested. Everything the check makes is removed again."""
+    import tempfile
+    from qgis.core import QgsApplication, QgsAuthMethodConfig, QgsProviderRegistry, QgsRasterLayer
+    from mapflow_next.core import tile_layers as core_tiles
+    from mapflow_next.qgis_bridge import compat
+    from mapflow_next.qgis_bridge import tile_layers as bridge_tiles
+
+    project, manager, registry = QgsProject.instance(), QgsApplication.authManager(), QgsProviderRegistry.instance()
+    layers_before, configs_before = set(project.mapLayers()), set(manager.configIds())
+    version = f"QGIS {compat.QGIS_VERSION_INT}"
+    host = "tiles.example.com"
+    login, password = "us+er&1", "p@ss/w=rd#1 ü"          # pragma: allowlist secret
+    cfg_login, cfg_password = "cfg-user-78", "cfg-pass-78"      # pragma: allowlist secret
+
+    def make_config(method, **values):
+        config = QgsAuthMethodConfig()
+        config.setName(f"source-test-{method}")
+        config.setMethod(method)
+        for key, value in values.items():
+            config.setConfig(key, value)
+        manager.storeAuthenticationConfig(config)
+        return config.id()
+
+    basic_id = make_config("Basic", username=cfg_login, password=cfg_password)
+    other_id = make_config("APIHeader", headers="X-Key=1")
+    xyz_url = f"https://{host}/KEYQ77/{{z}}/{{x}}/{{y}}.png?token=TOK&style=a&v=2"
+    tms_url = f"https://{host}/tms/{{z}}/{{x}}/{{-y}}.png?k=1&b=2"
+    quad_url = f"https://{host}/quad/{{q}}.jpg?key=KEYQ78"
+    percent_url = f"https://{host}/a%2Fb/{{z}}/{{x}}/{{-y}}.png?a=1+2&b=100%25&c=ü#f"
+    registry_parts = {"type": "xyz", "url": xyz_url, "zmin": "3", "zmax": "16", "username": login,
+                      "password": password}
+
+    # name -> how QGIS writes it ("write": `qgis_xyz_source`, "parts": the provider's encodeUri), what the plugin
+    # must read, the text that the source must hold, and `qgis_zooms`, the zooms that the QGIS provider builds
+    # (the form offers `zooms`, never above 21).
+    cases = {
+        "xyz": {"write": dict(url=xyz_url, zmin=2, zmax=17), "kind": "XYZ", "url": xyz_url, "qgis_zooms": (2, 17),
+                "has": ("type=xyz&url=", "zmin=2", "zmax=17")},
+        "tms {-y}": {"write": dict(url=tms_url), "kind": "TMS", "url": tms_url.replace("{-y}", "{y}"),
+                     "qgis_zooms": (0, 18), "has": ("%7B-y%7D",), "not": ("zmin", "zmax")},
+        "quadkey {q}": {"write": dict(url=quad_url, zmin=0, zmax=25), "kind": "QUADKEY", "url": quad_url,
+                        "qgis_zooms": (0, 25), "zooms": (0, 21), "has": ("%7Bq%7D", "zmax=25")},
+        "login": {"write": dict(url=xyz_url, zmin=0, zmax=19, username=login, password=password), "kind": "XYZ",
+                  "url": xyz_url, "qgis_zooms": (0, 19), "credentials": (login, password),
+                  "has": ("&username=", "&password=")},
+        "authcfg Basic": {"write": dict(url=xyz_url, authcfg=basic_id), "kind": "XYZ", "url": xyz_url,
+                          "qgis_zooms": (0, 18), "credentials": (cfg_login, cfg_password),
+                          "has": (f"authcfg={basic_id}",), "not": ("username=", "password=")},
+        "%2F and %25 in the address": {"write": dict(url=percent_url, zmin=2, zmax=17), "kind": "TMS",
+                                       "url": percent_url.replace("{-y}", "{y}"), "qgis_zooms": (2, 17)},
+        "referer": {"write": dict(url=xyz_url, referer="https://r.example.com/a?b=c"),
+                    "reason": core_tiles.HEADERS, "has": ("referer=",)},
+        "header": {"write": dict(url=xyz_url, headers={"X-Key": "abc=1", "Accept": "image/png"}),
+                   "reason": core_tiles.HEADERS, "has": ("http-header:X-Key=", "http-header:Accept=")},
+        "file://": {"write": dict(url="file:///tmp/{z}/{x}/{y}.png"), "reason": core_tiles.NOT_HTTP,
+                    "has": ("type=xyz&url=file", "%7Bz%7D")},
+        "authcfg not Basic": {"write": dict(url=xyz_url, authcfg=other_id), "reason": core_tiles.NOT_BASIC,
+                              "has": (f"authcfg={other_id}",)},
+        "encodeUri": {"parts": registry_parts, "kind": "XYZ", "url": xyz_url, "qgis_zooms": (3, 16),
+                      "credentials": (login, password), "has": ("type=xyz", "zmin=3", "zmax=16")},
+        "encodeUri header": {"parts": dict(registry_parts, **{"http-header:X-Key": "abc"}),
+                             "reason": core_tiles.HEADERS, "has": ("http-header:X-Key=",)},
+    }
+
+    def text_of(case):
+        if "parts" in case:
+            text = registry.encodeUri("wms", case["parts"])
+            return text if isinstance(text, str) else bytes(text).decode()
+        return qgis_xyz_source(**case["write"])
+
+    def mismatches(case, layer, where):
+        """What the plugin reads from `layer` of the project `where` and the case does not say ([] when all fits)."""
+        found = [o for o in bridge_tiles.tile_offers(where) if o.layer_id == layer.id()]
+        if len(found) != 1:
+            return [f"{len(found)} rows"]
+        offer, bad = found[0], []
+        if not layer.isValid() or layer.providerType() != "wms" or "type=xyz" not in layer.source():
+            bad.append("the layer is not an XYZ layer of the wms provider")
+        if "reason" in case:
+            return bad + ([f"reason {offer.reason!r}"] if offer.usable or offer.reason != case["reason"] else [])
+        params = offer.params
+        if params is None:
+            return bad + [f"refused: {offer.reason}"]
+        qgis_url = registry.decodeUri("wms", layer.source())["url"]
+        low, high = case["qgis_zooms"]
+        offered = case.get("zooms", case["qgis_zooms"])
+        if params.source_type != case["kind"] or params.meta_source != case["kind"].lower():
+            bad.append(f"kind {params.source_type}")
+        if params.url != case["url"]:
+            bad.append("the address differs from the one that was written")
+        if params.url != (qgis_url.replace("{-y}", "{y}") if params.source_type == "TMS" else qgis_url):
+            bad.append("the address differs from what QGIS reads")
+        if params.zooms != tuple(range(offered[0], offered[1] + 1)):
+            bad.append(f"zooms {params.zooms[:1]}..{params.zooms[-1:]}")
+        if len(layer.dataProvider().nativeResolutions()) != high - low + 1:
+            bad.append("the zooms of the QGIS provider are not the ones of the case")
+        credentials = case.get("credentials")
+        if params.has_login != bool(credentials) or bridge_tiles.tile_credentials(layer.id(), where) != credentials:
+            bad.append("the login")
+        return bad
+
+    try:
+        # ---------- layers made from the text that QGIS wrote, in the project ----------
+        layers = {}
+        for name, case in cases.items():
+            layers[name] = QgsRasterLayer(text_of(case), f"Source {name}", "wms")
+            project.addMapLayer(layers[name])
+        for name, case in cases.items():
+            source = layers[name].source()
+            check(all(part in source for part in case.get("has", ())) and not any(p in source for p in
+                                                                                  case.get("not", ())),
+                  f"TILE SOURCE ({version}): the source of {name} has the names {case.get('has', ())} "
+                  f"and not {case.get('not', ())}")
+            bad = mismatches(case, layers[name], project)
+            check(not bad, f"TILE SOURCE ({version}): the plugin reads what QGIS wrote for {name} {bad or ''}")
+        # ---------- saved to a QGIS project file and read back ----------
+        writer = QgsProject()
+        copies = {name: QgsRasterLayer(text_of(case), f"Source {name}", "wms") for name, case in cases.items()}
+        for copy in copies.values():
+            writer.addMapLayer(copy)
+        with tempfile.TemporaryDirectory(prefix="mapflow-source-") as folder:
+            file = os.path.join(folder, "tiles.qgz")
+            back = QgsProject()
+            check(writer.write(file) and back.read(file),
+                  f"TILE SOURCE ({version}): the project is saved and read back")
+            for name, case in cases.items():
+                read_back = back.mapLayer(copies[name].id())
+                if read_back is None:
+                    check(False, f"TILE SOURCE ({version}): {name} is in the project that was read back")
+                    continue
+                expected = dict(case)
+                if compat.QGIS_MAJOR < 4 and name.startswith("%2F"):
+                    # QGIS 3.28 writes a `%2F` of the address as `/` into a project file: the address is then
+                    # what QGIS reads from the layer that was read back
+                    expected["url"] = registry.decodeUri("wms", read_back.source())["url"].replace("{-y}", "{y}")
+                bad = mismatches(expected, read_back, back)
+                check(not bad, f"TILE SOURCE ({version}): …{name} after a save and a read {bad or ''}")
+    finally:
+        for layer_id in set(project.mapLayers()) - layers_before:
+            project.removeMapLayer(layer_id)
+        for config_id in (basic_id, other_id):
+            manager.removeAuthenticationConfig(config_id)
+    check(set(project.mapLayers()) == layers_before and set(manager.configIds()) == configs_before,
+          "TILE SOURCE: the layers and the authentication configurations the check made are removed again")
+
+
 def check_tile_layers(iface, plugin, state, api_url):
     """spec/002_B § Imagery from a QGIS tile layer: the XYZ/TMS layers of the project are rows of the run form; the
     plugin's own layers, WMS layers and other layers are not; a layer it cannot use is disabled with its reason;
@@ -4456,10 +4637,10 @@ def check_tile_layers(iface, plugin, state, api_url):
     again finds the layer. The alert is answered by a stand-in for `Controller._ask_tile_login` (as the
     confirmation of Delete is), and the dialog class is clicked without `exec()`. Everything the function changes
     is restored."""
-    from urllib.parse import quote
     from qgis.core import QgsApplication, QgsAuthMethodConfig, QgsRasterLayer
     from qgis.PyQt.QtWidgets import QCheckBox, QToolButton
     from mapflow_next.core import tile_layers as core_tiles
+    from mapflow_next.qgis_bridge import tile_layers as bridge_tiles
     from mapflow_next.core.models import CatalogImage, Processing as ProcessingModel
     from mapflow_next.settings import SKIP_TILE_LOGIN_ALERT
     from mapflow_next.ui.processings_page import ProcessingCard
@@ -4476,8 +4657,8 @@ def check_tile_layers(iface, plugin, state, api_url):
     secrets = ("KEYSECRET99", "TOK123", login, password, cfg_login, cfg_password, address)
     created, plugin_layers, invalid = [], [], []
 
-    def tile(name, url, extra="", encode=True):
-        layer = QgsRasterLayer("type=xyz&url=" + (quote(url, safe="") if encode else url) + extra, name, "wms")
+    def tile(name, url, **parts):
+        layer = QgsRasterLayer(qgis_xyz_source(url, **parts), name, "wms")
         if not layer.isValid():
             invalid.append(name)
         project.addMapLayer(layer)
@@ -4525,12 +4706,12 @@ def check_tile_layers(iface, plugin, state, api_url):
     quad_url = f"https://{host}/quad/{{q}}.jpg"
     try:
         # ---------- the layers of the project ----------
-        xyz = tile("Tiles XYZ", xyz_url, "&zmin=2&zmax=17")
-        tms = tile("Tiles TMS", tms_url, "&zmin=0&zmax=19")
-        quad = tile("Tiles QUADKEY", quad_url, "&zmin=0&zmax=25")
+        xyz = tile("Tiles XYZ", xyz_url, zmin=2, zmax=17)
+        tms = tile("Tiles TMS", tms_url, zmin=0, zmax=19)
+        quad = tile("Tiles QUADKEY", quad_url, zmin=0, zmax=25)
         with_login = tile("Tiles login", f"https://{host}/login/{{z}}/{{x}}/{{y}}.png",
-                          f"&username={login}&password={password}")
-        with_config = tile("Tiles Basic", f"https://{host}/basic/{{z}}/{{x}}/{{y}}.png", f"&authcfg={basic_id}")
+                          username=login, password=password)
+        with_config = tile("Tiles Basic", f"https://{host}/basic/{{z}}/{{x}}/{{y}}.png", authcfg=basic_id)
         refused = {
             "Refused bare": (tile("Refused bare", f"https://{host}/tiles.png"), core_tiles.NO_PLACEHOLDERS),
             "Refused file": (tile("Refused file", "file:///tmp/{z}/{x}/{y}.png"), core_tiles.NOT_HTTP),
@@ -4539,11 +4720,11 @@ def check_tile_layers(iface, plugin, state, api_url):
             "Refused private": (tile("Refused private", "http://192.168.1.5/{z}/{x}/{y}.png"),
                                 core_tiles.PRIVATE_HOST),
             "Refused referer": (tile("Refused referer", f"https://{host}/r/{{z}}/{{x}}/{{y}}.png",
-                                     "&referer=https://example.org"), core_tiles.HEADERS),
+                                     referer="https://example.org"), core_tiles.HEADERS),
             "Refused header": (tile("Refused header", f"https://{host}/h/{{z}}/{{x}}/{{y}}.png",
-                                    "&http-header:X-Key=abc"), core_tiles.HEADERS),
+                                    headers={"X-Key": "abc"}), core_tiles.HEADERS),
             "Refused config": (tile("Refused config", f"https://{host}/c/{{z}}/{{x}}/{{y}}.png",
-                                    f"&authcfg={other_id}"), core_tiles.NOT_BASIC)}
+                                    authcfg=other_id), core_tiles.NOT_BASIC)}
         wms = QgsRasterLayer(f"url={api_url}/open/wms&layers=a&styles=&format=image/png&crs=EPSG:3857",
                              "WMS layer", "wms")
         project.addMapLayer(wms)
@@ -4713,8 +4894,8 @@ def check_tile_layers(iface, plugin, state, api_url):
             check(not eye and set(project.mapLayers()) == ids_before_run,
                   "…no eye and no preview layer was added by choosing or running")
         check(not Ask.asked, "TILE LAYERS: a layer without a login gives no alert")
-        check(core_tiles.tile_params(core_tiles.tile_source(xyz.source()))[0].url == xyz_url,
-              "…the decoded address keeps its query")
+        xyz_offer = next(o for o in bridge_tiles.tile_offers() if o.layer_id == xyz.id())
+        check(xyz_offer.params.url == xyz_url, "…the decoded address keeps its query")
 
         # ---------- the area checks of § AOI area limit still apply ----------
         big = QgsVectorLayer("Polygon?crs=EPSG:4326", "Big area", "memory")
@@ -7041,6 +7222,7 @@ def main():
     check_failed_requests(iface, plugin, state)
     check_upload_timeout(iface, plugin, state)
     check_network_timeout(iface, plugin, state)
+    check_tile_source_from_qgis(plugin)
     check_tile_layers(iface, plugin, state, url)
 
     # ---------- account menu: Settings and Sign out ----------
