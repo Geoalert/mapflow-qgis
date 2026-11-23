@@ -22,6 +22,7 @@ from ...http import Http
 from ...functional import layer_utils, helpers
 from ...functional.app_context import AppContext
 from ...config import Config
+from ...domain import url_with_domain
 from ...entity.provider import MyImageryProvider
 
 
@@ -537,7 +538,8 @@ class DataCatalogService(QObject):
         if not target.open(QIODevice.WriteOnly):
             self.view.alert(self.tr("Failed to save file: {}").format(target.errorString()))
             return
-        reply = self.api.http.nam.get(QNetworkRequest(QUrl(url)))
+        # The address comes from a server answer: it goes to the Mapflow domain in use (spec/002_api.md)
+        reply = self.api.http.nam.get(QNetworkRequest(QUrl(url_with_domain(url, Config.DOMAIN))))
         # The slots are methods that find their reply via sender(). A lambda capturing `reply` would
         # form a reply <-> slot cycle that the garbage collector can tear down mid-download, losing
         # the slot or crashing QGIS on `finished`. Holding the reply here keeps it alive until then.

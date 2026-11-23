@@ -65,6 +65,7 @@ All plugin settings are scoped under the `"mapflow"` group via `settings.beginGr
 | Variable | Type | Purpose |
 |----------|------|---------|
 | `variables/mapflow_env` | string | Environment: production/staging/internal/duty |
+| `variables/mapflow_ru` | string | `true`: the plugin uses the domain `mapflow.ru` in place of `mapflow.ai` (`002_api.md` § The `mapflow.ru` domain) |
 | `variables/mapflow_project_id` | string | Default project ID override |
 | `variables/zoom_selector` | string ("true"/"false") | Enable zoom selector feature |
 | `variables/mapflow_raw_error` | string ("true"/"false") | Show raw error messages (debug) |

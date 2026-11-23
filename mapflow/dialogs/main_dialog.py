@@ -11,6 +11,7 @@ from qgis.core import QgsMapLayerProxyModel, QgsSettings
 from qgis.gui import QgsRangeSlider
 
 from . import icons
+from .domain_labels import labels_on_domain
 from ..config import config, ConfigColumns, provider_display_name
 from ..schema import BillingType, UserRole
 from ..entity.provider import ProviderInterface
@@ -34,6 +35,7 @@ class MainDialog(*uic.loadUiType(ui_path/'main_dialog.ui')):
         super().__init__(parent)
         self.settings = settings
         self.setupUi(self)
+        labels_on_domain(self)  # the Help tab has links with the default Mapflow domain
         # Allow the project label to shrink below its text width so the window can be resized smaller
         self.currentProjectLabel.setMinimumWidth(150)
         # Restrict combos to relevant layer types; QGIS 3.10-3.20 (at least) bugs up if set in .ui

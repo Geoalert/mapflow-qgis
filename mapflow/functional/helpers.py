@@ -10,6 +10,7 @@ from qgis.core import (
 )
 
 from ..config import config
+from ..domain import url_with_domain
 from ..schema.billing import BillingType
 from ..schema.project import UserRole
 
@@ -103,7 +104,8 @@ def check_aoi(aoi: Union[QgsGeometry, None]) -> bool:
 
 
 def open_url(url: str):
-    url = QUrl(url)
+    # A link can come from a server answer with the default Mapflow domain (spec/002_api.md)
+    url = QUrl(url_with_domain(url, config.DOMAIN))
     QDesktopServices.openUrl(url)
 
 

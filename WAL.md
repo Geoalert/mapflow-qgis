@@ -26,3 +26,14 @@
 - `Http.send_request` has the same lambda shape but survives because its abort-timer closure also holds
   the reply — safe by accident; keep it in mind when touching http.py.
 - dev has the same bug behind `guarded_connect`; port the fix there after this merges.
+
+## 4. 3.6.4 (branch `v3.6ltr`): the `mapflow_ru` variable
+[ready-for-review]
+- The backend is not reachable from Russia through `mapflow.ai`, and the plugin showed errors in place of
+  its window. `mapflow.ru` is a proxy of the same service, so the variable changes only the domain; it has
+  no control in the interface, because only the users with this problem need it.
+- The texts keep `mapflow.ai` in the code, the `.ui` files and the translations. The domain is changed in
+  the shown text, so no translation file changes.
+- Addresses from server answers are changed at the moment of use (`Http.send_request`, the tile layers,
+  `open_url`), never in the data, so an address that goes back to the server stays as the server gave it.
+- The sign-in configuration keeps its name; its addresses are rewritten in place (`functional/auth.py`).

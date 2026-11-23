@@ -2,6 +2,9 @@ from typing import Optional
 from PyQt5.QtWidgets import QApplication, QMessageBox
 from PyQt5.QtCore import Qt, QObject
 
+from ...config import config
+from ...domain import text_with_domain
+
 
 class AlertService(QObject):
     """Singleton service for displaying alerts and notifications."""
@@ -40,6 +43,8 @@ class AlertService(QObject):
         :param blocking: Opened as modal - code below will only be executed when the alert is closed
         :return: True if user clicked OK (for Question dialogs), False otherwise
         """
+        # The links in the messages are written with the default Mapflow domain: show the domain in use
+        message = text_with_domain(message, config.DOMAIN)
         box = QMessageBox(icon, self._plugin_name, message, parent=QApplication.activeWindow())
         box.setTextFormat(Qt.RichText)
         if icon == QMessageBox.Question:

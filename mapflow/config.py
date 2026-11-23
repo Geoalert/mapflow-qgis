@@ -4,8 +4,20 @@ from dataclasses import dataclass
 from PyQt5.QtCore import QCoreApplication
 from qgis.core import QgsSettings
 
+from .domain import domain_from_setting, text_with_domain
+
 
 SEARCH_CAPTURE_TIMEZONE = 'UTC'
+
+# `mapflow.ai`, or `mapflow.ru` when the QGIS global variable `mapflow_ru` is `true` (spec/002_api.md).
+# It is read once, as `mapflow_env` is: a change applies after a restart of QGIS.
+MAPFLOW_DOMAIN = domain_from_setting(QgsSettings().value('variables/mapflow_ru', ''))
+
+
+def _on_domain(text: str) -> str:
+    """An address or a configuration text, written with `mapflow.ai`, on the domain in use."""
+    return text_with_domain(text, MAPFLOW_DOMAIN)
+
 
 @dataclass
 class ConfigColumns():
@@ -57,11 +69,12 @@ class Config:
     DEFAULT_MODEL = '🏠 Buildings'
     MAPFLOW_ENV = QgsSettings().value('variables/mapflow_env', "") or 'production'
     PROJECT_ID = QgsSettings().value("variables/mapflow_project_id", "") or "default"
-    SERVER = "https://whitemaps-{env}.mapflow.ai/rest".format(env=MAPFLOW_ENV)
-    BILLING_HISTORY_URL = "https://app.mapflow.ai/account/billing-history"
-    TOP_UP_URL = "https://app.mapflow.ai/account/balance"
-    MODEL_DOCS_URL = "https://docs.mapflow.ai/userguides/pipelines.html"
-    IMAGERY_DOCS_URL = "https://docs.mapflow.ai/userguides/my_imagery.html#my-imagery-in-qgis"
+    DOMAIN = MAPFLOW_DOMAIN
+    SERVER = _on_domain("https://whitemaps-{env}.mapflow.ai/rest".format(env=MAPFLOW_ENV))
+    BILLING_HISTORY_URL = _on_domain("https://app.mapflow.ai/account/billing-history")
+    TOP_UP_URL = _on_domain("https://app.mapflow.ai/account/balance")
+    MODEL_DOCS_URL = _on_domain("https://docs.mapflow.ai/userguides/pipelines.html")
+    IMAGERY_DOCS_URL = _on_domain("https://docs.mapflow.ai/userguides/my_imagery.html#my-imagery-in-qgis")
 
     # PROCESSINGS
     PROCESSING_TABLE_REFRESH_INTERVAL = 6  # in seconds
@@ -147,13 +160,15 @@ class Config:
     }
 
     # OAuth2
-    OAUTH2_URL = "https://auth-duty.mapflow.ai/auth/realms/mapflow-duty/protocol/openid-connect"
+    OAUTH2_URL = _on_domain("https://auth-duty.mapflow.ai/auth/realms/mapflow-duty/protocol/openid-connect")
+    # The name does not depend on the domain: `mapflow.ru` is a proxy of the same service, so both domains
+    # share one sign-in configuration, and `get_auth_id` writes the addresses of the domain in use into it.
     AUTH_CONFIG_NAME = f"mapflow_{MAPFLOW_ENV}"
     AUTH_CONFIG_MAPS = {'duty': '{"accessMethod":0,"apiKey":"","clientId":"qgis","clientSecret":"","configType":1,"customHeader":"","description":"","grantFlow":1,"id":"","name":"","objectName":"","password":"","persistToken":false,"queryPairs":{},"redirectPort":7070,"redirectUrl":"qgis","refreshTokenUrl":"https://auth-duty.mapflow.ai/auth/realms/mapflow-duty/protocol/openid-connect/token","requestTimeout":30,"requestUrl":"https://auth-duty.mapflow.ai/auth/realms/mapflow-duty/protocol/openid-connect/auth","scope":"","tokenUrl":"https://auth-duty.mapflow.ai/auth/realms/mapflow-duty/protocol/openid-connect/token","username":"","version":1}',
                         'staging': '{"accessMethod":0,"apiKey":"","clientId":"qgis","clientSecret":"","configType":1,"customHeader":"","description":"","grantFlow":1,"id":"","name":"","objectName":"","password":"","persistToken":false,"queryPairs":{},"redirectPort":7070,"redirectUrl":"qgis","refreshTokenUrl":"https://auth.mapflow.ai/auth/realms/mapflow-staging/protocol/openid-connect/token","requestTimeout":30,"requestUrl":"https://auth.mapflow.ai/auth/realms/mapflow-staging/protocol/openid-connect/auth","scope":"","tokenUrl":"https://auth.mapflow.ai/auth/realms/mapflow-staging/protocol/openid-connect/token","username":"","version":1}',
                         'internal': '{"accessMethod":0,"apiKey":"","clientId":"qgis","clientSecret":"","configType":1,"customHeader":"","description":"","grantFlow":1,"id":"","name":"","objectName":"","password":"","persistToken":false,"queryPairs":{},"redirectPort":7070,"redirectUrl":"qgis","refreshTokenUrl":"https://auth.mapflow.ai/auth/realms/mapflow-internal/protocol/openid-connect/token","requestTimeout":30,"requestUrl":"https://auth.mapflow.ai/auth/realms/mapflow-internal/protocol/openid-connect/auth","scope":"","tokenUrl":"https://auth.mapflow.ai/auth/realms/mapflow-internal/protocol/openid-connect/token","username":"","version":1}',
                         'production': '{"accessMethod":0,"apiKey":"","clientId":"qgis","clientSecret":"","configType":1,"customHeader":"","description":"","grantFlow":1,"id":"","name":"","objectName":"","password":"","persistToken":false,"queryPairs":{},"redirectPort":7070,"redirectUrl":"qgis","refreshTokenUrl":"https://auth.mapflow.ai/auth/realms/mapflow/protocol/openid-connect/token","requestTimeout":30,"requestUrl":"https://auth.mapflow.ai/auth/realms/mapflow/protocol/openid-connect/auth","scope":"","tokenUrl":"https://auth.mapflow.ai/auth/realms/mapflow/protocol/openid-connect/token","username":"","version":1}'}
-    AUTH_CONFIG_MAP = AUTH_CONFIG_MAPS.get(MAPFLOW_ENV, '')
+    AUTH_CONFIG_MAP = _on_domain(AUTH_CONFIG_MAPS.get(MAPFLOW_ENV, ''))
 
 
 config = Config()
