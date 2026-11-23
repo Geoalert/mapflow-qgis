@@ -3474,6 +3474,11 @@ def check_planned_processings(iface, content, controller, processings, state, li
 
     state.planned, state.planned_delay = {}, {}
     processings._poll.setInterval(60000)         # the checks tick by hand
+    # The status poll (5 s) and the collections refresh (30 s) would put /user/status and /rasters/mosaic/page into
+    # the window of "a click sends no request": they are stopped here, and started again as they were.
+    background = [(timer, timer.isActive()) for timer in (session._timer, controller._mosaic_refresh)]
+    for timer, _active in background:
+        timer.stop()
     try:
         check(session.project.id == "project-1" and page.filter == "all" and not page.terms,
               "PLANNED: the checks start in the default project, with the whole list shown")
@@ -3638,6 +3643,9 @@ def check_planned_processings(iface, content, controller, processings, state, li
         processings._poll.stop()
         processings._poll.setInterval(saved_interval)
         reload()
+        for timer, active in background:
+            if active:
+                timer.start()
 
 
 def check_upload_timeout(iface, plugin, state):
