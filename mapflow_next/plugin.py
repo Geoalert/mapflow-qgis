@@ -131,8 +131,9 @@ class MapflowNextPlugin:
     def _open_report(self, kind: str, message: str, details: str, request: Optional[RequestInfo]) -> None:
         """The button's work, done when it is pressed: a failure while building the text cannot stop the line."""
         secrets = [self.services[0].bearer] if self.services and self.services[0].bearer else []
+        cfg = config.load_config()
         environment = Environment(plugin_version(), Qgis.QGIS_VERSION, qVersion(), platform.platform(),
-                                  config.load_config().env)
+                                  cfg.env, cfg.domain)
         summary = summary_from(kind, message, secrets)
         technical = technical_text(summary, details, request, environment, secrets)
         self._close_report_dialog()
@@ -203,15 +204,15 @@ class MapflowNextPlugin:
     def _build(self) -> None:
         settings = Settings()
         cfg = config.load_config()
-        http = Http(cfg.server, plugin_version())
+        http = Http(cfg.server, plugin_version(), domain=cfg.domain)
         api = MapflowApi(http)
         catalogue = Catalogue.load(config.RESOURCES / "scenarios")
         session = Session(cfg, http, api, settings)
         processings = Processings(api)
         imagery = Imagery(api)
-        layers = self.layers = MapLayers(self.iface)
+        layers = self.layers = MapLayers(self.iface, domain=cfg.domain)
         results = Results(api, layers, settings)
-        self.dock = MapflowDock(catalogue, self.iface.mainWindow())
+        self.dock = MapflowDock(catalogue, cfg.links, self.iface.mainWindow())
         self.controller = Controller(self.iface, self.dock.content, session, processings, imagery, results,
                                      layers, api, catalogue, settings)
         self.services = [http, session, processings, imagery, results]

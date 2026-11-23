@@ -17,8 +17,9 @@ from qgis.PyQt.QtCore import QByteArray, QFile, QIODevice, QObject, QSaveFile, Q
 from qgis.PyQt.QtNetwork import QHttpMultiPart, QHttpPart, QNetworkReply, QNetworkRequest
 from qgis.core import Qgis, QgsApplication, QgsMessageLog, QgsNetworkAccessManager
 
-from ..config import PLUGIN_NAME, TIMEOUT_S, UPLOAD_TIMEOUT_S
+from ..config import DOMAIN, PLUGIN_NAME, TIMEOUT_S, UPLOAD_TIMEOUT_S
 from ..core import guard
+from ..core.domain import with_domain
 from ..core.guard import guarded
 from ..core.messages import describe
 from ..core.origin import Origin, carries_credentials
@@ -157,14 +158,19 @@ class _Pending:
 
 class Http(QObject):
     """`get/post/put/delete` take a path relative to the API root or an absolute URL. Callbacks:
-    `on_success(result)` with parsed JSON, text or bytes; `on_error(ApiError)`."""
+    `on_success(result)` with parsed JSON, text or bytes; `on_error(ApiError)`.
+
+    `answered=True` says the absolute URL comes from a server answer: when the plugin uses another domain
+    (`domain`), the host changes to it before the request is built, so the log, the report and the credentials
+    rule see the final address. A redirect target is such an address too. Every other URL is used as written."""
 
     unauthorized = pyqtSignal()
     failed = pyqtSignal(object)        # ApiError not handled by a caller
 
-    def __init__(self, server: str, plugin_version: str, parent: Optional[QObject] = None):
+    def __init__(self, server: str, plugin_version: str, parent: Optional[QObject] = None, domain: str = DOMAIN):
         super().__init__(parent)
         self.server = server.rstrip("/")
+        self.domain = domain       # in place of the default one, in the addresses of server answers
         self.plugin_version = plugin_version
         self.auth_config_id: Optional[str] = None     # API token: a Basic config in the QGIS auth database
         self.bearer: Optional[str] = None             # browser sign-in: the current access token
@@ -190,7 +196,7 @@ class Http(QObject):
 
     def download(self, path: str, target: str, on_success: Optional[Callback] = None,
                  on_error: Optional[Callback] = None, timeout: Optional[int] = None,
-                 on_progress: Optional[Callback] = None, authorize: bool = True) -> int:
+                 on_progress: Optional[Callback] = None, authorize: bool = True, answered: bool = False) -> int:
         """Stream the body to `target` (atomic: the file appears only when complete). A `target` that can't be
         opened fails at once, before any request. `authorize=False`: the request never carries Mapflow credentials,
         whatever its origin."""
@@ -201,7 +207,8 @@ class Http(QObject):
             self._fail(on_error, ApiError("client", f"Can't write {target}: {sink.errorString()}"))
             return 0
         return self._send("GET", path, on_success=on_success, on_error=on_error, timeout=timeout,
-                          parse="file", sink=sink, on_progress=on_progress, authorize=authorize)
+                          parse="file", sink=sink, on_progress=on_progress, authorize=authorize,
+                          answered=answered)
 
     def upload(self, path: str, file_path: str, on_success: Optional[Callback] = None,
                on_error: Optional[Callback] = None, on_progress: Optional[Callback] = None) -> int:
@@ -257,8 +264,9 @@ class Http(QObject):
               on_error: Optional[Callback] = None, timeout: Optional[int] = None, parse: str = "json",
               sink: Optional[QSaveFile] = None, on_progress: Optional[Callback] = None,
               upload: bool = False, authorize: bool = True,
-              form: Optional[Dict[str, str]] = None) -> int:
-        """`authorize` says the request may carry credentials; whether it does depends on its origin (`_dispatch`).
+              form: Optional[Dict[str, str]] = None, answered: bool = False) -> int:
+        """`answered`: `path` is an address from a server answer (see the class). `authorize` says the request
+        may carry credentials; whether it does depends on its origin (`_dispatch`).
         A body that holds a `userDefined` tile source makes the request sensitive: the server's answer may repeat
         the address and the login, so its text reaches no log line and no report, and an error keeps its
         parameters with the addresses cut to their hosts. Every other answer text that is kept (a report, a log
@@ -269,6 +277,8 @@ class Http(QObject):
         if timeout <= 0:    # 0 used to mean "none": a caller that passes it must fail here, not hang later
             raise ValueError("a request needs a timeout")
         url = self.url_for(path)
+        if answered:
+            url = with_domain(url, DOMAIN, self.domain)
         data = None
         if form is not None:
             data = QByteArray(urlencode(form).encode())
@@ -410,6 +420,10 @@ class Http(QObject):
             return False
         origin_url = reply.url()
         url = origin_url.resolved(target)
+        text = url.toString(QUrl.ComponentFormattingOption.FullyEncoded)
+        changed = with_domain(text, DOMAIN, self.domain)
+        if changed != text:                     # an address that stays is not written again: a presigned one is exact
+            url = QUrl(changed)
         if pending.method != "GET":
             reason = "it answered a change with a redirect, which the plugin does not repeat"
         elif url.scheme().lower() not in ("http", "https"):

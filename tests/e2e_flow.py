@@ -2053,7 +2053,7 @@ def check_failed_requests(iface, plugin, state):
     state.heal()
     imagery.load_mosaics()
     wait_until(lambda: imagery.mosaics_loaded and not imagery.mosaics_failed, 5)
-    fresh = ProjectsDialog()
+    fresh = ProjectsDialog(config.Links.of())
     fresh.set_state(None, [])
     texts = lambda: [w.text() for w in fresh.findChildren(QLabel)]  # noqa: E731
     check("Loading projects…" in texts() and "No projects yet." not in texts(),
@@ -5380,6 +5380,196 @@ def visible_windows(iface):
     return [w for w in QApplication.topLevelWidgets() if w.isVisible() and w is not iface.window]
 
 
+class RecordingNetwork:
+    """Stands in for QGIS's network access manager: keeps each request (its address and whether it carries an
+    Authorization header, and the body of a POST) and sends it to the mock server's picture, so no address of
+    another host is ever reached. A request for the mock server itself goes on as it is, except a POST, which
+    never reaches a route that changes data."""
+
+    def __init__(self, real, base):
+        self.real, self.base = real, base
+        self.seen = []                  # (the address, fully encoded; has Authorization)
+        self.bodies = []
+
+    def _forward(self, request, data=None):
+        from qgis.PyQt.QtNetwork import QNetworkRequest
+        address = request.url().toString(QUrl.ComponentFormattingOption.FullyEncoded)
+        self.seen.append((address, request.hasRawHeader(b"Authorization")))
+        if data is not None:
+            self.bodies.append(bytes(data).decode("utf-8", "replace"))
+        forwarded = QNetworkRequest(request)
+        if data is not None or not address.startswith(self.base):
+            forwarded.setUrl(QUrl(self.base + "/open/preview.png"))
+        return forwarded
+
+    def get(self, request):
+        return self.real.get(self._forward(request))
+
+    def deleteResource(self, request):
+        return self.real.deleteResource(self._forward(request))
+
+    def post(self, request, data):
+        return self.real.post(self._forward(request, data), data)
+
+    def put(self, request, data):
+        return self.real.put(self._forward(request, data), data)
+
+    def __getattr__(self, name):
+        return getattr(self.real, name)
+
+
+def check_mapflow_ru(iface, classFactory, state, links, api_url):
+    """spec/002 § The `mapflow.ru` domain: with the QGIS variable `mapflow_ru` set to `true` (any case, with spaces),
+    every address the plugin builds or opens has the new domain, an address from a server answer gets it when the
+    plugin uses it (a request, a layer source), an address that goes back to the server is not changed, the saved
+    sign-in is the same, and the report names the domain. The variable is removed in a `finally`."""
+    import dataclasses
+    key = "variables/mapflow_ru"
+    settings = QgsSettings()
+    saved_value = settings.value(key)
+    real_nam = None
+    plugin = None
+    try:
+        # the sign-in that the setting must keep: made with the default domain, kept by the QGIS auth database
+        first = classFactory(iface)
+        first.initGui()
+        first.toggle(True)
+        first.dock.content.sign_in.tokenSubmitted.emit(mock_server.TOKEN)
+        check(wait_until(lambda: first.services[1].state == "signed_in" and first.services[1].status is not None, 5),
+              "RU: a plugin with the default domain signs in with the API token")
+        check(first.services[1].config.domain == "mapflow.ai", "RU: …and uses the default domain")
+        first.unload()
+
+        settings.setValue(key, " True ")
+        plugin = classFactory(iface)
+        plugin.initGui()
+        plugin.toggle(True)
+        content, controller, http = plugin.dock.content, plugin.controller, plugin.services[0]
+        session, api = plugin.services[1], controller.api
+        check(session.config.domain == "mapflow.ru" and session.config.signed_in_url == "https://app.mapflow.ru",
+              f"RU: the variable ' True ' turns the domain on ({session.config.domain})")
+        check(wait_until(lambda: session.state == "signed_in" and session.status is not None, 5),
+              "RU: the saved sign-in of the default domain is still valid: no new sign-in is needed")
+
+        # links the plugin opens
+        def host_ok(address):
+            return ".mapflow.ru" in address or "//mapflow.ru" in address
+
+        def opened_after(action):
+            links.opened.clear()
+            action()
+            return list(links.opened)
+
+        pid = state.processings[0]["id"]
+        opened = {}
+        opened["terms"] = opened_after(content.sign_in.terms.click)
+        opened["credits"] = opened_after(content.credits.click)
+        footer = next(b for b in content.footer.findChildren(QPushButton) if b.text().startswith("Mapflow Web"))
+        opened["footer"] = opened_after(footer.click)
+        opened["web"] = opened_after(lambda: content.processings.openWeb.emit(pid))
+
+        def press_links(dialog):
+            for caption in ("Balance and billing", "API token", "Plugin guide"):
+                next(b for b in dialog.findChildren(QPushButton) if b.text().startswith(caption)).click()
+        links.opened.clear()
+        close_modal_later([], press_links)
+        controller.open_settings()
+        opened["settings"] = list(links.opened)
+
+        def open_docs():
+            controller.open_gallery()
+            next(b for b in controller.gallery.findChildren(QPushButton) if b.text().startswith("Model docs")).click()
+        opened["gallery"] = opened_after(open_docs)
+        controller.gallery.close()
+        check(opened["terms"] == ["https://mapflow.ru/terms-of-use-en.pdf"],
+              f"RU: Terms of use opens the terms on mapflow.ru ({opened['terms']})")
+        check(opened["credits"] == ["https://app.mapflow.ru/account/balance"],
+              f"RU: the credits button opens the billing page on app.mapflow.ru ({opened['credits']})")
+        check(opened["footer"] == ["https://app.mapflow.ru"],
+              f"RU: the footer's Mapflow Web opens app.mapflow.ru ({opened['footer']})")
+        check(len(opened["web"]) == 1 and opened["web"][0].startswith("https://app.mapflow.ru/projects/")
+              and opened["web"][0].endswith(f"?processing={pid}"),
+              f"RU: Open in Mapflow Web opens the processing on app.mapflow.ru ({opened['web']})")
+        check(opened["settings"] == ["https://app.mapflow.ru/account/balance", "https://app.mapflow.ru/account/api",
+                                     "https://docs.mapflow.ru/api/qgis_mapflow.html"],
+              f"RU: Settings opens billing, the API token and the plugin guide on mapflow.ru ({opened['settings']})")
+        check(opened["gallery"] == ["https://docs.mapflow.ru/userguides/pipelines.html"],
+              f"RU: Model docs opens the guide on docs.mapflow.ru ({opened['gallery']})")
+        every = [address for group in opened.values() for address in group]
+        check(every and all(host_ok(a) for a in every) and not any("mapflow.ai" in a for a in every),
+              f"RU: every opened link has mapflow.ru and none has mapflow.ai ({every})")
+
+        # requests
+        recorder = RecordingNetwork(http._nam, api_url)
+        real_nam = http._nam
+        http._nam = recorder
+        try:
+            done = []
+            target = Path(tempfile.mkdtemp(prefix="mapflow-ru-")) / "image.tif"
+            api.preview("https://preview.mapflow.ai/p.png?sig=a%2Fb", done.append, lambda e: done.append(e))
+            api.download_image_file("https://files.mapflow.ai/o.tif?sig=x%2Fy", str(target), done.append,
+                                    lambda e: done.append(e))
+            api.tilejson("https://tiles.mapflow.ai/t.json", done.append, lambda e: done.append(e))
+            api.preview("https://tiles.example.com/p.png", done.append, lambda e: done.append(e))
+            api.preview("https://MAPFLOW.AI/p.png", done.append, lambda e: done.append(e))
+            answer = []
+            http.get("user/status", on_success=answer.append)
+            userdefined = {"params": {"sourceParams": {"userDefined": {
+                "url": "https://tiles.mapflow.ai/{z}/{x}/{y}.png", "type": "xyz"}}}}
+            http.post("processings", userdefined, on_error=lambda e: None)
+            check(wait_until(lambda: len(done) == 5 and answer, 5), f"RU: the requests ended ({len(done)} of 5)")
+            seen = recorder.seen
+            check(len(seen) == 7, f"RU: the test saw each request ({len(seen)})")
+            expected = ["https://preview.mapflow.ru/p.png?sig=a%2Fb", "https://files.mapflow.ru/o.tif?sig=x%2Fy",
+                        "https://tiles.mapflow.ru/t.json", "https://tiles.example.com/p.png",
+                        "https://mapflow.ru/p.png"]
+            check([address for address, _ in seen[:5]] == expected,
+                  f"RU: an address from an answer gets mapflow.ru, the rest of it stays byte for byte; another "
+                  f"domain is not changed ({[address for address, _ in seen[:5]]})")
+            check(not any(authorized for _, authorized in seen[:5]),
+                  "RU: no request for an address from an answer carries credentials: it is not the API's origin")
+            check(seen[5][0] == f"{api_url}/user/status" and seen[5][1],
+                  f"RU: an API request goes to the API in use, with credentials ({seen[5]})")
+            body = recorder.bodies[-1] if recorder.bodies else ""
+            check("https://tiles.mapflow.ai/{z}/{x}/{y}.png" in body and "mapflow.ru" not in body,
+                  f"RU: an address the plugin sends back to the server is not changed ({body[:120]})")
+        finally:
+            http._nam = real_nam
+
+        # layer sources
+        layers = plugin.layers
+        raster = layers.tile_raster("https://tiles.mapflow.ai/{z}/{x}/{y}.png", "RU tiles")
+        vector = layers.vector_tiles(dataclasses.replace(
+            processing_done("ru"), vector_tile_url="https://vt.mapflow.ai/{z}/{x}/{y}.pbf"))
+        other = layers.tile_raster("https://tiles.example.com/{z}/{x}/{y}.png", "Other tiles")
+        check(raster is not None and "tiles.mapflow.ru" in raster.source() and "mapflow.ai" not in raster.source(),
+              f"RU: a result or preview tile layer has the new domain in its source ({raster and raster.source()})")
+        check(vector is not None and "vt.mapflow.ru" in vector.source() and "mapflow.ai" not in vector.source(),
+              f"RU: a vector tile layer has the new domain in its source ({vector and vector.source()})")
+        check(other is not None and "tiles.example.com" in other.source(),
+              "RU: a tile layer of another domain keeps its address")
+
+        # the report
+        seen_report = []
+
+        def read_report(dialog):
+            seen_report.append(dialog.report_text())
+        close_modal_later([], read_report)
+        plugin._open_report("ValueError", "boom", "Traceback", None)
+        check(seen_report and "Domain: mapflow.ru" in seen_report[0],
+              "RU: the report names the domain in use")
+    finally:
+        if real_nam is not None:
+            plugin.services[0]._nam = real_nam
+        if saved_value is None:
+            settings.remove(key)
+        else:
+            settings.setValue(key, saved_value)
+        if plugin is not None:
+            plugin.unload()
+        wait_until(lambda: False, 0.2)
+
+
 def check_unloaded(label, iface, state, parts):
     """After `unload`: no window or dialog of the plugin is visible, no timer runs, no request is pending, and
     nothing late reaches plugin code. `parts` is what the plugin held before: `windows`, `dock`, `timers`, `http`,
@@ -6167,7 +6357,7 @@ def main():
     stored = [key for key in QgsSettings().allKeys() if "available" in key.lower()]
     check(not stored, f"the switch is not stored in the settings ({stored})")
     from mapflow_next.ui.imagery_page import ImageryPage
-    fresh = ImageryPage()
+    fresh = ImageryPage(config.Links.of())
     check(not fresh.available.isChecked(), "a new page starts with “Available for me” off")
     fresh.deleteLater()
     check(wait_until(lambda: imagery_page.has_thumbnail("img-1"), 5), "search results load their picture previews")
@@ -7485,7 +7675,7 @@ def main():
     from mapflow_next.ui.dock import DockContent
     from mapflow_next.core.scenarios import Catalogue
     from mapflow_next.config import RESOURCES
-    dark = DockContent(Catalogue.load(RESOURCES / "scenarios"))
+    dark = DockContent(Catalogue.load(RESOURCES / "scenarios"), config.Links.of())
     dark.show_signed_in()
     dark.set_project(session.project)
     dark.set_credits("1,240", "")
@@ -7514,6 +7704,7 @@ def main():
     guard.report(ValueError("late"), "after unload")
     check(len(iface.bar.messages) == shown, "after unload the guard has no reporter: nothing reaches the bar")
     check_unload(iface, classFactory, state)
+    check_mapflow_ru(iface, classFactory, state, links, url)
     check(not planned_endpoint_only(state),
           f"no request went to another planned-processing endpoint ({planned_endpoint_only(state)})")
     server.shutdown()

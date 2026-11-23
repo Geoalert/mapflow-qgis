@@ -48,6 +48,7 @@ describes the state after the chain; each step makes the code match it, and upda
 [ready-for-review] Terms of use link on the sign-in page
 [ready-for-review] XYZ/TMS layers that QGIS already has as an imagery source — `spec/002_B` § Imagery from a QGIS tile layer
 [ready-for-review] Planned processings in the Processings tab, with a "search processing" mark; a click opens Mapflow Web — `spec/002_F` § Plugin behaviour in Mapflow Next
+[ready-for-review] The `mapflow_ru` variable switches the plugin to the domain `mapflow.ru` — `spec/002_api.md` § The `mapflow.ru` domain
 
 ## Later, not in 4.0.0
 

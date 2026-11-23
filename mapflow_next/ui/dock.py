@@ -10,7 +10,7 @@ from qgis.PyQt.QtWidgets import (QAbstractButton, QButtonGroup, QFrame, QHBoxLay
                                  QSizePolicy, QStackedWidget, QToolButton, QVBoxLayout, QWidget)
 from qgis.gui import QgsDockWidget
 
-from .. import config
+from ..config import Links
 from ..core.models import Project
 from ..core.scenarios import Catalogue
 from . import icons
@@ -113,8 +113,9 @@ class DockContent(QWidget):
     signOutRequested = pyqtSignal()
     tabChanged = pyqtSignal(int)
 
-    def __init__(self, catalogue: Catalogue, parent=None):
+    def __init__(self, catalogue: Catalogue, links: Links, parent=None):
         super().__init__(parent)
+        self.links = links
         load_fonts()
         self.setObjectName("mfRoot")
         self.setStyleSheet(stylesheet())
@@ -128,11 +129,11 @@ class DockContent(QWidget):
         layout.addWidget(self._header())
         layout.addWidget(self._tabs())
         self.stack = QStackedWidget(self)
-        self.sign_in = SignInPage()
-        self.start = StartPage(catalogue)
-        self.run = RunPage()
+        self.sign_in = SignInPage(links)
+        self.start = StartPage(catalogue, links)
+        self.run = RunPage(links)
         self.processings = ProcessingsPage()
-        self.imagery = ImageryPage()
+        self.imagery = ImageryPage(links)
         self.upgrade = UpgradePage()
         for page in (self.sign_in, self.start, self.run, self.processings, self.imagery, self.upgrade):
             self.stack.addWidget(page)
@@ -167,7 +168,7 @@ class DockContent(QWidget):
         self.credits.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         self.credits.setIcon(icons.icon("coins", tokens()["primary_ink"], 14))
         self.credits.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.credits.clicked.connect(guarded(lambda: QDesktopServices.openUrl(QUrl(config.TOP_UP_URL))))
+        self.credits.clicked.connect(guarded(lambda: QDesktopServices.openUrl(QUrl(self.links.top_up))))
         row.addWidget(self.credits)
         settings = tool("settings", "Settings")
         settings.clicked.connect(guarded(lambda *_: self.settingsRequested.emit()))
@@ -193,9 +194,9 @@ class DockContent(QWidget):
         title.setEnabled(False)
         self.account_menu.addSeparator()
         self._menu_action(self.account_menu, "coins", "Balance and billing  ↗",
-                          lambda: QDesktopServices.openUrl(QUrl(config.TOP_UP_URL)))
+                          lambda: QDesktopServices.openUrl(QUrl(self.links.top_up)))
         self._menu_action(self.account_menu, "users", "Team in Mapflow Web  ↗",
-                          lambda: QDesktopServices.openUrl(QUrl(config.TEAM_URL)))
+                          lambda: QDesktopServices.openUrl(QUrl(self.links.team)))
         self._menu_action(self.account_menu, "settings", "Settings…", self.settingsRequested.emit)
         self._menu_action(self.account_menu, "logout", "Sign out", self.signOutRequested.emit)
 
@@ -284,7 +285,7 @@ class DockContent(QWidget):
         row.addWidget(self.running_link)
         row.addWidget(self.running_bar)
         row.addStretch(1)
-        row.addWidget(link("Mapflow Web", config.WEB_URL))
+        row.addWidget(link("Mapflow Web", self.links.web))
         self.footer = footer
         self.set_running(0, 0)
         return footer
@@ -317,9 +318,9 @@ class DockContent(QWidget):
 
 
 class MapflowDock(QgsDockWidget):
-    def __init__(self, catalogue: Catalogue, parent=None):
+    def __init__(self, catalogue: Catalogue, links: Links, parent=None):
         super().__init__("Mapflow", parent)
         self.setObjectName("MapflowNextDock")
-        self.content = DockContent(catalogue, self)
+        self.content = DockContent(catalogue, links, self)
         self.setWidget(self.content)
         self.setMinimumWidth(360)

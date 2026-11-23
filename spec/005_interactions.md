@@ -56,6 +56,7 @@ specified is the behaviour in the table.
 - Protocol: OpenID Connect Authorization Code with PKCE
 - Hosts: `auth.mapflow.ai` in production, `auth-{env}.mapflow.ai` in staging, internal and duty
   (see `002_api.md`)
+- With the variable `mapflow_ru`, the same hosts on the domain `mapflow.ru` (`002_api.md` § The `mapflow.ru` domain)
 - Local redirect: `http://127.0.0.1:7070/qgis`, served by a listener the plugin opens for the sign-in
 - Token storage: the refresh token in the QGIS authentication database (encrypted); the access token in
   memory only

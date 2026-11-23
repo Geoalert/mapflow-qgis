@@ -397,7 +397,7 @@ class Controller(QObject):
     @guarded
     def open_settings(self) -> None:
         dialog = SettingsDialog(self.settings, self.session.email, self.session.config.server,
-                                self.iface.mainWindow())
+                                self.session.config.links, self.iface.mainWindow())
         if dialog.exec() and dialog.signed_out:
             self.sign_out()
 
@@ -418,7 +418,7 @@ class Controller(QObject):
         if self._stopped:
             return
         if self.projects_dialog is None:
-            dialog = ProjectsDialog(self.iface.mainWindow())
+            dialog = ProjectsDialog(self.session.config.links, self.iface.mainWindow())
             dialog.queryChanged.connect(self._query_projects)
             dialog.moreRequested.connect(self._more_projects)
             dialog.projectChosen.connect(self._choose_project)
@@ -512,7 +512,8 @@ class Controller(QObject):
     def _share_project(self, project_id: str) -> None:
         """Sharing and roles are managed in Mapflow Web: open the project there."""
         web = self.session.config.web_url
-        QDesktopServices.openUrl(QUrl(f"{web}/projects/{project_id}" if project_id else config.PROJECTS_URL))
+        projects = self.session.config.links.projects
+        QDesktopServices.openUrl(QUrl(f"{web}/projects/{project_id}" if project_id else projects))
 
     @guarded
     def create_project(self) -> None:
@@ -710,7 +711,7 @@ class Controller(QObject):
         if self._stopped:
             return
         if self.gallery is None:
-            self.gallery = GalleryDialog(self.catalogue, self.iface.mainWindow())
+            self.gallery = GalleryDialog(self.catalogue, self.session.config.links, self.iface.mainWindow())
             self.gallery.scenarioChosen.connect(self.apply_scenario)
         self.gallery.set_query(query or "")
         self.gallery.show()

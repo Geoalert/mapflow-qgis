@@ -73,9 +73,6 @@ class Opened:
         QDesktopServices.unsetUrlHandler("https")
 
 
-TERMS = "https://mapflow.ai/terms-of-use-en.pdf"
-
-
 def check_terms_link(sign_in, label):
     """The sign-in page's "Terms of use" link shows, fits the page, and opens the terms address on a click."""
     terms = getattr(sign_in, "terms", None)
@@ -117,6 +114,9 @@ from mapflow_next.core.scenarios import Catalogue  # noqa: E402
 from . import fixtures  # noqa: E402
 
 catalogue = Catalogue.load(config.RESOURCES / "scenarios")
+LINKS = config.Links.of()
+TERMS = "https://mapflow.ai/terms-of-use-en.pdf"
+assert LINKS.terms == TERMS
 project = Project.from_api(fixtures.PROJECT, "me@example.com")
 status = UserStatus.from_api(fixtures.STATUS)
 state = {}
@@ -142,7 +142,7 @@ def _imports():
 @step("dock: header, tabs, sign-in")
 def _dock():
     from mapflow_next.ui.dock import DockContent
-    content = DockContent(catalogue)
+    content = DockContent(catalogue, LINKS)
     content.resize(400, 880)
     content.show()
     state["content"] = content
@@ -191,7 +191,7 @@ def _menu():
 @step("dock: upgrade page")
 def _upgrade():
     from mapflow_next.ui.dock import PAGE_UPGRADE, DockContent
-    content = DockContent(catalogue)
+    content = DockContent(catalogue, LINKS)
     content.resize(400, 880)
     content.show()
     content.show_upgrade("5.0.0", "4.0.0")
@@ -358,7 +358,7 @@ def _report_dialog():
     QDesktopServices.setUrlHandler("mailto", mail, "handle")
     request = RequestInfo("GET", "https://api.example.com/rest/user/status?token=SECRET", 200,
                           '{"access_token": "AAA", "name": "kept"}')
-    environment = Environment("4.0.0", "4.2.0", "6.8.0", "Linux", "production")
+    environment = Environment("4.0.0", "4.2.0", "6.8.0", "Linux", "production", "mapflow.ai")
     technical = technical_text("ValueError: boom", "Traceback (most recent call last):\nValueError: boom",
                                request, environment)
     dialog = ReportDialog("ValueError: boom", technical, config.SUPPORT_EMAIL, "4.0.0")
@@ -536,7 +536,7 @@ def _processings():
 @step("projects window")
 def _projects():
     from mapflow_next.ui.projects_dialog import ProjectsDialog
-    dialog = ProjectsDialog()
+    dialog = ProjectsDialog(LINKS)
     projects = [Project.from_api(fixtures.PROJECT, "me@example.com"),
                 Project.from_api(fixtures.PROJECT_2, "me@example.com")]
     projects += [Project.from_api(item, "me@example.com") for item in fixtures.MORE_PROJECTS[:6]]
@@ -578,7 +578,7 @@ def _projects():
 @step("My imagery picker")
 def _picker():
     from mapflow_next.ui.mosaic_picker import MosaicPicker
-    picker = MosaicPicker()
+    picker = MosaicPicker(None, LINKS.my_data)
     picker.show()
     mosaics = [Mosaic.from_api(item) for item in fixtures.MOSAICS]
     picker.set_collections(mosaics, None, None)
@@ -596,7 +596,7 @@ def _picker():
 @step("scenario gallery")
 def _gallery():
     from mapflow_next.ui.gallery import GalleryDialog
-    gallery = GalleryDialog(catalogue)
+    gallery = GalleryDialog(catalogue, LINKS)
     gallery.show()
     spin(100)
     shot(gallery, "q6-09-gallery")
@@ -628,7 +628,7 @@ def _settings():
         if dialog:
             dialog.reject()
     QTimer.singleShot(200, close)
-    dialog = SettingsDialog(Settings(), "me@example.com", "https://whitemaps-production.mapflow.ai/rest")
+    dialog = SettingsDialog(Settings(), "me@example.com", "https://whitemaps-production.mapflow.ai/rest", LINKS)
     dialog.exec()
     check(seen == ["SettingsDialog"], "the settings dialog opens")
 
@@ -645,7 +645,7 @@ def _dark():
     for name in ("_tokens_cache", "_dark"):
         if hasattr(theme, name):
             setattr(theme, name, None)
-    content = DockContent(catalogue)
+    content = DockContent(catalogue, LINKS)
     content.show()
     shot(content, "q6-12-dark-sign-in", QSize(400, 880))
     check(theme.is_dark() and theme.tokens()["link"] == "#90cdf4"
@@ -720,7 +720,7 @@ def _network():
               f"browser sign-in opens the sign-in page {failures}")
         status, back = browse(opened[-1])
         status, landing = browse(back) if status == 302 else (status, "")
-        check(status == 302 and landing == config.SIGNED_IN_URL,
+        check(status == 302 and landing == config.Config("production", "s").signed_in_url,
               f"the loopback listener (QTcpServer) takes the code and sends the browser on ({status} {landing})")
         check(wait(lambda: tokens), "the code is exchanged for tokens (form POST)")
         if not tokens:

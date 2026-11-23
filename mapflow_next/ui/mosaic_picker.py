@@ -8,7 +8,6 @@ from qgis.PyQt.QtGui import QIcon, QPixmap
 from qgis.PyQt.QtWidgets import (QDialog, QFrame, QHBoxLayout, QLabel, QLineEdit, QMenu, QProgressBar, QScrollArea,
                                  QVBoxLayout, QWidget)
 
-from .. import config
 from ..core import formatting
 from ..core.failures import empty_list_text
 from ..core.models import Mosaic, MosaicImage
@@ -43,7 +42,7 @@ class MosaicPicker(QDialog):
     queryChanged = pyqtSignal(str)              # the search box, once typing pauses ("" = the listing again)
     moreRequested = pyqtSignal(str)             # "Show more": the next page of the search (or of the listing, "")
 
-    def __init__(self, parent=None, my_data_url: str = config.WEB_URL + config.MY_DATA_PATH):
+    def __init__(self, parent, my_data_url: str):
         super().__init__(parent)
         self.setObjectName("mfRoot")
         self.setWindowTitle("My imagery")

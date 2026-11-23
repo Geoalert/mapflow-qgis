@@ -55,6 +55,7 @@ from its default.
 | Variable | Type | Purpose |
 |----------|------|---------|
 | `variables/mapflow_env` | string | Environment: production/staging/internal/duty. Empty: production |
+| `variables/mapflow_ru` | string | `true`: the plugin uses the domain `mapflow.ru` in place of `mapflow.ai` (`002_api.md` § The `mapflow.ru` domain). Empty: `mapflow.ai` |
 
 The 3.x variables `mapflow_project_id`, `zoom_selector`, `mapflow_raw_error` and `mapflow_max_aois` are
 not read.

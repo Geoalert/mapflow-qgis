@@ -12,6 +12,7 @@ from qgis.PyQt.QtWidgets import (QComboBox, QFrame, QGridLayout, QHBoxLayout, QL
                                  QScrollArea, QSizePolicy, QToolButton, QVBoxLayout, QWidget)
 
 from .. import config
+from ..config import Links
 from ..core import formatting
 from ..core.draft import Issue
 from ..core.models import Block, Model
@@ -23,15 +24,19 @@ from ..core.guard import guarded
 
 
 STAR = "#d69e2e"            # the recommended zoom's star: amber, seen on white, hover grey, the selected row, dark
-ISSUE_LINKS = {"top_up": config.TOP_UP_URL, "pricing": config.PRICING_URL,
-               "support": f"mailto:{config.SUPPORT_EMAIL}"}
 
 
-def issue_html(issue: Issue) -> str:
+def issue_links(links: Links) -> dict:
+    """Where each way out of an issue leads."""
+    return {"top_up": links.top_up, "pricing": links.pricing, "support": f"mailto:{config.SUPPORT_EMAIL}"}
+
+
+def issue_html(issue: Issue, links: Links) -> str:
     """An issue's text, with its ways out as links."""
-    links = [f'<a href="{ISSUE_LINKS[where]}">{html.escape(text)}</a>' for text, where in issue.links
-             if where in ISSUE_LINKS]
-    return " ".join([html.escape(issue.text)] + ([" · ".join(links)] if links else []))
+    where_to = issue_links(links)
+    anchors = [f'<a href="{where_to[where]}">{html.escape(text)}</a>' for text, where in issue.links
+               if where in where_to]
+    return " ".join([html.escape(issue.text)] + ([" · ".join(anchors)] if anchors else []))
 
 
 @dataclass
@@ -79,8 +84,9 @@ class RunPage(QWidget):
     searchImageryRequested = pyqtSignal()
     runRequested = pyqtSignal()
 
-    def __init__(self, parent=None):
+    def __init__(self, links: Links, parent=None):
         super().__init__(parent)
+        self.links = links
         self.setObjectName("mfPage")
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -170,7 +176,7 @@ class RunPage(QWidget):
         self.options_box = QVBoxLayout()
         self.options_box.setSpacing(10)
         self.model_card.add(self.options_box)
-        info = link("How the models work", config.MODELS_DOCS_URL)
+        info = link("How the models work", self.links.models_docs)
         self.model_card.add(info)
         return self.model_card
 
@@ -269,7 +275,7 @@ class RunPage(QWidget):
         layout.addWidget(self.run_button)
         bottom = QHBoxLayout()
         self.balance = label("", "meta")
-        self.top_up = link("Top up", config.TOP_UP_URL)
+        self.top_up = link("Top up", self.links.top_up)
         bottom.addWidget(self.balance, 1)
         bottom.addWidget(self.top_up)
         layout.addLayout(bottom)
@@ -535,8 +541,9 @@ class RunPage(QWidget):
         # Steps show their own hints; the bar only repeats what no step can show. Its first way out (Top up) is
         # a button on the right, any others links in the text
         issue = blocking[0] if blocking else None
-        ways = [(text, where) for text, where in issue.links if where in ISSUE_LINKS] if issue else []
-        self.issues.set("warn", issue_html(replace(issue, links=tuple(ways[1:]))) if issue else "")
-        self.issues.set_action(*((ways[0][0], ISSUE_LINKS[ways[0][1]]) if ways else ()))
+        where_to = issue_links(self.links)
+        ways = [(text, where) for text, where in issue.links if where in where_to] if issue else []
+        self.issues.set("warn", issue_html(replace(issue, links=tuple(ways[1:])), self.links) if issue else "")
+        self.issues.set_action(*((ways[0][0], where_to[ways[0][1]]) if ways else ()))
         self.run_button.setEnabled(not issues and not busy)
         self.run_button.setText("Starting…" if busy else "Run processing")

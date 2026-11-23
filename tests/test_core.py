@@ -9,7 +9,7 @@ from mapflow_next.core.messages import describe
 from mapflow_next.core.models import (BillingType, DataProvider, Model, PlannedProcessing, Processing, Project, Role,
                                       Status, UserStatus, planned_processings)
 from mapflow_next.core.scenarios import Catalogue, match_model, resolve, scenario_for_model
-from mapflow_next.config import RESOURCES, TERMS_URL, Config, load_config
+from mapflow_next.config import RESOURCES, Config, Links, load_config
 from mapflow_next.core import oauth
 
 from .fixtures import (BUILDINGS, FOREST, MULTI, ROADS, OPEN_DATA, MAPBOX, PROJECT, STATUS, planned_json,
@@ -305,8 +305,217 @@ def test_sign_in_override_wins_in_every_environment(env):
 
 
 def test_terms_of_use_address():
-    assert TERMS_URL == "https://mapflow.ai/terms-of-use-en.pdf"
-    assert TERMS_URL.startswith("https://")
+    terms = Links.of().terms
+    assert terms == "https://mapflow.ai/terms-of-use-en.pdf"
+    assert terms.startswith("https://")
+
+
+# ---------- the domain `mapflow.ru` (spec/002 § The `mapflow.ru` domain) ----------
+
+ENVIRONMENTS = ["production", "staging", "internal", "duty"]
+AUTH_PREFIX = {"production": ("auth", "mapflow"), "staging": ("auth-staging", "mapflow-staging"),
+               "internal": ("auth-internal", "mapflow-internal"), "duty": ("auth-duty", "mapflow-duty")}
+WEB_PREFIX = {"production": "app", "staging": "app", "internal": "app", "duty": "duty"}
+
+
+def _load(domain=None, env=None, **overrides):
+    values = {}
+    if domain is not None:
+        values["variables/mapflow_ru"] = domain
+    if env is not None:
+        values["variables/mapflow_env"] = env
+    values.update({f"mapflow_next/{key}": value for key, value in overrides.items()})
+    return load_config(type("S", (), {"value": lambda self, k, d=None: values.get(k, d)})())
+
+
+@pytest.mark.parametrize("value", ["true", "TRUE", " True ", "tRuE\n", True])
+def test_the_variable_mapflow_ru_turns_the_domain_on(value):
+    assert _load(value).domain == "mapflow.ru"
+
+
+@pytest.mark.parametrize("value", [None, "", "  ", "false", "False", "1", "yes", "on", "tru", "truee", "t rue",
+                                   False, 1, 0])
+def test_every_other_value_of_mapflow_ru_keeps_the_default_domain(value):
+    assert _load(value).domain == "mapflow.ai"
+
+
+@pytest.mark.parametrize("env", ENVIRONMENTS)
+@pytest.mark.parametrize("domain", ["mapflow.ai", "mapflow.ru"])
+def test_every_address_of_each_environment_carries_the_domain(env, domain):
+    config = _load("true" if domain == "mapflow.ru" else "", env=env)
+    prefix, realm = AUTH_PREFIX[env]
+    base = f"https://{prefix}.{domain}/auth/realms/{realm}/protocol/openid-connect"
+    web = f"https://{WEB_PREFIX[env]}.{domain}"
+    assert config.domain == domain and config.env == env
+    assert config.server == f"https://whitemaps-{env}.{domain}/rest"
+    assert config.authorize_url == f"{base}/auth" and config.token_url == f"{base}/token"
+    assert config.web_url == web and config.my_data_url == f"{web}/my-data"
+    assert config.signed_in_url == f"https://app.{domain}"
+    assert config.redirect_uri == "http://127.0.0.1:7070/qgis"
+    links = config.links
+    assert links == Links.of(domain)
+    assert links.web == f"https://app.{domain}" and links.my_data == f"https://app.{domain}/my-data"
+    assert links.top_up == f"https://app.{domain}/account/balance"
+    assert links.ai_agent == f"https://app.{domain}/#home-top"
+    assert links.api_token == f"https://app.{domain}/account/api"
+    assert links.sign_up == f"https://app.{domain}"
+    assert links.projects == f"https://app.{domain}/en/projects"
+    assert links.team == f"https://app.{domain}/en/team"
+    assert links.pricing == f"https://{domain}/pricing"
+    assert links.docs == f"https://docs.{domain}/api/qgis_mapflow.html"
+    assert links.terms == f"https://{domain}/terms-of-use-en.pdf"
+    assert links.models_docs == f"https://docs.{domain}/userguides/pipelines.html"
+    assert links.custom_models == f"https://{domain}/custom-models"
+
+
+def test_the_default_links_are_the_addresses_the_plugin_always_had():
+    links = Links.of()
+    assert (links.web, links.my_data, links.top_up, links.pricing, links.ai_agent) == (
+        "https://app.mapflow.ai", "https://app.mapflow.ai/my-data", "https://app.mapflow.ai/account/balance",
+        "https://mapflow.ai/pricing", "https://app.mapflow.ai/#home-top")
+    assert (links.api_token, links.sign_up, links.projects, links.team) == (
+        "https://app.mapflow.ai/account/api", "https://app.mapflow.ai", "https://app.mapflow.ai/en/projects",
+        "https://app.mapflow.ai/en/team")
+    assert (links.docs, links.terms, links.models_docs, links.custom_models) == (
+        "https://docs.mapflow.ai/api/qgis_mapflow.html", "https://mapflow.ai/terms-of-use-en.pdf",
+        "https://docs.mapflow.ai/userguides/pipelines.html", "https://mapflow.ai/custom-models")
+    assert Config("production", "s").signed_in_url == "https://app.mapflow.ai"
+    assert Config("production", "s").links == links
+
+
+@pytest.mark.parametrize("env", ENVIRONMENTS)
+@pytest.mark.parametrize("on", ["", "true"])
+def test_the_overrides_are_used_as_written(env, on):
+    domain = "mapflow.ru" if on else "mapflow.ai"
+    config = _load(on, env=env, server="https://api.mapflow.ai/rest/", auth_url="https://sso.mapflow.ai/oidc/",
+                   web_url="https://web.mapflow.ai/")
+    assert config.server == "https://api.mapflow.ai/rest"
+    assert config.authorize_url == "https://sso.mapflow.ai/oidc/auth"
+    assert config.token_url == "https://sso.mapflow.ai/oidc/token"
+    assert config.web_url == "https://web.mapflow.ai" and config.my_data_url == "https://web.mapflow.ai/my-data"
+    assert config.links.web == f"https://app.{domain}"      # the other links still change
+    # each override alone leaves the other addresses to the domain
+    only_server = _load(on, env=env, server="http://localhost:9/rest")
+    assert only_server.server == "http://localhost:9/rest"
+    assert only_server.token_url.startswith(f"https://{AUTH_PREFIX[env][0]}.{domain}/")
+    assert only_server.web_url == f"https://{WEB_PREFIX[env]}.{domain}"
+    only_auth = _load(on, env=env, auth_url="http://localhost:9/oidc")
+    assert only_auth.token_url == "http://localhost:9/oidc/token"
+    assert only_auth.server == f"https://whitemaps-{env}.{domain}/rest"
+    only_web = _load(on, env=env, web_url="http://localhost:9/")
+    assert only_web.web_url == "http://localhost:9" and only_web.my_data_url == "http://localhost:9/my-data"
+    assert only_web.server == f"https://whitemaps-{env}.{domain}/rest"
+
+
+@pytest.mark.parametrize("env", ENVIRONMENTS)
+def test_the_saved_sign_in_is_the_same_for_both_domains(env):
+    off, on = _load("", env=env), _load("true", env=env)
+    assert off.token_config_name == on.token_config_name == f"mapflow_next_token_{env}"
+    assert off.refresh_token_key == on.refresh_token_key == f"mapflow_next/{env}/refresh_token"
+    assert off.redirect_uri == on.redirect_uri
+
+
+@pytest.mark.parametrize("url, expected", [
+    ("https://mapflow.ai/a", "https://mapflow.ru/a"),
+    ("https://tiles.mapflow.ai/a.png", "https://tiles.mapflow.ru/a.png"),
+    ("https://a.b.mapflow.ai/x", "https://a.b.mapflow.ru/x"),
+    ("https://TILES.MapFlow.AI/x", "https://TILES.mapflow.ru/x"),
+    ("HTTPS://tiles.mapflow.ai/x", "HTTPS://tiles.mapflow.ru/x"),
+    ("http://tiles.mapflow.ai/x", "http://tiles.mapflow.ru/x"),
+    ("https://tiles.mapflow.ai:8443/x", "https://tiles.mapflow.ru:8443/x"),
+    ("https://user:pw@tiles.mapflow.ai/x", "https://user:pw@tiles.mapflow.ru/x"),  # pragma: allowlist secret
+    ("https://tiles.mapflow.ai", "https://tiles.mapflow.ru"),
+    ("https://tiles.mapflow.ai?k=v", "https://tiles.mapflow.ru?k=v"),
+    ("https://tiles.mapflow.ai#frag", "https://tiles.mapflow.ru#frag"),
+    ("https://tiles.mapflow.ai/p/q.tif?X-Amz-Signature=a%2Fb&x=1#f",
+     "https://tiles.mapflow.ru/p/q.tif?X-Amz-Signature=a%2Fb&x=1#f"),
+    ("https://tiles.mapflow.ai/p?", "https://tiles.mapflow.ru/p?"),
+    ("https://tiles.mapflow.ai/a/mapflow.ai/b?u=mapflow.ai", "https://tiles.mapflow.ru/a/mapflow.ai/b?u=mapflow.ai"),
+    ("https://{s}.mapflow.ai/{z}/{x}/{y}.png?k=v%2Fw", "https://{s}.mapflow.ru/{z}/{x}/{y}.png?k=v%2Fw"),
+])
+def test_an_address_of_the_old_domain_gets_the_new_one(url, expected):
+    from mapflow_next.core.domain import with_domain
+    assert with_domain(url, "mapflow.ai", "mapflow.ru") == expected
+
+
+@pytest.mark.parametrize("url", [
+    "https://evilmapflow.ai/a", "https://mapflow.ai.evil.com/a", "https://tiles.mapflow.ai.evil.com/a",
+    "https://evil.com/mapflow.ai", "https://evil.com/?u=https://mapflow.ai/a", "https://evil.com/#mapflow.ai",
+    "https://mapflow.ai@evil.com/a", "https://mapflow.ai:pw@evil.com/a",  # pragma: allowlist secret
+    "https://mapflow.ai./a",
+    "https://tiles.mapflow.ai./a", "ftp://tiles.mapflow.ai/a", "file://tiles.mapflow.ai/a",
+    "mailto:help@mapflow.ai", "help@mapflow.ai", "//tiles.mapflow.ai/a", "/rest/a/mapflow.ai", "tiles.mapflow.ai/a",
+    "", "mapflow.ai", "not an address", "https://[::1]/a", "https://[mapflow.ai]/a", "https://mapflow.ru/a",
+    "https://tiles.mapflow.ai:port/a/", "javascript://tiles.mapflow.ai/%0a",
+])
+def test_an_address_that_is_not_of_the_old_domain_stays(url):
+    from mapflow_next.core.domain import with_domain
+    assert with_domain(url, "mapflow.ai", "mapflow.ru") == url
+
+
+def test_the_same_domain_and_a_value_that_is_not_text_stay():
+    from mapflow_next.core.domain import with_domain
+    assert with_domain("https://tiles.mapflow.ai/a", "mapflow.ai", "mapflow.ai") == "https://tiles.mapflow.ai/a"
+    assert with_domain(None, "mapflow.ai", "mapflow.ru") is None
+    assert with_domain(b"https://tiles.mapflow.ai/a", "mapflow.ai", "mapflow.ru") == b"https://tiles.mapflow.ai/a"
+
+
+def test_the_domain_function_does_not_hold_the_address_of_the_domain():
+    text = (PLUGIN / "core" / "domain.py").read_text(encoding="utf-8")
+    assert "mapflow.ai" not in text.lower() and "mapflow.ru" not in text.lower()
+
+
+def test_the_report_names_the_domain():
+    from mapflow_next.core.report import Environment, technical_text
+    environment = Environment("4.0.0", "3.28.15", "5.15.3", "Linux", "production", "mapflow.ru")
+    text = technical_text("E: x", "", None, environment)
+    assert "Domain: mapflow.ru" in text
+    assert text.index("Environment: production") < text.index("Domain: mapflow.ru")
+
+
+# The plugin has one place for the default domain, `config.py`; every link comes from `Config.links`.
+def rule_no_address_of_the_domain(source):
+    return [(number, "an address of mapflow.ai belongs in config.py; read it from Config.links")
+            for number, line in enumerate(source.splitlines(), 1) if "mapflow.ai" in line.lower()]
+
+
+def rule_the_domain_rule_is_called_where_the_address_is_used(source):
+    return [(number, "with_domain is called by api/http.py and qgis_bridge/layers.py only")
+            for number, line in enumerate(source.splitlines(), 1) if "with_domain(" in line]
+
+
+def rule_the_variable_has_no_control(source):
+    return [(number, "mapflow_ru and mapflow.ru belong in config.py: the plugin has no control or text for it")
+            for number, line in enumerate(source.splitlines(), 1)
+            if "mapflow_ru" in line.lower() or "mapflow.ru" in line.lower()]
+
+
+def _problems_outside(rule, allowed):
+    problems = []
+    for path in sorted(PLUGIN.rglob("*.py")):
+        name = str(path.relative_to(PLUGIN))
+        if name not in allowed:
+            problems += [f"{name}:{number}: {why}" for number, why in rule(path.read_text(encoding="utf-8"))]
+    return problems
+
+
+def test_no_address_of_the_default_domain_outside_the_configuration():
+    _bites(rule_no_address_of_the_domain, 'URL = "https://app.mapflow.ai/x"\n', 'URL = config.Links.of().web\n')
+    _bites(rule_no_address_of_the_domain, "x = 'https://MapFlow.AI'\n", "email = 'help@geoalert.io'\n")
+    assert _problems_outside(rule_no_address_of_the_domain, {"config.py"}) == []
+
+
+def test_only_http_and_the_layers_apply_the_domain_rule():
+    _bites(rule_the_domain_rule_is_called_where_the_address_is_used, "url = with_domain(url, a, b)\n",
+           "from .domain import with_domain\n")
+    assert _problems_outside(rule_the_domain_rule_is_called_where_the_address_is_used,
+                             {"api/http.py", "qgis_bridge/layers.py", "core/domain.py"}) == []
+
+
+def test_the_variable_mapflow_ru_has_no_control_text_or_message():
+    _bites(rule_the_variable_has_no_control, 'label = "mapflow_ru"\n', "label = 'Region'\n")
+    _bites(rule_the_variable_has_no_control, "text = 'use mapflow.ru'\n", "text = 'use the proxy'\n")
+    assert _problems_outside(rule_the_variable_has_no_control, {"config.py"}) == []
 
 
 def test_pkce_and_authorize_url():
@@ -1677,7 +1886,7 @@ REMOVED = "[removed]"
 def _environment():
     from mapflow_next.core.report import Environment
     return Environment(plugin_version="4.0.0", qgis_version="3.28.15", qt_version="5.15.3",
-                       os="Linux-6.8-x86_64", env="staging")
+                       os="Linux-6.8-x86_64", env="staging", domain="mapflow.ai")
 
 
 @pytest.mark.parametrize("text, secret", [

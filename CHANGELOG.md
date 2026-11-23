@@ -30,6 +30,7 @@
     - The sign-in page has a "Terms of use" link that opens the terms in your browser
     - The XYZ/TMS tile layers of the QGIS project can be the imagery of a processing: the run form lists them under "QGIS tile layers", with the zooms of the layer (up to 21). A layer with a login (or a Basic authentication configuration) asks first, because the login goes to Mapflow with the processing; a layer on this computer or a private network, with a referer or other headers, or with another kind of authentication configuration is listed disabled, with the reason. The processing card shows "Custom tile layer" and the host, never the address. Run again chooses the project layer with the same address
     - The Processings tab lists the planned processings (templates) of the project, before the other processings, each with a "search processing" mark, its name and its status. A click opens the project in Mapflow Web. They are not shown while you search, and when they don't load they are hidden without a message
+    - The QGIS global variable `mapflow_ru`, set to `true`, makes the plugin use the domain `mapflow.ru` in place of `mapflow.ai`: the API, the sign-in, Mapflow Web, the links, and the addresses in Mapflow's answers. Your saved sign-in stays valid when you turn it on or off. The plugin has no setting for it; support gives it to a user who needs it. E-mail addresses do not change
     - Not carried over yet: creating and managing planned processings (Mapflow Web does it), translations (es, pt, ru, zh; planned for 4.1)
 
 ## 3.6.3

@@ -8,7 +8,7 @@ from qgis.PyQt.QtGui import QDesktopServices, QFont, QFontMetrics, QKeySequence,
 from qgis.PyQt.QtWidgets import (QAbstractButton, QButtonGroup, QDialog, QFrame, QGridLayout, QHBoxLayout, QLabel,
                                  QLineEdit, QScrollArea, QShortcut, QSizePolicy, QStackedWidget, QVBoxLayout, QWidget)
 
-from .. import config
+from ..config import Links
 from ..core.scenarios import Catalogue, Scenario
 from . import icons
 from .start_page import plain, scenario_pixmap
@@ -181,9 +181,10 @@ class ScenarioCard(FocusRing, QAbstractButton):
 class GalleryDialog(QDialog):
     scenarioChosen = pyqtSignal(str)
 
-    def __init__(self, catalogue: Catalogue, parent=None):
+    def __init__(self, catalogue: Catalogue, links: Links, parent=None):
         super().__init__(parent)
         self.catalogue = catalogue
+        self.links = links
         self.setObjectName("mfRoot")
         self.setWindowTitle("Mapflow — Scenarios")
         self.setWindowIcon(icons.app_icon(is_dark()))
@@ -236,8 +237,8 @@ class GalleryDialog(QDialog):
         help_card = Card(margins=(14, 14, 14, 14), spacing=6)
         help_card.add(label("Need a different object?", "title"))
         help_card.add(label("We train custom models on your imagery and classes.", "meta", wrap=True))
-        help_card.add(link("Request a custom model", config.CUSTOM_MODELS_URL))
-        help_card.add(link("Models and benchmarks", config.MODELS_DOCS_URL))
+        help_card.add(link("Request a custom model", self.links.custom_models))
+        help_card.add(link("Models and benchmarks", self.links.models_docs))
         layout.addWidget(help_card)
         return side
 
@@ -341,7 +342,7 @@ class GalleryDialog(QDialog):
         self.visible = [self.cards[s.id] for s in scenarios]
         self.empty.set("info", "" if scenarios else
                        "No scenario matches that search. Try another word, browse the categories, or "
-                       f"<a href='{config.CUSTOM_MODELS_URL}'>ask us to train a model</a> for your objects.")
+                       f"<a href='{self.links.custom_models}'>ask us to train a model</a> for your objects.")
         self._reflow(force=True)
         self.scroll.verticalScrollBar().setValue(0)
 
@@ -427,12 +428,12 @@ class GalleryDialog(QDialog):
         self.primary = button("Use this scenario", "primary", "play", size="lg")
         self.primary.clicked.connect(self._use)
         docs = button("Model docs", "outline", "book", size="lg", external=True)
-        docs.clicked.connect(guarded(lambda: QDesktopServices.openUrl(QUrl(config.MODELS_DOCS_URL))))
+        docs.clicked.connect(guarded(lambda: QDesktopServices.openUrl(QUrl(self.links.models_docs))))
         actions.addWidget(self.primary)
         actions.addWidget(docs)
         actions.addStretch(1)
         right.addLayout(actions)
-        right.addWidget(link("Try it in Mapflow Web", config.WEB_URL))
+        right.addWidget(link("Try it in Mapflow Web", self.links.web))
         right.addStretch(1)
         columns.addLayout(left, 11)
         columns.addLayout(right, 10)
@@ -494,7 +495,7 @@ class GalleryDialog(QDialog):
         if not self.current:
             return
         if self.current.custom:
-            QDesktopServices.openUrl(QUrl(config.CUSTOM_MODELS_URL))
+            QDesktopServices.openUrl(QUrl(self.links.custom_models))
             return
         self.scenarioChosen.emit(self.current.id)
 

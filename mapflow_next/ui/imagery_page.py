@@ -10,6 +10,7 @@ from qgis.PyQt.QtWidgets import (QComboBox, QDateEdit, QGridLayout, QHBoxLayout,
                                  QPushButton, QScrollArea, QSlider, QToolButton, QVBoxLayout, QWidget)
 
 from .. import config
+from ..config import Links
 from ..core import formatting
 from ..core.failures import empty_list_text
 from ..core.models import CatalogImage, Mosaic
@@ -39,8 +40,9 @@ class ImageryPage(QWidget):
     layerChosen = pyqtSignal(str)
     clearRequested = pyqtSignal()
 
-    def __init__(self, parent=None):
+    def __init__(self, links: Links, parent=None):
         super().__init__(parent)
+        self.links = links
         self.setObjectName("mfPage")
         self._thumbs: Dict[str, QLabel] = {}
         self._pixmaps: Dict[str, QPixmap] = {}      # loaded thumbnails, kept while the results are
@@ -54,7 +56,7 @@ class ImageryPage(QWidget):
         self.geotiff_layers: Callable[[], List[Tuple[str, str]]] = lambda: []
         # (file, name) of the GeoTIFFs a drag carries; the controller sets it
         self.parse_drop: Callable[[object], List[Tuple[str, str]]] = lambda mime: []
-        self.my_data_url = config.WEB_URL + config.MY_DATA_PATH     # the controller sets the environment's
+        self.my_data_url = links.my_data     # the controller sets the environment's
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         scroll = QScrollArea(self)
@@ -182,7 +184,7 @@ class ImageryPage(QWidget):
         self.results = QVBoxLayout()
         self.results.setSpacing(8)
         layout.addLayout(self.results)
-        layout.addWidget(link("Get advanced imagery search tools in Mapflow Web", config.WEB_URL))
+        layout.addWidget(link("Get advanced imagery search tools in Mapflow Web", self.links.web))
         layout.addStretch(1)
         return page
 

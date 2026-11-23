@@ -3,12 +3,12 @@ from __future__ import annotations
 
 from typing import Dict, List, Optional
 
-from qgis.PyQt.QtCore import QSize, Qt, QTimer, QUrl, pyqtSignal
-from qgis.PyQt.QtGui import QDesktopServices, QKeySequence
+from qgis.PyQt.QtCore import QSize, Qt, QTimer, pyqtSignal
+from qgis.PyQt.QtGui import QKeySequence
 from qgis.PyQt.QtWidgets import (QDialog, QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QMenu, QScrollArea,
                                  QShortcut, QSizePolicy, QVBoxLayout, QWidget)
 
-from .. import config
+from ..config import Links
 from ..core import formatting
 from ..core.models import Project, Role
 from . import icons
@@ -151,8 +151,9 @@ class ProjectsDialog(QDialog):
     renameRequested = pyqtSignal(str)
     deleteRequested = pyqtSignal(str)
 
-    def __init__(self, parent=None):
+    def __init__(self, links: Links, parent=None):
         super().__init__(parent)
+        self.links = links
         self.setObjectName("mfRoot")
         self.setWindowTitle("Mapflow projects")
         self.setStyleSheet(stylesheet())
@@ -178,7 +179,7 @@ class ProjectsDialog(QDialog):
         self.count = label("", "meta")
         head.addWidget(self.count, 0, Qt.AlignmentFlag.AlignBottom)
         head.addStretch(1)
-        team = link("Team in Mapflow Web", config.TEAM_URL)
+        team = link("Team in Mapflow Web", self.links.team)
         team.setIcon(icons.icon("users", tokens()["link"], 14))
         head.addWidget(team)
         share = link("Share project in Mapflow Web", lambda: "")      # opens the current project
@@ -348,7 +349,3 @@ class ProjectsDialog(QDialog):
     @guarded(default=QSize(-1, -1))
     def sizeHint(self) -> QSize:
         return QSize(900, 640)
-
-
-def open_in_web(url: str = config.PROJECTS_URL) -> None:
-    QDesktopServices.openUrl(QUrl(url))

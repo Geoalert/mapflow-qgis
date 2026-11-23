@@ -4,7 +4,7 @@ from __future__ import annotations
 from qgis.PyQt.QtCore import Qt, pyqtSignal
 from qgis.PyQt.QtWidgets import QHBoxLayout, QLabel, QLineEdit, QScrollArea, QVBoxLayout, QWidget
 
-from .. import config
+from ..config import Links
 from . import icons
 from .theme import is_dark, tokens
 from .widgets import Callout, button, hbox, label, link, rule, vbox
@@ -20,8 +20,9 @@ class SignInPage(QWidget):
     tokenSubmitted = pyqtSignal(str)
     networkSettingsRequested = pyqtSignal()
 
-    def __init__(self, parent=None):
+    def __init__(self, links: Links, parent=None):
         super().__init__(parent)
+        self.links = links
         self.setObjectName("mfPage")
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -70,8 +71,8 @@ class SignInPage(QWidget):
         layout.addWidget(self.cancel, 0, Qt.AlignmentFlag.AlignHCenter)
 
         create = button("Create a free account", "outline", external=True, size="lg")
-        create.setToolTip(config.SIGN_UP_URL)
-        create.clicked.connect(guarded(lambda: _open(config.SIGN_UP_URL)))
+        create.setToolTip(self.links.sign_up)
+        create.clicked.connect(guarded(lambda: _open(self.links.sign_up)))
         gift = QLabel(body)
         gift.setPixmap(icons.gift_pixmap(tokens()["muted"]))
         credits = hbox(None, gift, label("250 free credits to start", "meta"), None, spacing=5)
@@ -103,7 +104,7 @@ class SignInPage(QWidget):
         row.addWidget(self.token, 1)
         row.addWidget(self.token_button)
         token_layout.addLayout(row)
-        token_layout.addWidget(link("Get your token in Mapflow Web", config.API_TOKEN_URL))
+        token_layout.addWidget(link("Get your token in Mapflow Web", self.links.api_token))
         self.token_box.setVisible(False)
         layout.addWidget(self.token_box)
 
@@ -114,11 +115,11 @@ class SignInPage(QWidget):
         footer = QHBoxLayout()
         footer.setSpacing(16)
         footer.addWidget(network)
-        footer.addWidget(link("Plugin guide", config.DOCS_URL))
+        footer.addWidget(link("Plugin guide", self.links.docs))
         footer.addStretch(1)
         layout.addLayout(footer)
         # a row of its own: three links do not fit the 352 px of a narrow dock
-        self.terms = link("Terms of use", config.TERMS_URL)
+        self.terms = link("Terms of use", self.links.terms)
         terms_row = QHBoxLayout()
         terms_row.setSpacing(16)
         terms_row.addWidget(self.terms)

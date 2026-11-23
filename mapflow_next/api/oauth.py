@@ -147,14 +147,15 @@ class BrowserSignIn(QObject):
         elif redirect.kind == "error":
             self._stop()
             self._answer(socket, oauth.http_response("200 OK", oauth.page(
-                "Sign-in didn't complete", "Return to QGIS and try again.", cfg.SIGNED_IN_URL, "Open Mapflow Web")))
+                "Sign-in didn't complete", "Return to QGIS and try again.", self.config.signed_in_url,
+                "Open Mapflow Web")))
             self.failed.emit(f"Sign-in didn't complete ({redirect.value}). Try again.")
         else:
             verifier = self._verifier
             self._stop()
             self._answer(socket, oauth.http_response("302 Found", oauth.page(
-                "You're signed in", "Return to QGIS to continue.", cfg.SIGNED_IN_URL, "Open Mapflow Web"),
-                location=cfg.SIGNED_IN_URL))
+                "You're signed in", "Return to QGIS to continue.", self.config.signed_in_url, "Open Mapflow Web"),
+                location=self.config.signed_in_url))
             exchange_code(self.http, self.config, redirect.value, verifier, self.succeeded.emit, self._exchange_failed)
 
     def _exchange_failed(self, error: ApiError) -> None:

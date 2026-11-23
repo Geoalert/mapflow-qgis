@@ -154,7 +154,8 @@ class MapflowApi:
                       on_error=on_error)
 
     def tilejson(self, url: str, on_done: Callable[[dict], None], on_error: OnError = None) -> None:
-        self.http.get(url, on_success=on_done, on_error=on_error, timeout=20)
+        """`url` is an address from a server answer: the domain in use applies (`Http`)."""
+        self.http.get(url, on_success=on_done, on_error=on_error, timeout=20, answered=True)
 
     # ---------- imagery ----------
 
@@ -245,7 +246,7 @@ class MapflowApi:
         """The file behind a presigned address, streamed to `target`. The address is another host's: the request
         carries no Mapflow credentials. It has a long timeout of silence, for files of several GB."""
         self.http.download(url, target, on_success=on_done, on_error=on_error, timeout=IMAGE_DOWNLOAD_TIMEOUT_S,
-                           on_progress=on_progress, authorize=False)
+                           on_progress=on_progress, authorize=False, answered=True)
 
     def validate_image(self, metadata: dict, on_done: Callable[[dict], None], on_error: OnError = None) -> None:
         """Ask Mapflow whether an image is acceptable before uploading it (POST rasters/validate-image-metadata,
@@ -254,4 +255,4 @@ class MapflowApi:
                        on_error=on_error)
 
     def preview(self, url: str, on_done: Callable[[bytes], None], on_error: OnError = None) -> None:
-        self.http.get(url, on_success=on_done, on_error=on_error, parse="bytes", timeout=30)
+        self.http.get(url, on_success=on_done, on_error=on_error, parse="bytes", timeout=30, answered=True)

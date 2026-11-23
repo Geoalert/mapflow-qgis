@@ -129,7 +129,9 @@ That is the rule; today the controller also holds the run form's state itself. `
 - **API:** the same endpoints and v2 processing payload (`processings/v2`, `processing/cost/v2`,
   `projects/{id}/processings/v2/page`, `catalog/meta`, `rasters/mosaic…`, `processings/{id}/result`).
 - **Sign-in:** the same Mapflow sign-in client (`qgis`) and redirect address
-  (`http://127.0.0.1:7070/qgis`). The `mapflow_env` QGIS variable picks the environment, as before.
+  (`http://127.0.0.1:7070/qgis`). The `mapflow_env` QGIS variable picks the environment, as before. The
+  `mapflow_ru` QGIS variable, set to `true`, switches the plugin to the domain `mapflow.ru` in place of `mapflow.ai`
+  (support gives it to a user who needs it); the saved sign-in stays valid.
 - **Area rules** (spec 002_B):
   - The area is measured on the union of its parts, and each part is repaired first.
   - The plan limit is checked both on the total and on each polygon's bounding box.

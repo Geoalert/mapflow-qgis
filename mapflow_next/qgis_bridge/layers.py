@@ -17,8 +17,9 @@ from qgis.core import (QgsCoordinateReferenceSystem, QgsCoordinateTransform, Qgs
 
 from qgis.PyQt.QtGui import QImage
 
-from ..config import LAYER_GROUP_NAME, PREVIEW_PROPERTY, PROCESSING_PROPERTY, RESOURCES
+from ..config import DOMAIN, LAYER_GROUP_NAME, PREVIEW_PROPERTY, PROCESSING_PROPERTY, RESOURCES
 from ..core import filenames
+from ..core.domain import with_domain
 from ..core.models import Mosaic, Processing
 from ..core.tile_layers import TileOffer
 from . import styles, tile_layers
@@ -121,8 +122,13 @@ def features_extent(collection: dict) -> Optional[QgsRectangle]:
 
 
 class MapLayers:
-    def __init__(self, iface, project: Optional[QgsProject] = None):
+    """`domain` is the one the plugin uses in place of the default: the tile addresses that Mapflow's answers give
+    (results, imagery previews) change to it when they become a layer source. The address of a QGIS tile layer
+    does not come here."""
+
+    def __init__(self, iface, project: Optional[QgsProject] = None, domain: str = DOMAIN):
         self.iface = iface
+        self.domain = domain
         self.project = project or QgsProject.instance()
         self._temp: Optional[Path] = None
         self._closed = False
@@ -223,7 +229,7 @@ class MapLayers:
 
     def tile_raster(self, url: str, name: str, extent: Optional[QgsRectangle] = None,
                     zmax: int = 21) -> Optional[QgsRasterLayer]:
-        layer = QgsRasterLayer(xyz_uri(url, 0, zmax), name, "wms")
+        layer = QgsRasterLayer(xyz_uri(with_domain(url, DOMAIN, self.domain), 0, zmax), name, "wms")
         if not layer.isValid():
             return None
         if extent is not None:
@@ -333,7 +339,8 @@ class MapLayers:
     def vector_tiles(self, processing: Processing) -> Optional[QgsVectorTileLayer]:
         if not processing.vector_tile_url:
             return None
-        layer = QgsVectorTileLayer(xyz_uri(processing.vector_tile_url, 0, 18), processing.name)
+        url = with_domain(processing.vector_tile_url, DOMAIN, self.domain)
+        layer = QgsVectorTileLayer(xyz_uri(url, 0, 18), processing.name)
         if not layer.isValid():
             return None
         styles.apply(layer, processing.model_name, processing.style_name)

@@ -33,6 +33,7 @@ class Environment:
     qt_version: str
     os: str
     env: str                 # production, staging, ...
+    domain: str              # the domain in use, from `config.Config.domain`
 
 
 def without_query(url: str) -> str:
@@ -158,7 +159,8 @@ def technical_text(summary: str, details: str, request: Optional[RequestInfo], e
              f"QGIS: {environment.qgis_version}",
              f"Qt: {environment.qt_version}",
              f"OS: {environment.os}",
-             f"Environment: {environment.env}"]
+             f"Environment: {environment.env}",
+             f"Domain: {environment.domain}"]
     if request is not None:
         body = redact(request.body or "", secrets)       # redact first: a cut could leave half a token
         if len(body) > BODY_LIMIT:
