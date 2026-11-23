@@ -26,6 +26,7 @@ from qgis.core import (QgsRectangle,
 
 from .app_context import AppContext
 from ..config import Config
+from ..domain import url_with_domain
 from ..dialogs.error_message_widget import ErrorMessageWidget
 from .geometry import clip_aoi_to_catalog_extent
 from .helpers import WGS84, to_wgs84, WGS84_ELLIPSOID
@@ -241,11 +242,12 @@ def generate_raster_layer(layer_uri,
                           username=None,
                           password=None,
                           ):
+    """A raster tile layer for a tile address that the Mapflow server gave (a result, a collection)."""
     if not layer_uri:
         return None
     params = {
         'type': 'xyz',
-        'url': layer_uri,
+        'url': url_with_domain(layer_uri, Config.DOMAIN),
         'zmin': min_zoom,
         'zmax': max_zoom,
     }
@@ -266,11 +268,12 @@ def generate_vector_layer(layer_uri,
                           username=None,
                           password=None,
                           ):
+    """A vector tile layer for a tile address that the Mapflow server gave (a result)."""
     if not layer_uri:
         return None
     params = {
         'type': 'xyz',
-        'url': layer_uri,
+        'url': url_with_domain(layer_uri, Config.DOMAIN),
         'zmin': min_zoom,
         'zmax': max_zoom,
     }
@@ -747,7 +750,7 @@ class ResultsLoader(QObject):
                 self.message_bar.pushMessage(self.tr("Error"), text)
                 return
         # COG: Add the source raster if it has been created
-        raster_url = processing.rasterLayer.tileUrl
+        raster_url = url_with_domain(processing.rasterLayer.tileUrl, Config.DOMAIN)
         tile_json_url = processing.rasterLayer.tileJsonUrl
         if raster_url:
             params = {

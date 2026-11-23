@@ -26,6 +26,7 @@ from qgis.core import (
 
 from . import constants
 from .config import Config, ConfigColumns
+from .domain import url_with_domain
 from .errors import (BadProcessingInput,
                      ErrorMessage,
                      ImageIdRequired,
@@ -3322,6 +3323,8 @@ class Mapflow(QObject):
                        preview_type: str,
                        provider_name: str,
                        image_date: str):
+        # The address comes from the search answer of the server: it goes to the Mapflow domain in use
+        url = url_with_domain(url, self.config.DOMAIN)
         uri = layer_utils.generate_xyz_layer_definition(url=url, source_type=preview_type)
         tile_layer = QgsRasterLayer(uri, provider_name, "wms")
         tiles_to_delete = [layer.id() for layer in self.app_context.project.mapLayers().values()
@@ -3399,7 +3402,10 @@ class Mapflow(QObject):
             return
         except Exception as e:
             self.alert(str(e), QMessageBox.Warning)
-            return         
+            return
+        if isinstance(provider, DefaultProvider):
+            # The server gave this address. The address of a user's own provider is never changed.
+            url = url_with_domain(url, self.config.DOMAIN)
         uri = layer_utils.generate_xyz_layer_definition(url,
                                                         provider.source_type,
                                                         preview_max_zoom or max_zoom,
@@ -4007,7 +4013,8 @@ class Mapflow(QObject):
         """Compose and memorize the user's credentils as Basic Auth."""
         if self.use_oauth:
             auth_id, new_auth = get_auth_id(self.config.AUTH_CONFIG_NAME,
-                                             self.config.AUTH_CONFIG_MAP)
+                                             self.config.AUTH_CONFIG_MAP,
+                                             self.config.DOMAIN)
             if new_auth:
                 self.alert(self.tr("We have just set the authentication config for you. \n"
                                        " You may need to restart QGIS to apply it so you could log in"),

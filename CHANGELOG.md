@@ -1,3 +1,6 @@
+## 3.6.4
+    - The plugin can work through the domain mapflow.ru, for networks that cannot reach mapflow.ai. Set the QGIS global variable `mapflow_ru` to `true` (Settings → Options → Variables) and restart QGIS: the plugin then uses mapflow.ru for the Mapflow API, the sign-in, the previews and results, and every link. It is the same service and the same account
+
 ## 3.6.3
     - Fix: downloading an image from My imagery could crash QGIS, or finish without saving anything — mostly for large images, whose download lasts long enough for Python's garbage collector to discard the code waiting for it to finish. The plugin now holds each download until it completes
     - Downloaded images are streamed to disk as they arrive instead of being held in memory, so multi-GB images (beyond Qt's 2 GiB buffer limit) can be saved. The file replaces the chosen path only once the download has succeeded: a failed download leaves no partial file and keeps any file already there

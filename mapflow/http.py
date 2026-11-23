@@ -6,7 +6,9 @@ from PyQt5.QtCore import QBuffer, QByteArray, QObject, QTimer, QUrl, qVersion
 from PyQt5.QtNetwork import QHttpMultiPart, QNetworkReply, QNetworkRequest
 from qgis.core import QgsNetworkAccessManager, Qgis, QgsApplication, QgsAuthMethodConfig, QgsMessageLog
 
+from .config import config
 from .constants import DEFAULT_HTTP_TIMEOUT_SECONDS
+from .domain import url_with_domain
 from .errors import ErrorMessage, ProxyIsAlreadySet
 
 
@@ -143,6 +145,9 @@ class Http(QObject):
             # relative path that is bound to the self.server, allowes to NOT repeat the server loaction
             url = f"{self.server}/{path.lstrip('/')}"
 
+        # An address from a server answer (a preview, a tile description, a download) can have the
+        # default Mapflow domain. With the `mapflow_ru` variable it must go to the domain in use.
+        url = url_with_domain(url, config.DOMAIN)
         request = QNetworkRequest(QUrl(url))
         if isinstance(body, bytes):
             request.setHeader(QNetworkRequest.ContentTypeHeader, 'application/json')

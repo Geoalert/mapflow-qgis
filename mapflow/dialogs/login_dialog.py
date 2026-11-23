@@ -3,6 +3,7 @@ from pathlib import Path
 from PyQt5 import uic
 from PyQt5.QtWidgets import QWidget
 
+from .domain_labels import labels_on_domain
 from .icons import plugin_icon
 
 ui_path = Path(__file__).parent/'static'/'ui'
@@ -38,6 +39,7 @@ class MapflowLoginDialog(*uic.loadUiType(ui_path / 'login_dialog.ui')):
             self.needAnAccount.setText(self.tr('<html><head/><body><p><a href="https://app.mapflow.ai/account/api"><span style=" text-decoration: underline; color:#0057ae;">Get token</span></a></p><p><a href="https://mapflow.ai/terms-of-use-en.pdf"><span style=" text-decoration: underline; color:#0057ae;">Terms of use</span></a></p><p>Register at <a href="https://mapflow.ai"><span style=" text-decoration: underline; color:#0057ae;">mapflow.ai</span></a> to use the plugin</p><p><br/></p></body></html>'))
             self.invalidToken.setText(self.tr('Invalid credentials'))
             self.invalidToken.setStyleSheet('color: rgb(239, 41, 41);')
+        labels_on_domain(self)  # the texts above have links with the default Mapflow domain
         self.token.setText(token)
         self.token.setVisible(not use_oauth)
         self.labelPassword.setVisible(not use_oauth)
