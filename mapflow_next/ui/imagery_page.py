@@ -370,6 +370,17 @@ class ImageryPage(QWidget):
         self.upload_limit.setText(
             f"Upload RGB GeoTIFFs, up to {formatting.size_limit(max_bytes)} each, as a new collection.")
 
+    def set_storage_usage(self, used_bytes: Optional[int], limit_bytes: Optional[int]) -> None:
+        if used_bytes is None or limit_bytes is None or limit_bytes <= 0:
+            self.storage_badge.hide()
+            return
+        used_bytes = max(0, used_bytes)
+        used, limit = (value / 1024 ** 3 for value in (used_bytes, limit_bytes))
+        self.storage_amount.setText(f"{used:.1f} / {limit:.1f} GB")
+        self.storage_bar.setValue(min(100, round(used_bytes / limit_bytes * 100)))
+        set_prop(self.storage_bar, "storageWarning", used_bytes > limit_bytes * 0.8)
+        self.storage_badge.show()
+
     def _build_mine(self) -> QWidget:
         page = QWidget()
         page.setObjectName("mfScrollBody")
@@ -385,7 +396,7 @@ class ImageryPage(QWidget):
         self.drop = DropTarget(upload, lambda mime: self.parse_drop(mime))
         self.upload_button = button("Upload a GeoTIFF", "outline", "upload")
         self.upload_button.clicked.connect(guarded(lambda *_: self.uploadRequested.emit()))
-        self.layer_button = button("Choose from raster layers", "outline", "layers")
+        self.layer_button = button("Choose raster layers", "outline", "layers")
         self.layer_button.clicked.connect(guarded(lambda *_: self._choose_layers()))
         # The two ways in, side by side and sharing the width
         buttons = hbox(self.upload_button, self.layer_button, spacing=8)
@@ -401,8 +412,23 @@ class ImageryPage(QWidget):
         self.upload_message = Callout("info", "")
         upload.add(self.upload_message)
         layout.addWidget(upload)
-        self.mosaics_title = label("", "label")
-        layout.addWidget(self.mosaics_title)
+        self.mosaics_title = ElidedLabel("", "label")
+        self.storage_badge = Card(margins=(10, 4, 10, 7), spacing=3)
+        self.storage_badge.setObjectName("mfStorageBadge")
+        self.storage_link = link("Storage", self.links.top_up)
+        self.storage_badge.setToolTip("Increase storage")
+        self.storage_link.setToolTip(self.storage_badge.toolTip())
+        self.storage_amount = label("", "meta")
+        self.storage_badge.add(hbox(self.storage_link, None, self.storage_amount))
+        self.storage_bar = QProgressBar()
+        self.storage_bar.setObjectName("mfStorageUsage")
+        self.storage_bar.setAccessibleName("My imagery storage used")
+        self.storage_bar.setTextVisible(False)
+        self.storage_badge.add(self.storage_bar)
+        self.storage_badge.hide()
+        heading = hbox(self.mosaics_title, self.storage_badge)
+        heading.setStretch(0, 1)
+        layout.addLayout(heading)
         self.mosaic_list = QVBoxLayout()
         self.mosaic_list.setSpacing(8)
         layout.addLayout(self.mosaic_list)

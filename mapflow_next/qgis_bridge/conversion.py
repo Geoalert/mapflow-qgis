@@ -12,7 +12,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Set
 
-from qgis.core import (QgsCoordinateTransformContext, QgsFeedback, QgsTask, QgsVectorFileWriter, QgsVectorLayer)
+from osgeo import gdal, ogr
+from qgis.core import QgsFeedback, QgsTask
 
 from ..core.guard import guarded
 from .compat import TASK_CAN_CANCEL
@@ -36,7 +37,6 @@ class Job:
     work: Path                              # where the GeoPackage is written, in `.downloads/`
     target: Path                            # where the finished GeoPackage goes
     fallback: Path                          # where the GeoJSON goes when it can't be converted
-    transform_context: QgsCoordinateTransformContext
 
 
 @dataclass(frozen=True)
@@ -83,6 +83,69 @@ def normalise_json_fields(path: str) -> None:
             json.dump(data, handle)
 
 
+def _close_dataset(dataset) -> bool:
+    close = getattr(dataset, "Close", None)  # older bundled GDAL releases close on reference release
+    return close is None or close() in (None, gdal.CE_None)
+
+
+def _write_geometry_layers(job: Job, stop_if_canceled: Callable[[], None],
+                           report_progress: Callable[..., int]) -> Optional[List[str]]:
+    """Write through GDAL so QGIS's OGR iterator cache cannot retain a Windows lock on the download."""
+    try:
+        source = gdal.OpenEx(str(job.geojson), gdal.OF_VECTOR, allowed_drivers=["GeoJSON"])
+    except RuntimeError:
+        return []
+    if source is None:
+        return []
+
+    layer = None
+    try:
+        layer = source.GetLayer(0)
+        if layer is None:
+            return []
+        source_name = layer.GetName().replace("\\", "\\\\").replace('"', '\\"')
+        mixed = ogr.GT_Flatten(layer.GetGeomType()) == ogr.wkbUnknown
+        names: List[str] = []
+        for index, geometry_type in enumerate(GEOMETRY_TYPES):
+            stop_if_canceled()
+            kind = geometry_type.upper()
+            where = f"OGR_GEOMETRY IN ('{kind}', 'MULTI{kind}')"
+            layer.SetAttributeFilter(where)
+            if layer.GetFeatureCount() == 0:
+                continue
+            geometry = None
+            if mixed:
+                # GeoPackage layers need a declared geometry family even when GeoJSON mixes families.
+                layer.SetAttributeFilter(f"OGR_GEOMETRY = 'MULTI{kind}'")
+                geometry = f"MULTI{kind}" if layer.GetFeatureCount() else kind
+            layer.SetAttributeFilter(None)
+            layer_name = job.name if geometry_type == "Polygon" else f"{job.name} ({geometry_type.lower()}s)"
+            # OGRSQL reports a fast feature count for the filtered result, which GDAL needs to call progress.
+            selection = f'SELECT * FROM "{source_name}" WHERE {where}'
+            output = None
+            try:
+                output = gdal.VectorTranslate(str(job.work), source, format="GPKG", layerName=layer_name,
+                                              accessMode="append" if names else None,
+                                              SQLStatement=selection, SQLDialect="OGRSQL",
+                                              geometryType=geometry, callback=report_progress, callback_data=index)
+                written = output is not None and _close_dataset(output)
+            except RuntimeError:
+                written = False
+            finally:
+                del output
+            stop_if_canceled()                  # GDAL also reports cancellation as a write error
+            if not written:
+                return None
+            names.append(layer_name)
+        return names
+    finally:
+        del layer
+        try:
+            _close_dataset(source)
+        finally:
+            del source
+
+
 def convert_geojson(job: Job, is_canceled: Callable[[], bool], feedback: QgsFeedback,
                     progress: Callable[[float], None] = lambda _percent: None) -> Converted:
     """Write the GeoJSON to a GeoPackage (one layer per geometry type) and move it to `job.target`. Falls back to
@@ -90,37 +153,26 @@ def convert_geojson(job: Job, is_canceled: Callable[[], bool], feedback: QgsFeed
     The output folder never holds a partial file: the writes go to `job.work`, and only a finished file is moved."""
     job.work.parent.mkdir(parents=True, exist_ok=True)
 
+    def canceled() -> bool:
+        return is_canceled() or feedback.isCanceled()
+
     def stop_if_canceled() -> None:
-        if is_canceled() or feedback.isCanceled():
+        if canceled():
             raise Cancelled()
+
+    def report_progress(fraction: float, _message: str, index: int) -> int:
+        progress(100.0 * (index + fraction) / len(GEOMETRY_TYPES))
+        return int(not canceled())
 
     try:
         stop_if_canceled()
         normalise_json_fields(str(job.geojson))
-        names: List[str] = []
-        options = QgsVectorFileWriter.SaveVectorOptions()
-        options.driverName = "GPKG"
-        options.feedback = feedback             # a long write stops on cancel
-        for index, geometry_type in enumerate(GEOMETRY_TYPES):
-            stop_if_canceled()
-            progress(100.0 * index / len(GEOMETRY_TYPES))
-            source = QgsVectorLayer(f"{job.geojson}|geometrytype={geometry_type}", "source", "ogr")
-            if not source.isValid() or source.featureCount() == 0:
-                del source
-                continue
-            layer_name = job.name if geometry_type == "Polygon" else f"{job.name} ({geometry_type.lower()}s)"
-            options.layerName = layer_name
-            options.actionOnExistingFile = (QgsVectorFileWriter.ActionOnExistingFile.CreateOrOverwriteLayer if names
-                                            else QgsVectorFileWriter.ActionOnExistingFile.CreateOrOverwriteFile)
-            error, *_ = QgsVectorFileWriter.writeAsVectorFormatV3(
-                source, str(job.work), job.transform_context, options)
-            del source                          # the file is closed before it is moved or removed
-            stop_if_canceled()                  # the writer reports a cancel as an error: tell it apart
-            if error != QgsVectorFileWriter.WriterError.NoError:
-                remove_files(job.work, WORK_SUFFIXES)
-                job.geojson.replace(job.fallback)
-                return Converted(job.fallback, [job.name], GEOJSON)
-            names.append(layer_name)
+        remove_files(job.work, WORK_SUFFIXES)
+        names = _write_geometry_layers(job, stop_if_canceled, report_progress)
+        stop_if_canceled()
+        if names is None:
+            job.geojson.replace(job.fallback)
+            return Converted(job.fallback, [job.name], GEOJSON)
         progress(100.0)
         if not names:
             return Converted(job.target, [], GPKG)

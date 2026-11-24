@@ -110,6 +110,9 @@ class Controller(QObject):
         self._mosaic_refresh.setInterval(config.MOSAICS_REFRESH_MS)
         self._mosaic_refresh.timeout.connect(
             guarded(lambda: self._refresh_mosaics(config.MOSAICS_REFRESH_MS / 1000 - 1, poll=True)))
+        self._storage_refresh = QTimer(self)
+        self._storage_refresh.setInterval(config.STORAGE_REFRESH_MS)
+        self._storage_refresh.timeout.connect(self._poll_storage)
         self.content.imagery.my_data_url = session.config.my_data_url
         self._connect()
 
@@ -214,7 +217,7 @@ class Controller(QObject):
         self.imagery.mosaicsChanged.connect(self.on_mosaics)
         self.imagery.mosaicsFailed.connect(self.on_mosaics_failed)
         self.imagery.imagesFailed.connect(self.on_images_failed)
-        self.imagery.limitsChanged.connect(guarded(self._show_upload_limit))
+        self.imagery.limitsChanged.connect(guarded(self._show_storage_limits))
         self.imagery.limitsFailed.connect(self.on_limits_failed)
         self.imagery.notice.connect(guarded(lambda text: self.notify(text, Qgis.MessageLevel.Warning)))
         self.imagery.mosaicSearchChanged.connect(
@@ -251,6 +254,7 @@ class Controller(QObject):
         self._stopped = True
         self._mosaic_render.stop()
         self._mosaic_refresh.stop()
+        self._storage_refresh.stop()
         if self._projects_request:
             self.api.abort(self._projects_request)
             self._projects_request = 0
@@ -314,6 +318,7 @@ class Controller(QObject):
         elif state == SIGNED_OUT:
             sign_in.set_busy(False)
             self._mosaic_refresh.stop()
+            self._storage_refresh.stop()
             self.processings.stop()
             self.processings.set_project(None)
             # Sign-out aborts requests in flight, and aborted requests report nothing back
@@ -324,6 +329,7 @@ class Controller(QObject):
             # …nor do a start or an upload in flight: their busy flags would stay up after signing back in
             self.starting = False
             self.imagery.reset_busy()
+            self._show_storage_limits()
             self.imagery.forget_mosaics()
             self._choose_uploaded = self._use_pending = None
             self._extent_pending = False
@@ -340,6 +346,8 @@ class Controller(QObject):
             sign_in.clear()
             if not self._mosaic_refresh.isActive():
                 self._mosaic_refresh.start()
+            if not self._storage_refresh.isActive():
+                self._storage_refresh.start()
             self.content.set_account(self.session.email)
             self.content.set_project(self.session.project)
             self.content.show_signed_in()
@@ -642,6 +650,12 @@ class Controller(QObject):
             self.imagery.refresh_mosaics(max_age, poll)
             if not poll:
                 self.imagery.refresh_limits(max_age)
+
+    @guarded
+    def _poll_storage(self) -> None:
+        page = self.content.imagery
+        if self.session.state == SIGNED_IN and page.isVisible() and page.current_tab() == imagery_tabs.MINE:
+            self.imagery.refresh_limits(retain_on_failure=True)
 
     @guarded
     def on_tab(self, tab: int) -> None:
@@ -1702,12 +1716,13 @@ class Controller(QObject):
 
     @guarded
     def open_planned(self, planned_id: str) -> None:
-        """A planned processing is managed in Mapflow Web: open its project there."""
+        """Open the planned search in Mapflow Web."""
         row = next((x for x in self.processings.planned if x.id == planned_id), None)
         project = row.project_id if row and row.project_id else (
             self.session.project.id if self.session.project else "")
         web = self.session.config.web_url
-        QDesktopServices.openUrl(QUrl(f"{web}/projects/{project}" if project else web))
+        url = f"{web}/projects/{project}?processing={planned_id}" if project else web
+        QDesktopServices.openUrl(QUrl(url))
 
     @guarded
     def download_aoi(self, processing_id: str) -> None:
@@ -2119,8 +2134,10 @@ class Controller(QObject):
         if text:
             self.notify(text, Qgis.MessageLevel.Warning)
 
-    def _show_upload_limit(self) -> None:
-        self.content.imagery.set_upload_limit(self.imagery.limits.max_upload_bytes or config.UPLOAD_LIMIT_BYTES)
+    def _show_storage_limits(self) -> None:
+        limits = self.imagery.limits
+        self.content.imagery.set_upload_limit(limits.max_upload_bytes or config.UPLOAD_LIMIT_BYTES)
+        self.content.imagery.set_storage_usage(limits.storage_used_bytes, limits.storage_limit_bytes)
 
     @guarded
     def on_limits_failed(self, reason: str) -> None:

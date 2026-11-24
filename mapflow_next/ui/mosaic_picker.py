@@ -91,7 +91,7 @@ class MosaicPicker(QDialog):
         self.upload_button = button("Upload a GeoTIFF", "outline", "upload")
         self.upload_button.clicked.connect(guarded(lambda *_: self.uploadRequested.emit(self.current or "")))
         actions.addWidget(self.upload_button)
-        self.layer_button = button("Choose from raster layers", "outline", "layers")
+        self.layer_button = button("Choose raster layers", "outline", "layers")
         self.layer_button.clicked.connect(guarded(lambda *_: self._choose_layers()))
         actions.addWidget(self.layer_button)
         actions.addStretch(1)
@@ -239,7 +239,7 @@ class MosaicPicker(QDialog):
         for mosaic in shown[len(drawn):]:
             meta = " · ".join(t for t in (image_count_text(mosaic), formatting.size(mosaic.size_bytes)
                                           if mosaic.size_bytes else "") if t)
-            row = OptionRow(mosaic.name, meta)
+            row = OptionRow(mosaic.name, meta, elide_text=True)
             row.set_selected(mosaic.id == self.current)
             row.clicked.connect(guarded(lambda *_, mid=mosaic.id: self._row_clicked(mid)))
             self.list_box.insertWidget(len(self._rows), row)      # before the note, "Show more" and the stretch

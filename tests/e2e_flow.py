@@ -436,6 +436,8 @@ def check_the_guard(iface, plugin, api_url, settings, state):
 def check_no_report_for_connectivity(iface, plugin, state):
     """spec/006 § The report dialog: offline, a proxy error, a timeout, 403 and 5xx are message tier. They never
     reach the guard, so no Critical line and no "Send a report" button comes of them."""
+    import socket
+    from qgis.PyQt.QtNetwork import QNetworkReply
     from mapflow_next.api import http as http_module
     http = plugin.services[0]
     seen_lines, seen_widgets = len(iface.bar.ledger.unexpected()), len(iface.bar.widgets)
@@ -453,15 +455,21 @@ def check_no_report_for_connectivity(iface, plugin, state):
             kinds[name] = [e.kind for e in errors]
         state.heal()
         errors = []
-        http.get("http://127.0.0.1:1/unreachable", on_error=errors.append)      # nothing listens: refused
-        wait_until(lambda: errors, 8)
-        kinds["a refused connection"] = [e.kind for e in errors]
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as reserved:
+            reserved.bind(("127.0.0.1", 0))             # a reserved port with no listener rejects the connection
+            port = reserved.getsockname()[1]
+            http.get(f"http://127.0.0.1:{port}/unreachable", on_error=errors.append)
+            wait_until(lambda: errors, 8)
+            kinds["an unreachable port"] = [e.kind for e in errors]
     finally:
         http_module.TIMEOUT_S = saved_timeout
         state.heal()
+    unreachable = kinds.pop("an unreachable port", [])
     check(kinds == {"403": ["forbidden"], "503": ["server"], "a closed connection": ["server"],
-                    "a timeout": ["timeout"], "a refused connection": ["server"]},
-          f"connectivity failures end as expected errors ({kinds})")
+                    "a timeout": ["timeout"]} and unreachable in (["server"], ["timeout"]),
+          f"connectivity failures end as expected errors ({kinds}, unreachable: {unreachable})")
+    refused = http_module.classify(QNetworkReply.NetworkError.ConnectionRefusedError, None, "", "", False)
+    check(refused.kind == "server", f"a definite connection refusal is classified as server ({refused.kind})")
     wait_until(lambda: False, 0.3)
     check(len(iface.bar.ledger.unexpected()) == seen_lines and plugin.report_dialog is None
           and not any(b.text() == "Send a report" for w in iface.bar.widgets[seen_widgets:]
@@ -567,6 +575,22 @@ def check_result_conversion(iface, plugin):
         conversion.convert_geojson = original
     check(failures[0][1] == "The processing returned no features." and not results.is_busy(nothing.id)
           and files_under(out_dir) == before, f"…as “no features”, the flag cleared, no file left ({failures})")
+
+    def cancel_inside_writer(job, is_canceled, feedback, progress):
+        def on_progress(percent):
+            if 0 < percent < 100:
+                feedback.cancel()
+            progress(percent)
+
+        return original(job, is_canceled, feedback, on_progress)
+
+    try:
+        interrupted = scenario("conv-writer-cancel", cancel_inside_writer)
+        check(wait_until(lambda: failures, 5) and "was cancelled" in failures[0][1]
+              and not results.is_busy(interrupted.id) and files_under(out_dir) == before,
+              "cancelling during the real write removes the partial GeoPackage and its GeoJSON")
+    finally:
+        conversion.convert_geojson = original
 
     # the user cancels in the Tasks panel: QGIS keeps answering, and the work file goes
     started, stopped = [], []
@@ -3497,7 +3521,9 @@ def check_planned_processings(iface, content, controller, processings, state, li
         check(order() == ["PlannedCard"] * 2 + ["ProcessingCard"] * len(base_cards),
               f"PLANNED: …before every processing, in the order of the answer ({order()})")
         texts = [[x.text() for x in c.findChildren(QLabel)] for c in planned_cards()]
-        check(all("Search processing" in t for t in texts) and "Searching" in texts[0] and "Failed" in texts[1]
+        marks = [c.findChildren(QLabel)[-1] for c in planned_cards()]
+        check(all(mark.property("pill") == "gray" and mark.text() for mark in marks)
+              and "Searching" in texts[0] and "Failed" in texts[1]
               and "Harbor watch" in "".join(texts[0]) and "Forest watch" in "".join(texts[1]),
               f"PLANNED: …each with the mark, the name and the status ({texts})")
         check(not [w for c in planned_cards() for w in c.findChildren(QPushButton) + c.findChildren(QToolButton)]
@@ -3551,19 +3577,20 @@ def check_planned_processings(iface, content, controller, processings, state, li
         links.opened.clear()
         click(planned_cards()[0])
         new = [r[1] for r in state.requests[total:]]
-        check(links.opened == ["https://web.example.test/projects/project-1"] and page.expanded == expanded
+        check(links.opened == ["https://web.example.test/projects/project-1?processing=tpl-1"]
+              and page.expanded == expanded
               and not new,
-              f"PLANNED: a click opens the project on the overridden web address ({links.opened}, {new})")
+              f"PLANNED: a click opens the selected search on the overridden web address ({links.opened}, {new})")
         state.planned["project-1"][1]["projectId"] = "project-9"
         reload()
         links.opened.clear()
         click(planned_cards()[1])
-        check(links.opened == ["https://web.example.test/projects/project-9"],
+        check(links.opened == ["https://web.example.test/projects/project-9?processing=tpl-2"],
               f"PLANNED: …the project of the planned processing, not the open one ({links.opened})")
         session.config = dataclasses.replace(saved_config, web="", env="duty")
         links.opened.clear()
         click(planned_cards()[0])
-        check(links.opened == ["https://duty.mapflow.ai/projects/project-1"],
+        check(links.opened == ["https://duty.mapflow.ai/projects/project-1?processing=tpl-1"],
               f"PLANNED: with no override, the environment's web address applies ({links.opened})")
         session.config = saved_config
         state.planned["project-1"][1]["projectId"] = "project-1"
@@ -4022,9 +4049,12 @@ def check_rename_collection(iface, plugin, state, picker):
 
     saved_dialog, saved_imagery = controller_module.CollectionDialog, controller.draft.imagery
     shown_before = {layer.id(): layer.name() for layer in controller.layers.previews("mosaic:m-1")}
+    poll_was_active = controller._mosaic_refresh.isActive()
+    controller._mosaic_refresh.stop()
     controller_module.CollectionDialog = Fake
     try:
         # Rename: the PUT, and the name everywhere without a reload
+        wait_until(lambda: not imagery.loading_mosaics, 5)
         state.rename_requests.clear()
         asked = len(pages())
         rename("m-2", ("Beirut harbour", ["port"]))
@@ -4037,8 +4067,9 @@ def check_rename_collection(iface, plugin, state, picker):
               and picker.title.full_text() == "Beirut harbour" and "“Beirut harbour”" in picker.target.text()
               and picker.current == "m-2" and imagery.get_mosaic("m-2").tags == ["port"],
               "…the picker's row, title and target line, and the My imagery tab show the new name, still selected")
-        check(len(pages()) == asked and "“Beirut” is renamed to “Beirut harbour”" in picker.upload_note.text.text(),
-              "…without asking for the list again, and the window says so")
+        check(len(pages()) == asked, f"…without asking for the list again ({len(pages()) - asked} requests)")
+        check("“Beirut” is renamed to “Beirut harbour”" in picker.upload_note.text.text(),
+              f"…and the window confirms it ({picker.upload_note.text.text()!r})")
 
         # The chosen collection of the run form, and its preview on the map
         controller.draft.imagery = ImageryChoice.from_mosaic("m-1", "Drone survey March")
@@ -4099,6 +4130,8 @@ def check_rename_collection(iface, plugin, state, picker):
         check(len(state.rename_requests) == count, "an empty name, a cancelled dialog or no change send nothing")
     finally:
         controller_module.CollectionDialog = saved_dialog
+        if poll_was_active:
+            controller._mosaic_refresh.start()
 
     # The real dialog through the controller: its tags are prefilled and a tag typed but not added is sent
     class Editing(CollectionDialog):
@@ -4143,7 +4176,8 @@ def check_storage_limits(iface, plugin, state, picked):
     import mapflow_next.controller as controller_module
     from mapflow_next.core.formatting import size, size_limit
     from mapflow_next.qgis_bridge import rasters
-    from mapflow_next.ui.dock import IMAGERY
+    from mapflow_next.ui.dock import IMAGERY, START
+    from mapflow_next.ui.imagery_page import SEARCH
     imagery, controller = plugin.services[3], plugin.controller
     content = plugin.dock.content
     page = content.imagery
@@ -4194,6 +4228,9 @@ def check_storage_limits(iface, plugin, state, picked):
 
     saved_open = controller_module.QFileDialog.getOpenFileNames
     saved_metadata = controller_module.rasters.geotiff_metadata
+    storage_poll = controller._storage_refresh
+    poll_was_active = storage_poll.isActive()
+    storage_poll.stop()
     controller_module.QFileDialog.getOpenFileNames = staticmethod(lambda *a, **k: (picked["files"], ""))
     state.heal()
     state.memory = None
@@ -4219,9 +4256,39 @@ def check_storage_limits(iface, plugin, state, picked):
         controller._mosaic_refresh.timeout.emit()
         wait_until(lambda: False, 0.4)
         check(asked() == before + 2, "…the collections timer does not ask")
+
+        # Drive the storage timer explicitly so it cannot interrupt the following upload request checks.
+        selected_tab = content.current_tab()
+        try:
+            check(storage_poll.interval() == 20_000, "STORAGE: the poll interval is 20 seconds")
+            imagery._limits_at = time.monotonic()
+            content.go(IMAGERY)
+            poll_before = asked()
+            free_from_poll = fixtures.MEMORY["memoryFree"] - 128 * 1024 ** 2
+            state.memory = dict(fixtures.MEMORY, memoryFree=free_from_poll)
+            imagery._limits_at = 0.0
+            storage_poll.timeout.emit()
+            check(wait_until(lambda: imagery.limits.free_bytes == free_from_poll, 5)
+                  and asked() == poll_before + 1, "STORAGE: a tick on My imagery refreshes free space once")
+            page.show_tab(SEARCH)
+            imagery._limits_at = 0.0
+            storage_poll.timeout.emit()
+            imagery._limits_at = time.monotonic()
+            page.show_tab(MINE)
+            content.go(START)
+            imagery._limits_at = 0.0
+            storage_poll.timeout.emit()
+            wait_until(lambda: False, 0.3)
+            check(asked() == poll_before + 1, "STORAGE: no request on catalog search or Start")
+        finally:
+            state.memory = None
+            imagery._limits_at = time.monotonic()
+            content.go(selected_tab)
+
+        before_picker = asked()
         imagery._limits_at = 0.0
         controller.open_mosaic_picker()
-        check(wait_until(lambda: asked() == before + 3, 5), "…the collection picker opening asks too")
+        check(wait_until(lambda: asked() == before_picker + 1, 5), "…the collection picker opening asks too")
         settled()
         if controller.mosaic_picker is not None:
             controller.mosaic_picker.hide()
@@ -4234,11 +4301,27 @@ def check_storage_limits(iface, plugin, state, picked):
         check(size_limit(fixtures.MEMORY["maxUploadFileSize"]) in page.upload_limit.text(),
               f"…the page names the account's file limit ({page.upload_limit.text()!r})")
 
-        # asked before every upload
-        before = asked()
-        uploads_ok([make_geotiff("limits_one.tif")], "STORAGE (first)")
-        uploads_ok([make_geotiff("limits_two.tif")], "STORAGE (second)")
-        check(asked() == before + 2, f"STORAGE: each upload asks GET /rasters/memory first ({asked() - before})")
+        # The preflight reads the old free space; the answer after each upload sees what Mapflow now reports.
+        free_after_upload = fixtures.MEMORY["memoryFree"] - 256 * 1024 ** 2
+
+        def upload_changed_storage(_name):
+            state.memory = dict(fixtures.MEMORY, memoryFree=free_after_upload)
+
+        imagery.uploadDone.connect(upload_changed_storage)
+        try:
+            for label in ("first", "second"):
+                state.memory = None
+                before = len(state.requests)
+                uploads_ok([make_geotiff(f"limits_{label}.tif")], f"STORAGE ({label})")
+                check(wait_until(lambda: imagery.limits.free_bytes == free_after_upload, 5),
+                      f"STORAGE: upload refresh sees the changed free space ({imagery.limits})")
+                traffic = [(method, path) for method, path, *_ in state.requests[before:]
+                           if path in (memory, "/rasters/mosaic/image")]
+                check(traffic == [("GET", memory), ("POST", "/rasters/mosaic/image"), ("GET", memory)],
+                      f"STORAGE: one limits request before and one after upload ({traffic})")
+        finally:
+            imagery.uploadDone.disconnect(upload_changed_storage)
+            state.memory = None
 
         # larger limits than the built-in ones accept a file the built-in ones refuse
         wide = make_geotiff("wide_limits.tif", size=config.MAX_SIDE_PIXELS + 1)
@@ -4286,6 +4369,10 @@ def check_storage_limits(iface, plugin, state, picked):
         uploads_ok([one, two], "STORAGE (free space equal to the sum)")
         state.memory = dict(fixtures.MEMORY, memoryFree=0)
         refused([one], [size(0)], "STORAGE (no free space)")
+        state.memory = dict(fixtures.MEMORY, memoryFree=-2 * 1024 ** 3)
+        refused([one], ["-2.0 GB", "free"], "STORAGE (over quota)")
+        check(page.storage_amount.text() == "12.0 / 10.0 GB" and page.storage_bar.value() == 100,
+              "STORAGE: usage keeps the excess above quota while the progress bar is full")
         state.memory = dict(fixtures.MEMORY, memoryLimit=None, memoryFree=None)
         uploads_ok([one], "STORAGE (storage not limited)")
         state.memory = None
@@ -4312,6 +4399,7 @@ def check_storage_limits(iface, plugin, state, picked):
             iface.bar.messages.clear()
             upload([make_geotiff("fallback.tif")])
             check(wait_until(lambda: state.uploads and idle(), 8), f"STORAGE (request fails: {what}): the upload goes")
+            settled()
             check(len(lines(0, failed_line)) == 1 and "2 GB" in lines(0, failed_line)[0],
                   f"…the user is told once, with the limits that apply ({lines(0, failed_line)})")
             check(imagery.limits.max_upload_bytes is None and not imagery._limits_loading,
@@ -4368,6 +4456,8 @@ def check_storage_limits(iface, plugin, state, picked):
     finally:
         controller_module.rasters.geotiff_metadata = saved_metadata
         controller_module.QFileDialog.getOpenFileNames = saved_open
+        if poll_was_active:
+            storage_poll.start()
         state.memory = None
         state.heal()
         http = plugin.services[1].http
@@ -6803,7 +6893,7 @@ def main():
     state.uploads.clear()
     page.layer_button.click()
     check(seen == ["LayerPicker"] and sorted(listed[-1]) == ["Dock 2", "Pier 7"],
-          f"Choose from raster layers lists only GeoTIFF file layers ({listed})")
+          f"Choose raster layers lists only GeoTIFF file layers ({listed})")
     check(wait_until(lambda: [u[:2] for u in state.uploads] == [("new", "Pier 7")] and controller.uploading is None
                      and not imagery_service.uploading, 5),
           f"…and picking one uploads its file as a collection named after the layer ({state.uploads})")

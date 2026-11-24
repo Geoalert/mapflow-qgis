@@ -467,7 +467,7 @@ class GalleryDialog(QDialog):
         self.cost_main.setText(scenario.cost_main)
         self.cost_note.setText(scenario.cost_note)
         if scenario.custom:
-            self.primary.setText("Request access  ↗")
+            self.primary.setText("Request access")
             self.primary.setIcon(icons.icon("external", tokens()["primary_text"], 14))
         else:
             self.primary.setText("Use this scenario")

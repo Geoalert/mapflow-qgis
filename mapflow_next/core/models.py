@@ -592,20 +592,25 @@ def _whole(value: Any) -> Optional[int]:
 @dataclass
 class StorageLimits:
     """GET rasters/memory: what an upload may be. None means "no value": the built-in limit applies, or, for
-    `free_bytes`, the free space is not known or not limited."""
+    `free_bytes`, the free space is not known or not limited. Free space can be negative above quota."""
     max_upload_bytes: Optional[int] = None
     max_side_pixels: Optional[int] = None       # maxPixelCount: a limit on a side, as 3.x applied it
     free_bytes: Optional[int] = None
+    storage_used_bytes: Optional[int] = None
+    storage_limit_bytes: Optional[int] = None
 
     @classmethod
     def from_api(cls, data: Any) -> "StorageLimits":
         data = data if isinstance(data, dict) else {}
         upload, side = _whole(data.get("maxUploadFileSize")), _whole(data.get("maxPixelCount"))
         limit, free = _whole(data.get("memoryLimit")), _whole(data.get("memoryFree"))
+        limit = limit if limit is not None and limit > 0 else None
+        free = free if limit is not None else None
+        used = max(0, limit - free) if limit is not None and free is not None else _whole(data.get("memoryUsed"))
         return cls(max_upload_bytes=upload if upload and upload > 0 else None,
                    max_side_pixels=side if side and side > 0 else None,
                    # With the storage not limited, Mapflow sends no limit and no free space
-                   free_bytes=max(0, free) if limit and limit > 0 and free is not None else None)
+                   free_bytes=free, storage_used_bytes=used, storage_limit_bytes=limit)
 
 
 @dataclass

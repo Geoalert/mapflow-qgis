@@ -48,7 +48,8 @@ class Imagery(QObject):
         self._images_loading: Set[str] = set()
         self.uploading = False
         self.limits = StorageLimits()           # GET rasters/memory; all None until it answers: the built-in limits
-        self._limits_at = 0.0                   # when My imagery last asked for it (monotonic)
+        self._limits_at = 0.0                   # when the limits were last requested (monotonic)
+        self._limits_request = 0
         self._limits_loading = False
         self._limits_alerted = False            # a failure was told and no success since
         # Asked when Mapflow says a collection already has a file: (file name, collection name) →
@@ -302,14 +303,22 @@ class Imagery(QObject):
         if not self._mosaics_loading and time.monotonic() - self._mosaics_at >= max_age:
             self.load_mosaics(poll)
 
-    def load_limits(self, on_done: Optional[Callable[[StorageLimits], None]] = None, waiting: bool = False) -> None:
+    def load_limits(self, on_done: Optional[Callable[[StorageLimits], None]] = None, waiting: bool = False,
+                    *, retain_on_failure: bool = False) -> None:
         """Ask for the account's upload limits and free storage. `on_done` gets them, or the built-in ones (all
         None) when the request fails: an upload goes on either way. `waiting`: an upload waits for the answer, so
-        a failure is told at once; any other failure is told once, until a request succeeds."""
+        a failure is told at once; any other failure is told once, until a request succeeds. Display-only
+        refreshes keep the last known values on failure."""
+        self._limits_request += 1
+        request = self._limits_request
+        self._limits_at = time.monotonic()
+        self._limits_loading = True
         answered = False
 
         def done(limits: StorageLimits) -> None:
             nonlocal answered
+            if request != self._limits_request:
+                return
             answered = True
             self.limits = limits
             self._limits_loading = self._limits_alerted = False
@@ -318,9 +327,12 @@ class Imagery(QObject):
                 on_done(limits)
 
         def failed(error: ApiError) -> None:
-            if answered:
-                return              # `on_done` raised after the answer: the http layer reports it, then calls this
-            self._limits_loading = False            # before anything that can raise
+            # A callback can raise after answering, and a later request can supersede this one.
+            if answered or request != self._limits_request:
+                return
+            self._limits_loading = False
+            if retain_on_failure:
+                return
             self.limits = StorageLimits()           # free space of an older answer may be out of date
             if error.kind != "auth" and (waiting or not self._limits_alerted):
                 self._limits_alerted = self._limits_alerted or not waiting     # an upload's failure is its own
@@ -328,19 +340,23 @@ class Imagery(QObject):
             self.limitsChanged.emit()
             if on_done:
                 on_done(self.limits)
-        self.api.storage_limits(done, failed)
+        try:
+            self.api.storage_limits(done, failed)
+        except Exception:
+            if request == self._limits_request:
+                self._limits_loading = False
+            raise
 
-    def refresh_limits(self, max_age: float = 5.0) -> None:
-        """My imagery opens: ask for the limits, unless a request is out or the last answer is younger than
-        `max_age`."""
+    def refresh_limits(self, max_age: float = 5.0, *, retain_on_failure: bool = False) -> None:
+        """Ask for the limits unless a request is in flight or was sent less than `max_age` seconds ago."""
         if not self._limits_loading and time.monotonic() - self._limits_at >= max_age:
-            self._limits_at = time.monotonic()
-            self._limits_loading = True
-            self.load_limits()
+            self.load_limits(retain_on_failure=retain_on_failure)
 
     def reset_busy(self) -> None:
         """After sign-out: requests in flight were aborted and won't call back, so nothing is loading."""
         self.uploading = False
+        self._limits_at = 0.0
+        self._limits_request += 1
         self._limits_loading = self._limits_alerted = False
         self.limits = StorageLimits()
         self.loading_more = False
@@ -423,6 +439,7 @@ class Imagery(QObject):
         def done(_data):
             self.uploading = False
             self.uploadDone.emit(name)
+            self.load_limits(retain_on_failure=True)
             self.load_mosaics()
 
         def failed(error: ApiError):
@@ -491,6 +508,8 @@ class Imagery(QObject):
         sent_files: List[str] = []
 
         def finish() -> None:
+            if sent_files:
+                self.load_limits(retain_on_failure=True)
             self.load_images(mosaic_id, force=True)
             self.load_mosaics()
 

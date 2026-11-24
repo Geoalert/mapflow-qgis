@@ -25,6 +25,7 @@ RU_DOMAIN = "mapflow.ru"
 WEB_PREFIXES = {"production": "app", "duty": "duty"}
 MY_DATA_PATH = "/my-data"          # My imagery collections in Mapflow Web
 MOSAICS_REFRESH_MS = 30_000        # My imagery collections, asked for again while the panel is open
+STORAGE_REFRESH_MS = 20_000        # storage usage while My imagery is visible
 SUPPORT_EMAIL = "help@geoalert.io"
 RELEASES_URL = "https://github.com/Geoalert/mapflow-qgis/releases"
 

@@ -167,7 +167,7 @@ class PlannedCard(Card):
         self.add(top)
         marks = QHBoxLayout()
         marks.setSpacing(8)
-        marks.addWidget(Pill("Search processing", "gray"))
+        marks.addWidget(Pill("Planned search", "gray"))
         marks.addStretch(1)
         self.add(marks)
 

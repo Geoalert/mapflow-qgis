@@ -3,11 +3,12 @@ from __future__ import annotations
 
 from typing import Callable, List, Optional, Tuple
 
-from qgis.PyQt.QtCore import QEvent, QObject, QPointF, QRectF, QSize, Qt, QTimer, QUrl, pyqtSignal
-from qgis.PyQt.QtGui import QCursor, QDesktopServices, QFont, QFontMetrics, QPainter, QPainterPath, QPen, QPixmap
-from qgis.PyQt.QtWidgets import (QAbstractButton, QAction, QApplication, QButtonGroup, QComboBox, QFrame, QHBoxLayout,
-                                 QLabel, QLineEdit, QPushButton, QSizePolicy, QToolButton, QToolTip, QVBoxLayout,
-                                 QWidget)
+from qgis.PyQt.QtCore import QEvent, QObject, QPointF, QRect, QRectF, QSize, Qt, QTimer, QUrl, pyqtSignal
+from qgis.PyQt.QtGui import (QCursor, QDesktopServices, QFont, QFontMetrics, QIcon, QPainter, QPainterPath, QPen,
+                            QPixmap)
+from qgis.PyQt.QtWidgets import (QAbstractButton, QAction, QApplication, QButtonGroup, QComboBox, QFrame,
+                                 QHBoxLayout, QLabel, QLineEdit, QPushButton, QSizePolicy, QStyle, QStyleOptionButton,
+                                 QStylePainter, QToolButton, QToolTip, QVBoxLayout, QWidget)
 
 from . import icons
 from .theme import color, set_prop, tokens
@@ -39,17 +40,70 @@ def label(text: str = "", role: str = "body", wrap: bool = False, parent: Option
     return widget
 
 
+class _ExternalButton(QPushButton):
+    """A button with a trailing arrow and an optional native leading icon."""
+
+    ARROW_SIZE = 18
+    ARROW_GAP = 3
+
+    def __init__(self, text: str, ink: str, parent: Optional[QWidget] = None):
+        super().__init__(text, parent)
+        self.setIconSize(QSize(14, 14))
+        self.set_arrow_color(ink)
+
+    def set_arrow_color(self, ink: str) -> None:
+        self.arrow = icons.icon("arrow-up-right", ink, self.ARROW_SIZE)
+        self.update()
+
+    @guarded(default=QSize(-1, -1))
+    def sizeHint(self) -> QSize:
+        size = super().sizeHint()
+        return QSize(size.width() + self.ARROW_SIZE + self.ARROW_GAP, max(size.height(), self.ARROW_SIZE))
+
+    @guarded(default=QSize(-1, -1))
+    def minimumSizeHint(self) -> QSize:
+        return self.sizeHint()
+
+    @guarded
+    def paintEvent(self, event) -> None:
+        option = QStyleOptionButton()
+        self.initStyleOption(option)
+        painter = QStylePainter(self)
+        control = QStyle.ControlElement
+        # The style still paints the frame and focus state. The label and arrow share the contents rectangle.
+        frame = QStyleOptionButton(option)
+        frame.text = ""
+        frame.icon = QIcon()
+        painter.drawControl(control.CE_PushButton, frame)
+
+        content = self.style().subElementRect(QStyle.SubElement.SE_PushButtonContents, option, self)
+        arrow_width = self.ARROW_GAP + self.ARROW_SIZE
+        label_width = option.fontMetrics.size(Qt.TextFlag.TextShowMnemonic, option.text).width()
+        if not option.icon.isNull():
+            label_width += option.iconSize.width() + 4  # the spacing Qt uses in its button label
+        label_width = min(label_width, max(0, content.width() - arrow_width))
+        left = content.x()
+        if self.property("variant") != "link":
+            left += max(0, (content.width() - label_width - arrow_width) // 2)
+        option.rect = QRect(left, content.y(), label_width, content.height())
+        painter.drawControl(control.CE_PushButtonLabel, option)
+
+        arrow_rect = QRect(left + label_width + self.ARROW_GAP, content.y(), self.ARROW_SIZE, content.height())
+        mode = QIcon.Mode.Normal if self.isEnabled() else QIcon.Mode.Disabled
+        self.arrow.paint(painter, arrow_rect, Qt.AlignmentFlag.AlignCenter, mode)
+
+
 def button(text: str, variant: str = "outline", icon: Optional[str] = None, size: Optional[str] = None,
            icon_color: Optional[str] = None, external: bool = False, parent: Optional[QWidget] = None) -> QPushButton:
-    if external:
-        text = f"{text}  ↗"
-    widget = QPushButton(text, parent)
+    palette = tokens()
+    tone = {"primary": "primary_text", "ghost": "link", "link": "link"}.get(variant, "ink")
+    ink = icon_color or palette[tone]
+    widget = _ExternalButton(text, ink, parent) if external else QPushButton(text, parent)
     widget.setProperty("variant", variant)
     if size:
         widget.setProperty("size", size)
     if icon:
-        default = {"primary": tokens()["primary_text"], "ghost": tokens()["link"], "link": tokens()["link"]}
-        widget.setIcon(icons.icon(icon, icon_color or default.get(variant, tokens()["ink"]), 14))
+        widget.setIcon(icons.icon(icon, ink, 14))
         widget.setIconSize(QSize(14, 14))
     widget.setCursor(Qt.CursorShape.PointingHandCursor)
     return widget
@@ -60,7 +114,7 @@ def link(text: str, url=None, external: bool = True, on_click: Optional[Callable
     """A link button. `url` is an address, or a function that returns one when clicked (for an address
     that depends on the environment, known only once the plugin has its configuration). `on_click` is
     called instead when the address is not the widget's to know: the page emits a signal and the controller
-    opens it. It carries the same "↗" mark."""
+    opens it. External links carry an arrow icon after the text."""
     widget = button(text, "link", external=external and bool(url or on_click), parent=parent)
     widget.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
     if on_click:
@@ -325,7 +379,7 @@ class Callout(QFrame):
         layout.addWidget(self.icon, 0, Qt.AlignmentFlag.AlignVCenter)     # centred on the text, any length
         layout.addWidget(self.text, 1)
         # A way out (Top up), as a button on the right; set_action shows it
-        self.action = button("", "outline", size="sm", parent=self)
+        self.action = button("", "outline", size="sm", external=True, parent=self)
         self.action.setProperty("callout_action", True)     # small, in the callout's own colours (theme)
         self.action.setVisible(False)
         self._action_url = ""
@@ -336,7 +390,7 @@ class Callout(QFrame):
 
     def set_action(self, text: str = "", url: str = "") -> None:
         """A button on the right that opens `url` in the browser; no text hides it."""
-        self.action.setText(f"{text}  ↗" if text else "")
+        self.action.setText(text)
         self._action_url = url
         self.action.setVisible(bool(text and url))
 
@@ -346,6 +400,7 @@ class Callout(QFrame):
         name = {"info": "info", "warn": "alert", "error": "alert"}[kind]
         tone = {"info": "primary_ink", "warn": "warn_fg", "error": "err_fg"}[kind]
         self.icon.setPixmap(icons.pixmap(name, tokens()[tone], 16))
+        self.action.set_arrow_color(tokens()[tone])
         self.text.setText(text)
         # Shown only once it has a parent: a parentless widget shown is a window of its own, and one flashed up
         # empty, titled "QGIS3", before the projects window took it in. With text, it shows when it is added.
@@ -762,7 +817,7 @@ class OptionRow(QFrame):
     clicked = pyqtSignal()
 
     def __init__(self, title: str, meta: str = "", parent: Optional[QWidget] = None,
-                 *, title_detail: str = ""):
+                 *, title_detail: str = "", elide_text: bool = False):
         super().__init__(parent)
         self.setProperty("option", True)
         self.setProperty("selected", False)
@@ -776,8 +831,14 @@ class OptionRow(QFrame):
         self.dot.setFixedSize(16, 16)
         texts = QVBoxLayout()
         texts.setSpacing(1)
-        self.title = label(title, "title", wrap=True, parent=self)
-        self.meta = label(meta, "meta", wrap=True, parent=self)
+        if elide_text:
+            self.title = ElidedLabel(title, "title", self)
+            self.meta = ElidedLabel(meta, "meta", self)
+            self.title.setTextFormat(Qt.TextFormat.PlainText)
+            self.meta.setTextFormat(Qt.TextFormat.PlainText)
+        else:
+            self.title = label(title, "title", wrap=True, parent=self)
+            self.meta = label(meta, "meta", wrap=True, parent=self)
         self.meta.setVisible(bool(meta))
         if title_detail:
             texts.addLayout(hbox(self.title, label(title_detail, "meta"), None))

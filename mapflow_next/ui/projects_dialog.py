@@ -71,7 +71,10 @@ class ProjectTile(FocusRing, QFrame):
         layout.addLayout(top)
 
         fallback = "Default project" if project.is_default else "No description"
-        description = ElidedLabel(project.description or fallback, "meta")
+        description_text = (project.description or "").strip() or fallback
+        description = ElidedLabel(" ".join(description_text.split()), "meta")
+        description.setTextFormat(Qt.TextFormat.PlainText)
+        description.setToolTip(description_text)
         layout.addWidget(description)
 
         pills_row = QWidget(self)
@@ -177,7 +180,7 @@ class ProjectsDialog(QDialog):
         head.setSpacing(16)
         head.addWidget(label("Projects", "h1"))
         self.count = label("", "meta")
-        head.addWidget(self.count, 0, Qt.AlignmentFlag.AlignBottom)
+        head.addWidget(self.count, 0, Qt.AlignmentFlag.AlignVCenter)
         head.addStretch(1)
         team = link("Team in Mapflow Web", self.links.team)
         team.setIcon(icons.icon("users", tokens()["link"], 14))

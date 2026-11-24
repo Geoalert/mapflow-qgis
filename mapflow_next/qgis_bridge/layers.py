@@ -354,8 +354,7 @@ class MapLayers:
         stem = f"{safe_filename(processing.name)}_{processing.id[:8]}"
         job = Job(geojson=Path(geojson_path), name=processing.name,
                   work=work_path(Path(geojson_path).parent, processing.id),
-                  target=self._unique(out_dir, stem, ".gpkg"), fallback=self._unique(out_dir, stem, ".geojson"),
-                  transform_context=self.project.transformContext())
+                  target=self._unique(out_dir, stem, ".gpkg"), fallback=self._unique(out_dir, stem, ".geojson"))
         return ConvertTask(job, on_done)
 
     @staticmethod

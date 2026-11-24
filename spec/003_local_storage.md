@@ -94,3 +94,8 @@ the plugin makes a new one the next time it adds a layer. The 3.x plugin remembe
 | `{output_dir}/.downloads/` | A result being downloaded, before it is converted and moved into place |
 | a folder made with `tempfile.mkdtemp()` once per session | Catalog preview pictures and the files GDAL derives from them. Private to the user, removed at unload. File names never carry an id as the server sent it: ids are made safe first |
 | `{tempDir}/mapflow_next_icons/` | Icons drawn for the current theme and scale |
+
+After a result is converted to GeoPackage, the finished file is moved into the output directory
+and the temporary GeoJSON is removed. Cancelling the conversion removes the temporary GeoJSON and
+any partial GeoPackage. If the writer falls back to GeoJSON, it moves that file into the output
+directory as the result.

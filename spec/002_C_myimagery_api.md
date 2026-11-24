@@ -182,7 +182,14 @@ Response shape (`UserLimitSchema`):
   when the request fails: an account with larger limits must not be refused locally.
 - An upload larger than `memoryFree` is refused before anything is sent, with a message that names the
   free space.
-- The usage itself ("Your data: X. Free space: Y") is not shown; Mapflow Web shows it.
+- My imagery shows a **Storage** badge next to Collections when the used storage and a positive
+  limit are known. It shows used storage and the limit in GB, a usage bar, and a link to billing
+  in Mapflow Web.
+- The plugin requests fresh usage after successful uploads and every 20 seconds while My imagery
+  is visible. A failed display refresh keeps the last known values.
+- A negative `memoryFree` is valid when an account is over quota. Used storage is calculated as
+  `max(0, memoryLimit - memoryFree)` when both values are available, with `memoryUsed` as the fallback.
+  The badge shows the actual usage above the limit with a full bar. It has no separate free-space line.
 
 ## Error Model
 Data catalog errors use format: `{"detail": {error_data}}`.

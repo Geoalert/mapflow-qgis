@@ -34,6 +34,7 @@ def test_storage_limits_from_the_memory_answer():
     full = StorageLimits.from_api({"memoryLimit": 10_000, "memoryUsed": 400, "memoryFree": 9_600,
                                    "maxUploadFileSize": 5_000, "maxPixelCount": 100_000})
     assert (full.max_upload_bytes, full.max_side_pixels, full.free_bytes) == (5_000, 100_000, 9_600)
+    assert (full.storage_used_bytes, full.storage_limit_bytes) == (400, 10_000)
     # null (spec/002_E: limiting off), missing, zero, text and a bool are "no value"
     for answer in ({}, None, [], "x", {"maxUploadFileSize": None, "maxPixelCount": None},
                    {"maxUploadFileSize": 0, "maxPixelCount": 0}, {"maxUploadFileSize": "big", "maxPixelCount": True}):
@@ -46,7 +47,8 @@ def test_storage_limits_from_the_memory_answer():
         assert StorageLimits.from_api({"memoryLimit": limit, "memoryFree": 500}).free_bytes is None
     assert StorageLimits.from_api({"memoryLimit": 100, "memoryFree": None}).free_bytes is None
     assert StorageLimits.from_api({"memoryLimit": 100, "memoryFree": 0}).free_bytes == 0
-    assert StorageLimits.from_api({"memoryLimit": 100, "memoryFree": -5}).free_bytes == 0
+    over_quota = StorageLimits.from_api({"memoryLimit": 100, "memoryFree": -5})
+    assert (over_quota.free_bytes, over_quota.storage_used_bytes) == (-5, 105)
 
 
 def test_a_size_limit_prints_without_a_trailing_zero():

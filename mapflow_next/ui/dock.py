@@ -3,11 +3,11 @@ from __future__ import annotations
 
 from typing import Optional
 
-from qgis.PyQt.QtCore import QRectF, QSize, Qt, QUrl, pyqtSignal
+from qgis.PyQt.QtCore import QRect, QRectF, QSize, Qt, QUrl, pyqtSignal
 from qgis.PyQt.QtGui import QDesktopServices, QFont, QFontMetrics, QPainter, QPixmap
-from qgis.PyQt.QtWidgets import QAction
 from qgis.PyQt.QtWidgets import (QAbstractButton, QButtonGroup, QFrame, QHBoxLayout, QLabel, QMenu, QProgressBar,
-                                 QSizePolicy, QStackedWidget, QToolButton, QVBoxLayout, QWidget)
+                                 QSizePolicy, QStackedWidget, QStyle, QStyleOptionMenuItem, QToolButton, QVBoxLayout,
+                                 QWidget)
 from qgis.gui import QgsDockWidget
 
 from ..config import Links
@@ -19,13 +19,36 @@ from .processings_page import ProcessingsPage
 from .run_page import RunPage
 from .sign_in import SignInPage
 from .start_page import StartPage
-from .theme import color, is_dark, load_fonts, stylesheet, tokens
+from .theme import MENU_ITEM_LEFT_PADDING, color, is_dark, load_fonts, stylesheet, tokens
 from .upgrade_page import UpgradePage
 from .widgets import FocusRing, link, menu_action, tool
 from ..core.guard import guarded
 
 START, PROCESSINGS, IMAGERY = 0, 1, 2
 PAGE_SIGN_IN, PAGE_START, PAGE_RUN, PAGE_PROCESSINGS, PAGE_IMAGERY, PAGE_UPGRADE = range(6)
+
+
+class _AccountMenu(QMenu):
+    def add_external_action(self, icon_name: str, text: str, url: str) -> None:
+        action = menu_action(self, icon_name, text, lambda: QDesktopServices.openUrl(QUrl(url)))
+        action.setProperty("opensInBrowser", True)
+
+    @guarded
+    def paintEvent(self, event) -> None:
+        super().paintEvent(event)
+        painter = QPainter(self)
+        arrow_size = 14
+        arrow = icons.icon("arrow-up-right", tokens()["ink"], arrow_size)
+        for action in self.actions():
+            if action.isVisible() and action.property("opensInBrowser"):
+                option = QStyleOptionMenuItem()
+                self.initStyleOption(option, action)
+                row = self.actionGeometry(action)
+                text_width = QFontMetrics(option.font).horizontalAdvance(action.text())
+                # The styled menu reserves an icon column before each row's text.
+                left = row.x() + MENU_ITEM_LEFT_PADDING + option.maxIconWidth + text_width + 4
+                rect = QRect(left, row.y(), arrow_size, row.height())
+                arrow.paint(painter, QStyle.visualRect(option.direction, row, rect))
 
 
 class TabButton(FocusRing, QAbstractButton):
@@ -177,14 +200,11 @@ class DockContent(QWidget):
         self.avatar.setProperty("variant", "avatar")
         self.avatar.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self.avatar.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.account_menu = QMenu(self.avatar)
+        self.account_menu = _AccountMenu(self.avatar)
         self.avatar.setMenu(self.account_menu)
         row.addWidget(self.avatar)
         self.header = header
         return header
-
-    def _menu_action(self, menu: QMenu, icon_name: str, text: str, handler) -> QAction:
-        return menu_action(menu, icon_name, text, handler)
 
     def set_account(self, email: str) -> None:
         self.avatar.setText((email[:1] or "M").upper())
@@ -193,12 +213,10 @@ class DockContent(QWidget):
         title = self.account_menu.addAction(email or "Signed in")
         title.setEnabled(False)
         self.account_menu.addSeparator()
-        self._menu_action(self.account_menu, "coins", "Balance and billing  ↗",
-                          lambda: QDesktopServices.openUrl(QUrl(self.links.top_up)))
-        self._menu_action(self.account_menu, "users", "Team in Mapflow Web  ↗",
-                          lambda: QDesktopServices.openUrl(QUrl(self.links.team)))
-        self._menu_action(self.account_menu, "settings", "Settings…", self.settingsRequested.emit)
-        self._menu_action(self.account_menu, "logout", "Sign out", self.signOutRequested.emit)
+        self.account_menu.add_external_action("coins", "Balance and billing", self.links.top_up)
+        self.account_menu.add_external_action("users", "Team in Mapflow Web", self.links.team)
+        menu_action(self.account_menu, "settings", "Settings…", self.settingsRequested.emit)
+        menu_action(self.account_menu, "logout", "Sign out", self.signOutRequested.emit)
 
     def set_credits(self, text: str, tooltip: str) -> None:
         self.credits.setText(text)

@@ -38,7 +38,7 @@ The plugin covers the work that belongs next to the map. Each tab has its scenar
   the run form. When an image is chosen, the area is clipped to its footprint, and an area outside it blocks Run.
 - **Processings › Follow the work and its history.** Progress updates on its own. Filter by status, search
   the whole project by name (the list below keeps updating while you search), load older processings, rename them, run one again with the same settings,
-  or delete it. The project's planned processings (search templates) come first, with a "search processing" mark, their name and status; a click opens the project in Mapflow Web. A list that fails to load says so instead of looking empty; if the project is deleted in
+  or delete it. The project's planned processings (search templates) come first, with a "Planned search" mark, their name and status. Clicking a row opens that search in Mapflow Web. A list that fails to load says so instead of looking empty; if the project is deleted in
   Mapflow Web, the default project opens.
 - **Processings › Get the results into QGIS.** Finished results load as styled layers: GeoPackage files,
   or vector tiles for a quick look. Results can also be saved as GeoJSON.
@@ -207,7 +207,7 @@ every Mapflow user. The plugin links to the right page wherever it leaves someth
 | Projects: share | **Mapflow Web** › the project ("Share project in Mapflow Web" and the share icon in the Projects window) | Sharing needs the team's members and roles. The plugin creates, renames, deletes, switches, searches and pins projects |
 | Review: accept or send back results | **Mapflow Web** (the processing links there) | Review is a step of its own, with its own page, after the processing; the plugin shows that a processing needs it |
 | Balance and top-up, API tokens | **Mapflow Web** › [Account](https://app.mapflow.ai/account/balance) ("Top up" in the run form) | Payments and keys stay with the account |
-| Planned processings (search templates): the list | **Kept**: the Processings tab lists them, with a "search processing" mark; a click opens the project in Mapflow Web | The plugin lists them and does nothing else |
+| Planned processings (search templates): the list | **Kept**: the Processings tab lists them with a "Planned search" mark. Clicking a row opens that search in Mapflow Web | The plugin lists them and does nothing else |
 | Planned processings: create one, its areas and results, pause and resume, run from it, delete it | **Mapflow Web** | Managing a search template is a task of its own; the plugin only shows that one exists |
 | XYZ/TMS tile layers of the QGIS project as imagery | **Kept**, as a fourth kind of imagery: the run form lists them under "QGIS tile layers"; the plugin reads the layer and has no editor for tile sources. A login goes to Mapflow after an alert; a layer on this computer or a private network, with a referer or other headers, or with a non-Basic authentication configuration is listed disabled, with the reason | The tile sources a team already has in QGIS can be mapped without being entered again; Mapflow's servers can read only public addresses and send no custom headers |
 | Translations (es, pt, ru, zh) | **Not yet**: planned for 4.1 | Every text is new, so the 3.x translations don't apply |
