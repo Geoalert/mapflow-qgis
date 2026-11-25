@@ -1024,6 +1024,20 @@ class Controller(QObject):
             self._watched_tiles[layer_id] = layer
         return offers
 
+    def _use_tile_layer(self, layer_id: str) -> None:
+        """The tile layer becomes the imagery, at the zoom last chosen for it, and the run form opens. A layer
+        Mapflow can't use changes nothing; the message bar gives the run form's reason."""
+        offer = self._tile_offer(layer_id)
+        if offer is None:
+            return
+        if not offer.usable:
+            self.notify(f"Mapflow can't use the tile layer “{offer.name}”. {offer.reason}", Qgis.MessageLevel.Warning)
+            return
+        self.draft.imagery = ImageryChoice.from_tile(offer, self.tile_zoom.get(layer_id))
+        self._imagery_to_choose = False
+        self.content.open_run()
+        self.refresh_run()
+
     def _tile_offer(self, layer_id: str) -> Optional[TileOffer]:
         return next((offer for offer in self._tile_offers() if offer.layer_id == layer_id), None)
 
@@ -2531,14 +2545,19 @@ class Controller(QObject):
 
     @guarded
     def use_layer_as_imagery(self, layer_id: str) -> None:
-        """“Use as imagery in Mapflow” on a GeoTIFF layer: uploaded to My imagery, then chosen as the imagery."""
+        """“Use as imagery in Mapflow” in the Layers panel. A GeoTIFF layer is uploaded to My imagery, then chosen as
+        the imagery. An XYZ/TMS tile layer is chosen as it is, as in the run form's "QGIS tile layers"."""
         layer = QgsProject.instance().mapLayer(layer_id)
-        if not rasters.geotiff_path(layer):
-            self.notify("Only a layer read from a GeoTIFF file can be uploaded to Mapflow.",
+        is_file = bool(rasters.geotiff_path(layer))
+        if not is_file and self._tile_offer(layer_id) is None:
+            self.notify("Only a GeoTIFF file layer or an XYZ/TMS tile layer can be the imagery in Mapflow.",
                         Qgis.MessageLevel.Warning)
             return
         if self.session.state != SIGNED_IN:
             self._after_sign_in = ("imagery", layer_id)
+            return
+        if not is_file:
+            self._use_tile_layer(layer_id)
             return
         if self.uploading is not None or self.imagery.uploading:
             self.notify("Another upload is running. Try again when it's done.", Qgis.MessageLevel.Info)

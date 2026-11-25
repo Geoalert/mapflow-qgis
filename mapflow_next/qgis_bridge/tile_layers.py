@@ -33,6 +33,12 @@ def _source_of(layer) -> Optional[TileSource]:
     return tile_source(QgsProviderRegistry.instance().decodeUri("wms", layer.source()), _auth_method)
 
 
+def is_tile_layer(layer) -> bool:
+    """A layer the run form lists under "QGIS tile layers", whether Mapflow can use it or not: those get "Use as
+    imagery in Mapflow" in the Layers panel, which then gives the same reason as the run form."""
+    return _offer_of(layer) is not None
+
+
 def tile_offers(project: Optional[QgsProject] = None) -> List[TileOffer]:
     """The tile layers of the project, by name: each usable, or disabled with its reason. A layer that cannot be
     read is left out."""

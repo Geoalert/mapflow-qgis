@@ -6872,12 +6872,16 @@ def main():
     dock = QgsRasterLayer(make_geotiff("dock.tif"), "Dock 2")
     xyz = QgsRasterLayer("type=xyz&url=https://tile.example.com/%7Bz%7D/%7Bx%7D/%7By%7D.png&zmax=19&zmin=0",
                          "Street tiles", "wms")
+    intranet = QgsRasterLayer("type=xyz&url=http://tiles.local/%7Bz%7D/%7Bx%7D/%7By%7D.png&zmax=19&zmin=0",
+                              "Office tiles", "wms")
+    wms = QgsRasterLayer("contextualWMSLegend=0&crs=EPSG:4326&format=image/png&layers=a&styles=&"
+                         "url=https://wms.example.com/wms", "Some WMS", "wms")
     wells = QgsVectorLayer("Point?crs=EPSG:4326", "Wells", "memory")
     harbour = QgsVectorLayer("Polygon?crs=EPSG:4326", "Harbour area", "memory")
     feature = QgsFeature()
     feature.setGeometry(QgsGeometry.fromRect(QgsRectangle(37.60, 55.74, 37.62, 55.75)))
     harbour.dataProvider().addFeatures([feature])
-    project.addMapLayers([pier, dock, xyz, wells, harbour])
+    project.addMapLayers([pier, dock, xyz, intranet, wms, wells, harbour])
     page = content.imagery
     listed = []
 
@@ -6954,10 +6958,11 @@ def main():
           f"starting an upload doesn't scroll My imagery down to the collections "
           f"({top} → {page.scroll.verticalScrollBar().value()})")
     page.set_upload(None)
-    menus = {layer.name(): iface.layer_menu(layer) for layer in (pier, xyz, wells, harbour)}
-    check(menus == {"Pier 7": ["Use as imagery in Mapflow"], "Street tiles": [], "Wells": [],
+    menus = {layer.name(): iface.layer_menu(layer) for layer in (pier, xyz, intranet, wms, wells, harbour)}
+    check(menus == {"Pier 7": ["Use as imagery in Mapflow"], "Street tiles": ["Use as imagery in Mapflow"],
+                    "Office tiles": ["Use as imagery in Mapflow"], "Some WMS": [], "Wells": [],
                     "Harbour area": ["Use as AOI in Mapflow"]},
-          f"the Layers panel offers Mapflow's actions on GeoTIFF and polygon layers only ({menus})")
+          f"the Layers panel offers Mapflow's actions on GeoTIFF, XYZ tile and polygon layers only ({menus})")
     check(not plugin.aoi_action.icon().isNull() and not plugin.imagery_action.icon().isNull(),
           "…with the Mapflow mark")
     area_before, imagery_before = controller.aoi_layer, controller.draft.imagery
@@ -6979,12 +6984,34 @@ def main():
 
     check(wait_until(lambda: chosen_name() == "Pier 7", 8),
           f"Use as imagery in Mapflow: the layer is uploaded and becomes the imagery ({state.uploads})")
+    # an XYZ tile layer: chosen as it is, as the run form's "QGIS tile layers" row would; no upload
+    state.uploads.clear()
+    content.go(2)
+    iface.setActiveLayer(xyz)
+    plugin.imagery_action.trigger()
+    choice = controller.draft.imagery
+    check(choice is not None and choice.kind == "tile" and choice.tile_layer_id == xyz.id() and not state.uploads
+          and content.stack.currentWidget() is content.run,
+          f"Use as imagery in Mapflow on an XYZ layer: it becomes the imagery, the run form opens, nothing is "
+          f"uploaded ({choice and choice.kind}, {state.uploads})")
+    controller.on_imagery(f"tile:{xyz.id()}")
+    same = controller.draft.imagery
+    check(same is not None and (same.kind, same.tile_layer_id, same.zoom, same.label)
+          == (choice.kind, choice.tile_layer_id, choice.zoom, choice.label),
+          f"…the same choice as its row under QGIS tile layers ({same and same.label} / {choice.label})")
+    controller.draft.imagery = choice
+    iface.bar.messages.clear()
+    iface.setActiveLayer(intranet)
+    plugin.imagery_action.trigger()
+    check(controller.draft.imagery is choice
+          and any("can't use the tile layer “Office tiles”. Its host is" in (m or "") for _l, m in iface.bar.messages),
+          f"…a tile layer Mapflow can't use changes nothing, and the message bar says why ({iface.bar.messages[-1:]})")
     state.list_uploads = False
     state.extra_mosaics, state.extra_images = [], {}
     controller.draft.imagery = imagery_before
     if area_before is not None:
         controller.set_aoi_layer(area_before)
-    project.removeMapLayers([pier.id(), dock.id(), xyz.id(), wells.id(), harbour.id()])
+    project.removeMapLayers([pier.id(), dock.id(), xyz.id(), intranet.id(), wms.id(), wells.id(), harbour.id()])
     check(aoi_module.is_polygon_layer(controller.aoi_layer) or area_before is None, "…and the area is put back")
     imagery_service.load_mosaics()
     wait_until(lambda: not imagery_service._mosaics_loading, 5)    # or the check below would ride on this load

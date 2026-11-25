@@ -19,7 +19,7 @@ from .core.report import Environment, RequestInfo, summary_from, technical_text
 from .core.scenarios import Catalogue
 from .qgis_bridge import aoi as aoi_tools
 from .qgis_bridge import message_bar
-from .qgis_bridge import rasters, updates
+from .qgis_bridge import rasters, tile_layers, updates
 from .qgis_bridge.compat import RASTER_LAYER, VECTOR_LAYER
 from .qgis_bridge.layers import MapLayers
 from .services.imagery import Imagery
@@ -174,7 +174,7 @@ class MapflowNextPlugin:
         for layer in layers:
             if aoi_tools.is_polygon_layer(layer):
                 self.iface.addCustomActionForLayer(self.aoi_action, layer)
-            elif rasters.geotiff_path(layer):
+            elif rasters.geotiff_path(layer) or tile_layers.is_tile_layer(layer):
                 self.iface.addCustomActionForLayer(self.imagery_action, layer)
 
     def _remove_layer_actions(self) -> None:

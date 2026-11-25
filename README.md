@@ -32,7 +32,8 @@ The plugin covers the work that belongs next to the map. Each tab has its scenar
   other, and, for an existing collection, that they fit it.
   The imagery's extent becomes the area, and its preview goes on the map.
 - **Layers panel › Use a layer in Mapflow.** Right-click a polygon layer for "Use as AOI in Mapflow", or a
-  GeoTIFF layer for "Use as imagery in Mapflow": it's uploaded to My imagery and chosen when it's ready.
+  GeoTIFF or XYZ/TMS tile layer for "Use as imagery in Mapflow". A GeoTIFF is uploaded to My imagery and chosen
+  when it's ready; a tile layer is chosen as it is, as under "QGIS tile layers" in the run form.
 - **Imagery sources › Find imagery in the catalog.** Search by area, dates, cloud cover, off-nadir
   angle and how much of the area an image covers, look at the footprints on the map, and use an image in
   the run form. When an image is chosen, the area is clipped to its footprint, and an area outside it blocks Run.
