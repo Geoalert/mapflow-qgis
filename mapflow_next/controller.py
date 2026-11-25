@@ -1300,7 +1300,9 @@ class Controller(QObject):
             run.set_name(self.draft.effective_name(), self.draft.description)
         credits_billing = bool(status and status.billing is BillingType.credits)
         models = project.models if project else []
-        run.set_models(models, self.draft.model.id if self.draft.model else None)
+        # A scenario's model is the scenario: the list is there only when no scenario set one
+        choosable = scenario is None or self.draft.model is None or not scenario.apply.get("model")
+        run.set_models(models, self.draft.model.id if self.draft.model else None, choosable)
         base = formatting.per_km2(self.draft.model.base_price) if (self.draft.model and credits_billing) else ""
         note = ""
         if scenario and not self.draft.model and scenario.apply.get("model"):

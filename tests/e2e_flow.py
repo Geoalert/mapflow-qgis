@@ -6047,6 +6047,19 @@ def main():
     draft = controller.draft
     check(draft.model and draft.model.id == "wd-buildings", "scenario picks the Buildings model")
     check(draft.options == {"heights"}, "scenario switches on the heights option")
+    run_form = content.run
+    wait_until(lambda: run_form.model_name.isVisible(), 2)
+    check(not run_form.model_combo.isVisible() and run_form.model_name.isVisible()
+          and "Buildings" in run_form.model_name.text() and run_form._switches
+          and run_form._switches["heights"].isChecked(),
+          f"step 1 is the scenario: no model list, the model named, its options shown "
+          f"({run_form.model_name.text()!r}, {sorted(run_form._switches)})")
+    controller.custom_setup()
+    wait_until(lambda: run_form.model_combo.isVisible(), 2)
+    check(run_form.model_combo.isVisible() and not run_form.model_name.isVisible() and run_form._switches,
+          "Custom setup has the model list, with the options of the chosen model")
+    content.start.scenarioChosen.emit("heights")
+    draft = controller.draft
     # area: adopted from the active polygon layer
     check(draft.aoi and draft.aoi.name == "Old town" and 1.0 < draft.aoi.area_km2 < 1.5,
           f"area comes from the active polygon layer ({draft.aoi.area_km2 if draft.aoi else 0:.3f} km²)")

@@ -103,7 +103,6 @@ class RunPage(QWidget):
         layout.setContentsMargins(16, 12, 16, 16)
         layout.setSpacing(10)
 
-        layout.addWidget(self._build_summary())
         layout.addWidget(self._build_model_step())
         layout.addWidget(self._build_area_step())
         layout.addWidget(self._build_imagery_step())
@@ -119,8 +118,9 @@ class RunPage(QWidget):
 
     # ---------- building ----------
 
-    def _build_summary(self) -> QWidget:
-        card = Card(margins=(8, 8, 12, 8))
+    def _build_summary(self) -> QHBoxLayout:
+        """The scenario of step 1: back to the scenarios, its picture and title, the processing name, the gallery."""
+        card = self.model_card
         row = QHBoxLayout()
         row.setSpacing(10)
         back = tool("chevron-left", "Back to scenarios", "plain", 18)
@@ -157,20 +157,25 @@ class RunPage(QWidget):
         row.addWidget(self.thumb)
         row.addLayout(texts, 1)
         row.addWidget(change)
-        card.add(row)
-        return card
+        return row
 
     def _build_model_step(self) -> QWidget:
+        """Step 1 is the scenario itself: it sets the model, so the model's list shows only when there is a model to
+        pick (Custom setup, or a project without the scenario's model). The model's options show either way."""
         self.model_card = Card(spacing=10)
         self.model_header = StepHeader(1, "What to map")
         self.model_price = label("", "value")
         self.model_header.right.addWidget(self.model_price)
         self.model_card.add(self.model_header)
+        self.model_card.add(self._build_summary())
         self.model_combo = Combo(self.model_card)
         self.model_combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
         self.model_combo.setMinimumContentsLength(12)
         self.model_combo.activated.connect(self._model_activated)
         self.model_card.add(self.model_combo)
+        self.model_name = label("", "label")          # the scenario's model, where its list is hidden
+        self.model_name.setVisible(False)
+        self.model_card.add(self.model_name)
         self.model_note = label("", "meta", wrap=True)
         self.model_card.add(self.model_note)
         self.options_box = QVBoxLayout()
@@ -310,7 +315,12 @@ class RunPage(QWidget):
             self.name.setCursorPosition(0)
         self.name.setToolTip(f"{text}\n\n{description}" if description else "Processing name: edit to rename")
 
-    def set_models(self, models: List[Model], selected: Optional[str]) -> None:
+    def set_models(self, models: List[Model], selected: Optional[str], choosable: bool = True) -> None:
+        """`choosable`: the model's list shows. Without it the scenario has set the model."""
+        self.model_combo.setVisible(choosable)
+        chosen = next((m for m in models if m.id == selected), None)
+        self.model_name.setText(f"Model: {chosen.name}" if chosen else "")
+        self.model_name.setVisible(not choosable and chosen is not None)
         blocker = QSignalBlocker(self.model_combo)
         self.model_combo.clear()
         self._model_ids = []
