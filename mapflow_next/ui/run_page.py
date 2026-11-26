@@ -111,7 +111,10 @@ class RunPage(QWidget):
         self._model_ids: List[str] = []
         self._layer_ids: List[str] = []
         self._rows: List[OptionRow] = []
-        self.group_labels: List[QLabel] = []
+        self.group_labels: List[QPushButton] = []
+        self._groups: Dict[str, Tuple[QPushButton, List[Tuple[QWidget, bool]]]] = {}
+        self._open_groups: set = set()      # groups the user opened
+        self._shut_groups: set = set()      # groups the user closed though the chosen row is in them
         self._rows_key = None
         self._switches: Dict[str, Toggle] = {}
         self._options_key = None
@@ -438,15 +441,20 @@ class RunPage(QWidget):
         self._rows_key = key
         clear_layout(self.rows_box)
         self._rows = []
-        self.group_labels: List[QLabel] = []
+        self.group_labels = []
+        self._groups = {}
         mosaic_row = basemap_row = None
         group = ""
         for spec in rows:
             if spec.group != group:
                 group = spec.group
                 if group:
-                    heading = label(group, "meta")
+                    count = sum(1 for r in rows if r.group == group)
+                    heading = button(f"{group} ({count})", "link", size="sm")
+                    heading.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
+                    heading.clicked.connect(guarded(lambda *_, name=group: self._toggle_group(name)))
                     self.group_labels.append(heading)
+                    self._groups[group] = (heading, [])
                     self.rows_box.addWidget(heading)
             inline_price = spec.key == "mosaic"
             row = OptionRow(spec.title, spec.meta, title_detail=spec.price if inline_price else "")
@@ -459,6 +467,8 @@ class RunPage(QWidget):
                 row.setCursor(Qt.CursorShape.ArrowCursor)
                 self.rows_box.addWidget(row)
                 self._rows.append(row)
+                if spec.group:
+                    self._groups[spec.group][1].append((row, chosen))
                 continue
             if spec.note:
                 row.add_note(spec.note)
@@ -512,6 +522,8 @@ class RunPage(QWidget):
                 row.right.addLayout(controls)
             self.rows_box.addWidget(row)
             self._rows.append(row)
+            if spec.group:
+                self._groups[spec.group][1].append((row, chosen))
             if inline_price:
                 mosaic_row = row
             elif spec.zooms and basemap_row is None:
@@ -520,6 +532,35 @@ class RunPage(QWidget):
         if mosaic_row is not None and basemap_row is not None:
             basemap_row.ensurePolished()
             mosaic_row.setMinimumHeight(basemap_row.minimumSizeHint().height())
+        for name in self._groups:
+            self._show_group(name)
+
+    def group_open(self, name: str) -> bool:
+        """A group of rows (the QGIS tile layers, which can be many) is folded under its heading until the user
+        opens it, or until one of its rows is the chosen source."""
+        if name in self._open_groups:
+            return True
+        holds_choice = any(chosen for _, chosen in self._groups.get(name, (None, []))[1])
+        return holds_choice and name not in self._shut_groups
+
+    def _toggle_group(self, name: str) -> None:
+        if self.group_open(name):
+            self._open_groups.discard(name)
+            self._shut_groups.add(name)
+        else:
+            self._open_groups.add(name)
+            self._shut_groups.discard(name)
+        with self.keep_scroll():
+            self._show_group(name)
+
+    def _show_group(self, name: str) -> None:
+        """Folded, a group shows only its chosen row, so the step's choice is never hidden."""
+        heading, members = self._groups[name]
+        opened = self.group_open(name)
+        heading.setIcon(icons.icon("chevron-down" if opened else "chevron-right", tokens()["link"], 14))
+        heading.setToolTip("Hide these layers" if opened else "Show these layers")
+        for row, chosen in members:
+            row.setVisible(opened or chosen)
 
     def set_steps(self, model_done: bool, area_done: bool, imagery_done: bool) -> None:
         states = []

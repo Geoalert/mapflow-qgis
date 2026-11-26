@@ -290,10 +290,19 @@ def _run():
     disabled = run._rows[-1]
     chosen = recorder(run.imageryChosen)
     disabled.clicked.emit()
-    check(heading == ["QGIS tile layers"] and len(run._rows) == 4 and not disabled.isEnabled()
+    check(heading == ["QGIS tile layers (2)"] and len(run._rows) == 4 and not disabled.isEnabled()
           and disabled.toolTip() == disabled.meta.text() and not chosen
           and not [t for t in run._rows[-2].findChildren(QToolButton) if t.toolTip().startswith("Preview")],
           "a tile layer is a row under its heading, a disabled one shows its reason and chooses nothing")
+    run.set_imagery(tiles, "provider:mapbox")
+    spin()
+    check(not run._rows[-1].isVisible() and not run._rows[-2].isVisible() and run.group_labels[0].isVisible(),
+          "tile layers fold under their heading while none is chosen")
+    run.group_labels[0].click()
+    spin()
+    check(run._rows[-1].isVisible() and run._rows[-2].isVisible(), "a click on the heading shows them")
+    run.set_imagery(tiles, "tile:l1")
+    spin()
     shot(content, "q6-03b-run-tiles")
     run.set_issues([Issue("area", "Choose an area")], False)
     check(not run.run_button.isEnabled(), "an issue disables Run")

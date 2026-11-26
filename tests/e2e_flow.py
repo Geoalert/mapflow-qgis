@@ -4994,8 +4994,33 @@ def check_tile_layers(iface, plugin, state, api_url):
         check(not any(name in titles for name in ("Plugin preview", "Plugin result", "WMS layer", "GeoTIFF layer",
                                                   "Blocks", "Old town")),
               "…and no layer the plugin added (a preview, a result), no WMS layer, no vector or GeoTIFF layer")
-        check([label.text() for label in run.group_labels] == ["QGIS tile layers"],
-              "…under the heading “QGIS tile layers”")
+        heading_text = [label.text() for label in run.group_labels]
+        check(heading_text == [f"QGIS tile layers ({len(tile_rows())})"],
+              f"…under the heading “QGIS tile layers”, with their count ({heading_text})")
+        # Many tile layers would be a long list: folded until opened, or until one of them is the chosen source
+        chosen_key = controller._imagery_rows(session.status, True)[1]
+        heading = run.group_labels[0]
+        tiles_ui = [ui_row(r.title) for r in tile_rows()]
+        check(not (chosen_key or "").startswith("tile:") and not run.group_open("QGIS tile layers")
+              and not any(w.isVisible() for w in tiles_ui) and heading.isVisible(),
+              "TILE LAYERS: folded under their heading while none of them is chosen")
+        heading.click()
+        check(run.group_open("QGIS tile layers") and all(w.isVisible() for w in tiles_ui),
+              "…a click on the heading shows them")
+        controller.refresh_run()
+        check(all(ui_row(r.title).isVisible() for r in tile_rows()), "…and they stay shown when the form re-renders")
+        run.group_labels[0].click()
+        check(not any(ui_row(r.title).isVisible() for r in tile_rows()), "…another click folds them again")
+        first_usable = next(r for r in tile_rows() if not r.disabled)
+        controller.on_imagery(first_usable.key)
+        controller.refresh_run()
+        shown = [r.title for r in tile_rows() if ui_row(r.title).isVisible()]
+        check(run.group_open("QGIS tile layers") is False and shown == [first_usable.title],
+              f"…folded by the user, the chosen tile layer still shows, alone ({shown})")
+        run.group_labels[0].click()
+        check(all(ui_row(r.title).isVisible() for r in tile_rows()), "…and the heading opens the rest")
+        controller.on_imagery(chosen_key)
+        controller.refresh_run()
         kinds = []
         for row in rows():
             kind = row.key.split(":")[0]
