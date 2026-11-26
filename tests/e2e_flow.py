@@ -1272,7 +1272,7 @@ def check_rename_project(iface, plugin, state):
         return next((t for t in controller.projects_dialog.tiles if t.project.id == project_id), None)
 
     def header():
-        return content.project_button.text(), content.project_button.toolTip()
+        return content.project_button.full_text(), content.project_button.toolTip()
 
     class Fake:
         answer = None
@@ -1467,7 +1467,7 @@ def check_delete_project(iface, plugin, state):
         return next((t for t in controller.projects_dialog.tiles if t.project.id == project_id), None)
 
     def header():
-        return content.project_button.text(), content.project_button.toolTip()
+        return content.project_button.full_text(), content.project_button.toolTip()
 
     def lines():
         return [text for _level, text in iface.bar.messages]
@@ -6124,20 +6124,56 @@ def main():
     check(content.run.cost_value.text() == "70 credits", "cost bar shows the server's figure")
     check(content.run.run_button.isEnabled(), "Run is enabled once model, area and imagery are set")
     shot(content, "03-run", QSize(400, 980))
-    content.resize(360, 980)
+    from mapflow_next.ui.dock import DOCK_MIN_WIDTH
+    narrow = DOCK_MIN_WIDTH
+    content.resize(narrow, 980)
     wait_until(lambda: False, 0.2)
-    shot(content, "03b-run-narrow", QSize(360, 980))
+    shot(content, "03b-run-narrow", QSize(narrow, 980))
     from qgis.PyQt.QtWidgets import QScrollArea
     area = content.run.findChild(QScrollArea)
     area.verticalScrollBar().setValue(area.verticalScrollBar().maximum())
-    shot(content, "03c-run-imagery", QSize(360, 980))
+    shot(content, "03c-run-imagery", QSize(narrow, 980))
     area.verticalScrollBar().setValue(0)
-    iface.window.resizeDocks([plugin.dock], [360], Qt.Orientation.Horizontal)
+    iface.window.resizeDocks([plugin.dock], [narrow], Qt.Orientation.Horizontal)
     wait_until(lambda: False, 0.2)
     scroll_body = content.run.model_card.parentWidget()
     check(scroll_body.width() <= area.viewport().width(),
           f"run form fits a narrow dock without sideways scrolling "
           f"({scroll_body.width()} ≤ {area.viewport().width()} px)")
+    # Every page, the header and the tabs fit the dock's minimum width, with room for the vertical scroll bar:
+    # nothing in the panel makes it wider than that
+    bar = area.verticalScrollBar().sizeHint().width()
+    content.project_button.set_full_text("A project with a long name that would widen the header")
+    too_wide = []
+    for page in [content.stack.widget(n) for n in range(content.stack.count())]:
+        needed = page.layout().minimumSize().width() if page.layout() else 0
+        for scroll in page.findChildren(QScrollArea):
+            if scroll.widget() is not None and scroll.widget().layout() is not None:
+                needed = max(needed, scroll.widget().layout().minimumSize().width() + bar)
+        if needed > narrow:
+            too_wide.append((type(page).__name__, needed))
+    header, tabs = content.header.layout().minimumSize().width(), content.tab_buttons[0].parentWidget().layout()
+    if header > narrow:
+        too_wide.append(("header", header))
+    if tabs.minimumSize().width() > narrow:
+        too_wide.append(("tabs", tabs.minimumSize().width()))
+    check(not too_wide and plugin.dock.minimumWidth() == narrow and content.minimumSizeHint().width() <= narrow,
+          f"every page fits a {narrow} px dock with its scroll bar, and so does the header with a long project name "
+          f"({too_wide or 'all fit'}, content {content.minimumSizeHint().width()} px)")
+    content.project_button.set_full_text(session.project.name)
+    # My imagery's two upload buttons: one above the other in the narrow dock, side by side in a wide one; their
+    # text is never cut
+    pair = content.imagery.upload_buttons
+    content.stack.setCurrentWidget(content.imagery)
+    wait_until(lambda: False, 0.2)
+    narrow_pair = (pair.stacked(), [b.width() >= b.sizeHint().width() for b in pair.buttons])
+    iface.window.resizeDocks([plugin.dock], [520], Qt.Orientation.Horizontal)
+    wait_until(lambda: False, 0.2)
+    wide_pair = (pair.stacked(), [b.width() >= b.sizeHint().width() for b in pair.buttons])
+    content.open_run()
+    check(narrow_pair == (True, [True, True]) and wide_pair == (False, [True, True]),
+          f"the upload buttons stack in a {narrow} px dock and sit side by side in a wide one, never cut "
+          f"({narrow_pair}, {wide_pair})")
     content.resize(400, 980)
 
     # ---------- review round: the run form ----------

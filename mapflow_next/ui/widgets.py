@@ -6,9 +6,9 @@ from typing import Callable, List, Optional, Tuple
 from qgis.PyQt.QtCore import QEvent, QObject, QPointF, QRect, QRectF, QSize, Qt, QTimer, QUrl, pyqtSignal
 from qgis.PyQt.QtGui import (QCursor, QDesktopServices, QFont, QFontMetrics, QIcon, QPainter, QPainterPath, QPen,
                              QPixmap)
-from qgis.PyQt.QtWidgets import (QAbstractButton, QAction, QApplication, QButtonGroup, QComboBox, QFrame,
-                                 QHBoxLayout, QLabel, QLineEdit, QPushButton, QSizePolicy, QStyle, QStyleOptionButton,
-                                 QStylePainter, QToolButton, QToolTip, QVBoxLayout, QWidget)
+from qgis.PyQt.QtWidgets import (QAbstractButton, QAction, QApplication, QBoxLayout, QButtonGroup, QComboBox,
+                                 QFrame, QHBoxLayout, QLabel, QLineEdit, QPushButton, QSizePolicy, QStyle,
+                                 QStyleOptionButton, QStylePainter, QToolButton, QToolTip, QVBoxLayout, QWidget)
 
 from . import icons
 from .theme import color, set_prop, tokens
@@ -812,6 +812,41 @@ class ImageTile(FocusRing, QAbstractButton):
         painter.end()
 
 
+class ButtonPair(QWidget):
+    """Two buttons side by side, sharing the width; stacked, each the full width, when the row is too narrow for
+    both texts. Never clipped, and never wider than the wider button."""
+    GAP = 8
+
+    def __init__(self, first: QAbstractButton, second: QAbstractButton, parent: Optional[QWidget] = None):
+        super().__init__(parent)
+        self.buttons = (first, second)
+        self.box = QBoxLayout(QBoxLayout.Direction.LeftToRight, self)
+        self.box.setContentsMargins(0, 0, 0, 0)
+        self.box.setSpacing(self.GAP)
+        for item in self.buttons:
+            item.setParent(self)
+            self.box.addWidget(item, 1)
+
+    def side_by_side_width(self) -> int:
+        return sum(item.sizeHint().width() for item in self.buttons) + self.GAP
+
+    def stacked(self) -> bool:
+        return self.box.direction() == QBoxLayout.Direction.TopToBottom
+
+    @guarded(default=QSize(-1, -1))
+    def minimumSizeHint(self) -> QSize:
+        hint = super().minimumSizeHint()
+        return QSize(max(item.sizeHint().width() for item in self.buttons), hint.height())
+
+    @guarded
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        wanted = QBoxLayout.Direction.TopToBottom if self.width() < self.side_by_side_width() \
+            else QBoxLayout.Direction.LeftToRight
+        if self.box.direction() != wanted:
+            self.box.setDirection(wanted)
+
+
 class OptionRow(QFrame):
     """A selectable row (radio-like) with a title, a meta line and free space on the right."""
     clicked = pyqtSignal()
@@ -826,7 +861,7 @@ class OptionRow(QFrame):
         self.setAccessibleName(title)
         layout = QHBoxLayout(self)
         layout.setContentsMargins(10, 7, 10, 7)
-        layout.setSpacing(10)
+        layout.setSpacing(8)
         self.dot = QLabel(self)
         self.dot.setFixedSize(16, 16)
         texts = QVBoxLayout()

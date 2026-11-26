@@ -228,7 +228,7 @@ class ProcessingsPage(QWidget):
         outer.setContentsMargins(0, 0, 0, 0)
         toolbar = QHBoxLayout()
         toolbar.setContentsMargins(16, 12, 16, 4)
-        toolbar.setSpacing(6)
+        toolbar.setSpacing(4)
         self.chips = QButtonGroup(self)
         self.chip_buttons = {}
         for key, text in FILTERS:

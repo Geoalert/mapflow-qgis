@@ -17,9 +17,9 @@ from ..core.models import CatalogImage, Mosaic
 from . import icons
 from .layer_picker import pick_layers
 from .theme import set_prop, tokens
-from .widgets import (Callout, Card, Combo, DropCard, DropTarget, ElidedLabel, Pill, RangeSlider, Segmented, Toggle,
-                      button, clear_layout, hbox, label, link, placeholder, release_focus, rounded, same_width, tool,
-                      vbox)
+from .widgets import (ButtonPair, Callout, Card, Combo, DropCard, DropTarget, ElidedLabel, Pill, RangeSlider,
+                      Segmented, Toggle, button, clear_layout, hbox, label, link, placeholder, release_focus, rounded,
+                      same_width, tool, vbox)
 from ..core.guard import guarded
 
 
@@ -328,9 +328,9 @@ class ImageryPage(QWidget):
             second.append(f"z{image.zoom}")
         if image.coverage is not None:
             second.append(f"covers {image.coverage:.0f}%")
-        texts.addWidget(label(" · ".join(first), "meta"))
+        texts.addWidget(label(" · ".join(first), "meta", wrap=True))
         if second:
-            texts.addWidget(label(" · ".join(second), "meta"))
+            texts.addWidget(label(" · ".join(second), "meta", wrap=True))
         row.addLayout(texts, 1)
         show = tool("eye", "Show the preview and the footprint on the map", "plain")
         show.clicked.connect(guarded(lambda *_: self.showImage.emit(image.key)))
@@ -388,23 +388,20 @@ class ImageryPage(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(12)
         upload = DropCard(margins=(20, 17, 20, 17), spacing=8)     # room inside the dashed line
-        upload.add(hbox(label("Your own imagery", "h2"), None, label("Drag GeoTIFF layers or files here", "meta")))
+        upload.add(label("Your own imagery", "h2"))
         self.upload_limit = label("", "meta", wrap=True)
         self.set_upload_limit(config.UPLOAD_LIMIT_BYTES)
-        upload.add(vbox(4, self.upload_limit,
+        # The drop hint is a line of its own, so the title row never sets the panel's width
+        upload.add(vbox(4, label("Drag GeoTIFF layers or files here.", "meta", wrap=True), self.upload_limit,
                         label("It costs no imagery credits to process.", "meta", wrap=True), 4, spacing=0))
         self.drop = DropTarget(upload, lambda mime: self.parse_drop(mime))
         self.upload_button = button("Upload a GeoTIFF", "outline", "upload")
         self.upload_button.clicked.connect(guarded(lambda *_: self.uploadRequested.emit()))
         self.layer_button = button("Choose raster layers", "outline", "layers")
         self.layer_button.clicked.connect(guarded(lambda *_: self._choose_layers()))
-        # The two ways in, side by side and sharing the width
-        buttons = hbox(self.upload_button, self.layer_button, spacing=8)
-        buttons.setStretch(0, 1)
-        buttons.setStretch(1, 1)
-        for item in (self.upload_button, self.layer_button):
-            item.setMinimumWidth(1)                 # a narrow dock squeezes them instead of widening the page
-        upload.add(buttons)
+        # The two ways in, side by side and sharing the width, or one above the other in a narrow dock
+        self.upload_buttons = ButtonPair(self.upload_button, self.layer_button)
+        upload.add(self.upload_buttons)
         self.upload_bar = QProgressBar()
         self.upload_bar.setTextVisible(False)
         self.upload_bar.setVisible(False)
@@ -490,7 +487,7 @@ class ImageryPage(QWidget):
             f"{mosaic.image_count} image" + ("" if mosaic.image_count == 1 else "s")
         meta = " · ".join(t for t in (count, formatting.size(mosaic.size_bytes) if mosaic.size_bytes else "",
                                       formatting.when(mosaic.created)) if t)
-        row.addLayout(vbox(ElidedLabel(mosaic.name, "title"), label(meta, "meta"), spacing=2), 1)
+        row.addLayout(vbox(ElidedLabel(mosaic.name, "title"), label(meta, "meta", wrap=True), spacing=2), 1)
         show = tool("eye", "Show on the map", "plain")
         show.clicked.connect(guarded(lambda *_, mid=mosaic.id: self.showMosaic.emit(mid)))
         several = (mosaic.image_count or 0) > 1

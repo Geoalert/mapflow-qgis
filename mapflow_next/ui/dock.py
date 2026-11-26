@@ -28,6 +28,9 @@ START, PROCESSINGS, IMAGERY = 0, 1, 2
 PAGE_SIGN_IN, PAGE_START, PAGE_RUN, PAGE_PROCESSINGS, PAGE_IMAGERY, PAGE_UPGRADE = range(6)
 
 
+DOCK_MIN_WIDTH = 320                # every page fits it; tests/e2e_flow checks each
+
+
 class _AccountMenu(QMenu):
     def add_external_action(self, icon_name: str, text: str, url: str) -> None:
         action = menu_action(self, icon_name, text, lambda: QDesktopServices.openUrl(QUrl(url)))
@@ -130,6 +133,51 @@ class TabButton(FocusRing, QAbstractButton):
         painter.end()
 
 
+class _ProjectButton(QToolButton):
+    """The header's project button: the name takes the room the header has, up to `WIDEST` px, and ends in “…”
+    below that. Its minimum is a few letters, so a long name never sets the dock's width."""
+    WIDEST, NARROWEST = 150, 40
+
+    def __init__(self, parent: Optional[QWidget] = None):
+        super().__init__(parent)
+        self._full = ""
+
+    def set_full_text(self, text: str) -> None:
+        self._full = text
+        self._fit()
+        self.updateGeometry()
+
+    def full_text(self) -> str:
+        return self._full
+
+    def _chrome(self) -> int:
+        """The width around the text: icon, padding, border."""
+        return super().sizeHint().width() - self.fontMetrics().horizontalAdvance(self.text())
+
+    def _hint(self, room: int) -> QSize:
+        base = super().sizeHint()
+        return QSize(self._chrome() + min(self.fontMetrics().horizontalAdvance(self._full), room), base.height())
+
+    @guarded(default=QSize(-1, -1))
+    def sizeHint(self) -> QSize:
+        return self._hint(self.WIDEST)
+
+    @guarded(default=QSize(-1, -1))
+    def minimumSizeHint(self) -> QSize:
+        return self._hint(self.NARROWEST)
+
+    @guarded
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self._fit()
+
+    def _fit(self) -> None:
+        room = max(self.NARROWEST, min(self.WIDEST, self.width() - self._chrome()))
+        text = self.fontMetrics().elidedText(self._full, Qt.TextElideMode.ElideRight, room)
+        if text != self.text():
+            QToolButton.setText(self, text)
+
+
 class DockContent(QWidget):
     projectsRequested = pyqtSignal()
     settingsRequested = pyqtSignal()
@@ -145,7 +193,7 @@ class DockContent(QWidget):
         font = QFont(self.font())
         font.setFamily(load_fonts() or font.family())
         self.setFont(font)
-        self.setMinimumWidth(360)
+        self.setMinimumWidth(DOCK_MIN_WIDTH)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
@@ -177,7 +225,7 @@ class DockContent(QWidget):
         mark = icons.mark_widget(is_dark(), 26, header)
         mark.setToolTip("Mapflow")
         row.addWidget(mark)
-        self.project_button = QToolButton(header)
+        self.project_button = _ProjectButton(header)
         self.project_button.setProperty("variant", "project")
         self.project_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         self.project_button.setIcon(icons.icon("folder", tokens()["ink"], 15))
@@ -225,8 +273,7 @@ class DockContent(QWidget):
 
     def set_project(self, current: Optional[Project]) -> None:
         name = current.name if current else "Loading…"
-        metrics = QFontMetrics(self.project_button.font())
-        self.project_button.setText(metrics.elidedText(name, Qt.TextElideMode.ElideRight, 150))
+        self.project_button.set_full_text(name)
         shared = bool(current and current.shared)
         self.project_button.setIcon(icons.icon("users" if shared else "folder", tokens()["ink"], 15))
         self.project_button.setToolTip(f"Project: {name}{' (shared)' if shared else ''}. Click to switch, "
@@ -341,4 +388,4 @@ class MapflowDock(QgsDockWidget):
         self.setObjectName("MapflowNextDock")
         self.content = DockContent(catalogue, links, self)
         self.setWidget(self.content)
-        self.setMinimumWidth(360)
+        self.setMinimumWidth(DOCK_MIN_WIDTH)

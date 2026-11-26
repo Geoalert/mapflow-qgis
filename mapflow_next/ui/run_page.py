@@ -125,7 +125,7 @@ class RunPage(QWidget):
         """The scenario of step 1: back to the scenarios, its picture and title, the processing name, the gallery."""
         card = self.model_card
         row = QHBoxLayout()
-        row.setSpacing(10)
+        row.setSpacing(8)
         back = tool("chevron-left", "Back to scenarios", "plain", 18)
         back.clicked.connect(self.backRequested.emit)
         self.thumb = QLabel(card)
@@ -487,7 +487,7 @@ class RunPage(QWidget):
                 zoom.setToolTip("Zoom level: higher is sharper and costs more. The starred one is recommended for "
                                 "this scenario")
                 zoom.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
-                zoom.setMinimumContentsLength(4)
+                zoom.setMinimumContentsLength(3)       # "z19"
                 zoom.activated.connect(
                     guarded(lambda i, key=spec.key, combo=zoom: self.zoomChosen.emit(key, combo.itemData(i))))
                 controls.addWidget(zoom)

@@ -34,7 +34,7 @@ class SignInPage(QWidget):
         scroll.setWidget(body)
         outer.addWidget(scroll)
         layout = QVBoxLayout(body)
-        layout.setContentsMargins(24, 28, 24, 20)
+        layout.setContentsMargins(16, 28, 16, 20)
         layout.setSpacing(20)
 
         layout.addWidget(icons.logo_widget(is_dark(), 44, body), 0, Qt.AlignmentFlag.AlignLeft)    # the waves show
@@ -113,12 +113,12 @@ class SignInPage(QWidget):
         network = link("Network and proxy settings", external=False)
         network.clicked.connect(self.networkSettingsRequested.emit)
         footer = QHBoxLayout()
-        footer.setSpacing(16)
+        footer.setSpacing(12)
         footer.addWidget(network)
         footer.addWidget(link("Plugin guide", self.links.docs))
         footer.addStretch(1)
         layout.addLayout(footer)
-        # a row of its own: three links do not fit the 352 px of a narrow dock
+        # a row of its own: three links do not fit a narrow dock
         self.terms = link("Terms of use", self.links.terms)
         terms_row = QHBoxLayout()
         terms_row.setSpacing(16)

@@ -146,7 +146,7 @@ QPushButton[variant="primary"]:disabled { background: $tile; color: $disabled; }
 QPushButton[variant="outline"] { background: $bg; color: $ink; border: 1px solid $stroke; }
 QPushButton[variant="outline"]:hover { background: $subtle; }
 QPushButton[variant="outline"]:disabled { color: $disabled; }
-QPushButton[variant="ghost"] { background: transparent; color: $link; border: 0; }
+QPushButton[variant="ghost"] { background: transparent; color: $link; border: 0; padding: 0 10px; }
 QPushButton[variant="ghost"]:hover { background: $primary_soft; }
 QPushButton[variant="ghost"]:disabled { color: $disabled; }
 QPushButton[variant="link"] { background: transparent; color: $link; border: 0; padding: 0; min-height: 18px;
@@ -191,7 +191,7 @@ QPushButton[segbtn="true"] { background: transparent; color: $text2; border: 0; 
 QPushButton[segbtn="true"]:checked { background: $bg; color: $ink; }
 
 QPushButton[chip="true"] { background: $bg; color: $text; border: 1px solid $border; border-radius: 13px;
-                           min-height: 24px; padding: 0 10px; font-size: 12px; }
+                           min-height: 24px; padding: 0 8px; font-size: 12px; }
 QPushButton[chip="true"]:checked { background: $primary_soft; border-color: $primary_soft2; color: $primary_ink; }
 
 QFrame[option="true"] { background: $bg; border: 1px solid $border; border-radius: 8px; }
