@@ -15,6 +15,7 @@
     - Imagery search: a minimum area coverage filter; previews that come in several parts are shown whole
     - Imagery search: one off-nadir range slider, 0–30°, sends both its ends
     - Imagery search: an "Available for me" switch hides the images your account cannot process; off by default
+    - A processing that waits for its imagery order shows "Awaiting", not "Running"
     - With one image chosen from the imagery search, the area is clipped to the image's footprint: the submitted geometry, the area shown, the cost and the limits use the part inside; an area outside the image blocks Run
     - Unloading or reloading the plugin closes its Projects, My imagery and scenario windows and stops everything it was doing
     - Preview pictures are kept in a private folder, under names that carry no server id; the folder is removed when the plugin unloads

@@ -2291,6 +2291,17 @@ def check_restart(iface, content, controller, processings, state):
                          and status_of("restart-awaiting") is Status.awaiting, 5),
               "RESTART: a cancelled and an awaiting processing are loaded")
 
+        # AWAITING (waiting for its imagery order): "Awaiting", not "Running", and no progress bar yet
+        from qgis.PyQt.QtWidgets import QProgressBar
+        from mapflow_next.ui.widgets import Pill
+        from mapflow_next.ui.processings_page import ProcessingCard
+        card = next((c for c in page.findChildren(ProcessingCard) if c.processing.id == "restart-awaiting"), None)
+        pills = [p.text() for p in card.findChildren(Pill)] if card else []
+        tips = [p.toolTip() for p in card.findChildren(Pill)] if card else []
+        check("Awaiting" in pills and not any(t.startswith("Running") for t in pills)
+              and not card.findChildren(QProgressBar) and any("imagery order" in t for t in tips),
+              f"AWAITING: its card says Awaiting, with no progress bar, and says why ({pills})")
+
         # not offered: ok, in progress, awaiting
         for pid, what in (("old-1", "an OK"), ("restart-awaiting", "an awaiting")):
             check(restart_button(pid) is None, f"RESTART: not offered for {what} processing")

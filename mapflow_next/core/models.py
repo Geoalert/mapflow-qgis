@@ -472,6 +472,11 @@ class Processing:
         return not self.status.is_terminal
 
     @property
+    def is_awaiting(self) -> bool:
+        """Waiting for its imagery order (a catalog image being bought) to be delivered; nothing runs yet."""
+        return self.status is Status.awaiting
+
+    @property
     def needs_review(self) -> bool:
         return self.review_status == "IN_REVIEW"
 

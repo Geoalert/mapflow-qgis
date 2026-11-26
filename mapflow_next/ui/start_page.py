@@ -37,12 +37,22 @@ def plain(text: str) -> str:
 def status_pill(processing: Processing, in_map: bool) -> tuple:
     if processing.needs_review:
         return "Review required", "warn"
+    if processing.is_awaiting:
+        return "Awaiting", "run"
     if processing.is_running:
         return f"Running · {processing.percent}%", "run"
     if processing.is_done:
         return ("✓ In map", "ok") if in_map else ("Done", "ok")
     return {"FAILED": ("Failed", "err"), "REFUNDED": ("Refunded", "gray"),
             "CANCELLED": ("Cancelled", "gray")}.get(processing.status.value, (processing.status.value.title(), "gray"))
+
+
+AWAITING_TIP = "Waiting for the imagery order to be completed. The processing starts when the imagery arrives."
+
+
+def status_tip(processing: Processing) -> str:
+    """The status pill's tooltip, where its text needs one."""
+    return AWAITING_TIP if processing.is_awaiting else ""
 
 
 def model_icon(model_name: str) -> Optional[str]:
@@ -187,9 +197,11 @@ class _MiniCard(Card):
         top.setSpacing(6)
         top.addWidget(ElidedLabel(processing.name, "title"), 1)
         text, kind = status_pill(processing, in_map)
-        top.addWidget(Pill(text, kind))
+        pill = Pill(text, kind)
+        pill.setToolTip(status_tip(processing))
+        top.addWidget(pill)
         texts.addLayout(top)
-        if processing.is_running:
+        if processing.is_running and not processing.is_awaiting:
             bar = QProgressBar(self)
             bar.setTextVisible(False)
             bar.setValue(processing.percent)

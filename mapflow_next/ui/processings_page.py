@@ -15,7 +15,7 @@ from ..core.failures import empty_list_text
 from ..core.messages import describe
 from ..core.models import PlannedProcessing, Processing, Status
 from . import icons
-from .start_page import model_icon, status_pill
+from .start_page import model_icon, status_pill, status_tip
 from .theme import set_prop, tokens
 from .widgets import (Card, ElidedLabel, Pill, Stars, button, clear_layout, event_pos, label, link, menu_action,
                       rule, tool)
@@ -58,10 +58,12 @@ class ProcessingCard(Card):
         top.addWidget(icon)
         top.addWidget(ElidedLabel(processing.name, "title"), 1)
         text, kind = status_pill(processing, in_map)
-        top.addWidget(Pill(text, kind))
+        pill = Pill(text, kind)
+        pill.setToolTip(status_tip(processing))
+        top.addWidget(pill)
         self.add(top)
 
-        if processing.is_running:
+        if processing.is_running and not processing.is_awaiting:      # awaiting: no progress to show yet
             bar = QProgressBar(self)
             bar.setTextVisible(False)
             bar.setValue(processing.percent)
