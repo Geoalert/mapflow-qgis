@@ -18,8 +18,8 @@ from ..core.draft import Issue
 from ..core.models import Block, Model
 from . import icons
 from .theme import set_prop, tokens
-from .widgets import (Callout, Card, Combo, ElidedLabel, FitLineEdit, HoverTip, OptionRow, Pill, StepHeader, Toggle,
-                      button, clear_layout, label, link, rounded, tool, vbox)
+from .widgets import (ButtonGrid, Callout, Card, Combo, ElidedLabel, FitLineEdit, HoverTip, OptionRow, Pill,
+                      StepHeader, Toggle, button, clear_layout, label, link, rounded, tool, vbox)
 from ..core.guard import guarded
 
 
@@ -234,9 +234,8 @@ class RunPage(QWidget):
         hint_layout.setSpacing(6)
         self.area_hint_text = Callout("info", "", self.area_hint)
         hint_layout.addWidget(self.area_hint_text)
-        self.area_hint_actions = QGridLayout()        # two columns that shrink with the dock
-        self.area_hint_actions.setHorizontalSpacing(6)
-        self.area_hint_actions.setVerticalSpacing(6)
+        self.area_hint_actions = QVBoxLayout()        # its ButtonGrid: two columns, or one in a narrow dock
+        self.area_hint_actions.setContentsMargins(0, 0, 0, 0)
         hint_layout.addLayout(self.area_hint_actions)
         self.area_hint.setVisible(False)
         self.area_hint_buttons: Dict[str, QPushButton] = {}
@@ -420,14 +419,12 @@ class RunPage(QWidget):
         self.area_hint_text.set(kind, text)
         clear_layout(self.area_hint_actions)
         self.area_hint_buttons = {}
-        for index, (caption, action) in enumerate(actions):
+        for caption, action in actions:
             item = button(caption, "outline", size="sm")
-            item.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
-            item.setMinimumWidth(90)
-            item.setToolTip(caption)
             item.clicked.connect(guarded(lambda *_, a=action: self.areaAction.emit(a)))
-            self.area_hint_actions.addWidget(item, index // 2, index % 2)
             self.area_hint_buttons[action] = item
+        if self.area_hint_buttons:
+            self.area_hint_actions.addWidget(ButtonGrid(self.area_hint_buttons.values(), columns=2, gap=6))
         self.area_hint.setVisible(bool(text))
 
     def set_imagery(self, rows: List[ImageryRow], selected: Optional[str], hint: str = "", error: str = "") -> None:

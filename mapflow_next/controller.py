@@ -17,8 +17,8 @@ from qgis.core import Qgis, QgsGeometry, QgsProject, QgsVectorLayer
 from . import config
 from .api.client import MapflowApi
 from .core import filenames, formatting
-from .core.draft import Coverage, ImageryChoice, Issue, RunDraft
-from .core.failures import USER, project_deleted_text, project_gone_text
+from .core.draft import MIN_ORDER, Coverage, ImageryChoice, Issue, RunDraft
+from .core.failures import USER, project_deleted_text, project_gone_text, search_area_text
 from .core.guard import guarded
 from .core.tile_layers import TileOffer, match_offer, nearest_zoom
 from .core.models import BillingType, CatalogImage, Processing, SourceInfo, StorageLimits, UserStatus
@@ -52,6 +52,7 @@ VECTOR_FILTER = "Vector files (*.geojson *.json *.gpkg *.shp *.kml *.kmz *.gml);
 TILE_GROUP = "QGIS tile layers"          # the heading of the tile layers among the imagery rows
 PROJECTS_WINDOW_PAGE = 24        # eight rows of three tiles
 EXTENT_PROPERTY = "mapflow_next/extent_of"   # on an area layer made from My imagery: the imagery's name
+ENLARGED_PROPERTY = "mapflow_next/enlarged_for"     # on an area enlarged to a provider's minimum order: the source
 
 
 class Controller(QObject):
@@ -183,6 +184,7 @@ class Controller(QObject):
 
         imagery_page = c.imagery
         imagery_page.searchRequested.connect(self.search)
+        imagery_page.typesChanged.connect(self.filter_search_types)
         imagery_page.useImage.connect(self.use_image)
         imagery_page.showImage.connect(self.show_image)
         imagery_page.useMosaic.connect(self.use_mosaic)
@@ -842,6 +844,8 @@ class Controller(QObject):
         elif action == "imagery_extent":
             self.use_imagery_extent()
             return
+        elif action == "enlarge":
+            self.enlarge_area()
         elif action == "edit_outline":
             self.edit_outline()
             return
@@ -1147,10 +1151,23 @@ class Controller(QObject):
     def _is_extent_layer(self, layer) -> bool:
         return bool(layer is not None and layer.customProperty(EXTENT_PROPERTY))
 
-    def _area_hint(self, outside: bool, area_issue: str):
+    def _area_hint(self, outside: bool, area_issue: str, min_order: Optional[Issue] = None):
         coverage = self.draft.coverage
         if outside:
             return "warn", area_issue, (("Use the imagery extent", "imagery_extent"),)
+        if min_order is not None:
+            # The button is the confirmation: the area becomes a rectangle over it of the minimum size
+            minimum, _source = self.draft.min_order(self.session.status)
+            return "warn", min_order.text, ((f"Enlarge to {formatting.km2(minimum)}", "enlarge"),
+                                            ("Draw a larger area", "draw"))
+        layer = self.aoi_layer
+        if self.draft.aoi and layer is not None and layer.customProperty(ENLARGED_PROPERTY):
+            actions = [("Edit the outline", "edit_outline")]
+            previous = QgsProject.instance().mapLayer(self._previous_aoi or "")
+            if aoi_tools.is_polygon_layer(previous) and previous is not layer:
+                actions.insert(0, (f"Back to “{previous.name()}”", "previous"))
+            return ("info", f"The area was enlarged to a rectangle over your area, to the smallest order "
+                            f"{layer.customProperty(ENLARGED_PROPERTY)} sells.", tuple(actions))
         if self.draft.aoi and self._is_extent_layer(self.aoi_layer):
             actions = [("Draw a smaller area", "draw"), ("Edit the outline", "edit_outline")]
             previous = QgsProject.instance().mapLayer(self._previous_aoi or "")
@@ -1196,6 +1213,31 @@ class Controller(QObject):
         self.layers.zoom_to([layer])
         self.refresh_run()
         self.render_imagery_area()
+
+    def enlarge_area(self) -> None:
+        """The area is under the smallest order of the imagery's provider, and the user confirmed: a rectangle over
+        the whole area that meets the minimum becomes the area. For imagery with a footprint, it is the part inside
+        the image that counts, so the rectangle is checked (and grown) against the footprint."""
+        minimum, source = self.draft.min_order(self.session.status)
+        aoi = self.draft.aoi
+        if not aoi or not minimum:
+            return
+        area = aoi_tools.geometry_from_geojson(aoi.geometry)
+        found = self._imagery_footprint()
+        rectangle, why = aoi_tools.enlarged_rectangle(area, minimum, found[1] if found else None) \
+            if area is not None else (None, "There is no area to enlarge.")
+        if rectangle is None:
+            self.notify(f"The area can't be enlarged automatically. {why}", Qgis.MessageLevel.Warning, duration=10)
+            return
+        self._area_counter += 1
+        layer = aoi_tools.memory_layer(rectangle, aoi_tools.WGS84,
+                                       f"Mapflow area {self._area_counter} (enlarged to {formatting.km2(minimum)})")
+        layer.setCustomProperty(ENLARGED_PROPERTY, source)
+        self.layers.add(layer)
+        if self.aoi_layer is not None and not self.aoi_layer.customProperty(ENLARGED_PROPERTY):
+            self._previous_aoi = self.aoi_layer.id()
+        self.set_aoi_layer(layer)
+        self.layers.zoom_to([layer])
 
     def edit_outline(self) -> None:
         """Start editing the area layer's outline on the map (QGIS's vertex tool)."""
@@ -1318,6 +1360,7 @@ class Controller(QObject):
         offers = self._tile_offers()
         issues = self._issues(project, status, offers)
         area_issue = next((i.text for i in issues if i.field == "area" and self.draft.aoi), "")
+        min_order = next((i for i in issues if i.code == MIN_ORDER and self.draft.aoi), None)
         coverage = self.draft.coverage
         outside = bool(self.draft.aoi and coverage and not coverage.overlaps)
         if self.draft.aoi:
@@ -1333,11 +1376,12 @@ class Controller(QObject):
                 parts.append(f"within your {formatting.km2(limit)} limit")
             if processed.area_km2 < config.MIN_BILLED_AREA_KM2 and not outside:
                 parts.append("billed as 1 km²")
-            # outside the imagery: the suggestion below says it, with a way out
-            run.set_area(formatting.km2(processed.area_km2), " · ".join(parts), "" if outside else area_issue)
+            # outside the imagery, or under the provider's minimum: the suggestion below says it, with a way out
+            run.set_area(formatting.km2(processed.area_km2), " · ".join(parts),
+                         "" if outside or min_order else area_issue)
         else:
             run.set_area("", "Pick a polygon layer, draw the area, or use the map view.")
-        run.set_area_hint(*self._area_hint(outside, area_issue))
+        run.set_area_hint(*self._area_hint(outside, area_issue, min_order))
 
         rows, selected = self._imagery_rows(status, credits_billing, offers)
         imagery_issue = next((i.text for i in issues if i.field == "imagery" and self.draft.imagery), "")
@@ -1951,15 +1995,26 @@ class Controller(QObject):
         if not self.draft.aoi:
             self.content.imagery.show_search_message("Set an area first.", "warn")
             return
+        self._searching()
+        self.imagery.search(self.draft.aoi.geometry, params["date_from"], params["date_to"], params["max_cloud"],
+                            params["min_off_nadir"], params["max_off_nadir"], params["product_types"],
+                            params.get("min_coverage"), bool(params.get("hide_unavailable")))
+
+    def _searching(self) -> None:
         self.content.imagery.set_searching(True)
         self.content.imagery.show_search_message("")
         self.content.imagery.forget_thumbnails()
         self._pictures = {}
         # Loaded tiles stay; one still loading may never answer (a sign-out aborts it): asked for again
         self._world_tiles = {url: tile for url, tile in self._world_tiles.items() if isinstance(tile, bytes)}
-        self.imagery.search(self.draft.aoi.geometry, params["date_from"], params["date_to"], params["max_cloud"],
-                            params["min_off_nadir"], params["max_off_nadir"], params["product_types"],
-                            params.get("min_coverage"), bool(params.get("hide_unavailable")))
+
+    @guarded
+    def filter_search_types(self, product_types: list) -> None:
+        """Mosaics or Scenes clicked: the results on the list follow, by the same search with that type. Before
+        any search, the choice waits for "Search imagery"."""
+        if self.imagery.types_differ(product_types or None):
+            self._searching()
+            self.imagery.search_types(product_types or None)
 
     @guarded
     def on_search_done(self, images, total: int) -> None:
@@ -2046,7 +2101,12 @@ class Controller(QObject):
     @guarded
     def on_search_failed(self, text: str) -> None:
         self.content.imagery.set_searching(False)
-        self.content.imagery.show_search_message(text, "error")
+        too_large = search_area_text(text)
+        if too_large:
+            self.content.imagery.show_search_message(too_large, "warn",
+                                                     ("Open Mapflow Web", self.session.config.links.web))
+        else:
+            self.content.imagery.show_search_message(text, "error")
 
     @guarded
     def show_image(self, image_key: str) -> None:

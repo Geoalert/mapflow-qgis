@@ -15,6 +15,8 @@
     - Imagery search: a minimum area coverage filter; previews that come in several parts are shown whole
     - Imagery search: one off-nadir range slider, 0–30°, sends both its ends
     - Imagery search: an "Available for me" switch hides the images your account cannot process; off by default
+    - Imagery search: date presets for the last 3 months, 6 months and year; a click on Mosaics or Scenes shows only that type in the results at once, and a second click shows both; an area too large for the search says its size and the limit, and that Mapflow Web can run the search in the background
+    - An area smaller than the imagery's provider sells per order can be enlarged in one click: a rectangle over the whole area that meets the minimum, checked against the chosen image's footprint, with the area before a click away
     - A processing that waits for its imagery order shows "Awaiting", not "Running"
     - With one image chosen from the imagery search, the area is clipped to the image's footprint: the submitted geometry, the area shown, the cost and the limits use the part inside; an area outside the image blocks Run
     - Unloading or reloading the plugin closes its Projects, My imagery and scenario windows and stops everything it was doing

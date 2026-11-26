@@ -1,7 +1,6 @@
 """Imagery: search the catalog over your area, or use your own collections (My imagery)."""
 from __future__ import annotations
 
-from datetime import date
 from typing import Callable, Dict, List, Optional, Tuple
 
 from qgis.PyQt.QtCore import QDate, QSize, Qt, QTimer, pyqtSignal
@@ -17,13 +16,16 @@ from ..core.models import CatalogImage, Mosaic
 from . import icons
 from .layer_picker import pick_layers
 from .theme import set_prop, tokens
-from .widgets import (ButtonPair, Callout, Card, Combo, DropCard, DropTarget, ElidedLabel, Pill, RangeSlider,
+from .widgets import (ButtonGrid, Callout, Card, Combo, DropCard, DropTarget, ElidedLabel, Pill, RangeSlider,
                       Segmented, Toggle, button, clear_layout, hbox, label, link, placeholder, release_focus, rounded,
                       same_width, tool, vbox)
 from ..core.guard import guarded
 
 
 MINE, SEARCH = 0, 1                             # the tabs: My imagery, Search the catalog
+
+
+DATE_PRESETS = ((3, "3 months"), (6, "6 months"), (12, "year"))      # (months, chip)
 
 
 class ImageryPage(QWidget):
@@ -33,6 +35,7 @@ class ImageryPage(QWidget):
     moreResults = pyqtSignal()
     useMosaic = pyqtSignal(str)
     showMosaic = pyqtSignal(str)
+    typesChanged = pyqtSignal(list)           # the Mosaics/Scenes filter: ["MOSAIC"], ["IMAGE"] or [] for both
     moreMosaics = pyqtSignal()                # "Show more" under the collections: their next page
     uploadRequested = pyqtSignal()
     layerUploadRequested = pyqtSignal(list)   # GeoTIFF layers of the project, by layer id
@@ -128,9 +131,9 @@ class ImageryPage(QWidget):
         grid = QGridLayout()
         grid.setHorizontalSpacing(10)
         grid.setVerticalSpacing(4)
-        today = date.today()
-        self.date_from = QDateEdit(QDate(today.year - 1, today.month, today.day))
-        self.date_to = QDateEdit(QDate(today.year, today.month, today.day))
+        today = QDate.currentDate()
+        self.date_from = QDateEdit(today.addYears(-1))      # addYears: 29 Feb a year back is 28 Feb
+        self.date_to = QDateEdit(today)
         for edit in (self.date_from, self.date_to):
             edit.setCalendarPopup(True)              # the calendar icon opens a month view
             edit.setDisplayFormat("d MMM yyyy")
@@ -142,6 +145,22 @@ class ImageryPage(QWidget):
             grid.addWidget(label(text, "label"), 0, column)
             grid.addWidget(widget, 1, column)
         form.add(grid)
+        # Fixed ranges up to today; the one the dates match shows as on, so editing a date turns it off
+        presets = QHBoxLayout()
+        presets.setSpacing(4)
+        presets.addWidget(label("Last", "meta"))
+        self.date_presets: Dict[int, QPushButton] = {}
+        for months, text in DATE_PRESETS:
+            chip = self._chip(text, False)
+            chip.setToolTip(f"From {text if months != 12 else 'a year'} ago to today")
+            chip.clicked.connect(guarded(lambda *_, m=months: self.set_date_preset(m)))
+            presets.addWidget(chip)
+            self.date_presets[months] = chip
+        presets.addStretch(1)
+        form.add(presets)
+        for edit in (self.date_from, self.date_to):
+            edit.dateChanged.connect(guarded(lambda *_: self._show_date_preset()))
+        self._show_date_preset()
         self.cloud, self.cloud_value = self._slider(form, "Max cloud cover", 0, 100, 20, 5, "{} %")
         self.nadir, self.nadir_value = self._range_slider(form, "Off-nadir angle", 0, 30, 5, "{}°")
         self.coverage, self.coverage_value = self._slider(form, "Min area coverage", 0, 100, 20, 10, "{} %")
@@ -161,8 +180,10 @@ class ImageryPage(QWidget):
         types.addWidget(label("Type", "label"))
         self.type_mosaic = self._chip("Mosaics", True)
         self.type_image = self._chip("Scenes", True)
-        types.addWidget(self.type_mosaic)
-        types.addWidget(self.type_image)
+        for chip in (self.type_mosaic, self.type_image):
+            chip.clicked.connect(guarded(lambda *_, c=chip: self._type_clicked(c)))
+            types.addWidget(chip)
+        self._show_types()
         types.addStretch(1)
         form.add(types)
         self.search_button = button("Search imagery", "primary", "search")
@@ -184,9 +205,29 @@ class ImageryPage(QWidget):
         self.results = QVBoxLayout()
         self.results.setSpacing(8)
         layout.addLayout(self.results)
-        layout.addWidget(link("Get advanced imagery search tools in Mapflow Web", self.links.web))
+        layout.addWidget(link("Advanced imagery search in Mapflow Web", self.links.web))
         layout.addStretch(1)
         return page
+
+    def set_date_preset(self, months: int) -> None:
+        """The last `months` up to today."""
+        today = QDate.currentDate()
+        self.date_to.setMaximumDate(today)              # a panel left open past midnight: today moved on
+        self.date_to.setDate(today)
+        self.date_from.setDate(today.addMonths(-months))
+        self._show_date_preset()
+
+    def date_preset(self) -> Optional[int]:
+        """The preset the dates match (months), or None."""
+        today = QDate.currentDate()
+        if self.date_to.date() != today:
+            return None
+        return next((months for months, _ in DATE_PRESETS if self.date_from.date() == today.addMonths(-months)), None)
+
+    def _show_date_preset(self) -> None:
+        current = self.date_preset()
+        for months, chip in self.date_presets.items():
+            chip.setChecked(months == current)
 
     def _chip(self, text: str, checked: bool) -> QPushButton:
         chip = QPushButton(text)
@@ -227,15 +268,36 @@ class ImageryPage(QWidget):
         form.add(vbox(head, slider, spacing=0))
         return slider, shown
 
-    def _emit_search(self) -> None:
-        # The API's product types are MOSAIC and IMAGE (a "Scene" in the results is an IMAGE)
+    def product_types(self) -> Optional[List[str]]:
+        """The type filter: ["MOSAIC"] or ["IMAGE"], or None for both. The API's product types are MOSAIC and
+        IMAGE (a "Scene" in the results is an IMAGE)."""
         types = [t for t, chip in (("MOSAIC", self.type_mosaic), ("IMAGE", self.type_image)) if chip.isChecked()]
+        return types if len(types) == 1 else None
+
+    def _type_clicked(self, chip: QPushButton) -> None:
+        """A type chip filters by its type: a click shows only that type, and a click on the only type shown
+        shows both again. With results on the list, they follow at once."""
+        other = self.type_image if chip is self.type_mosaic else self.type_mosaic
+        was_only = not chip.isChecked() and not other.isChecked()     # Qt has toggled it already
+        chip.setChecked(True)
+        other.setChecked(was_only)
+        self._show_types()
+        self.typesChanged.emit(self.product_types() or [])
+
+    def _show_types(self) -> None:
+        for chip, other, name in ((self.type_mosaic, self.type_image, "mosaics"),
+                                  (self.type_image, self.type_mosaic, "scenes")):
+            chip.setToolTip("Show mosaics and scenes" if chip.isChecked() and not other.isChecked()
+                            else f"Show only {name}")
+
+    def _emit_search(self) -> None:
+        types = self.product_types()
         self.searchRequested.emit({
             "date_from": self.date_from.date().toPyDate(), "date_to": self.date_to.date().toPyDate(),
             "max_cloud": float(self.cloud.value()), "min_off_nadir": float(self.nadir.low()),
             "max_off_nadir": float(self.nadir.high()),
             "min_coverage": float(self.coverage.value()) or None,
-            "product_types": types if len(types) == 1 else None,
+            "product_types": types,
             "hide_unavailable": self.available.isChecked(),
         })
 
@@ -268,8 +330,10 @@ class ImageryPage(QWidget):
         self.search_button.setEnabled(not busy)
         self.search_button.setText("Searching…" if busy else "Search imagery")
 
-    def show_search_message(self, text: str, kind: str = "info") -> None:
+    def show_search_message(self, text: str, kind: str = "info", action: Tuple[str, str] = ()) -> None:
+        """`action`: (caption, url) of a button next to the text that opens the page in the browser."""
         self.search_message.set(kind, text)
+        self.search_message.set_action(*action)
 
     def set_results(self, images: List[CatalogImage], total: int, chosen: Optional[str],
                     previewing: Optional[set] = None, loading_more: bool = False) -> None:
@@ -277,7 +341,7 @@ class ImageryPage(QWidget):
         self._thumbs, self._eyes = {}, {}
         if not images:
             self._pixmaps = {}
-        self.results_title.setText(f"{total:,} images over your area" if total else "")
+        self.results_title.setText(f"{total:,} {'image' if total == 1 else 'images'} over your area" if total else "")
         self.results_title.setVisible(bool(total))
         self.clear_button.setVisible(bool(images))
         self._uses = []                             # Use and Chosen: one width
@@ -400,7 +464,7 @@ class ImageryPage(QWidget):
         self.layer_button = button("Choose raster layers", "outline", "layers")
         self.layer_button.clicked.connect(guarded(lambda *_: self._choose_layers()))
         # The two ways in, side by side and sharing the width, or one above the other in a narrow dock
-        self.upload_buttons = ButtonPair(self.upload_button, self.layer_button)
+        self.upload_buttons = ButtonGrid((self.upload_button, self.layer_button))
         upload.add(self.upload_buttons)
         self.upload_bar = QProgressBar()
         self.upload_bar.setTextVisible(False)

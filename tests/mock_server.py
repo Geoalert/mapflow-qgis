@@ -58,6 +58,7 @@ class State:
         self.lock = threading.Lock()
         self.starred = {"project-3"}       # starred in Mapflow Web
         self.catalog_many = False          # the catalog answers with 60 images, in pages
+        self.catalog_too_large = False     # the catalog refuses the area as too large, as Mapflow does
         self.extra_mosaics = []            # collections added while the test runs (an empty one)
         self.created_projects = []         # POST /projects
         self.renamed_projects = {}         # PUT /projects/{id}: project id → (name, description)
@@ -484,6 +485,9 @@ class Handler(BaseHTTPRequestHandler):
             if bad:   # what the real API answers
                 return self._send(400, {"code": "BAD_REQUEST", "message": f"Invalid value for: body ('{bad[0]}' is "
                                         "not a member of enum io.geoalert.mapflow.model.enums.ProductType)"})
+            if self.state.catalog_too_large:
+                return self._send(400, {"code": "BAD_REQUEST", "message": "Too large extent of AOI "
+                                        "(gotArea: 701687808, allowedArea: 250000000)"})
             base = f"http://127.0.0.1:{self.server.server_address[1]}/rest"
             if self.state.catalog_many:
                 every = [dict(copy.deepcopy(fixtures.CATALOG["images"][0]), id=f"many-{n:02d}",
@@ -493,6 +497,10 @@ class Handler(BaseHTTPRequestHandler):
                                         "limit": limit, "offset": offset})
             catalog = copy.deepcopy(fixtures.CATALOG)
             catalog["images"][0]["previewUrl"] = f"{base}/catalog/preview/img-1"   # a picture preview
+            wanted = {t.upper() for t in body.get("productTypes") or []}
+            if wanted:          # the filter, as the real API applies it
+                catalog["images"] = [i for i in catalog["images"] if i["productType"].upper() in wanted]
+                catalog["total"] = len(catalog["images"])
             return self._send(200, catalog)
         if method == "POST" and path == "/rasters/validate-image-metadata":
             # the schema of Mapflow's ValidationRequest (rasters/openapi.json): these fields, no others

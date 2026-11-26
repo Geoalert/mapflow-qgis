@@ -4,7 +4,10 @@ Pure Python: the services decide with these rules, and the Qt side only shows th
 """
 from __future__ import annotations
 
+import re
 from typing import Optional
+
+from .formatting import km2
 
 # What triggered a request. The rule follows the trigger, not the endpoint.
 USER = "user"        # a click, a search, a refresh button: the user waits on it
@@ -99,3 +102,24 @@ def project_deleted_text(name: str, opened_default: Optional[bool]) -> str:
     if opened_default:
         return f"{label} is deleted. The default project is open instead."
     return f"{label} is deleted, and there is no other project to open."
+
+
+BACKGROUND_SEARCH_NOTE = "Note, you can run the background search in Mapflow Web."
+_AREA_SIZES = re.compile(r"gotArea\W*(?P<got>\d+(?:\.\d+)?).*?allowedArea\W*(?P<allowed>\d+(?:\.\d+)?)",
+                         re.IGNORECASE | re.DOTALL)
+
+
+def search_area_text(message: str) -> Optional[str]:
+    """The catalog search's refusal of a large area, e.g. "Too large extent of AOI (gotArea: 701687808,
+    allowedArea: 250000000)" (m²), as a line the user can act on, with the note that Mapflow Web searches larger
+    areas in the background. None for any other message."""
+    message = message or ""
+    sizes = _AREA_SIZES.search(message)
+    if not sizes and "too large extent" not in message.lower():
+        return None
+    if sizes:
+        got, allowed = float(sizes.group("got")) / 1e6, float(sizes.group("allowed")) / 1e6
+        text = f"The area is too large to search here: {km2(got)}, the limit is {km2(allowed)}. Choose a smaller area."
+    else:
+        text = "The area is too large to search here. Choose a smaller area."
+    return f"{text} {BACKGROUND_SEARCH_NOTE}"

@@ -6,8 +6,8 @@ from typing import Callable, List, Optional, Tuple
 from qgis.PyQt.QtCore import QEvent, QObject, QPointF, QRect, QRectF, QSize, Qt, QTimer, QUrl, pyqtSignal
 from qgis.PyQt.QtGui import (QCursor, QDesktopServices, QFont, QFontMetrics, QIcon, QPainter, QPainterPath, QPen,
                              QPixmap)
-from qgis.PyQt.QtWidgets import (QAbstractButton, QAction, QApplication, QBoxLayout, QButtonGroup, QComboBox,
-                                 QFrame, QHBoxLayout, QLabel, QLineEdit, QPushButton, QSizePolicy, QStyle,
+from qgis.PyQt.QtWidgets import (QAbstractButton, QAction, QApplication, QButtonGroup, QComboBox, QFrame,
+                                 QGridLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QSizePolicy, QStyle,
                                  QStyleOptionButton, QStylePainter, QToolButton, QToolTip, QVBoxLayout, QWidget)
 
 from . import icons
@@ -812,39 +812,55 @@ class ImageTile(FocusRing, QAbstractButton):
         painter.end()
 
 
-class ButtonPair(QWidget):
-    """Two buttons side by side, sharing the width; stacked, each the full width, when the row is too narrow for
-    both texts. Never clipped, and never wider than the wider button."""
-    GAP = 8
+class ButtonGrid(QWidget):
+    """Buttons in rows of `columns`, sharing the width; one per row, each the full width, when a column is too
+    narrow for a button's text. Never clipped, and never wider than the widest button."""
 
-    def __init__(self, first: QAbstractButton, second: QAbstractButton, parent: Optional[QWidget] = None):
+    def __init__(self, buttons, columns: int = 2, gap: int = 8, parent: Optional[QWidget] = None):
         super().__init__(parent)
-        self.buttons = (first, second)
-        self.box = QBoxLayout(QBoxLayout.Direction.LeftToRight, self)
-        self.box.setContentsMargins(0, 0, 0, 0)
-        self.box.setSpacing(self.GAP)
+        self.buttons = tuple(buttons)
+        self.most_columns = max(1, columns)
+        self.grid = QGridLayout(self)
+        self.grid.setContentsMargins(0, 0, 0, 0)
+        self.grid.setHorizontalSpacing(gap)
+        self.grid.setVerticalSpacing(gap)
+        self._columns = 0
         for item in self.buttons:
             item.setParent(self)
-            self.box.addWidget(item, 1)
+            item.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        self._place(self.most_columns)
 
-    def side_by_side_width(self) -> int:
-        return sum(item.sizeHint().width() for item in self.buttons) + self.GAP
+    def columns(self) -> int:
+        return self._columns
 
     def stacked(self) -> bool:
-        return self.box.direction() == QBoxLayout.Direction.TopToBottom
+        """One button per row."""
+        return self._columns == 1 and len(self.buttons) > 1
+
+    def _fits(self, columns: int, width: int) -> bool:
+        room = (width - self.grid.horizontalSpacing() * (columns - 1)) / columns
+        return all(item.sizeHint().width() <= room for item in self.buttons)
+
+    def _place(self, columns: int) -> None:
+        if columns == self._columns:
+            return
+        while self.grid.count():
+            self.grid.takeAt(0)
+        for column in range(max(columns, self._columns)):
+            self.grid.setColumnStretch(column, 1 if column < columns else 0)
+        for index, item in enumerate(self.buttons):
+            self.grid.addWidget(item, index // columns, index % columns)
+        self._columns = columns
 
     @guarded(default=QSize(-1, -1))
     def minimumSizeHint(self) -> QSize:
         hint = super().minimumSizeHint()
-        return QSize(max(item.sizeHint().width() for item in self.buttons), hint.height())
+        return QSize(max((item.sizeHint().width() for item in self.buttons), default=0), hint.height())
 
     @guarded
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
-        wanted = QBoxLayout.Direction.TopToBottom if self.width() < self.side_by_side_width() \
-            else QBoxLayout.Direction.LeftToRight
-        if self.box.direction() != wanted:
-            self.box.setDirection(wanted)
+        self._place(self.most_columns if self._fits(self.most_columns, self.width()) else 1)
 
 
 class OptionRow(QFrame):

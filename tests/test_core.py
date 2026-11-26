@@ -4,7 +4,7 @@ import re
 import pytest
 from pathlib import Path
 
-from mapflow_next.core.draft import AreaOfInterest, ImageryChoice, RunDraft
+from mapflow_next.core.draft import MIN_ORDER, AreaOfInterest, ImageryChoice, RunDraft
 from mapflow_next.core.messages import describe
 from mapflow_next.core.models import (BillingType, DataProvider, Model, PlannedProcessing, Processing, Project, Role,
                                       Status, UserStatus, planned_processings)
@@ -223,10 +223,10 @@ def test_issues_carry_ways_out():
     assert status.can_search("maxar") and status.can_search("MAXAR") and not status.can_search("orbview")
     # the provider's smallest order
     big = UserStatus.from_api(dict(STATUS, searchDataProviders=[{"name": "orbview", "minAreaSqKm": 25}]))
-    small = [i for i in draft.issues(project, big) if i.field == "imagery"]
+    small = [i for i in draft.issues(project, big) if i.code == MIN_ORDER]
     assert small and "25.00 km²" in small[0].text
     draft.aoi.area_km2 = 30
-    assert not [i for i in draft.issues(project, big) if i.field == "imagery"]
+    assert not [i for i in draft.issues(project, big) if i.code == MIN_ORDER]
 
 
 def test_ratings_are_read_from_processings():
@@ -1102,10 +1102,13 @@ def test_catalog_coverage():
     assert not any(i.field == "area" for i in draft.issues(project, status))  # the part inside is not
     # the provider's smallest order is judged on the part inside
     draft.imagery = ImageryChoice.from_catalog("img-9", "maxar", 18, "Maxar scene", min_area_km2=25)
-    small = [i for i in draft.issues(project, status) if i.field == "imagery"]
+    small = [i for i in draft.issues(project, status) if i.code == MIN_ORDER]
     assert small and "sells at least 25.00 km²" in small[0].text and "20.00 km²" in small[0].text
+    assert small[0].field == "area" and small[0].text.endswith("Choose a larger area or confirm to enlarge it "
+                                                               "automatically.")
+    assert draft.min_order(status) == (25.0, "Maxar")
     draft.coverage = None
-    assert not [i for i in draft.issues(project, status) if i.field == "imagery"]    # the whole area is above it
+    assert not [i for i in draft.issues(project, status) if i.code == MIN_ORDER]    # the whole area is above it
     draft.coverage = Coverage("Maxar scene", False, None)
     assert draft.processed_area is whole
     assert any(i.field == "area" and "doesn't overlap “Maxar scene”" in i.text
@@ -2733,3 +2736,16 @@ def test_a_request_body_with_a_tile_source_is_known_wherever_it_sits():
     assert has_tile_source({"a": [{"b": {"userDefined": {}}}]})
     assert not has_tile_source({"params": {"sourceParams": {"dataProvider": {}}}})
     assert not has_tile_source(None) and not has_tile_source("userDefined") and not has_tile_source([1, {"a": 2}])
+
+
+def test_search_area_text_reads_the_too_large_refusal():
+    from mapflow_next.core.failures import BACKGROUND_SEARCH_NOTE, search_area_text
+    text = search_area_text("Too large extent of AOI (gotArea: 701687808, allowedArea: 250000000)")
+    assert text == ("The area is too large to search here: 702 km², the limit is 250 km². Choose a smaller area. "
+                    + BACKGROUND_SEARCH_NOTE)
+    assert search_area_text("too large extent of aoi") == ("The area is too large to search here. Choose a "
+                                                           "smaller area. " + BACKGROUND_SEARCH_NOTE)
+    assert search_area_text("gotArea: 1500000.5, allowedArea: 1000000").startswith(
+        "The area is too large to search here: 1.50 km², the limit is 1.00 km².")
+    for other in ("", "Invalid value for: body", "Bad gateway"):
+        assert search_area_text(other) is None

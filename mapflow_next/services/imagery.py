@@ -95,11 +95,30 @@ class Imagery(QObject):
         }
         request = {key: value for key, value in request.items() if value is not None}
         request["hideUnavailable"] = bool(hide_unavailable)
+        self._send(request)
+
+    def _send(self, request: dict) -> None:
         self._request, self.total, self.loading_more = request, 0, False
         self._search_id += 1
         search_id = self._search_id
         self.api.search_catalog(request, lambda images, total: self._found(search_id, images, total),
                                 lambda error: self.searchFailed.emit(error.message))
+
+    def types_differ(self, product_types: Optional[List[str]]) -> bool:
+        """There is a search to repeat, and it had other product types."""
+        return self._request is not None and self._request.get("productTypes") != (product_types or None)
+
+    def search_types(self, product_types: Optional[List[str]]) -> bool:
+        """The last search again, with only `product_types` changed (None: mosaics and scenes). False when there
+        is no search to repeat, or it already had these types."""
+        if not self.types_differ(product_types):
+            return False
+        request = dict(self._request)
+        request.pop("productTypes", None)
+        if product_types:
+            request["productTypes"] = list(product_types)
+        self._send(request)
+        return True
 
     def _found(self, search_id: int, images: List[CatalogImage], total: int) -> None:
         if search_id != self._search_id:            # a newer search went out

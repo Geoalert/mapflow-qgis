@@ -14,6 +14,7 @@ from .models import BillingType, DataProvider, Model, Project, UserStatus
 from .tile_layers import TileOffer, TileParams, nearest_zoom, user_defined
 
 MIN_BILLED_AREA_KM2 = 1.0
+MIN_ORDER = "min_order"     # Issue.code: the area is smaller than the imagery's provider sells
 
 
 @dataclass
@@ -168,6 +169,7 @@ class Issue:
     # Ways out, shown as links next to the text: (label, where) with where one of "top_up",
     # "pricing" or "support". The form knows the addresses.
     links: Tuple[Tuple[str, str], ...] = ()
+    code: str = ""  # what kind of issue, where the form offers a fix of its own: MIN_ORDER
 
 
 @dataclass
@@ -253,14 +255,11 @@ class RunDraft:
                 found.append(Issue("account", f"{self.imagery.source_name} imagery isn't included in your plan. "
                                               "Switch to a Premium plan, or ask support to enable it.",
                                    (("See plans", "pricing"), ("Contact support", "support"))))
-            minimum, source = self.imagery.min_area_km2, self.imagery.source_name
-            if self.imagery.kind == "provider" and self.imagery.provider:
-                minimum = max(minimum, self.imagery.provider.min_area_km2)
-            elif self.imagery.kind == "catalog" and status is not None:
-                minimum = max(minimum, status.min_area_for(self.imagery.catalog_provider))
+            minimum, source = self.min_order(status)
             if self.aoi and minimum and self.processed_area.area_km2 < minimum:
-                found.append(Issue("imagery", f"{source} sells at least {minimum:,.2f} km² per order; the area is "
-                                              f"{self.processed_area.area_km2:,.2f} km². Choose a larger area."))
+                found.append(Issue("area", f"{source} sells at least {minimum:,.2f} km² per order; the area is "
+                                           f"{self.processed_area.area_km2:,.2f} km². Choose a larger area or "
+                                           "confirm to enlarge it automatically.", code=MIN_ORDER))
         if status and not found:
             if status.billing is BillingType.credits:
                 estimate = self.estimate()
@@ -273,6 +272,17 @@ class RunDraft:
                     found.append(Issue("account", f"This run needs {self.processed_area.area_km2:,.2f} km²; you have "
                                                   f"{status.remaining_area_km2:,.2f} km² left."))
         return found
+
+    def min_order(self, status=None) -> Tuple[float, str]:
+        """(km², source name): the smallest order the chosen imagery's provider sells; 0 when it has no minimum."""
+        if not self.imagery:
+            return 0.0, ""
+        minimum = self.imagery.min_area_km2
+        if self.imagery.kind == "provider" and self.imagery.provider:
+            minimum = max(minimum, self.imagery.provider.min_area_km2)
+        elif self.imagery.kind == "catalog" and status is not None:
+            minimum = max(minimum, status.min_area_for(self.imagery.catalog_provider))
+        return minimum, self.imagery.source_name
 
     def payload(self, project_id: str, version: str = "", credentials: Optional[Tuple[str, str]] = None) -> dict:
         """The `POST /processings/v2` body (also accepted by `/processing/cost/v2`). `credentials`: the login and

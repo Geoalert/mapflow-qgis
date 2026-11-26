@@ -738,6 +738,138 @@ def check_conversion_layer_names():
               f"a result whose GeoJSON layer is called {name!r} becomes a GeoPackage ({done.kind}, {done.layer_names})")
 
 
+def check_enlarge_to_min_order(controller, run, draft, image):
+    """Under the provider's smallest order: the alert asks for a larger area or a confirmation, and the
+    confirmation (Enlarge) makes a rectangle over the whole area whose part inside the image meets the minimum.
+    The area before is a click away. Leaves the area as it found it."""
+    from mapflow_next.qgis_bridge import aoi as aoi_tools
+    before_layer, before_area = controller.aoi_layer, draft.aoi
+    controller.refresh_run()
+    hint = run.area_hint_text.text.text()
+    check(run.area_hint.isVisible() and run.area_hint_text.property("callout") == "warn"
+          and "sells at least 1.00 km²" in hint and "Choose a larger area or confirm to enlarge it" in hint
+          and set(run.area_hint_buttons) == {"enlarge", "draw"} and not run.run_button.isEnabled()
+          and run.area_hint_buttons["enlarge"].text() == "Enlarge to 1.00 km²",
+          f"MIN ORDER: the area step says the minimum, and offers Enlarge or Draw ({hint!r}, "
+          f"{list(run.area_hint_buttons)})")
+    check("sells at least" not in run.imagery_error.text(), "MIN ORDER: …said once, at the area, not at the imagery")
+    wait_until(lambda: False, 0.2)
+    cut = [b.text() for b in run.area_hint_buttons.values() if b.width() < b.sizeHint().width()]
+    check(not cut, f"MIN ORDER: the buttons show their whole text ({cut or 'none cut'})")
+    run.area_hint_buttons["enlarge"].click()
+    layer = controller.aoi_layer
+    enlarged = aoi_tools.geometry_from_geojson(draft.aoi.geometry)
+    old = aoi_tools.geometry_from_geojson(before_area.geometry)
+    footprint = aoi_tools.catalog_footprint(image.footprint)
+    inside = aoi_tools.measure(enlarged.intersection(footprint))[0]
+    check(layer is not before_layer and layer.customProperty("mapflow_next/enlarged_for")
+          and "enlarged to 1.00 km²" in layer.name() and enlarged.buffer(1e-9, 4).contains(old)
+          and draft.processed_area.area_km2 >= 1.0 and inside >= 1.0,
+          f"MIN ORDER: Enlarge makes a rectangle over the whole area, {inside:.3f} km² of it inside the image "
+          f"({layer.name()})")
+    check(not any(i.code == "min_order" for i in draft.issues(controller.session.project, controller.session.status)),
+          "MIN ORDER: …and the minimum is met")
+    hint = run.area_hint_text.text.text()
+    check("enlarged to a rectangle over your area" in hint and "previous" in run.area_hint_buttons
+          and before_layer.name() in run.area_hint_buttons["previous"].text(),
+          f"MIN ORDER: the area step says it was enlarged, with the way back ({hint!r})")
+    run.area_hint_buttons["previous"].click()
+    check(controller.aoi_layer is before_layer and draft.aoi.area_km2 == before_area.area_km2,
+          "MIN ORDER: “Back to …” brings the area before")
+    from qgis.core import QgsProject
+    QgsProject.instance().removeMapLayer(layer.id())
+    # An image that is smaller than the minimum itself: no rectangle can be enough, and the user is told why
+    draft.imagery.min_area_km2 = 500.0
+    controller.refresh_run()
+    notices = []
+    real_notify = controller.notify
+    controller.notify = lambda text, *a, **k: notices.append(text)
+    try:
+        run.area_hint_buttons["enlarge"].click()
+    finally:
+        controller.notify = real_notify
+    check(controller.aoi_layer is before_layer and notices and "image covers only" in notices[-1]
+          and "Choose another image" in notices[-1],
+          f"MIN ORDER: an image smaller than the minimum: the area stays, and the message says why ({notices})")
+    draft.imagery.min_area_km2 = 1.0
+    controller.refresh_run()
+
+
+def check_search_presets_and_types(page, plugin, state):
+    """Search the catalog: the date presets, the Mosaics/Scenes chips as a filter of the results, and the
+    message for an area too large to search, which points to Mapflow Web's background search."""
+    from qgis.PyQt.QtCore import QDate
+    service = plugin.services[3]
+
+    def metas():
+        return [r for r in state.requests if r[1] == "/catalog/meta"]
+
+    def on():
+        return [months for months, chip in page.date_presets.items() if chip.isChecked()]
+
+    today = QDate.currentDate()
+    page.set_date_preset(12)
+    check(on() == [12] and [c.text() for c in page.date_presets.values()] == ["3 months", "6 months", "year"],
+          f"DATES: presets Last 3 months, 6 months and year; the default year matches the last one ({on()})")
+    page.date_presets[3].click()
+    check(page.date_from.date() == today.addMonths(-3) and page.date_to.date() == today and on() == [3],
+          "DATES: “3 months” sets the last three months up to today, and shows as on")
+    page.date_presets[6].click()
+    check(page.date_from.date() == today.addMonths(-6) and on() == [6], "DATES: “6 months” the last six")
+    page.date_from.setDate(today.addDays(-10))
+    check(on() == [], "DATES: a date set by hand turns the preset off")
+    page.date_presets[3].click()
+    page.search_button.click()
+    check(wait_until(lambda: page.search_button.isEnabled(), 5)
+          and metas()[-1][2]["acquisitionDateFrom"] == f"{today.addMonths(-3).toPyDate().isoformat()}T00:00:00Z",
+          f"DATES: the search sends the preset's range ({metas()[-1][2]['acquisitionDateFrom']})")
+    page.set_date_preset(12)
+
+    # The type chips filter the results on the list, at once
+    page.search_button.click()
+    wait_until(lambda: page.search_button.isEnabled() and len(service.results) == 2, 5)
+    asked = len(metas())
+    page.type_mosaic.click()
+    check(wait_until(lambda: len(metas()) == asked + 1 and page.search_button.isEnabled(), 5)
+          and metas()[-1][2].get("productTypes") == ["MOSAIC"] and [i.is_mosaic for i in service.results] == [True]
+          and page.type_mosaic.isChecked() and not page.type_image.isChecked(),
+          "TYPES: a click on Mosaics shows only the mosaics: the search again, with productTypes MOSAIC")
+    page.type_image.click()
+    check(wait_until(lambda: len(metas()) == asked + 2 and page.search_button.isEnabled(), 5)
+          and metas()[-1][2].get("productTypes") == ["IMAGE"] and [i.is_mosaic for i in service.results] == [False]
+          and page.type_image.isChecked() and not page.type_mosaic.isChecked(),
+          "TYPES: then a click on Scenes shows only the scenes")
+    page.type_image.click()
+    check(wait_until(lambda: len(metas()) == asked + 3 and page.search_button.isEnabled(), 5)
+          and "productTypes" not in metas()[-1][2] and len(service.results) == 2
+          and page.type_image.isChecked() and page.type_mosaic.isChecked(),
+          "TYPES: a click on the only type shown shows both again")
+    plugin.controller.clear_search()
+    asked = len(metas())
+    page.type_mosaic.click()
+    wait_until(lambda: False, 0.3)
+    check(len(metas()) == asked and page.product_types() == ["MOSAIC"],
+          "TYPES: without results, a chip only sets the filter for the next search")
+    page.type_mosaic.click()
+
+    # An area too large for the search: what it means, and Mapflow Web for a background search
+    state.catalog_too_large = True
+    try:
+        page.search_button.click()
+        wait_until(lambda: page.search_button.isEnabled() and page.search_message.isVisible(), 5)
+        text = page.search_message.text.text()
+        check("702 km²" in text and "250 km²" in text and "background search in Mapflow Web" in text
+              and "gotArea" not in text and page.search_message.property("callout") == "warn"
+              and page.search_message.action.isVisible() and "Mapflow Web" in page.search_message.action.text(),
+              f"TOO LARGE: the search says the area's size and the limit, and offers Mapflow Web ({text})")
+    finally:
+        state.catalog_too_large = False
+    page.search_button.click()
+    check(wait_until(lambda: page.search_button.isEnabled() and len(service.results) == 2, 5)
+          and not page.search_message.isVisible() and not page.search_message.action.isVisible(),
+          "TOO LARGE: the next search clears the message and its button")
+
+
 def check_results_loading_flag(iface, plugin):
     """spec/006 § The guard: the "loading" flag of a processing is cleared on every way out of a load, the
     synchronous start and the `on_error` fallbacks included. An exception is reported once, the user is told
@@ -6156,13 +6288,20 @@ def main():
     bar = area.verticalScrollBar().sizeHint().width()
     content.project_button.set_full_text("A project with a long name that would widen the header")
     too_wide = []
-    for page in [content.stack.widget(n) for n in range(content.stack.count())]:
+    from mapflow_next.ui import imagery_page as imagery_tabs
+    tab_before = content.imagery.current_tab()
+    # Each page, and each of the Imagery page's two tabs: a hidden tab adds nothing to a layout's minimum
+    for page, tab in [(content.stack.widget(n), None) for n in range(content.stack.count())] \
+            + [(content.imagery, imagery_tabs.MINE), (content.imagery, imagery_tabs.SEARCH)]:
+        if tab is not None:
+            content.imagery.show_tab(tab)
         needed = page.layout().minimumSize().width() if page.layout() else 0
         for scroll in page.findChildren(QScrollArea):
             if scroll.widget() is not None and scroll.widget().layout() is not None:
                 needed = max(needed, scroll.widget().layout().minimumSize().width() + bar)
         if needed > narrow:
-            too_wide.append((type(page).__name__, needed))
+            too_wide.append((type(page).__name__ + ("" if tab is None else f" tab {tab}"), needed))
+    content.imagery.show_tab(tab_before)
     header, tabs = content.header.layout().minimumSize().width(), content.tab_buttons[0].parentWidget().layout()
     if header > narrow:
         too_wide.append(("header", header))
@@ -6586,7 +6725,7 @@ def main():
     check(shown is not None and not shown.isNull() and expected[3] == 255 and centre(shown) == expected,
           "back from Start, the results keep their picture previews")
     links_texts = [b.text() for b in imagery_page.findChildren(QPushButton)]
-    check(any("Get advanced imagery search tools in Mapflow Web" in t for t in links_texts),
+    check(any("Advanced imagery search in Mapflow Web" in t for t in links_texts),
           "the search links to Mapflow Web's advanced imagery search")
     state.catalog_many = True
     imagery_page.search_button.click()
@@ -6615,7 +6754,7 @@ def main():
     imagery_page.search_button.click()
     check(wait_until(lambda: [r for r in state.requests
                               if r[1] == "/catalog/meta"][-1][2].get("productTypes") == ["MOSAIC"]
-                     and not imagery_page.search_message.isVisible() and len(plugin.services[3].results) == 2, 5),
+                     and not imagery_page.search_message.isVisible() and len(plugin.services[3].results) == 1, 5),
           "a mosaics-only search sends productTypes MOSAIC and succeeds")
     check([r for r in state.requests if r[1] == "/catalog/meta"][-1][2]["maxCloudCover"] == 35,
           "the cloud cover slider sets the filter")
@@ -6632,6 +6771,7 @@ def main():
           and "minAoiIntersectionPercent" not in [r for r in state.requests if r[1] == "/catalog/meta"][-1][2],
           "…and at 0 it is no filter: it isn't sent")
     imagery_page.coverage.setValue(20)
+    check_search_presets_and_types(imagery_page, plugin, state)
 
     # a multi-part preview (Roscosmos): every part is fetched, and they make one preview layer
     from mapflow_next.core.models import CatalogImage
@@ -6840,9 +6980,10 @@ def main():
     check(not any(i.field == "area" for i in draft.issues(session.project, session.status)),
           "…the part inside is within the area limit")
     draft.imagery.min_area_km2 = 1.0
-    check(any(i.field == "imagery" and "sells at least 1.00 km²" in i.text
+    check(any(i.code == "min_order" and "sells at least 1.00 km²" in i.text
               for i in draft.issues(session.project, session.status)),
           "…and the provider's minimum area is judged on the part inside (the whole area would pass it)")
+    check_enlarge_to_min_order(controller, run, draft, half)
     draft.imagery.min_area_km2 = 0.0
     limit_before = session.project.aoi_area_limit_km2
     session.project.aoi_area_limit_km2 = (processed.area_km2 + whole.area_km2) / 2
