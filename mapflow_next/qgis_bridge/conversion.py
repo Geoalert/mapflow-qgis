@@ -88,6 +88,15 @@ def _close_dataset(dataset) -> bool:
     return close is None or close() in (None, gdal.CE_None)
 
 
+def ogrsql_table(name: str) -> Optional[str]:
+    """`name` as a quoted OGR SQL table name, or None when OGR SQL can't spell it. OGR SQL takes a double quote
+    inside a quoted name as `\\"` and a backslash as it is, so a name that ends with a backslash (which would escape
+    the closing quote) or holds a line break has no spelling."""
+    if not name or name.endswith("\\") or any(ch in name for ch in "\r\n\0"):
+        return None
+    return '"' + name.replace('"', '\\"') + '"'
+
+
 def _write_geometry_layers(job: Job, stop_if_canceled: Callable[[], None],
                            report_progress: Callable[..., int]) -> Optional[List[str]]:
     """Write through GDAL so QGIS's OGR iterator cache cannot retain a Windows lock on the download."""
@@ -103,7 +112,8 @@ def _write_geometry_layers(job: Job, stop_if_canceled: Callable[[], None],
         layer = source.GetLayer(0)
         if layer is None:
             return []
-        source_name = layer.GetName().replace("\\", "\\\\").replace('"', '\\"')
+        source_name = layer.GetName()
+        table = ogrsql_table(source_name)
         mixed = ogr.GT_Flatten(layer.GetGeomType()) == ogr.wkbUnknown
         names: List[str] = []
         for index, geometry_type in enumerate(GEOMETRY_TYPES):
@@ -120,14 +130,20 @@ def _write_geometry_layers(job: Job, stop_if_canceled: Callable[[], None],
                 geometry = f"MULTI{kind}" if layer.GetFeatureCount() else kind
             layer.SetAttributeFilter(None)
             layer_name = job.name if geometry_type == "Polygon" else f"{job.name} ({geometry_type.lower()}s)"
-            # OGRSQL reports a fast feature count for the filtered result, which GDAL needs to call progress.
-            selection = f'SELECT * FROM "{source_name}" WHERE {where}'
+            if table is not None:
+                # OGRSQL reports a fast feature count for the filtered result, which GDAL needs to call progress.
+                # Not an injection: the table is quoted by ogrsql_table and the condition is built from the
+                # constant GEOMETRY_TYPES; OGRSQL here only reads the downloaded file.
+                selection = {"SQLStatement": f"SELECT * FROM {table} WHERE {where}",  # nosec B608
+                             "SQLDialect": "OGRSQL"}
+            else:
+                # A name OGRSQL can't spell: a plain filter, on which GDAL reports no progress for this layer
+                selection = {"layers": [source_name], "where": where}
             output = None
             try:
                 output = gdal.VectorTranslate(str(job.work), source, format="GPKG", layerName=layer_name,
-                                              accessMode="append" if names else None,
-                                              SQLStatement=selection, SQLDialect="OGRSQL",
-                                              geometryType=geometry, callback=report_progress, callback_data=index)
+                                              accessMode="append" if names else None, geometryType=geometry,
+                                              callback=report_progress, callback_data=index, **selection)
                 written = output is not None and _close_dataset(output)
             except RuntimeError:
                 written = False

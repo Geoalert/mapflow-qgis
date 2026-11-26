@@ -5,7 +5,7 @@ from typing import Callable, List, Optional, Tuple
 
 from qgis.PyQt.QtCore import QEvent, QObject, QPointF, QRect, QRectF, QSize, Qt, QTimer, QUrl, pyqtSignal
 from qgis.PyQt.QtGui import (QCursor, QDesktopServices, QFont, QFontMetrics, QIcon, QPainter, QPainterPath, QPen,
-                            QPixmap)
+                             QPixmap)
 from qgis.PyQt.QtWidgets import (QAbstractButton, QAction, QApplication, QButtonGroup, QComboBox, QFrame,
                                  QHBoxLayout, QLabel, QLineEdit, QPushButton, QSizePolicy, QStyle, QStyleOptionButton,
                                  QStylePainter, QToolButton, QToolTip, QVBoxLayout, QWidget)

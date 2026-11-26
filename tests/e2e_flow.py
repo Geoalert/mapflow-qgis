@@ -714,6 +714,30 @@ def check_result_conversion(iface, plugin):
     results.failed.disconnect(on_failed)
 
 
+def check_conversion_layer_names():
+    """The GeoJSON's own layer name (its "name" member) goes into an OGR SQL query: a quote or a backslash in it
+    must not make the result fall back to GeoJSON, and a name OGR SQL can't spell still converts, without SQL."""
+    import mapflow_next.qgis_bridge.conversion as conversion
+    from qgis.core import QgsFeedback
+    check(conversion.ogrsql_table('a "b" c') == '"a \\"b\\" c"' and conversion.ogrsql_table("tail\\") is None
+          and conversion.ogrsql_table("two\nlines") is None,
+          "OGR SQL table names are quoted, or refused when OGR SQL can't spell them")
+    folder = Path(tempfile.mkdtemp(prefix="mapflow-names-"))
+    features = [{"type": "Feature", "properties": {"i": 1},
+                 "geometry": {"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 0]]]}},
+                {"type": "Feature", "properties": {"i": 2}, "geometry": {"type": "Point", "coordinates": [0, 0]}}]
+    for index, name in enumerate(("plain", 'we"ird\\ name', "tail\\")):
+        source = folder / f"r{index}.geojson"
+        source.write_text(json.dumps({"type": "FeatureCollection", "name": name, "features": features}))
+        job = conversion.Job(source, "Result", folder / f"r{index}.work.gpkg", folder / f"r{index}.gpkg",
+                             folder / f"r{index}-fallback.geojson")
+        steps = []
+        done = conversion.convert_geojson(job, lambda: False, QgsFeedback(), steps.append)
+        check(done.kind == conversion.GPKG and done.layer_names == ["Result", "Result (points)"]
+              and done.path.exists() and steps and steps[-1] == 100.0,
+              f"a result whose GeoJSON layer is called {name!r} becomes a GeoPackage ({done.kind}, {done.layer_names})")
+
+
 def check_results_loading_flag(iface, plugin):
     """spec/006 § The guard: the "loading" flag of a processing is cleared on every way out of a load, the
     synchronous start and the `on_error` fallbacks included. An exception is reported once, the user is told
@@ -6382,6 +6406,7 @@ def main():
     shot(content, "05-processings-done", QSize(400, 880))
     check_the_guard(iface, plugin, url, settings, state)
     check_result_conversion(iface, plugin)
+    check_conversion_layer_names()
     check_results_loading_flag(iface, plugin)
     check_virtual_guard(iface, plugin)
     check_paint_guard(iface, plugin)
