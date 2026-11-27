@@ -17,7 +17,8 @@ You are read-only. Do not edit, create or delete files; do not commit. Bash is f
 - The release candidate: the checked-out tree. The previous release: a tag or commit you are given (or the latest
   `v*` tag). Read `git log --oneline <previous>..HEAD` and `git diff --stat <previous>..HEAD` first.
 - **Scope is the whole plugin, not only the diff.** The diff tells you where to look first; old code that new code
-  now calls is in scope too. Read `README.md` (what the plugin promises) and `mapflow_next/controller.py`, the
+  now calls is in scope too. Read `README.md` (what the plugin promises), `docs/DEVELOPMENT.md` (how it is
+  built, and what 4.0 keeps or moves from 3.x) and `mapflow_next/controller.py`, the
   services and the API client before judging any single file.
 - `tests/e2e_flow.py` and `tests/mock_server.py` show what is already tested, and how the mock models the API.
   A behaviour the mock gets wrong is untested, however green the run.
