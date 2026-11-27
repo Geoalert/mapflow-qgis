@@ -676,7 +676,7 @@ def test_no_handlers_that_swallow_qt_arguments():
 
 PLUGIN = Path(__file__).resolve().parents[1] / "mapflow_next"
 
-# Each README rule of § "QGIS 3 and QGIS 4" is a function that takes the source of one file and returns
+# Each rule of docs/DEVELOPMENT.md § "QGIS 3 and QGIS 4" is a function that takes the source of one file and returns
 # problems, as (line, text). RULE_ALLOWED lists the files a rule does not apply to.
 EVENT_NAMES = {"event", "e", "ev", "evt"}
 
@@ -969,8 +969,9 @@ def test_code_runs_on_qt5_and_qt6():
     assert "qgisMaximumVersion=4.99" in metadata and "qgisMinimumVersion=3.28" in metadata
 
 
-# Each rule of README § "QGIS 3 and QGIS 4": the start of its bullet -> what checks it. A README rule
-# without a key here fails test_every_readme_qt_rule_has_a_check.
+# Each rule of docs/DEVELOPMENT.md § "QGIS 3 and QGIS 4": the start of its bullet -> what checks it. A rule
+# there without a key here fails test_every_readme_qt_rule_has_a_check.
+QT_RULES_DOC = Path(__file__).resolve().parents[1] / "docs" / "DEVELOPMENT.md"
 README_RULE_CHECKS = {
     "Import Qt only through `qgis.PyQt`": "test_qt_is_imported_only_through_qgis_pyqt",
     "Use scoped enum names": "tools/qt6_check.py",             # Qt enums and enums read from an object
@@ -983,7 +984,8 @@ README_RULE_CHECKS = {
 
 
 def readme_qt_rules(text):
-    """The bullets of README § "QGIS 3 and QGIS 4" between "check these rules:" and the --fix line."""
+    """The bullets of docs/DEVELOPMENT.md § "QGIS 3 and QGIS 4" between "check these rules:" and the --fix
+    line."""
     section = text.split("check these rules:", 1)[1].split("Run `tools/qt6_check.py --fix`", 1)[0]
     rules = []
     for line in section.splitlines():
@@ -999,7 +1001,7 @@ def unchecked_readme_rules(text):
 
 
 def test_every_readme_qt_rule_has_a_check():
-    readme = (Path(__file__).resolve().parents[1] / "README.md").read_text(encoding="utf-8")
+    readme = QT_RULES_DOC.read_text(encoding="utf-8")
     assert len(readme_qt_rules(readme)) == len(README_RULE_CHECKS) == 7
     assert not unchecked_readme_rules(readme)
     for check in README_RULE_CHECKS.values():          # a named test exists; the tool is a file

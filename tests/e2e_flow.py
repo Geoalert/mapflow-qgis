@@ -720,13 +720,15 @@ def check_conversion_layer_names():
     import mapflow_next.qgis_bridge.conversion as conversion
     from qgis.core import QgsFeedback
     check(conversion.ogrsql_table('a "b" c') == '"a \\"b\\" c"' and conversion.ogrsql_table("tail\\") is None
+          and conversion.ogrsql_table("back\\slash") is None
           and conversion.ogrsql_table("two\nlines") is None,
           "OGR SQL table names are quoted, or refused when OGR SQL can't spell them")
     folder = Path(tempfile.mkdtemp(prefix="mapflow-names-"))
     features = [{"type": "Feature", "properties": {"i": 1},
                  "geometry": {"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 0]]]}},
                 {"type": "Feature", "properties": {"i": 2}, "geometry": {"type": "Point", "coordinates": [0, 0]}}]
-    for index, name in enumerate(("plain", 'we"ird\\ name', "tail\\")):
+    # With SQL: plain and quoted names. Without it: any backslash (GDAL versions disagree on it)
+    for index, name in enumerate(("plain", 'quo"ted', 'we"ird\\ name', "tail\\")):
         source = folder / f"r{index}.geojson"
         source.write_text(json.dumps({"type": "FeatureCollection", "name": name, "features": features}))
         job = conversion.Job(source, "Result", folder / f"r{index}.work.gpkg", folder / f"r{index}.gpkg",

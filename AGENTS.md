@@ -232,7 +232,7 @@ Execute it every time a session is initiated.
 # LANGUAGE PACKS (SCOPED)
 - `instructions/lang/python.md`: Python + PyQGIS conventions (PEP 8, module-function pattern, Qt/QGIS imports, containerized tests). Applies to `{mapflow,tests}/**`.
 - `instructions/lang/ui.md`: Qt dialog conventions (`uic.loadUiType`, `.ui` file placement, signal/slot style, icon handling, translatable strings). Applies to `mapflow/dialogs/**`.
-- **Both packs were written for the 3.x plugin (`mapflow/`) and don't match `mapflow_next/` yet** — it has no `.ui` files and no `functional/` layers, and its UI is built in code. Until they are rewritten, ask the user before applying them to `mapflow_next/`. What does hold for `mapflow_next/` is in the README: § QGIS 3 and QGIS 4.
+- **Both packs were written for the 3.x plugin (`mapflow/`) and don't match `mapflow_next/` yet** — it has no `.ui` files and no `functional/` layers, and its UI is built in code. Until they are rewritten, ask the user before applying them to `mapflow_next/`. What does hold for `mapflow_next/` is in `docs/DEVELOPMENT.md` § QGIS 3 and QGIS 4.
 - Add packs for other languages under `instructions/lang/` as the project grows. Each pack declares its own scope via `applyTo:` frontmatter.
 - During delivery, stabilization, and review, consult the pack(s) matching the files being touched. A change under `mapflow/dialogs/**` is in scope for **both** packs. If no pack covers a language present in the diff, ask the user before inventing conventions.
 

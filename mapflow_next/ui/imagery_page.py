@@ -5,7 +5,7 @@ from typing import Callable, Dict, List, Optional, Tuple
 
 from qgis.PyQt.QtCore import QDate, QSize, Qt, QTimer, pyqtSignal
 from qgis.PyQt.QtGui import QPixmap
-from qgis.PyQt.QtWidgets import (QComboBox, QDateEdit, QGridLayout, QHBoxLayout, QLabel, QProgressBar,
+from qgis.PyQt.QtWidgets import (QComboBox, QDateEdit, QHBoxLayout, QLabel, QProgressBar,
                                  QPushButton, QScrollArea, QSlider, QToolButton, QVBoxLayout, QWidget)
 
 from .. import config
@@ -128,9 +128,6 @@ class ImageryPage(QWidget):
         self.area_text = label("Set an area on Start, or use the map view.", "meta")
         form.add(self.area_text)
 
-        grid = QGridLayout()
-        grid.setHorizontalSpacing(10)
-        grid.setVerticalSpacing(4)
         today = QDate.currentDate()
         self.date_from = QDateEdit(today.addYears(-1))      # addYears: 29 Feb a year back is 28 Feb
         self.date_to = QDateEdit(today)
@@ -141,10 +138,18 @@ class ImageryPage(QWidget):
             edit.setToolTip("Click the calendar icon to pick a date")
         self.date_from.dateChanged.connect(guarded(lambda d: self.date_to.setMinimumDate(d)))
         self.date_to.dateChanged.connect(guarded(lambda d: self.date_from.setMaximumDate(d)))
-        for column, (text, widget) in enumerate((("From", self.date_from), ("To", self.date_to))):
-            grid.addWidget(label(text, "label"), 0, column)
-            grid.addWidget(widget, 1, column)
-        form.add(grid)
+        # Side by side, or one above the other where two dates don't fit (Qt 6 draws them wider)
+        fields = []
+        for text, widget in (("From", self.date_from), ("To", self.date_to)):
+            field = QWidget()
+            column = QVBoxLayout(field)
+            column.setContentsMargins(0, 0, 0, 0)
+            column.setSpacing(4)
+            column.addWidget(label(text, "label"))
+            column.addWidget(widget)
+            fields.append(field)
+        self.date_fields = ButtonGrid(fields, columns=2, gap=10)
+        form.add(self.date_fields)
         # Fixed ranges up to today; the one the dates match shows as on, so editing a date turns it off
         presets = QHBoxLayout()
         presets.setSpacing(4)

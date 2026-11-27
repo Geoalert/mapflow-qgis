@@ -69,12 +69,11 @@ class _ExternalButton(QPushButton):
         option = QStyleOptionButton()
         self.initStyleOption(option)
         painter = QStylePainter(self)
-        control = QStyle.ControlElement
         # The style still paints the frame and focus state. The label and arrow share the contents rectangle.
         frame = QStyleOptionButton(option)
         frame.text = ""
         frame.icon = QIcon()
-        painter.drawControl(control.CE_PushButton, frame)
+        painter.drawControl(QStyle.ControlElement.CE_PushButton, frame)
 
         content = self.style().subElementRect(QStyle.SubElement.SE_PushButtonContents, option, self)
         arrow_width = self.ARROW_GAP + self.ARROW_SIZE
@@ -86,7 +85,7 @@ class _ExternalButton(QPushButton):
         if self.property("variant") != "link":
             left += max(0, (content.width() - label_width - arrow_width) // 2)
         option.rect = QRect(left, content.y(), label_width, content.height())
-        painter.drawControl(control.CE_PushButtonLabel, option)
+        painter.drawControl(QStyle.ControlElement.CE_PushButtonLabel, option)
 
         arrow_rect = QRect(left + label_width + self.ARROW_GAP, content.y(), self.ARROW_SIZE, content.height())
         mode = QIcon.Mode.Normal if self.isEnabled() else QIcon.Mode.Disabled
@@ -813,8 +812,9 @@ class ImageTile(FocusRing, QAbstractButton):
 
 
 class ButtonGrid(QWidget):
-    """Buttons in rows of `columns`, sharing the width; one per row, each the full width, when a column is too
-    narrow for a button's text. Never clipped, and never wider than the widest button."""
+    """Buttons (or other widgets, such as a label over a field) in rows of `columns`, sharing the width; one per
+    row, each the full width, when a column is too narrow for one of them. Never clipped, and never wider than
+    the widest one."""
 
     def __init__(self, buttons, columns: int = 2, gap: int = 8, parent: Optional[QWidget] = None):
         super().__init__(parent)

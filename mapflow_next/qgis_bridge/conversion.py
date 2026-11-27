@@ -89,10 +89,11 @@ def _close_dataset(dataset) -> bool:
 
 
 def ogrsql_table(name: str) -> Optional[str]:
-    """`name` as a quoted OGR SQL table name, or None when OGR SQL can't spell it. OGR SQL takes a double quote
-    inside a quoted name as `\\"` and a backslash as it is, so a name that ends with a backslash (which would escape
-    the closing quote) or holds a line break has no spelling."""
-    if not name or name.endswith("\\") or any(ch in name for ch in "\r\n\0"):
+    """`name` as a quoted OGR SQL table name, or None when OGR SQL can't spell it. A double quote inside a quoted
+    name is `\\"` in every GDAL. A backslash has no spelling that works in all of them: GDAL 3.4 (QGIS 3.28) reads
+    it as it is, GDAL 3.12 (QGIS 4) as an escape that it drops. So a name with a backslash, or a line break, gets
+    None."""
+    if not name or any(ch in name for ch in "\\\r\n\0"):
         return None
     return '"' + name.replace('"', '\\"') + '"'
 
