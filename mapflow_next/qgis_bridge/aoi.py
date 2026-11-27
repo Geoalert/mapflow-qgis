@@ -7,13 +7,15 @@ and the plan limit applies both to the total and to each polygon's lat-lon bound
 from __future__ import annotations
 
 import json
-from typing import List, Optional
+import math
+from typing import List, Optional, Tuple
 
 from qgis.core import (QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsDistanceArea, QgsFeature,
-                       QgsGeometry, QgsMapLayer, QgsProject, QgsVectorLayer)
+                       QgsGeometry, QgsMapLayer, QgsProject, QgsRectangle, QgsVectorLayer)
 
 from ..config import RESOURCES
 from ..core.draft import AreaOfInterest
+from ..core.formatting import km2
 from .compat import POLYGON_GEOMETRY
 
 WGS84 = QgsCoordinateReferenceSystem("EPSG:4326")
@@ -148,6 +150,13 @@ def footprint(wkts: List[str]) -> Optional[QgsGeometry]:
     return None if _unusable(merged) else _polygons(merged)
 
 
+def catalog_footprint(geometry: Optional[dict]) -> Optional[QgsGeometry]:
+    """A catalog image's footprint (GeoJSON, WGS84) as a valid polygon geometry, as `footprint` returns it.
+    None when it is missing or unusable."""
+    wkt = _geojson_to_wkt(geometry)
+    return footprint([wkt]) if wkt else None
+
+
 def geometry_from_geojson(geometry: dict) -> Optional[QgsGeometry]:
     from osgeo import ogr
     parsed = ogr.CreateGeometryFromJson(json.dumps(geometry)) if geometry else None
@@ -191,3 +200,63 @@ def clip_to(aoi: AreaOfInterest, imagery: QgsGeometry) -> Optional[AreaOfInteres
 def extent_layer(imagery: QgsGeometry, name: str) -> QgsVectorLayer:
     """The imagery's extent as an editable area layer."""
     return memory_layer(imagery, WGS84, name)
+
+
+# An enlarged area asks for a little more than the minimum: the provider measures the area its own way
+ENLARGE_MARGIN = 1.02
+_GROWTH = (1.0, 1.1, 1.25, 1.5, 2.0, 3.0, 5.0, 8.0)
+
+
+def _rectangle_size(width: float, height: float, wanted: float) -> Tuple[float, float]:
+    """The size (m) of a rectangle of at least `wanted` m² that holds a `width` × `height` box: the box itself if it
+    is big enough, else grown along its short side first, and to a square for a small box."""
+    if width * height >= wanted:
+        return width, height
+    side = math.sqrt(wanted)
+    if width >= side:
+        return width, wanted / width
+    if height >= side:
+        return wanted / height, height
+    return side, side
+
+
+def enlarged_rectangle(area: QgsGeometry, minimum_km2: float,
+                       imagery: Optional[QgsGeometry] = None) -> Tuple[Optional[QgsGeometry], str]:
+    """A rectangle over the whole area (WGS84) that is at least `minimum_km2`, for a provider that sells no smaller
+    order. With `imagery` (the chosen image's footprint), what counts is the part inside the image, so the
+    rectangle leans towards the image and grows until that part is big enough. (rectangle, "") or (None, why)."""
+    if _unusable(area) or minimum_km2 <= 0:
+        return None, "There is no area to enlarge."
+    if imagery is not None:
+        inside_image = measure(imagery)[0]
+        if inside_image < minimum_km2:
+            return None, (f"The image covers only {km2(inside_image)}, less than the {km2(minimum_km2)} its "
+                          "provider sells per order. Choose another image.")
+        if not area.intersects(imagery):
+            return None, "The area is outside the image. Move the area onto the image first."
+    centre = area.boundingBox().center()
+    local = QgsCoordinateReferenceSystem.fromProj(
+        f"+proj=laea +lat_0={centre.y():.6f} +lon_0={centre.x():.6f} +datum=WGS84 +units=m +no_defs")
+    context = QgsProject.instance().transformContext()
+    there, back = QgsCoordinateTransform(WGS84, local, context), QgsCoordinateTransform(local, WGS84, context)
+
+    def in_local(geometry: QgsGeometry) -> QgsGeometry:
+        copy = QgsGeometry(geometry)
+        copy.transform(there)
+        return copy
+
+    box = in_local(area).boundingBox()
+    pull = in_local(imagery).centroid().asPoint() if imagery is not None else box.center()
+    for growth in _GROWTH:
+        width, height = _rectangle_size(box.width(), box.height(), minimum_km2 * 1e6 * ENLARGE_MARGIN * growth)
+        # Over the whole area, and as far towards the image as that allows
+        x = min(max(pull.x(), box.xMaximum() - width / 2), box.xMinimum() + width / 2)
+        y = min(max(pull.y(), box.yMaximum() - height / 2), box.yMinimum() + height / 2)
+        rectangle = QgsGeometry.fromRect(QgsRectangle(x - width / 2, y - height / 2, x + width / 2, y + height / 2))
+        rectangle = rectangle.densifyByCount(8)      # its sides stay straight lines in WGS84 too
+        rectangle.transform(back)
+        counted = rectangle.intersection(imagery) if imagery is not None else rectangle
+        if not _unusable(counted) and measure(counted)[0] >= minimum_km2:
+            return rectangle, ""
+    return None, (f"No rectangle over the area has {km2(minimum_km2)} inside the image. Draw a larger area "
+                  "inside the image.")

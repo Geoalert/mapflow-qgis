@@ -1,36 +1,39 @@
-"""New My imagery collection: a name and tags, as in Mapflow Web's "New collection"."""
+"""A My imagery collection's name and tags: new (as in Mapflow Web's "New collection"), or renamed."""
 from __future__ import annotations
 
-from typing import List, Tuple
+from typing import List, Sequence, Tuple
 
 from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtWidgets import QDialog, QHBoxLayout, QLineEdit, QVBoxLayout, QWidget
 
 from .theme import stylesheet, tokens
 from .widgets import Pill, button, clear_layout, label, tool
+from ..core.guard import guarded
 
 MAX_TAG = 40
 
 
 class CollectionDialog(QDialog):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, title: str = "New collection", action: str = "Create", name: str = "",
+                 tags: Sequence[str] = ()):
         super().__init__(parent)
         self.setObjectName("mfRoot")
-        self.setWindowTitle("New collection")
+        self.setWindowTitle(title)
         self.setStyleSheet(stylesheet())
         self.setMinimumWidth(440)
-        self.tags: List[str] = []
+        self.tags: List[str] = list(tags)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(22, 20, 22, 18)
         layout.setSpacing(8)
-        layout.addWidget(label("New collection", "h1"))
+        layout.addWidget(label(title, "h1"))
         layout.addSpacing(6)
         name_label = label(f"Name <span style='color:{tokens()['err_fg']}'>*</span>", "label")
         name_label.setTextFormat(Qt.TextFormat.RichText)
         layout.addWidget(name_label)
-        self.name = QLineEdit(self)
+        self.name = QLineEdit(name, self)
         self.name.setPlaceholderText("Untitled mosaic")
         self.name.setMaxLength(120)
+        self.name.selectAll()
         layout.addWidget(self.name)
         layout.addSpacing(6)
         layout.addWidget(label("Tags", "label"))
@@ -43,7 +46,7 @@ class CollectionDialog(QDialog):
         self.tag.returnPressed.connect(self.add_tag)
         entry.addWidget(self.tag)
         self.add_button = tool("plus", "Add the tag", "plain", 16)
-        self.add_button.clicked.connect(lambda *_: self.add_tag())
+        self.add_button.clicked.connect(guarded(lambda *_: self.add_tag()))
         entry.addWidget(self.add_button)
         entry.addStretch(1)
         layout.addLayout(entry)
@@ -57,17 +60,19 @@ class CollectionDialog(QDialog):
         buttons = QHBoxLayout()
         buttons.addStretch(1)
         cancel = button("Cancel", "ghost")
-        cancel.clicked.connect(lambda *_: self.reject())
-        self.create = button("Create", "primary")
-        self.create.clicked.connect(lambda *_: self.accept())
+        cancel.clicked.connect(guarded(lambda *_: self.reject()))
+        self.create = button(action, "primary")
+        self.create.clicked.connect(guarded(lambda *_: self.accept()))
         buttons.addWidget(cancel)
         buttons.addWidget(self.create)
         layout.addSpacing(10)
         layout.addLayout(buttons)
-        self.name.textChanged.connect(lambda text: self.create.setEnabled(bool(text.strip())))
-        self.create.setEnabled(False)
+        self.name.textChanged.connect(guarded(lambda text: self.create.setEnabled(bool(text.strip()))))
+        self.create.setEnabled(bool(name.strip()))
+        self._render_tags()
         self.name.setFocus()
 
+    @guarded
     def keyPressEvent(self, event) -> None:
         # Enter in the tag field adds the tag; it must not press Create as well
         if self.tag.hasFocus() and event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
@@ -75,6 +80,7 @@ class CollectionDialog(QDialog):
             return
         super().keyPressEvent(event)
 
+    @guarded
     def add_tag(self) -> None:
         tag = self.tag.text().strip()
         if tag and tag.lower() not in {t.lower() for t in self.tags}:
@@ -96,7 +102,7 @@ class CollectionDialog(QDialog):
             row.setSpacing(2)
             row.addWidget(Pill(tag, "gray"))
             remove = tool("x", f"Remove “{tag}”", "plain", 12)
-            remove.clicked.connect(lambda *_, t=tag: self.remove_tag(t))
+            remove.clicked.connect(guarded(lambda *_, t=tag: self.remove_tag(t)))
             row.addWidget(remove)
             self.chips.addWidget(chip)
         self.chips.addStretch(1)

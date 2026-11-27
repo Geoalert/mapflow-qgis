@@ -32,6 +32,7 @@ list is gone). A user who moves over signs in again and sets the output folder a
 | `results_mode` | string (`"file"` / `"tiles"`) | How results are added to the map |
 | `output_dir` | string | Folder for saved results. Empty: `<Documents>/Mapflow` |
 | `auto_load` | bool | Add the result of a processing started here to the map when it finishes |
+| `skip_tile_login_alert` | bool | The user ticked "Don't show this again" in the alert that comes before the plugin sends the login and password of a QGIS tile layer (`002_B_processing_api.md` § Imagery from a QGIS tile layer) |
 
 #### Projects and ratings
 | Key | Type | Purpose |
@@ -54,6 +55,7 @@ from its default.
 | Variable | Type | Purpose |
 |----------|------|---------|
 | `variables/mapflow_env` | string | Environment: production/staging/internal/duty. Empty: production |
+| `variables/mapflow_ru` | string | `true`: the plugin uses the domain `mapflow.ru` in place of `mapflow.ai` (`002_api.md` § The `mapflow.ru` domain). Empty: `mapflow.ai` |
 
 The 3.x variables `mapflow_project_id`, `zoom_selector`, `mapflow_raw_error` and `mapflow_max_aois` are
 not read.
@@ -92,3 +94,8 @@ the plugin makes a new one the next time it adds a layer. The 3.x plugin remembe
 | `{output_dir}/.downloads/` | A result being downloaded, before it is converted and moved into place |
 | a folder made with `tempfile.mkdtemp()` once per session | Catalog preview pictures and the files GDAL derives from them. Private to the user, removed at unload. File names never carry an id as the server sent it: ids are made safe first |
 | `{tempDir}/mapflow_next_icons/` | Icons drawn for the current theme and scale |
+
+After a result is converted to GeoPackage, the finished file is moved into the output directory
+and the temporary GeoJSON is removed. Cancelling the conversion removes the temporary GeoJSON and
+any partial GeoPackage. If the writer falls back to GeoJSON, it moves that file into the output
+directory as the result.

@@ -29,8 +29,11 @@ icon=resources/icons/app-icon.svg
 hasProcessingProvider=no
 changelog=
     4.0.0
-    - Runs in QGIS 3.28 and later and in QGIS 4 (Qt 6)
-    - Settings of the 3.x Mapflow plugin are not carried over
+    This is Mapflow Next (4.0), a redesign of the Mapflow plugin for QGIS 3.28 and later, supporting QGIS 4.
+    Mapflow Next installs next to the 3.x plugin, as a separate plugin, so you can try it without losing anything.
+    Sign in again, and set your output folder again if you changed it. Settings aren't carried over.
+    Sharing projects, reviewing results, topping up and API tokens are now in Mapflow Web, one click away from the plugin.
+    The plugin is in English for now. Multilanguage support is planned for 4.1.
     - New plugin built around one flow: model, area, imagery, processing, results
     - Dock panel with Start, Processings and Imagery sources tabs, opened from its own Mapflow toolbar
     - Check for updates in the plugin's menu

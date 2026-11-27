@@ -4,13 +4,39 @@
     - Installs next to the 3.x Mapflow plugin. Its settings are not carried over: sign in again, and set the output folder again if you changed it
     - Its own Mapflow toolbar, and Check for updates in the plugin's menu (Plugins › Mapflow Next)
     - Dock panel with Start, Processings and Imagery sources tabs; a scenario gallery with 16 ready-made setups built on Mapflow models
-    - Projects window: search, pin, see what's in each project and who it's shared with
+    - Projects window: search, pin, rename or delete a project you own, see what's in each project and who it's shared with
     - Zoom z17–z21 with the scenario's recommended zoom; pick one image from a My imagery collection, whose extent becomes the area
     - Sign in with Mapflow in the browser and stay signed in across restarts; an API token as a fallback; both kept in the QGIS authentication database
     - Live cost estimate before every run; results load as styled GeoPackage layers or vector tiles
-    - My imagery window: upload several GeoTIFFs at once from files or layers, or drag them in; create a collection, delete a collection or an image; collections are listed 50 at a time and searched on the server, by their name or by an image's file name
+    - My imagery window: upload several GeoTIFFs at once from files or layers, or drag them in; create a collection, rename a collection (name and tags), download an original image, delete a collection or an image; collections are listed 50 at a time and searched on the server, by their name or by an image's file name
+    - Run again on an image from the imagery search shows that image in the run form
+    - The search in Processings runs on Mapflow's side and covers the whole project, not only the processings already loaded; the full list, the Start tab and the "is ready" notices stay current while you search
+    - Your credentials go only to Mapflow's own address: a picture or a redirect to another address loads without them
     - Imagery search: a minimum area coverage filter; previews that come in several parts are shown whole
-    - Not carried over yet: planned processings (templates), custom XYZ/TMS providers, translations (es, pt, ru, zh; planned for 4.1)
+    - Imagery search: one off-nadir range slider, 0–30°, sends both its ends
+    - Imagery search: an "Available for me" switch hides the images your account cannot process; off by default
+    - Imagery search: date presets for the last 3 months, 6 months and year; a click on Mosaics or Scenes shows only that type in the results at once, and a second click shows both; an area too large for the search says its size and the limit, and that Mapflow Web can run the search in the background
+    - An area smaller than the imagery's provider sells per order can be enlarged in one click: a rectangle over the whole area that meets the minimum, checked against the chosen image's footprint, with the area before a click away
+    - A processing that waits for its imagery order shows "Awaiting", not "Running"
+    - With one image chosen from the imagery search, the area is clipped to the image's footprint: the submitted geometry, the area shown, the cost and the limits use the part inside; an area outside the image blocks Run
+    - Unloading or reloading the plugin closes its Projects, My imagery and scenario windows and stops everything it was doing
+    - Preview pictures are kept in a private folder, under names that carry no server id; the folder is removed when the plugin unloads
+    - A list that fails to load says so instead of looking empty; a refresh that keeps failing tells you once, and the default project opens when the open one is deleted in Mapflow Web
+    - An upload that stalls ends with a message after an hour without progress, and the next upload can start
+    - Uploads follow the file size and image size limits of your account and its free storage, as Mapflow reports them: an account with larger limits is not refused locally, and an upload larger than the free storage is refused before it is sent. If Mapflow does not answer, the plugin says so and uses the standard limits (2 GB, 30,000 px a side)
+    - A GeoTIFF that is deleted or becomes unreadable after the check and before its upload ends the upload with a message that names the file, and the next upload can start
+    - "Review this result in Mapflow Web" opens that processing in its project, on the web address the plugin is configured for, instead of the home page
+    - Restart is offered for a failed or a cancelled processing, to everyone who may run a processing in the project, not only to maintainers and owners. A refused restart shows the message of Mapflow
+    - A large result is converted to GeoPackage in the background: QGIS stays usable, and the task can be cancelled in the Tasks panel
+    - An unexpected error shows a “Send a report” button: it opens a window with the details and your comment, and opens your mail program with the report to Mapflow support. Nothing is sent without you
+    - When Mapflow expects a higher major version of the plugin, the plugin shows one page that asks to upgrade and opens the QGIS plugin manager, instead of working. A higher minor or patch version is not announced
+    - The sign-in page has a "Terms of use" link that opens the terms in your browser
+    - The XYZ/TMS tile layers of the QGIS project can be the imagery of a processing: the run form lists them under "QGIS tile layers", with the zooms of the layer (up to 21). A layer with a login (or a Basic authentication configuration) asks first, because the login goes to Mapflow with the processing; a layer on this computer or a private network, with a referer or other headers, or with another kind of authentication configuration is listed disabled, with the reason. The processing card shows "Custom tile layer" and the host, never the address. Run again chooses the project layer with the same address. The tile layers stay folded under their heading until you open it or choose one of them. A tile layer's "Use as imagery in Mapflow" in the Layers panel chooses it the same way
+    - The panel fits a width of 320 px: a long project name in the header ends in "…" instead of widening it
+    - The Processings tab shows planned searches first, with a "Planned search" mark, name and status. Clicking a row opens that search in Mapflow Web. The rows are hidden during a search or if they fail to load
+    - My imagery shows used storage and the account limit next to Collections, with a link to billing
+    - The QGIS global variable `mapflow_ru`, set to `true`, makes the plugin use the domain `mapflow.ru` in place of `mapflow.ai`: the API, the sign-in, Mapflow Web, the links, and the addresses in Mapflow's answers. Your saved sign-in stays valid when you turn it on or off. The plugin has no setting for it; support gives it to a user who needs it. E-mail addresses do not change
+    - Not carried over yet: creating and managing planned processings (Mapflow Web does it), translations (es, pt, ru, zh; planned for 4.1)
 
 ## 3.6.3
     - Fix: downloading an image from My imagery could crash QGIS, or finish without saving anything — mostly for large images, whose download lasts long enough for Python's garbage collector to discard the code waiting for it to finish. The plugin now holds each download until it completes

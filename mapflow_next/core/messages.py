@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
+from .tile_layers import hide_address_params, hide_addresses
+
 GENERIC = "Something went wrong on our side. Contact us at help@geoalert.io and we will sort it out."
 
 CODES: Dict[str, str] = {
@@ -133,8 +135,12 @@ class _Default(dict):
 
 def describe(code: Optional[str], params: Optional[Dict[str, Any]] = None, message: Optional[str] = None) -> str:
     """A readable sentence for an error: the known template filled with its parameters, else the
-    backend's own message with its parameters, else a generic line."""
-    params = dict(params or {})
+    backend's own message with its parameters, else a generic line. An address in the parameters or in the
+    message is shown as its host: it can carry a key (a processing on a QGIS tile layer)."""
+    return hide_addresses(_describe(code, hide_address_params(dict(params or {})), message))
+
+
+def _describe(code: Optional[str], params: Dict[str, Any], message: Optional[str]) -> str:
     if code == "TOO_LARGE_PROCESSING":
         # The backend reports square metres; people think in km²
         for key in ("area", "aoiAreaLimit"):
@@ -157,3 +163,17 @@ def describe(code: Optional[str], params: Optional[Dict[str, Any]] = None, messa
     if message and details:
         return f"{message} ({details})"
     return message or details or GENERIC
+
+
+_LINK_FAILURES = {403: "This image can't be downloaded.",
+                  404: "The image wasn't found. It may have been deleted.",
+                  409: "The image isn't ready for download yet. Try again later."}
+_FILE_FAILURES = {403: "The download link was refused or has expired. Try again.",
+                  404: "The download link was refused or has expired. Try again."}
+
+
+def image_download_failure(step: str, status: Optional[int], fallback: str) -> str:
+    """The line for a failed image download. `step` is "link" (Mapflow's request for the address) or "file" (the
+    request to that address). Other statuses, and the failures that have none (network, timeout, disk), keep
+    `fallback`, which already says the cause in plain words."""
+    return (_LINK_FAILURES if step == "link" else _FILE_FAILURES).get(status or 0, fallback)

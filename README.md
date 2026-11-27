@@ -1,281 +1,110 @@
 # Mapflow for QGIS
 
-At [Geoalert](https://www.geoalert.io/en-US/) we use AI to extract real-world objects from satellite and
-aerial imagery. With the [Mapflow](https://mapflow.ai/) plugin you choose what to map, where and from which
-imagery, and the results come back as styled layers in your QGIS project: buildings (optionally with
-height), forest (optionally with height), roads, fields, construction sites and more. See the
-[models](https://docs.mapflow.ai/userguides/pipelines).
+Map buildings, roads, forest and more from satellite, aerial or drone imagery, without leaving QGIS.
+[Mapflow](https://mapflow.ai/) by [Geoalert](https://www.geoalert.io/en-US/) runs AI models on the imagery you
+choose, and the results come back as styled layers in your project, ready to edit, measure and share.
 
-This repository holds **Mapflow Next** (`mapflow_next/`, version 4.0.0), a redesigned plugin for
-**QGIS 3.28+ and QGIS 4**. Everything in it follows one flow: **model → area → imagery → processing →
-results**. The previous plugin (3.x, `mapflow/`) is in the history up to tag `v3.6.3`.
+![Mapflow results in QGIS: buildings, roads and tree cover over satellite imagery, with the Mapflow panel on the right](docs/screens/results-on-map.jpg)
 
-| Sign in | Start | Run form | Processings |
-|---|---|---|---|
-| ![](docs/screens/01-sign-in.png) | ![](docs/screens/02-start.png) | ![](docs/screens/03-run.png) | ![](docs/screens/05-processings-done.png) |
+This is **Mapflow Next** (4.0), a redesign of the Mapflow plugin for **QGIS 3.28 and later, and QGIS 4**.
 
-More screens in [`docs/screens/`](docs/screens): imagery search, My imagery and its collection picker, the
-projects window, the scenario gallery and dark mode. The end-to-end test writes them (`make screens`), so
-they show the plugin as it is.
+## What you can do
 
-## What it's for
+- **Start from a scenario.** Pick a ready-made task (map every building, forest and tree cover, roads,
+  building heights and more) and the plugin sets the model, its options and the zoom for you. Or choose a model
+  yourself.
+- **Set the area your way.** Use a polygon layer, selected features, a quick drawing or the current map view.
+- **Use the imagery you need.** Global basemaps such as Mapbox and ArcGIS, fresh satellite images from the
+  catalog, your own GeoTIFFs (drone, aerial or satellite), or an XYZ tile layer already in your project.
+- **Know the cost before you run.** The price in credits updates as you change the area, the imagery and the
+  options.
+- **Get results as layers.** Finished processings load into the "Mapflow" group with their styles. You can
+  also save them as GeoJSON.
+- **Keep track of your work.** Follow progress, find past processings, run one again with the same settings,
+  and switch between projects, including your team's.
 
-The plugin covers the work that belongs next to the map. Each tab has its scenarios:
+![The scenario gallery: Map every building, Map forest and tree cover, and more, by category](docs/screens/scenarios.jpg)
 
-- **Start › Run a processing.** Pick a scenario or a model, set the area (a layer, a selection, a drawing
-  or the map view), choose imagery, check the cost and run.
-- **Start › Map your own imagery.** In the run form, My imagery opens a window with your collections. Choose a
-  collection or one image in it, or add imagery right there: upload GeoTIFFs, from files or from the project's
-  GeoTIFF layers — several at once, or dragged from the Layers panel or the file manager — into the selected
-  collection, or into a new one when none is selected. You can also create a
-  collection with a name and tags, and delete a collection or an image from its ⋯ menu. Files are checked before upload: bands, CRS, size, that they match each
-  other, and, for an existing collection, that they fit it.
-  The imagery's extent becomes the area, and its preview goes on the map.
-- **Layers panel › Use a layer in Mapflow.** Right-click a polygon layer for "Use as AOI in Mapflow", or a
-  GeoTIFF layer for "Use as imagery in Mapflow": it's uploaded to My imagery and chosen when it's ready.
-- **Imagery sources › Find imagery in the catalog.** Search by area, dates, cloud cover, off-nadir
-  angle and how much of the area an image covers, look at the footprints on the map, and use an image in
-  the run form.
-- **Processings › Follow the work and its history.** Progress updates on its own. Filter, search, load
-  older processings, rename them, run one again with the same settings, or delete it.
-- **Processings › Get the results into QGIS.** Finished results load as styled layers: GeoPackage files,
-  or vector tiles for a quick look. Results can also be saved as GeoJSON.
-- **Projects › Work in a team project.** Create a project, switch projects, search and pin them, and see
-  which are shared and what your role allows.
+## Get started
 
-Managing data, projects and the team happens in [Mapflow Web](https://app.mapflow.ai), and the plugin
-links there (see [below](#in-the-plugin-and-in-mapflow-web)).
+1. **Install.** In QGIS, open Plugins › Manage and Install Plugins…, search for **Mapflow Next** and install
+   it. While 4.0 is experimental, turn on *Show also experimental plugins* in the Settings tab first. You
+   can also download the zip from [Releases](https://github.com/Geoalert/mapflow-qgis/releases) and use
+   *Install from ZIP*.
+2. **Sign in.** Click the Mapflow button on the toolbar and sign in with your Mapflow account in the browser.
+   No account yet? [Sign up](https://app.mapflow.ai).
+3. **Run.** On Start, pick a scenario, set the area and the imagery, check the cost and press Run.
+4. **Look at the results.** When the processing is done, its layers appear on the map.
 
-## Install
-
-- **From a zip:** Plugins › Manage and Install Plugins › Install from ZIP, with the zip from `make zip`.
-  The plugin is called **Mapflow Next** (folder `mapflow_next`), so it installs next to the 3.x
-  Mapflow plugin instead of replacing it. **Settings are not carried over from the 3.x plugin**: sign in
-  again, and set the output folder again if you changed it. Too much changed between the two for the old
-  values to mean the same thing.
-- **For development:** `make link` symlinks `mapflow_next/` into your QGIS profile, then reload the
-  plugin with Plugin Reloader. The default path is the macOS one for QGIS 3; use `make link QGIS_MAJOR=4`
-  for QGIS 4, or set `PLUGINS_DIR` on Linux or Windows.
-
-The plugin adds a Mapflow toolbar, whose button opens the Mapflow dock on the right. The Plugins ›
-Mapflow Next menu has the same button, Scenarios…, which opens the scenario gallery directly, and Check
-for updates…. The update check asks your plugin repositories, through QGIS's own plugin installer, and
-an update installs from the Plugin Manager's Upgradeable tab. A plugin installed from a ZIP isn't in any
-repository, so the check points to the releases page instead. A Mapflow account is needed: [sign up](https://app.mapflow.ai). The user guide
-for the 3.x plugin is [here](https://docs.mapflow.ai/api/qgis_mapflow).
-
-## QGIS 3 and QGIS 4
-
-One zip runs in QGIS 3.28 and later (Qt 5) and in QGIS 4 (Qt 6): `metadata.txt` sets
-`qgisMinimumVersion=3.28` and `qgisMaximumVersion=4.99`. Every feature works in both. 3.28 is the oldest
-version the tests run on, so it is the oldest one declared.
-
-To keep it that way, write code both Qt versions accept. `tests/test_core.py` and `tools/qt6_check.py`
-check these rules:
-- Import Qt only through `qgis.PyQt`, never from `PyQt5` or `PyQt6` directly.
-- Use scoped enum names: `Qt.AlignmentFlag.AlignLeft`, `QSizePolicy.Policy.Expanding`,
-  `Qgis.MessageLevel.Info`. Qt 6 rejects `Qt.AlignLeft`, and enum values read from an object
-  (`action.NoRole`).
-- Use `exec()`, not `exec_()`.
-- Build menu items as `QAction`s, with `widgets.menu_action`.
-- Read mouse positions through `widgets.event_pos`.
-- Take geometry types from `qgis_bridge/compat.py`.
-- `QSvgWidget` moved to `QtSvgWidgets` in Qt 6. `ui/icons.py` imports it from either place.
-
-Run `tools/qt6_check.py --fix` to rewrite unscoped enum names automatically.
-
-The tests run on both versions (see [Development](#development)). `tests/qt6_ui.py` also drives the
-pages, the browser sign-in listener and the HTTP client on plain PyQt6, through a stand-in for QGIS 4's
-`qgis.PyQt` (`tests/qt6_shim/`), for when QGIS 4 isn't at hand. From the Python console of any
-installed QGIS, `tools/run_in_qgis.py` runs the end-to-end tests with that QGIS's own Python.
-
-## How it works
-
-```
-mapflow_next/
-  plugin.py          QGIS entry: the Mapflow toolbar, the plugin menu, the dock, wiring of the parts below
-  controller.py      the flow: connects services (state) to pages (views) and to QGIS
-  config.py          environments, URLs, timings
-  settings.py        QgsSettings under mapflow_next/ (never credentials)
-  core/              pure Python, no Qt: testable without QGIS
-    models.py          API responses → Project, Model (workflow def), DataProvider, Processing, …
-    draft.py           the run form as data: issues(), estimate(), payload()
-    scenarios.py       scenario catalogue and scenario → model matching
-    messages.py        readable texts for Mapflow error codes
-    oauth.py           browser sign-in without Qt: PKCE, the redirect, tokens
-  api/
-    http.py            async HTTP over QgsNetworkAccessManager, error classification
-    auth.py            credentials in the QGIS authentication database
-    oauth.py           browser sign-in: the loopback listener and token requests
-    client.py          the Mapflow endpoints the plugin uses
-  services/          Qt objects with signals: session, processings, imagery, results
-  qgis_bridge/       map-side code: area from layers, layers and styles, draw tool, QGIS 3/4 compat
-  ui/                dock, pages, gallery, dialogs, theme (design tokens) and icons, built in code
-  resources/         scenario data and pictures, result styles (QML), Nunito, brand icons
-```
-
-Services hold state, pages render it and emit what the user wants, and `controller.py` connects the two.
-That is the rule; today the controller also holds the run form's state itself. `spec/007_architecture.md`
-§ Mapflow Next (4.x) has the layer rules and where the code is not there yet.
-
-## What it keeps from the 3.x plugin
-
-- **API:** the same endpoints and v2 processing payload (`processings/v2`, `processing/cost/v2`,
-  `projects/{id}/processings/v2/page`, `catalog/meta`, `rasters/mosaic…`, `processings/{id}/result`).
-- **Sign-in:** the same Mapflow sign-in client (`qgis`) and redirect address
-  (`http://127.0.0.1:7070/qgis`). The `mapflow_env` QGIS variable picks the environment, as before.
-- **Area rules** (spec 002_B):
-  - The area is measured on the union of its parts, and each part is repaired first.
-  - The plan limit is checked both on the total and on each polygon's bounding box.
-  - A selection on the area's layer narrows the area to the selected polygons.
-- **Results:**
-  - Downloaded as GeoJSON, written to a GeoPackage, styled with the same QML styles, and added to the
-    "Mapflow" group.
-  - Vector tiles are an option. Their extent comes from the tilejson `bounds`, or else from the
-    processing's area.
-- **Error texts:** all 64 error-code descriptions.
-- **3.6.x fixes:**
-  - In-flight replies are held until they finish, and large downloads are streamed to disk.
-  - Overlapping polygons are counted once.
-  - Your rights in shared projects follow your account.
-
-## What it does differently
-
-- **Browser sign-in:** the plugin runs it itself instead of using QGIS's OAuth2 method, then sends the
-  browser on to app.mapflow.ai.
-  - It listens on 127.0.0.1 only and checks the answer with PKCE and a state value.
-  - You stay signed in across QGIS restarts. The plugin never opens the browser on its own, and QGIS
-    doesn't need a restart after the first sign-in.
-- **Credentials:** the API token (a fallback) and the browser sign-in are kept in the QGIS
-  authentication database, never in plain settings.
-- **One flow instead of five tabs:** the tabs are Start, Processings and Imagery sources. Settings and
-  the account move to the header.
-- **Scenario gallery:** 16 ready-made setups built on Mapflow models. The processing name is generated
-  from the model and the area, and the pencil next to it opens a dialog for a name and a description.
-- **Projects window:** project tiles with their description, done and failed counts, the last update
-  and whether they're shared.
-  - Search by name on the server, and load more with "Show more".
-  - Pin projects to the top. Pins are Mapflow Web's starred projects, so they follow the account.
-  - Share a project, or open the team page, in Mapflow Web.
-- **Zoom:** basemaps offer z17–z21, with the scenario's zoom preselected and marked ★.
-- **My imagery:**
-  - Collections show their image count, and a picker lets you use the whole collection or one image.
-  - Collections are listed 50 at a time, newest first, with "Show more". The collection search runs on
-    the server: it finds collections that aren't loaded yet, by their name or by the file name of an
-    image in them.
-  - The imagery's extent becomes the area, and any other area is clipped to the imagery.
-  - An area outside the imagery blocks Run, with a way back to the extent.
-- **Imagery search:** the same Area drop-down as on Start, date and slider filters (cloud cover,
-  off-nadir angle, minimum area coverage), and "Clear". Filters apply when you press "Search imagery":
-  the list always shows what the last search returned.
-- **Processings:** pages of 30 with "Show more". Polling refreshes the shown window and leaves older
-  pages in place.
-- **Live cost:** a local estimate at once, then the figure from `/cost`.
-- **Results:** they go to `Documents/Mapflow` unless you choose another folder. Finished results load
-  automatically, which you can turn off. "Run again" restores a processing's settings and its area.
-- **Theming:** follows the QGIS light or dark theme, with the Mapflow design tokens.
-
-## In the plugin and in Mapflow Web
-
-The plugin keeps what is done while looking at the map: choosing the area and the imagery, running,
-and bringing results in. Work that is about managing things moves to Mapflow Web. Each of those
-features needs a full screen, bulk actions or the team's view, and the web app already does it for
-every Mapflow user. The plugin links to the right page wherever it leaves something out.
-
-| 3.x plugin | 4.0 | Why, and where to do it |
+| Start | The run form | Processings |
 |---|---|---|
-| Run processings: models, options, area, providers, catalog, My imagery | **Kept**, redesigned as one form | The core of the plugin |
-| Processings list, results on the map, rename, delete, run again | **Kept** | Results belong in QGIS |
-| Imagery search in the catalog | **Kept** | Footprints are judged on the map |
-| Upload a GeoTIFF to My imagery | **Kept**: into a new or an existing collection, from one or several files or layers | Your imagery is made in QGIS and processed from there |
-| My imagery collections: create, delete, add or delete images | **Kept**: the My imagery window and its ⋯ menus | Adding imagery and clearing out what was added by mistake belong where the imagery is chosen |
-| My imagery: rename a collection or an image, download originals, storage usage | **Mapflow Web** › [My data](https://app.mapflow.ai/my-data) ("Manage collections in Mapflow Web") | File management, not mapping |
-| Create a project | **Kept**: New project in the Projects window | Starting new work shouldn't need a trip to the browser |
-| Projects: rename, delete, share | **Mapflow Web** › the project ("Share project in Mapflow Web" and the share icon in the Projects window) | Done rarely, and sharing needs the team's members and roles. The plugin creates, switches, searches and pins projects |
-| Review: accept or send back results | **Mapflow Web** (the processing links there) | Review is a step of its own, with its own page, after the processing; the plugin shows that a processing needs it |
-| Balance and top-up, API tokens | **Mapflow Web** › [Account](https://app.mapflow.ai/account/balance) ("Top up" in the run form) | Payments and keys stay with the account |
-| Planned processings (search templates) and their areas | **Not yet** | Left out of the first release to keep it to the main flow |
-| Custom XYZ/TMS providers | **Not yet** | Left out of the first release; Mapflow's own basemaps and My imagery cover the main cases |
-| Translations (es, pt, ru, zh) | **Not yet**: planned for 4.1 | Every text is new, so the 3.x translations don't apply |
-| Settings of the 3.x plugin | **Not migrated** | The two plugins install side by side; sign in and set the output folder again |
-| Georeferenced catalog previews, forced-upgrade dialog, Segment Anything zooms | **Not yet** | Smaller features, after the first release |
+| ![](docs/screens/02-start.png) | ![](docs/screens/03-run.png) | ![](docs/screens/05-processings-done.png) |
 
-## To verify against the real API
+## The plugin or Mapflow Web?
 
-- **Live API:** the tests use a mock API shaped like the spec. Nothing has been run against the live
-  Mapflow API yet.
-- **Mapflow Web links:** "Open in Mapflow Web" opens `/projects/{project}?processing={id}`, the address
-  the API itself reports for a processing. The team page address (`TEAM_URL` in `config.py`) is a guess.
-- **AOI names:** a processing is created with its area as one geometry (`geometry` in `processings/v2`).
-  The API documents no field for the names of its AOIs, so Mapflow Web lists them without the names the
-  layer has.
-- **Plugin version header:** requests send `x-plugin-version: 4.0.0`. Check the backend doesn't treat
-  it specially.
-- **Scenario → model matching:** scenarios find their model by keywords in the project's model names. A
-  stable scenario id on the backend would make this exact.
-- **Pinned projects:** pinning stars the project (`POST`/`DELETE /projects/{id}/starred`), and projects
-  starred in Mapflow Web are pinned here. The list of starred projects is read from `POST /projects/starred`.
-- **Browser sign-in:**
-  - The `qgis` client has to accept PKCE.
-  - The `offline_access` scope would keep a sign-in for weeks.
-  - A "You're signed in to QGIS" page in Mapflow Web would be a better landing than the home page.
+Both use the same account, projects and credits, so you can start in one and continue in the other. Choose by
+what you're doing.
 
-## Development
+**Use the plugin when the map is where the work happens.**
 
-Tests and lint run in the official `qgis/qgis` Docker images, so only Docker is needed:
+- *You're updating a city map and need the buildings of one new district.* Draw the district or use a layer
+  you already have, run, and the buildings land on your map next to your other data, already styled.
+- *A drone survey just came in as GeoTIFFs.* Right-click the layer › Use as imagery in Mapflow. It is
+  uploaded to your imagery in Mapflow and chosen for the run as soon as it's ready.
+- *Your team works from its own tile service.* An XYZ layer in your QGIS project can be the imagery, with
+  nothing to set up in Mapflow, as long as Mapflow's servers can reach its address.
+- *You want the latest satellite image of a site.* Search the catalog, compare the footprints and dates on
+  your map, and run on the image that covers your area best.
+- *You're checking or editing results.* They are ordinary QGIS layers, so you can edit, measure, join and
+  export them like any other.
 
-```
-make test          # both of the two runs below (the gate before review)
-make test-qgis3    # unit + end-to-end tests on QGIS 3 (qgis/qgis:release-3_28)
-make test-qgis4    # the same on QGIS 4 (qgis/qgis:4.2), plus the Qt 6 code check
-make test-core     # pure-Python tests only (30)
-make lint          # the plugins.qgis.org checks: flake8, bandit, detect-secrets
-make screens       # run the end-to-end flow and rewrite docs/screens/*.png
-```
+**Use [Mapflow Web](https://app.mapflow.ai) when the work is about managing, sharing or scale.**
 
-With QGIS or PyQt6 installed, there are local variants:
+- *Your area is a whole region, hundreds of square kilometres.* Mapflow Web runs the imagery search in the
+  background and lets you keep working.
+- *You need to watch an area over time,* for example for new construction every month. Planned searches live
+  in Mapflow Web; the plugin shows them and opens them there.
+- *Someone without QGIS needs to see the results,* such as a client or a manager. Share the project or the
+  results from Mapflow Web.
+- *Results are reviewed before they are accepted.* The review step is in Mapflow Web; the plugin marks the
+  processings that need it.
+- *You're managing your team, credits or API tokens,* or organising a large imagery library. Those pages are
+  in Mapflow Web, and the plugin links to each one where you need it.
 
-```
-make test-local QGIS_PYTHON=/Applications/QGIS-LTR.app/Contents/MacOS/bin/python3
-make test-qt6 QT6_PYTHON=…    # the pages, sign-in and HTTP client on PyQt6 (41 checks)
-make check-qt6 QT6_PYTHON=…   # Qt enum names and calls that only Qt 5 accepts
-```
+## Coming from the 3.x plugin?
 
-**The end-to-end test** (`tests/e2e_flow.py`, 259 checks) runs a real offscreen QGIS against a mock
-Mapflow API and sign-in server (`tests/mock_server.py`).
-- **Request checks:** the mock rejects request bodies the real API rejects, such as `myImagery` with both
-  `mosaicId` and `imageIds`.
-- **Sign-in:** a simulated browser signs in. The test then checks that the session renews, survives a
-  restart, can be cancelled and is forgotten on sign-out.
-- **The flow:** from there it covers scenarios and the run form, cost and the run itself, and results on
-  the map. It also covers imagery search, My imagery, the projects window, processings paging and
-  renaming, "Run again", the account menu, unload and dark mode.
-- **Isolation:** each run gets its own QGIS settings and authentication database in a temporary folder.
-- **Real clicks:** the test clicks the real buttons wherever a bug hid behind a click. For example,
-  toggling an option must leave the form's scroll position alone.
+- Mapflow Next installs **next to** the 3.x plugin, as a separate plugin, so you can try it without losing
+  anything.
+- **Sign in again**, and set your output folder again if you changed it. Settings aren't carried over.
+- Sharing projects, reviewing results, topping up and API tokens are now in Mapflow Web, one click away from
+  the plugin.
+- The plugin is in English for now. Spanish, Portuguese, Russian and Chinese are planned for 4.1.
 
-CI (`.github/workflows/tests.yml`) runs `test-qgis3`, `test-qgis4` and `lint` on every push to `dev` and
-`master` and on pull requests. **Releases are made by hand**: `make zip` builds the archive, and a
-maintainer uploads it to the QGIS Plugin Repository. No workflow publishes a release (`.qgis-plugin-ci`
-is kept for the `qgis-plugin-ci` tool, which nothing runs today; `release.yml` in the repository root is
-not under `.github/workflows/` and never runs).
+## Questions
 
-**Release review.** Every release PR into `master` is reviewed by Claude, following
-[`.claude/agents/release-reviewer.md`](.claude/agents/release-reviewer.md)
-(`.github/workflows/release-review.yml`). It reads the whole plugin and starts from what changed since the
-last `v*` tag. It looks for wrong paid runs, stuck states, stale async answers, deleted QGIS objects, API
-contracts (checked against Mapflow's published OpenAPI) and QGIS 3/4 support. The report is posted on the PR
-and in the job summary. CRITICAL findings fail the check: make "release review" a required check on `master`.
-It needs an `ANTHROPIC_API_KEY` repository secret. To run it on any commit, use the workflow's "Run
-workflow" button; locally, ask Claude Code to "run the release-reviewer agent".
+**Where do the results go?** To `Documents/Mapflow`, unless you choose another folder in the settings (the
+gear icon). Finished results load automatically; you can turn that off.
 
-## Contributing
+**What does a processing cost?** The run form shows the price before you run: the model's price per km² plus
+the imagery's, for the area that is processed. See [pricing](https://mapflow.ai/pricing) and your balance in
+the panel's header.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). Bugs and suggestions are welcome in
-[Issues](https://github.com/Geoalert/mapflow-qgis/issues).
+**macOS asks for my Keychain password.** Mapflow keeps your sign-in encrypted in QGIS's authentication
+database. The first time you open Mapflow in a QGIS session, QGIS unlocks it with its master password,
+which macOS keeps in the Keychain. Choose *Always Allow* in that dialog and it won't ask again.
+
+**Something went wrong.** Report it in [Issues](https://github.com/Geoalert/mapflow-qgis/issues) or write to
+[help@geoalert.io](mailto:help@geoalert.io). The [Mapflow documentation](https://docs.mapflow.ai) describes the
+[models](https://docs.mapflow.ai/userguides/pipelines) and the imagery in detail.
+
+## For developers
+
+How the plugin is built and tested, its QGIS 3 and 4 rules, and what 4.0 keeps from 3.x, feature by feature,
+are in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md). See also [CONTRIBUTING.md](CONTRIBUTING.md). The previous
+plugin (3.x, `mapflow/`) is in the history up to tag `v3.6.3`.
 
 ## License
 
 This software is released under the [GNU General Public License](mapflow_next/LICENSE), version 2 or any
-later version. You can inspect and modify the source code, and you always have access to it under the
-same terms as QGIS: free of cost and free to modify.
+later version. You can inspect and modify the source code, and you always have access to it under the same
+terms as QGIS: free of cost and free to modify.

@@ -8,12 +8,13 @@ from qgis.PyQt.QtGui import QDesktopServices, QFont, QFontMetrics, QKeySequence,
 from qgis.PyQt.QtWidgets import (QAbstractButton, QButtonGroup, QDialog, QFrame, QGridLayout, QHBoxLayout, QLabel,
                                  QLineEdit, QScrollArea, QShortcut, QSizePolicy, QStackedWidget, QVBoxLayout, QWidget)
 
-from .. import config
+from ..config import Links
 from ..core.scenarios import Catalogue, Scenario
 from . import icons
 from .start_page import plain, scenario_pixmap
 from .theme import color, is_dark, stylesheet, tokens
 from .widgets import Callout, Card, FocusRing, button, label, link, rounded, vbox
+from ..core.guard import guarded
 
 IMAGE_RATIO = 10 / 16
 LEFT_MIDDLE = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
@@ -50,9 +51,11 @@ class CategoryButton(FocusRing, QAbstractButton):
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setAccessibleName(f"{text}, {count} scenarios")
 
+    @guarded(default=QSize(-1, -1))
     def sizeHint(self) -> QSize:
         return QSize(200, 36)
 
+    @guarded
     def paintEvent(self, event) -> None:
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -105,6 +108,7 @@ class ScenarioCard(FocusRing, QAbstractButton):
     def set_width(self, width: int) -> None:
         self.setFixedSize(width, self._height(width))
 
+    @guarded
     def paintEvent(self, event) -> None:
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -166,6 +170,7 @@ class ScenarioCard(FocusRing, QAbstractButton):
                          QFontMetrics(font).elidedText(meta, Qt.TextElideMode.ElideRight, inner))
         painter.end()
 
+    @guarded
     def keyPressEvent(self, event) -> None:
         if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
             self.click()
@@ -176,9 +181,10 @@ class ScenarioCard(FocusRing, QAbstractButton):
 class GalleryDialog(QDialog):
     scenarioChosen = pyqtSignal(str)
 
-    def __init__(self, catalogue: Catalogue, parent=None):
+    def __init__(self, catalogue: Catalogue, links: Links, parent=None):
         super().__init__(parent)
         self.catalogue = catalogue
+        self.links = links
         self.setObjectName("mfRoot")
         self.setWindowTitle("Mapflow — Scenarios")
         self.setWindowIcon(icons.app_icon(is_dark()))
@@ -223,7 +229,7 @@ class GalleryDialog(QDialog):
         self.category_buttons: Dict[str, CategoryButton] = {}
         for category in self.catalogue.categories:
             item = CategoryButton(category["label"], len(self.catalogue.in_category(category["id"])), side)
-            item.clicked.connect(lambda _=False, cid=category["id"]: self.show_category(cid))
+            item.clicked.connect(guarded(lambda _=False, cid=category["id"]: self.show_category(cid)))
             self.group.addButton(item)
             self.category_buttons[category["id"]] = item
             layout.addWidget(item)
@@ -231,8 +237,8 @@ class GalleryDialog(QDialog):
         help_card = Card(margins=(14, 14, 14, 14), spacing=6)
         help_card.add(label("Need a different object?", "title"))
         help_card.add(label("We train custom models on your imagery and classes.", "meta", wrap=True))
-        help_card.add(link("Request a custom model", config.CUSTOM_MODELS_URL))
-        help_card.add(link("Models and benchmarks", config.MODELS_DOCS_URL))
+        help_card.add(link("Request a custom model", self.links.custom_models))
+        help_card.add(link("Models and benchmarks", self.links.models_docs))
         layout.addWidget(help_card)
         return side
 
@@ -285,13 +291,14 @@ class GalleryDialog(QDialog):
         self.cards = {}
         for scenario in self.catalogue.scenarios:
             card = ScenarioCard(scenario, self.pictures[scenario.id], host)
-            card.clicked.connect(lambda _=False, sid=scenario.id: self.open_scenario(sid))
+            card.clicked.connect(guarded(lambda _=False, sid=scenario.id: self.open_scenario(sid)))
             card.hide()
             self.cards[scenario.id] = card
         self.visible: List[ScenarioCard] = []
         self._layout_key = None
         return page
 
+    @guarded(default=False)
     def eventFilter(self, watched, event) -> bool:
         if event.type() == QEvent.Type.Resize:
             if watched is self.scroll.viewport():
@@ -315,6 +322,7 @@ class GalleryDialog(QDialog):
         if not text:
             self.show_category(self.category)
 
+    @guarded
     def _on_search(self, text: str) -> None:
         if not text.strip():
             self.show_category(self.category)
@@ -334,7 +342,7 @@ class GalleryDialog(QDialog):
         self.visible = [self.cards[s.id] for s in scenarios]
         self.empty.set("info", "" if scenarios else
                        "No scenario matches that search. Try another word, browse the categories, or "
-                       f"<a href='{config.CUSTOM_MODELS_URL}'>ask us to train a model</a> for your objects.")
+                       f"<a href='{self.links.custom_models}'>ask us to train a model</a> for your objects.")
         self._reflow(force=True)
         self.scroll.verticalScrollBar().setValue(0)
 
@@ -420,12 +428,12 @@ class GalleryDialog(QDialog):
         self.primary = button("Use this scenario", "primary", "play", size="lg")
         self.primary.clicked.connect(self._use)
         docs = button("Model docs", "outline", "book", size="lg", external=True)
-        docs.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(config.MODELS_DOCS_URL)))
+        docs.clicked.connect(guarded(lambda: QDesktopServices.openUrl(QUrl(self.links.models_docs))))
         actions.addWidget(self.primary)
         actions.addWidget(docs)
         actions.addStretch(1)
         right.addLayout(actions)
-        right.addWidget(link("Try it in Mapflow Web", config.WEB_URL))
+        right.addWidget(link("Try it in Mapflow Web", self.links.web))
         right.addStretch(1)
         columns.addLayout(left, 11)
         columns.addLayout(right, 10)
@@ -459,7 +467,7 @@ class GalleryDialog(QDialog):
         self.cost_main.setText(scenario.cost_main)
         self.cost_note.setText(scenario.cost_note)
         if scenario.custom:
-            self.primary.setText("Request access  ↗")
+            self.primary.setText("Request access")
             self.primary.setIcon(icons.icon("external", tokens()["primary_text"], 14))
         else:
             self.primary.setText("Use this scenario")
@@ -476,19 +484,22 @@ class GalleryDialog(QDialog):
         self.detail_image.setFixedHeight(height)
         self.detail_image.setPixmap(rounded(self.pictures[self.current.id], width, height, 14))
 
+    @guarded
     def back(self) -> None:
         self.stack.setCurrentIndex(0)
         if self.current and self.current.id in self.cards:
             self.cards[self.current.id].setFocus()
 
+    @guarded
     def _use(self) -> None:
         if not self.current:
             return
         if self.current.custom:
-            QDesktopServices.openUrl(QUrl(config.CUSTOM_MODELS_URL))
+            QDesktopServices.openUrl(QUrl(self.links.custom_models))
             return
         self.scenarioChosen.emit(self.current.id)
 
+    @guarded
     def keyPressEvent(self, event) -> None:
         if event.key() == Qt.Key.Key_Escape and self.stack.currentIndex() == 1:
             self.back()

@@ -159,3 +159,5 @@ mapflow_dev/
 # Test runs started from QGIS (tools/run_in_qgis.py) and `make zip`
 test-results/
 /mapflow_next-*.zip
+/mapflow_next/mapflow_next
+mapflow-next-*

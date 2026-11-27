@@ -1,16 +1,18 @@
 """Small building blocks shared by the dock pages. Styling comes from theme.QSS via properties."""
 from __future__ import annotations
 
-from typing import Callable, List, Optional
+from typing import Callable, List, Optional, Tuple
 
-from qgis.PyQt.QtCore import QEvent, QObject, QPointF, QRectF, QSize, Qt, QTimer, QUrl, pyqtSignal
-from qgis.PyQt.QtGui import QCursor, QDesktopServices, QFont, QFontMetrics, QPainter, QPainterPath, QPen, QPixmap
-from qgis.PyQt.QtWidgets import (QAbstractButton, QAction, QApplication, QButtonGroup, QComboBox, QFrame, QHBoxLayout,
-                                 QLabel, QLineEdit, QPushButton, QSizePolicy, QToolButton, QToolTip, QVBoxLayout,
-                                 QWidget)
+from qgis.PyQt.QtCore import QEvent, QObject, QPointF, QRect, QRectF, QSize, Qt, QTimer, QUrl, pyqtSignal
+from qgis.PyQt.QtGui import (QCursor, QDesktopServices, QFont, QFontMetrics, QIcon, QPainter, QPainterPath, QPen,
+                             QPixmap)
+from qgis.PyQt.QtWidgets import (QAbstractButton, QAction, QApplication, QButtonGroup, QComboBox, QFrame,
+                                 QGridLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QSizePolicy, QStyle,
+                                 QStyleOptionButton, QStylePainter, QToolButton, QToolTip, QVBoxLayout, QWidget)
 
 from . import icons
 from .theme import color, set_prop, tokens
+from ..core.guard import guarded
 
 
 def menu_action(menu, icon_name: str, text: str, handler, ink: Optional[str] = None) -> QAction:
@@ -19,7 +21,7 @@ def menu_action(menu, icon_name: str, text: str, handler, ink: Optional[str] = N
     not move it to the application menu (it does that to "Settings…")."""
     action = QAction(icons.icon(icon_name, ink or tokens()["ink"]), text, menu)
     action.setMenuRole(QAction.MenuRole.NoRole)
-    action.triggered.connect(lambda *_: handler())
+    action.triggered.connect(guarded(lambda *_: handler()))
     menu.addAction(action)
     return action
 
@@ -38,31 +40,88 @@ def label(text: str = "", role: str = "body", wrap: bool = False, parent: Option
     return widget
 
 
+class _ExternalButton(QPushButton):
+    """A button with a trailing arrow and an optional native leading icon."""
+
+    ARROW_SIZE = 18
+    ARROW_GAP = 3
+
+    def __init__(self, text: str, ink: str, parent: Optional[QWidget] = None):
+        super().__init__(text, parent)
+        self.setIconSize(QSize(14, 14))
+        self.set_arrow_color(ink)
+
+    def set_arrow_color(self, ink: str) -> None:
+        self.arrow = icons.icon("arrow-up-right", ink, self.ARROW_SIZE)
+        self.update()
+
+    @guarded(default=QSize(-1, -1))
+    def sizeHint(self) -> QSize:
+        size = super().sizeHint()
+        return QSize(size.width() + self.ARROW_SIZE + self.ARROW_GAP, max(size.height(), self.ARROW_SIZE))
+
+    @guarded(default=QSize(-1, -1))
+    def minimumSizeHint(self) -> QSize:
+        return self.sizeHint()
+
+    @guarded
+    def paintEvent(self, event) -> None:
+        option = QStyleOptionButton()
+        self.initStyleOption(option)
+        painter = QStylePainter(self)
+        # The style still paints the frame and focus state. The label and arrow share the contents rectangle.
+        frame = QStyleOptionButton(option)
+        frame.text = ""
+        frame.icon = QIcon()
+        painter.drawControl(QStyle.ControlElement.CE_PushButton, frame)
+
+        content = self.style().subElementRect(QStyle.SubElement.SE_PushButtonContents, option, self)
+        arrow_width = self.ARROW_GAP + self.ARROW_SIZE
+        label_width = option.fontMetrics.size(Qt.TextFlag.TextShowMnemonic, option.text).width()
+        if not option.icon.isNull():
+            label_width += option.iconSize.width() + 4  # the spacing Qt uses in its button label
+        label_width = min(label_width, max(0, content.width() - arrow_width))
+        left = content.x()
+        if self.property("variant") != "link":
+            left += max(0, (content.width() - label_width - arrow_width) // 2)
+        option.rect = QRect(left, content.y(), label_width, content.height())
+        painter.drawControl(QStyle.ControlElement.CE_PushButtonLabel, option)
+
+        arrow_rect = QRect(left + label_width + self.ARROW_GAP, content.y(), self.ARROW_SIZE, content.height())
+        mode = QIcon.Mode.Normal if self.isEnabled() else QIcon.Mode.Disabled
+        self.arrow.paint(painter, arrow_rect, Qt.AlignmentFlag.AlignCenter, mode)
+
+
 def button(text: str, variant: str = "outline", icon: Optional[str] = None, size: Optional[str] = None,
            icon_color: Optional[str] = None, external: bool = False, parent: Optional[QWidget] = None) -> QPushButton:
-    if external:
-        text = f"{text}  ↗"
-    widget = QPushButton(text, parent)
+    palette = tokens()
+    tone = {"primary": "primary_text", "ghost": "link", "link": "link"}.get(variant, "ink")
+    ink = icon_color or palette[tone]
+    widget = _ExternalButton(text, ink, parent) if external else QPushButton(text, parent)
     widget.setProperty("variant", variant)
     if size:
         widget.setProperty("size", size)
     if icon:
-        default = {"primary": tokens()["primary_text"], "ghost": tokens()["link"], "link": tokens()["link"]}
-        widget.setIcon(icons.icon(icon, icon_color or default.get(variant, tokens()["ink"]), 14))
+        widget.setIcon(icons.icon(icon, ink, 14))
         widget.setIconSize(QSize(14, 14))
     widget.setCursor(Qt.CursorShape.PointingHandCursor)
     return widget
 
 
-def link(text: str, url=None, external: bool = True, parent: Optional[QWidget] = None) -> QPushButton:
+def link(text: str, url=None, external: bool = True, on_click: Optional[Callable[[], None]] = None,
+         parent: Optional[QWidget] = None) -> QPushButton:
     """A link button. `url` is an address, or a function that returns one when clicked (for an address
-    that depends on the environment, known only once the plugin has its configuration)."""
-    widget = button(text, "link", external=external and bool(url), parent=parent)
+    that depends on the environment, known only once the plugin has its configuration). `on_click` is
+    called instead when the address is not the widget's to know: the page emits a signal and the controller
+    opens it. External links carry an arrow icon after the text."""
+    widget = button(text, "link", external=external and bool(url or on_click), parent=parent)
     widget.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
-    if url:
+    if on_click:
+        widget.clicked.connect(guarded(lambda *_: on_click()))
+    elif url:
         if isinstance(url, str):
             widget.setToolTip(url)
-        widget.clicked.connect(lambda *_: QDesktopServices.openUrl(QUrl(url() if callable(url) else url)))
+        widget.clicked.connect(guarded(lambda *_: QDesktopServices.openUrl(QUrl(url() if callable(url) else url))))
     return widget
 
 
@@ -82,6 +141,7 @@ def tool(icon_name: str, tooltip: str, variant: str = "icon", size: int = 16,
 def same_width(buttons: List[QWidget]) -> None:
     """Buttons stacked in a list (Use, Chosen, Choose…), made one width: the widest's. Measured once they are
     shown and styled, so the theme's font and padding count."""
+    @guarded
     def apply() -> None:
         try:
             width = max((b.sizeHint().width() for b in buttons), default=0)
@@ -180,6 +240,7 @@ class DropTarget(QObject):
         widget.setAcceptDrops(True)
         widget.installEventFilter(self)
 
+    @guarded(default=False)
     def eventFilter(self, obj, event) -> bool:
         kind = event.type()
         if kind in (QEvent.Type.DragEnter, QEvent.Type.DragMove, QEvent.Type.Drop):
@@ -210,6 +271,7 @@ class HoverTip(QObject):
         self.timer.timeout.connect(self._show)
         widget.installEventFilter(self)
 
+    @guarded(default=False)
     def eventFilter(self, obj, event) -> bool:
         kind = event.type()
         if kind == QEvent.Type.ToolTip:             # the children's come up here too: ours instead
@@ -221,6 +283,7 @@ class HoverTip(QObject):
             QToolTip.hideText()
         return False
 
+    @guarded
     def _show(self) -> None:
         if self.widget.underMouse():
             QToolTip.showText(QCursor.pos(), self.text, self.widget, self.widget.rect())
@@ -230,6 +293,7 @@ class Combo(QComboBox):
     """A drop-down for scrolling pages: the mouse wheel over it scrolls the page instead of changing the
     value. Its list, once opened, takes the wheel as usual (the list gets those events, not the combo)."""
 
+    @guarded
     def wheelEvent(self, event) -> None:
         event.ignore()                          # left to the parent: the scroll area scrolls
 
@@ -259,11 +323,13 @@ class DropCard(Card):
         super().__init__(parent, kind="drop", **kwargs)
         self.setAttribute(Qt.WidgetAttribute.WA_Hover)
 
+    @guarded(default=False)
     def event(self, event) -> bool:
         if event.type() in (QEvent.Type.HoverEnter, QEvent.Type.HoverLeave):
             set_prop(self, "hover", event.type() == QEvent.Type.HoverEnter)
         return super().event(event)
 
+    @guarded
     def paintEvent(self, event) -> None:
         super().paintEvent(event)
         half = self.WIDTH / 2
@@ -312,17 +378,18 @@ class Callout(QFrame):
         layout.addWidget(self.icon, 0, Qt.AlignmentFlag.AlignVCenter)     # centred on the text, any length
         layout.addWidget(self.text, 1)
         # A way out (Top up), as a button on the right; set_action shows it
-        self.action = button("", "outline", size="sm", parent=self)
+        self.action = button("", "outline", size="sm", external=True, parent=self)
         self.action.setProperty("callout_action", True)     # small, in the callout's own colours (theme)
         self.action.setVisible(False)
         self._action_url = ""
-        self.action.clicked.connect(lambda *_: self._action_url and QDesktopServices.openUrl(QUrl(self._action_url)))
+        self.action.clicked.connect(
+            guarded(lambda *_: self._action_url and QDesktopServices.openUrl(QUrl(self._action_url))))
         layout.addWidget(self.action, 0, Qt.AlignmentFlag.AlignVCenter)
         self.set(kind, text)
 
     def set_action(self, text: str = "", url: str = "") -> None:
         """A button on the right that opens `url` in the browser; no text hides it."""
-        self.action.setText(f"{text}  ↗" if text else "")
+        self.action.setText(text)
         self._action_url = url
         self.action.setVisible(bool(text and url))
 
@@ -332,6 +399,7 @@ class Callout(QFrame):
         name = {"info": "info", "warn": "alert", "error": "alert"}[kind]
         tone = {"info": "primary_ink", "warn": "warn_fg", "error": "err_fg"}[kind]
         self.icon.setPixmap(icons.pixmap(name, tokens()[tone], 16))
+        self.action.set_arrow_color(tokens()[tone])
         self.text.setText(text)
         # Shown only once it has a parent: a parentless widget shown is a window of its own, and one flashed up
         # empty, titled "QGIS3", before the projects window took it in. With text, it shows when it is added.
@@ -378,11 +446,13 @@ class FocusRing:
     ring around what was just clicked. Mixed in before the Qt class; the property `focusring` is for QSS."""
     _keyboard_focus = False
 
+    @guarded
     def focusInEvent(self, event) -> None:
         self._keyboard_focus = event.reason() in KEYBOARD_FOCUS
         set_prop(self, "focusring", self._keyboard_focus)
         super().focusInEvent(event)
 
+    @guarded
     def focusOutEvent(self, event) -> None:
         self._keyboard_focus = False
         set_prop(self, "focusring", False)
@@ -390,6 +460,149 @@ class FocusRing:
 
     def focus_ring(self) -> bool:
         return self.hasFocus() and self._keyboard_focus
+
+
+class RangeSlider(FocusRing, QWidget):
+    """A slider with two handles, for a range of whole numbers. Painted, so it needs no QSS or `qgis.gui`.
+    It works like a QSlider: `setRange`, `setPageStep`, and `valuesChanged` when the low or high end moves."""
+    valuesChanged = pyqtSignal(int, int)
+    HANDLE = 14                                 # the handle's diameter, in px
+
+    def __init__(self, minimum: int = 0, maximum: int = 100, parent: Optional[QWidget] = None):
+        super().__init__(parent)
+        self._minimum, self._maximum = minimum, maximum
+        self._low, self._high = minimum, maximum
+        self._page = 10
+        self._active = 0                        # the handle the keys move: 0 low, 1 high (the last one pressed)
+        self._dragging = False
+        self.setMinimumHeight(22)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+
+    @guarded(default=QSize(-1, -1))
+    def sizeHint(self) -> QSize:
+        return QSize(120, 22)
+
+    def minimum(self) -> int:
+        return self._minimum
+
+    def maximum(self) -> int:
+        return self._maximum
+
+    def low(self) -> int:
+        return self._low
+
+    def high(self) -> int:
+        return self._high
+
+    def setPageStep(self, step: int) -> None:
+        self._page = max(1, step)
+
+    def setRange(self, minimum: int, maximum: int) -> None:
+        self._minimum, self._maximum = minimum, max(minimum, maximum)
+        self.setValues(self._low, self._high)
+        self.update()
+
+    def setValues(self, low: int, high: int) -> None:
+        """Moves both ends, kept in the range with low <= high. Emits only when an end changes."""
+        low = min(max(int(low), self._minimum), self._maximum)
+        high = min(max(int(high), low), self._maximum)
+        if (low, high) == (self._low, self._high):
+            return
+        self._low, self._high = low, high
+        self.update()
+        self.valuesChanged.emit(low, high)
+
+    def _groove(self) -> Tuple[float, float]:
+        """The x of the minimum and of the maximum: inset by the handle's radius, so a handle stays inside."""
+        radius = self.HANDLE / 2
+        return radius + 1, max(radius + 1, self.width() - radius - 1)
+
+    def _x(self, value: int) -> float:
+        left, right = self._groove()
+        span = self._maximum - self._minimum
+        return left if span <= 0 else left + (right - left) * (value - self._minimum) / span
+
+    def _value_at(self, x: float) -> int:
+        left, right = self._groove()
+        if right <= left:
+            return self._minimum
+        share = min(max((x - left) / (right - left), 0.0), 1.0)
+        return int(round(self._minimum + share * (self._maximum - self._minimum)))
+
+    def _move(self, handle: int, value: int) -> None:
+        if handle == 0:
+            self.setValues(min(value, self._high), self._high)
+        else:
+            self.setValues(self._low, max(value, self._low))
+
+    @guarded
+    def mousePressEvent(self, event) -> None:
+        if event.button() != Qt.MouseButton.LeftButton:
+            super().mousePressEvent(event)
+            return
+        x = event_pos(event).x()
+        near_low, near_high = abs(x - self._x(self._low)), abs(x - self._x(self._high))
+        if near_low == near_high:               # the handles share a place: the click side decides
+            self._active = 0 if x < self._x(self._low) else 1
+        else:
+            self._active = 0 if near_low < near_high else 1
+        self._dragging = True
+        self.setFocus(Qt.FocusReason.MouseFocusReason)
+        self._move(self._active, self._value_at(x))
+        self.update()
+
+    @guarded
+    def mouseMoveEvent(self, event) -> None:
+        if self._dragging:
+            self._move(self._active, self._value_at(event_pos(event).x()))
+        else:
+            super().mouseMoveEvent(event)
+
+    @guarded
+    def mouseReleaseEvent(self, event) -> None:
+        self._dragging = False
+        super().mouseReleaseEvent(event)
+
+    @guarded
+    def keyPressEvent(self, event) -> None:
+        key = event.key()
+        current = self._high if self._active else self._low
+        steps = {Qt.Key.Key_Left: -1, Qt.Key.Key_Down: -1, Qt.Key.Key_Right: 1, Qt.Key.Key_Up: 1,
+                 Qt.Key.Key_PageDown: -self._page, Qt.Key.Key_PageUp: self._page}
+        if key in steps:
+            self._move(self._active, current + steps[key])
+        elif key == Qt.Key.Key_Home:
+            self._move(self._active, self._minimum)
+        elif key == Qt.Key.Key_End:
+            self._move(self._active, self._maximum)
+        else:
+            super().keyPressEvent(event)
+            return
+        self.update()
+
+    @guarded
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        enabled = self.isEnabled()
+        middle = self.height() / 2
+        low_x, high_x = self._x(self._low), self._x(self._high)
+        left, right = self._groove()
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(color("track"))
+        painter.drawRoundedRect(QRectF(left, middle - 2, right - left, 4), 2, 2)
+        painter.setBrush(color("primary") if enabled else color("border"))
+        painter.drawRoundedRect(QRectF(low_x, middle - 2, high_x - low_x, 4), 2, 2)
+        radius = self.HANDLE / 2
+        for index, x in enumerate((low_x, high_x)):
+            if self.focus_ring() and index == self._active:
+                painter.setBrush(Qt.BrushStyle.NoBrush)
+                painter.setPen(QPen(color("focus"), 1.5))
+                painter.drawEllipse(QPointF(x, middle), radius + 2.5, radius + 2.5)
+            painter.setBrush(color("bg"))
+            painter.setPen(QPen(color("primary") if enabled else color("border"), 2))
+            painter.drawEllipse(QPointF(x, middle), radius - 1, radius - 1)
+        painter.end()
 
 
 class Toggle(FocusRing, QAbstractButton):
@@ -401,9 +614,11 @@ class Toggle(FocusRing, QAbstractButton):
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
+    @guarded(default=QSize(-1, -1))
     def sizeHint(self) -> QSize:
         return QSize(36, 20)
 
+    @guarded
     def paintEvent(self, event) -> None:
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -442,7 +657,7 @@ class Stars(QWidget):
             star.setCursor(Qt.CursorShape.PointingHandCursor)
             star.setToolTip(f"Rate {index} of 5")
             star.setAccessibleName(f"Rate {index} of 5")
-            star.clicked.connect(lambda _=False, i=index: self._rate(i))
+            star.clicked.connect(guarded(lambda _=False, i=index: self._rate(i)))
             layout.addWidget(star)
             self.buttons.append(star)
         self._paint()
@@ -548,9 +763,11 @@ class ImageTile(FocusRing, QAbstractButton):
         self.setMinimumHeight(156)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
+    @guarded(default=QSize(-1, -1))
     def sizeHint(self) -> QSize:
         return QSize(170, 156)
 
+    @guarded
     def paintEvent(self, event) -> None:
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -594,12 +811,64 @@ class ImageTile(FocusRing, QAbstractButton):
         painter.end()
 
 
+class ButtonGrid(QWidget):
+    """Buttons (or other widgets, such as a label over a field) in rows of `columns`, sharing the width; one per
+    row, each the full width, when a column is too narrow for one of them. Never clipped, and never wider than
+    the widest one."""
+
+    def __init__(self, buttons, columns: int = 2, gap: int = 8, parent: Optional[QWidget] = None):
+        super().__init__(parent)
+        self.buttons = tuple(buttons)
+        self.most_columns = max(1, columns)
+        self.grid = QGridLayout(self)
+        self.grid.setContentsMargins(0, 0, 0, 0)
+        self.grid.setHorizontalSpacing(gap)
+        self.grid.setVerticalSpacing(gap)
+        self._columns = 0
+        for item in self.buttons:
+            item.setParent(self)
+            item.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        self._place(self.most_columns)
+
+    def columns(self) -> int:
+        return self._columns
+
+    def stacked(self) -> bool:
+        """One button per row."""
+        return self._columns == 1 and len(self.buttons) > 1
+
+    def _fits(self, columns: int, width: int) -> bool:
+        room = (width - self.grid.horizontalSpacing() * (columns - 1)) / columns
+        return all(item.sizeHint().width() <= room for item in self.buttons)
+
+    def _place(self, columns: int) -> None:
+        if columns == self._columns:
+            return
+        while self.grid.count():
+            self.grid.takeAt(0)
+        for column in range(max(columns, self._columns)):
+            self.grid.setColumnStretch(column, 1 if column < columns else 0)
+        for index, item in enumerate(self.buttons):
+            self.grid.addWidget(item, index // columns, index % columns)
+        self._columns = columns
+
+    @guarded(default=QSize(-1, -1))
+    def minimumSizeHint(self) -> QSize:
+        hint = super().minimumSizeHint()
+        return QSize(max((item.sizeHint().width() for item in self.buttons), default=0), hint.height())
+
+    @guarded
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self._place(self.most_columns if self._fits(self.most_columns, self.width()) else 1)
+
+
 class OptionRow(QFrame):
     """A selectable row (radio-like) with a title, a meta line and free space on the right."""
     clicked = pyqtSignal()
 
     def __init__(self, title: str, meta: str = "", parent: Optional[QWidget] = None,
-                 *, title_detail: str = ""):
+                 *, title_detail: str = "", elide_text: bool = False):
         super().__init__(parent)
         self.setProperty("option", True)
         self.setProperty("selected", False)
@@ -608,13 +877,19 @@ class OptionRow(QFrame):
         self.setAccessibleName(title)
         layout = QHBoxLayout(self)
         layout.setContentsMargins(10, 7, 10, 7)
-        layout.setSpacing(10)
+        layout.setSpacing(8)
         self.dot = QLabel(self)
         self.dot.setFixedSize(16, 16)
         texts = QVBoxLayout()
         texts.setSpacing(1)
-        self.title = label(title, "title", wrap=True, parent=self)
-        self.meta = label(meta, "meta", wrap=True, parent=self)
+        if elide_text:
+            self.title = ElidedLabel(title, "title", self)
+            self.meta = ElidedLabel(meta, "meta", self)
+            self.title.setTextFormat(Qt.TextFormat.PlainText)
+            self.meta.setTextFormat(Qt.TextFormat.PlainText)
+        else:
+            self.title = label(title, "title", wrap=True, parent=self)
+            self.meta = label(meta, "meta", wrap=True, parent=self)
         self.meta.setVisible(bool(meta))
         if title_detail:
             texts.addLayout(hbox(self.title, label(title_detail, "meta"), None))
@@ -669,11 +944,13 @@ class OptionRow(QFrame):
         pixmap.setDevicePixelRatio(scale)
         self.dot.setPixmap(pixmap)
 
+    @guarded
     def mouseReleaseEvent(self, event) -> None:
         if event.button() == Qt.MouseButton.LeftButton and self.rect().contains(event_pos(event)):
             self.clicked.emit()
         super().mouseReleaseEvent(event)
 
+    @guarded
     def keyPressEvent(self, event) -> None:
         if event.key() in (Qt.Key.Key_Space, Qt.Key.Key_Return, Qt.Key.Key_Enter):
             self.clicked.emit()
@@ -706,6 +983,7 @@ class MetaWithNote(QWidget):
     def _one_line(self, width: int) -> bool:
         return self.meta.fontMetrics().horizontalAdvance(self._joined()) + self.block.sizeHint().width() <= width
 
+    @guarded(default=False)
     def hasHeightForWidth(self) -> bool:
         return True
 
@@ -714,16 +992,19 @@ class MetaWithNote(QWidget):
         takes, so a row with a warning spaces its texts as one without."""
         return self.meta.heightForWidth(10_000) if self.text else self.meta.fontMetrics().height()
 
+    @guarded(default=-1)               # -1: Qt's own "no height for width"
     def heightForWidth(self, width: int) -> int:
         block = self.block.sizeHint().height()
         if self._one_line(width):
             return max(self._line_height(), block)
         return (self.meta.heightForWidth(width) + self.GAP if self.text else 0) + block
 
+    @guarded(default=QSize(-1, -1))
     def sizeHint(self) -> QSize:
         width = self.meta.fontMetrics().horizontalAdvance(self._joined()) + self.block.sizeHint().width()
         return QSize(width, self.heightForWidth(width))
 
+    @guarded(default=QSize(-1, -1))
     def minimumSizeHint(self) -> QSize:
         width = self.block.sizeHint().width()
         return QSize(width, self.heightForWidth(width))
@@ -741,6 +1022,7 @@ class MetaWithNote(QWidget):
             picture.setContentsMargins(0, top, 0, 0)
             self.updateGeometry()                   # the block may be a pixel taller now
 
+    @guarded
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
         self._line_up_icon()
@@ -772,12 +1054,14 @@ class FitLineEdit(QLineEdit):
         super().__init__(parent)
         self._editing = False
         self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
-        self.textChanged.connect(lambda *_: self._editing or self.updateGeometry())
+        self.textChanged.connect(guarded(lambda *_: self._editing or self.updateGeometry()))
 
+    @guarded
     def focusInEvent(self, event) -> None:
         super().focusInEvent(event)
         self._set_editing(True)
 
+    @guarded
     def focusOutEvent(self, event) -> None:
         super().focusOutEvent(event)
         self.setCursorPosition(0)                   # a long name shows from its start again
@@ -789,6 +1073,7 @@ class FitLineEdit(QLineEdit):
             self.updateGeometry()
             self.editing.emit(on)
 
+    @guarded(default=QSize(-1, -1))
     def sizeHint(self) -> QSize:
         if self._editing:                           # wider than any row: it gets all the space there is
             return QSize(10_000, super().sizeHint().height())
@@ -796,6 +1081,7 @@ class FitLineEdit(QLineEdit):
         # + the field's own 2 px margins on each side and the cursor
         return QSize(self.fontMetrics().horizontalAdvance(text) + 8, super().sizeHint().height())
 
+    @guarded(default=QSize(-1, -1))
     def minimumSizeHint(self) -> QSize:
         return QSize(40, super().minimumSizeHint().height())
 
@@ -816,10 +1102,12 @@ class ElidedLabel(QLabel):
     def full_text(self) -> str:
         return self._full
 
+    @guarded
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
         self._elide()
 
+    @guarded
     def changeEvent(self, event) -> None:
         super().changeEvent(event)
         if event.type() in (QEvent.Type.FontChange, QEvent.Type.StyleChange):

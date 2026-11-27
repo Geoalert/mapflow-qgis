@@ -13,6 +13,8 @@ from qgis.PyQt.QtWidgets import QApplication, QWidget
 
 from ..config import RESOURCES
 
+MENU_ITEM_LEFT_PADDING = 10
+
 LIGHT: Dict[str, str] = {
     "bg": "#ffffff", "subtle": "#f7fafc", "tile": "#edf2f7", "icon_button": "#f2f6fb",
     "border": "#e2e8f0", "stroke": "#cdd8e6", "ink": "#1b202b", "text": "#1a202c",
@@ -83,6 +85,7 @@ QFrame#mfFooter { border-top: 1px solid $border; }
 QFrame#mfBottomBar { border-top: 1px solid $border; }
 
 QFrame[card="true"] { background: $bg; border: 1px solid $border; border-radius: 15px; }
+QFrame#mfStorageBadge { border-radius: 8px; }
 QFrame[card="true"][active="true"] { border: 1px solid $primary_soft2; }
 QFrame[card="true"][tone="error"] { border: 1px solid $err_line; }
 QFrame[card="drop"] { background: $bg; border: 0; border-radius: 15px; }
@@ -143,7 +146,7 @@ QPushButton[variant="primary"]:disabled { background: $tile; color: $disabled; }
 QPushButton[variant="outline"] { background: $bg; color: $ink; border: 1px solid $stroke; }
 QPushButton[variant="outline"]:hover { background: $subtle; }
 QPushButton[variant="outline"]:disabled { color: $disabled; }
-QPushButton[variant="ghost"] { background: transparent; color: $link; border: 0; }
+QPushButton[variant="ghost"] { background: transparent; color: $link; border: 0; padding: 0 10px; }
 QPushButton[variant="ghost"]:hover { background: $primary_soft; }
 QPushButton[variant="ghost"]:disabled { color: $disabled; }
 QPushButton[variant="link"] { background: transparent; color: $link; border: 0; padding: 0; min-height: 18px;
@@ -188,7 +191,7 @@ QPushButton[segbtn="true"] { background: transparent; color: $text2; border: 0; 
 QPushButton[segbtn="true"]:checked { background: $bg; color: $ink; }
 
 QPushButton[chip="true"] { background: $bg; color: $text; border: 1px solid $border; border-radius: 13px;
-                           min-height: 24px; padding: 0 10px; font-size: 12px; }
+                           min-height: 24px; padding: 0 8px; font-size: 12px; }
 QPushButton[chip="true"]:checked { background: $primary_soft; border-color: $primary_soft2; color: $primary_ink; }
 
 QFrame[option="true"] { background: $bg; border: 1px solid $border; border-radius: 8px; }
@@ -227,6 +230,8 @@ QComboBox QAbstractItemView { background: $bg; color: $text; border: 1px solid $
 
 QProgressBar { background: $track; border: 0; border-radius: 3px; max-height: 6px; min-height: 6px; }
 QProgressBar::chunk { background: $progress; border-radius: 3px; }
+QProgressBar#mfStorageUsage::chunk { background: $primary; }
+QProgressBar#mfStorageUsage[storageWarning="true"]::chunk { background: $warn_fg; }
 
 QScrollBar:vertical { background: transparent; width: 10px; margin: 2px 0; }
 /* Thin to the eye, the whole bar's width to click: a transparent border is part of the handle, a margin
@@ -238,7 +243,7 @@ QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: trans
 
 QToolTip { background: #171923; color: #ffffff; border: 0; padding: 3px 6px; font-size: 12px; }
 QMenu { background: $bg; color: $text; border: 1px solid $border; padding: 4px; }
-QMenu::item { padding: 6px 18px 6px 10px; border-radius: 4px; }
+QMenu::item { padding: 6px 18px 6px ${menu_item_left_padding}px; border-radius: 4px; }
 QMenu::item:selected { background: $primary_soft; color: $ink; }
 QMenu::item:disabled { color: $text2; }
 QMenu::separator { height: 1px; background: $border; margin: 4px 6px; }
@@ -250,7 +255,8 @@ def stylesheet() -> str:
     t = tokens()
     return QSS.substitute(font=load_fonts() or "sans-serif", arrow_icon=icon_file("chevron-down", t["text2"]),
                           arrow_icon_off=icon_file("chevron-down", t["disabled"]),
-                          calendar_icon=icon_file("calendar", t["text2"]), **t)
+                          calendar_icon=icon_file("calendar", t["text2"]),
+                          menu_item_left_padding=MENU_ITEM_LEFT_PADDING, **t)
 
 
 def set_prop(widget: QWidget, name: str, value) -> None:

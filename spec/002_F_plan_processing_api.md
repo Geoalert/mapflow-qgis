@@ -9,13 +9,14 @@ Define REST API contracts for planned processing consumed by the plugin.
 search results, pause/resume, running from it and deleting it are done in Mapflow Web.
 
 - The Processings tab shows the planned processings of the open project
-  (`GET /processings/template/project/{projectId}`), each as a row with a **"search processing"** mark,
+  (`GET /processings/template/project/{projectId}`), each as a row with a **"Planned search"** mark,
   its name and its status, listed before the ordinary processings. They are loaded with the list and
   refreshed with it; a failure to load them hides the rows and nothing else.
 - A planned processing has none of a processing's actions: no result to add, no Run again, no rename, no
   delete, no restart.
-- **Clicking the row opens the planned processing in Mapflow Web**, in the browser. The plugin does not
-  open it in QGIS.
+- **Clicking the row opens the selected search in Mapflow Web** at
+  `/projects/{projectId}?processing={templateId}` on the configured web address. The project ID comes
+  from the row when available and otherwise from the open project.
 - This is the only endpoint of this document the plugin calls. The rest of the API is specified below
   because the backend serves it and a later release will use it; § In-template navigation, § Limits and
   client-side validation and every other "client behaviour" below describe the **3.x plugin** and bind

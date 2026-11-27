@@ -11,6 +11,7 @@ import hashlib
 import json
 import re
 import threading
+import time
 import uuid
 from urllib.parse import parse_qs, unquote, urlencode, urlsplit
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -22,7 +23,29 @@ OIDC = "/auth/realms/mapflow/protocol/openid-connect"
 # An 8×8 green PNG, for image previews
 PNG = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAACXBIWXMAAA9hAAAPYQGoP6dpAAAAFElEQVQImWOM"
                        "6vdjwAaYsIoOWgkA954BR71+LSAAAAAASUVORK5CYII=")  # pragma: allowlist secret (a PNG)
+# What a WMS server answers to GetCapabilities: one layer that QGIS reads as a valid `wms` raster layer (a WMS layer
+# is the tile source that the run form must not list)
+WMS_CAPABILITIES = """<?xml version="1.0" encoding="UTF-8"?>
+<WMS_Capabilities version="1.3.0" xmlns="http://www.opengis.net/wms" xmlns:xlink="http://www.w3.org/1999/xlink">
+<Service><Name>WMS</Name><Title>Test WMS</Title><OnlineResource xlink:href="http://127.0.0.1/open/wms"/></Service>
+<Capability>
+<Request>
+<GetCapabilities><Format>text/xml</Format><DCPType><HTTP><Get><OnlineResource xlink:href="http://127.0.0.1/open/wms?"/>
+</Get></HTTP></DCPType></GetCapabilities>
+<GetMap><Format>image/png</Format><DCPType><HTTP><Get><OnlineResource xlink:href="http://127.0.0.1/open/wms?"/>
+</Get></HTTP></DCPType></GetMap>
+</Request>
+<Layer>
+<Title>Root</Title><CRS>EPSG:3857</CRS><CRS>EPSG:4326</CRS>
+<EX_GeographicBoundingBox><westBoundLongitude>-180</westBoundLongitude><eastBoundLongitude>180</eastBoundLongitude>
+<southBoundLatitude>-85</southBoundLatitude><northBoundLatitude>85</northBoundLatitude></EX_GeographicBoundingBox>
+<Layer queryable="0"><Name>a</Name><Title>Layer A</Title></Layer>
+</Layer>
+</Capability>
+</WMS_Capabilities>"""
 REDIRECT_URI = "http://127.0.0.1:7070/qgis"
+ODD_BOUNDS_ID = "odd-bounds"          # a processing whose tilejson bounds cannot be transformed
+ODD_BOUNDS = [37.595, 91.0, 37.615, 92.0]
 
 
 class State:
@@ -35,9 +58,19 @@ class State:
         self.lock = threading.Lock()
         self.starred = {"project-3"}       # starred in Mapflow Web
         self.catalog_many = False          # the catalog answers with 60 images, in pages
+        self.catalog_too_large = False     # the catalog refuses the area as too large, as Mapflow does
         self.extra_mosaics = []            # collections added while the test runs (an empty one)
         self.created_projects = []         # POST /projects
+        self.renamed_projects = {}         # PUT /projects/{id}: project id → (name, description)
+        self.rename_project_requests = []  # …(id, body) of each such request that reached the route
+        self.project_refusal = None        # a message: PUT /projects/{id} answers 409 with it
+        self.project_delay = 0             # seconds PUT /projects/{id} waits before it answers
+        self.deleted_projects = set()      # DELETE /projects/{id}
+        self.delete_project_requests = []  # …the ids of those requests that reached the route
+        self.delete_refusal = None         # a message: DELETE /projects/{id} answers 409 with it
+        self.shared_projects = {}          # project id → a shareProject dict that replaces the fixture's
         self.no_mosaics = False            # an account without collections
+        self.status = None                 # GET /user/status answers this, not fixtures.STATUS (a changed balance)
         self.many_mosaics = 0              # this many more collections, listed after the fixtures' (for paging)
         self.uploads = []                  # (what, mosaic, detail) for each upload request
         self.list_uploads = False          # a one-file upload is listed afterwards as a collection with one image
@@ -47,12 +80,57 @@ class State:
         self.deleted_mosaics = set()       # DELETE rasters/mosaic/{id}
         self.created_mosaics = 0           # POST rasters/mosaic so far: numbers the new collections' ids
         self.deleted_images = set()        # DELETE rasters/image/{id}
+        self.renamed_mosaics = {}          # PUT rasters/mosaic/{id}: collection id → (name, tags)
+        self.rename_requests = []          # …the bodies of those requests that were accepted or refused
+        self.rename_refusal = None         # a message: PUT rasters/mosaic/{id} answers 409 with it
         self.codes = {}                 # code → (code_challenge, redirect_uri)
         self.access_tokens = set()
         self.refresh_tokens = set()
         self.issued = 0
         self.expires_in = 300
         self.pkce_checked = 0
+        self.failures = []                 # rules from fail(): requests that answer an error instead
+        self.hang_seconds = 3              # how long a "hang" holds the request before it closes
+        self.memory = None                 # GET /rasters/memory answers this, not fixtures.MEMORY (other limits)
+        self.tile_refusal = None           # (status, code, message, params): a cost check or a start of a QGIS tile
+        #                                    layer (`userDefined`) answers this error; the message and the params may
+        #                                    carry the tile address, as the server's own refusals do
+        self.restart_refused = None        # (status, code, message): POST /processings/{id}/restart/v2 answers this
+        self.image_bytes = bytes((n * 7 + n // 251) % 256 for n in range(1024 * 1024))   # the body of a download
+        self.download_mode = "ok"          # "ok" | "truncated" (half the body, then the connection closes) |
+        #                                    "slow" (small chunks, `download_chunk_delay` apart) | "stall" (some bytes,
+        #                                    then silence for `hang_seconds`) | "forbidden" (403 XML, as S3's)
+        self.download_chunk_delay = 0.5    # seconds between the chunks of a "slow" download
+        self.download_chunks = 10          # the number of chunks of a "slow" download
+        self.not_downloadable = set()      # image ids listed with available_for_download: false
+        self.download_links = []           # image ids GET rasters/image/{id}/download was asked for
+        self.expected_version = "4.0.0"    # GET /version answers this, as text: the plugin version the backend expects
+        self.planned = {}                  # project id → the planned processings (Template objects) of GET
+        #                                    /processings/template/project/{id}; none: an empty list
+        self.planned_delay = {}            # project id → seconds that answer waits
+        self.page_delay = {}               # terms (lower case) → seconds the processings page waits before it answers
+        #                                    (or before it fails, when fail() applies to it)
+
+    def fail(self, method, pattern, what, times=None):
+        """Requests of `method` whose path (without /rest) matches the regex `pattern` fail. `what`: an HTTP
+        status (401, 503, 403, 404, 400), "drop" (the connection closes with no answer) or "hang" (no answer for
+        `hang_seconds`). `times`: how many requests fail, or None until `heal()`."""
+        with self.lock:
+            self.failures.append({"method": method, "pattern": re.compile(pattern), "what": what, "left": times})
+
+    def heal(self):
+        with self.lock:
+            self.failures = []
+
+    def failure_for(self, method, path):
+        """The rule that fails this request, if any (and one use of it counted)."""
+        with self.lock:
+            for rule in self.failures:
+                if rule["method"] == method and rule["pattern"].search(path) and rule["left"] != 0:
+                    if rule["left"] is not None:
+                        rule["left"] -= 1
+                    return rule["what"]
+        return None
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -64,7 +142,13 @@ class Handler(BaseHTTPRequestHandler):
     def _projects(self):
         with self.state.lock:
             created = list(self.state.created_projects)
-        return created + [fixtures.PROJECT, fixtures.PROJECT_2] + fixtures.MORE_PROJECTS
+            renamed, shared = dict(self.state.renamed_projects), dict(self.state.shared_projects)
+            deleted = set(self.state.deleted_projects)
+        every = [p for p in created + [fixtures.PROJECT, fixtures.PROJECT_2] + fixtures.MORE_PROJECTS
+                 if p["id"] not in deleted]
+        return [dict(p, **({"name": renamed[p["id"]][0], "description": renamed[p["id"]][1]}
+                           if p["id"] in renamed else {}),
+                     **({"shareProject": shared[p["id"]]} if p["id"] in shared else {})) for p in every]
 
     def _mosaics(self):
         """Every collection of the account, newest first, as the data catalog lists them."""
@@ -74,7 +158,9 @@ class Handler(BaseHTTPRequestHandler):
                  f"{n % 60:02d}Z", "sizeInBytes": 1000, "footprint": None, "tags": [],
                  "rasterLayer": {"tileUrl": "", "tileJsonUrl": ""}, "status_summary": {"total": 1}}
                 for n in range(self.state.many_mosaics)]
-        every = [m for m in fixtures.MOSAICS + self.state.extra_mosaics + many
+        every = [dict(m, name=self.state.renamed_mosaics[m["id"]][0], tags=self.state.renamed_mosaics[m["id"]][1])
+                 if m["id"] in self.state.renamed_mosaics else m
+                 for m in fixtures.MOSAICS + self.state.extra_mosaics + many
                  if m["id"] not in self.state.deleted_mosaics]
         return sorted(every, key=lambda m: m.get("created_at") or "", reverse=True)
 
@@ -88,6 +174,19 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
+
+    def _fail(self, what):
+        """An answer the test asked for: an error status, no answer at all ("drop"), or one that never comes."""
+        if what == "drop":
+            self.close_connection = True
+            return
+        if what == "hang":
+            time.sleep(self.state.hang_seconds)
+            self.close_connection = True
+            return
+        messages = {401: "Session expired", 503: "Service unavailable", 403: "No access", 404: "Not found",
+                    400: "Bad request"}
+        return self._send(what, {"code": f"HTTP_{what}", "message": messages.get(what, "Failure")})
 
     def _authorized(self):
         header = self.headers.get("Authorization", "")
@@ -154,6 +253,39 @@ class Handler(BaseHTTPRequestHandler):
                 return self._issue()
         return self._send(404, {"error": "not_found"})
 
+    def _image_body(self):
+        """The file behind a presigned URL, as `download_mode` says."""
+        body, mode = self.state.image_bytes, self.state.download_mode
+        if mode == "forbidden":
+            return self._send(403, "<Error><Code>AccessDenied</Code><Message>Request has expired</Message></Error>",
+                              "application/xml")
+        self.send_response(200)
+        self.send_header("Content-Type", "image/tiff")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        try:
+            if mode == "truncated":
+                self.wfile.write(body[:len(body) // 2])
+                self.wfile.flush()
+                self.close_connection = True
+                return
+            if mode == "stall":
+                self.wfile.write(body[:len(body) // 4])
+                self.wfile.flush()
+                time.sleep(self.state.hang_seconds)
+                self.close_connection = True
+                return
+            if mode == "slow":
+                step = -(-len(body) // self.state.download_chunks)
+                for start in range(0, len(body), step):
+                    self.wfile.write(body[start:start + step])
+                    self.wfile.flush()
+                    time.sleep(self.state.download_chunk_delay)
+                return
+            self.wfile.write(body)
+        except OSError:       # the client went away (an aborted download)
+            self.close_connection = True
+
     def _route(self, method):
         path = self.path.split("?")[0].replace("/rest", "", 1)
         if path.startswith(OIDC):
@@ -164,12 +296,28 @@ class Handler(BaseHTTPRequestHandler):
         body = self._body() if method in ("POST", "PUT") else None
         with self.state.lock:
             self.state.requests.append((method, path, body, dict(self.headers)))
+        if method == "GET" and path == "/open/preview.png":     # a public picture: no sign-in
+            return self._send(200, PNG, "image/png")
+        if method == "GET" and path == "/open/wms":             # a public WMS server: no sign-in
+            return self._send(200, WMS_CAPABILITIES, "text/xml")
+        if method == "GET" and path.startswith("/open/image/"):   # a presigned URL: no sign-in
+            return self._image_body()
         if not self._authorized():
             return
+        if path == "/redirect":                                 # answers 302 to the `to` query value
+            target = parse_qs(urlsplit(self.path).query).get("to", [""])[0]
+            return self._redirect(target or self.path)             # no `to`: back to itself, a loop
+        failure = self.state.failure_for(method, path)
+        if failure is not None:
+            if method == "POST" and path.endswith("/processings/v2/page"):
+                time.sleep(self.state.page_delay.get(((body or {}).get("terms") or "").lower(), 0))
+            return self._fail(failure)
+        if method == "GET" and path == "/version":
+            return self._send(200, self.state.expected_version, "text/plain")
         if method == "GET" and path == "/projects/default":
             return self._send(200, fixtures.PROJECT)
         if method == "GET" and path == "/user/status":
-            return self._send(200, fixtures.STATUS)
+            return self._send(200, self.state.status or fixtures.STATUS)
         if method == "POST" and path == "/projects":
             name = (body or {}).get("name", "").strip()
             if not name:
@@ -216,8 +364,57 @@ class Handler(BaseHTTPRequestHandler):
             if project:
                 return self._send(200, project)
             return self._send(404, {"code": "NOT_FOUND", "message": "No project"})
+        if method == "PUT" and match:
+            with self.state.lock:
+                self.state.rename_project_requests.append((match.group(1), body))
+                refusal = self.state.project_refusal
+            time.sleep(self.state.project_delay)
+            project = next((p for p in self._projects() if p["id"] == match.group(1)), None)
+            name = ((body or {}).get("name") or "").strip()
+            if project is None:
+                return self._send(404, {"code": "NOT_FOUND", "message": "No project"})
+            if not name:
+                return self._send(400, {"code": "INVALID_BODY", "message": "Invalid value for: body"})
+            share = project.get("shareProject")
+            if share and fixtures.USER["email"] not in [o.get("email") for o in share.get("owners") or []]:
+                return self._send(403, {"code": "FORBIDDEN", "message": "Only the owner can rename the project"})
+            if refusal is not None:
+                return self._send(409, {"code": "ProjectNameRefused", "message": refusal})
+            description = (body or {}).get("description")
+            with self.state.lock:
+                self.state.renamed_projects[match.group(1)] = (name, description)
+            return self._send(200, dict(project, name=name, description=description))
+        if method == "DELETE" and match:
+            with self.state.lock:
+                self.state.delete_project_requests.append(match.group(1))
+                refusal = self.state.delete_refusal
+            time.sleep(self.state.project_delay)
+            project = next((p for p in self._projects() if p["id"] == match.group(1)), None)
+            if project is None:
+                return self._send(404, {"code": "NOT_FOUND", "message": "No project"})
+            share = project.get("shareProject")
+            if project.get("isDefault") or (share and fixtures.USER["email"]
+                                            not in [o.get("email") for o in share.get("owners") or []]):
+                return self._send(403, {"code": "FORBIDDEN", "message": "Only the owner can delete the project"})
+            if refusal is not None:
+                return self._send(409, {"code": "ProjectDeleteRefused", "message": refusal})
+            with self.state.lock:
+                self.state.deleted_projects.add(match.group(1))
+                self.state.processings = [p for p in self.state.processings if p["projectId"] != match.group(1)]
+                self.state.starred.discard(match.group(1))
+            return self._send(200, "", "text/plain")
+        match = re.fullmatch(r"/processings/template/project/([\w-]+)", path)
+        if method == "GET" and match:
+            time.sleep(self.state.planned_delay.get(match.group(1), 0))
+            with self.state.lock:
+                rows = list(self.state.planned.get(match.group(1), []))
+            return self._send(200, rows)
         match = re.fullmatch(r"/projects/([\w-]+)/processings/v2/page", path)
         if method == "POST" and match:
+            with self.state.lock:
+                gone = match.group(1) in self.state.deleted_projects
+            if gone:
+                return self._send(404, {"code": "NOT_FOUND", "message": "No project"})
             with self.state.lock:
                 for item in self.state.processings:
                     if item["status"] == "IN_PROGRESS":
@@ -225,12 +422,26 @@ class Handler(BaseHTTPRequestHandler):
                         if item["percentCompleted"] >= 100:
                             item["status"] = "OK"
                 items = list(reversed([p for p in self.state.processings if p["projectId"] == match.group(1)]))
+            terms = body.get("terms")
+            if terms is not None and not isinstance(terms, str):
+                return self._send(400, {"code": "BAD_REQUEST", "message": "Invalid value for: body", "params": None})
+            if terms:
+                items = [p for p in items if terms.lower() in (p["name"] or "").lower()]
             offset, limit = int(body.get("offset") or 0), int(body.get("limit") or 30)
             if limit > 100:
                 return self._send(400, {"code": "BAD_REQUEST", "message": "limit must be at most 100"})
-            page = items[offset:offset + limit]
+            page = [dict(p) for p in items[offset:offset + limit]]      # as it is now: a delayed answer is the old one
+            delay = self.state.page_delay.get((terms or "").lower())
+            if delay:
+                time.sleep(delay)               # outside state.lock: the server is threaded
             return self._send(200, {"results": page, "total": len(items), "count": len(page)})
         match = re.fullmatch(r"/processings/([\w-]+)/v2", path)
+        if method == "GET" and match:
+            with self.state.lock:
+                item = next((p for p in self.state.processings if p["id"] == match.group(1)), None)
+            if item is None:
+                return self._send(404, {"code": "NOT_FOUND", "message": "No processing"})
+            return self._send(200, item)
         if method == "PUT" and match:
             with self.state.lock:
                 item = next((p for p in self.state.processings if p["id"] == match.group(1)), None)
@@ -239,12 +450,20 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, item or {})
         if method == "POST" and path in ("/processing/cost/v2", "/processings/v2") and not valid_processing(body):
             return self._send(400, {"code": "BAD_REQUEST", "message": "Invalid value for: body", "params": None})
+        refusal = self.state.tile_refusal
+        if method == "POST" and path in ("/processing/cost/v2", "/processings/v2") and refusal is not None \
+                and "userDefined" in body["params"]["sourceParams"]:
+            status, code, message, params = refusal
+            return self._send(status, {"code": code, "message": message, "params": params})
         if method == "POST" and path == "/processing/cost/v2":
             return self._send(200, "70", "text/plain")
         match = re.fullmatch(r"/tiles/([\w-]+)\.json", path)
         if method == "GET" and match:     # a processing's vector tilejson: where its results are
-            return self._send(200, {"tilejson": "2.2.0", "minzoom": 0, "maxzoom": 18,
-                                    "bounds": [37.595, 55.745, 37.615, 55.755]})
+            # Latitudes beyond 90°: QgsCoordinateTransform.transformBoundingBox raises QgsCsException (QGIS 3 and 4)
+            bounds = ODD_BOUNDS if match.group(1) == ODD_BOUNDS_ID else [37.595, 55.745, 37.615, 55.755]
+            return self._send(200, {"tilejson": "2.2.0", "minzoom": 0, "maxzoom": 18, "bounds": bounds})
+        if method == "GET" and path == "/not-json":     # a maintenance page where JSON is promised
+            return self._send(200, "<html>maintenance</html>", "text/html")
         if method == "POST" and path == "/processings/v2":
             new = fixtures.processing_json(str(uuid.uuid4()), "IN_PROGRESS", 0, name=body["name"])
             new["vectorLayer"]["tileJsonUrl"] = \
@@ -266,6 +485,9 @@ class Handler(BaseHTTPRequestHandler):
             if bad:   # what the real API answers
                 return self._send(400, {"code": "BAD_REQUEST", "message": f"Invalid value for: body ('{bad[0]}' is "
                                         "not a member of enum io.geoalert.mapflow.model.enums.ProductType)"})
+            if self.state.catalog_too_large:
+                return self._send(400, {"code": "BAD_REQUEST", "message": "Too large extent of AOI "
+                                        "(gotArea: 701687808, allowedArea: 250000000)"})
             base = f"http://127.0.0.1:{self.server.server_address[1]}/rest"
             if self.state.catalog_many:
                 every = [dict(copy.deepcopy(fixtures.CATALOG["images"][0]), id=f"many-{n:02d}",
@@ -275,6 +497,10 @@ class Handler(BaseHTTPRequestHandler):
                                         "limit": limit, "offset": offset})
             catalog = copy.deepcopy(fixtures.CATALOG)
             catalog["images"][0]["previewUrl"] = f"{base}/catalog/preview/img-1"   # a picture preview
+            wanted = {t.upper() for t in body.get("productTypes") or []}
+            if wanted:          # the filter, as the real API applies it
+                catalog["images"] = [i for i in catalog["images"] if i["productType"].upper() in wanted]
+                catalog["total"] = len(catalog["images"])
             return self._send(200, catalog)
         if method == "POST" and path == "/rasters/validate-image-metadata":
             # the schema of Mapflow's ValidationRequest (rasters/openapi.json): these fields, no others
@@ -352,6 +578,8 @@ class Handler(BaseHTTPRequestHandler):
                     self.state.extra_images[mosaic_id] = ["centre.tif"]     # a footprint the fixtures know
                     return self._send(200, {"id": "img-new", "mosaic_id": mosaic_id})
             return self._send(200, {"id": "img-new", "mosaic_id": "m-new"})
+        if method == "GET" and path == "/rasters/memory":
+            return self._send(200, self.state.memory if self.state.memory is not None else fixtures.MEMORY)
         if method == "GET" and path == "/rasters/mosaic/page":
             # As the data catalog pages them: newest first, name_contains matched against the collection's
             # name and its images' file names, and an empty name_contains refused
@@ -374,6 +602,21 @@ class Handler(BaseHTTPRequestHandler):
             found = next((m for m in self._mosaics() if m["id"] == match.group(1)), None)
             return self._send(200, found) if found else \
                 self._send(404, {"detail": {"code": "ItemNotFound", "message": "mosaicId not found"}})
+        if method == "PUT" and match:
+            body = body if isinstance(body, dict) else {}
+            if not body.get("name") or not isinstance(body.get("tags"), list):     # MosaicUpdateRequestSchema
+                return self._send(422, {"detail": [{"loc": ["body"], "msg": "Field required", "type": "missing"}]})
+            with self.state.lock:
+                self.state.rename_requests.append((match.group(1), body))
+                refusal = self.state.rename_refusal
+            found = next((m for m in self._mosaics() if m["id"] == match.group(1)), None)
+            if found is None:
+                return self._send(404, {"detail": {"code": "ItemNotFound", "message": "mosaicId not found"}})
+            if refusal is not None:
+                return self._send(409, {"detail": {"code": "MosaicNameRefused", "message": refusal}})
+            with self.state.lock:
+                self.state.renamed_mosaics[match.group(1)] = (body["name"], body["tags"])
+            return self._send(200, dict(found, name=body["name"], tags=body["tags"]))
         if method == "DELETE" and match:
             with self.state.lock:
                 self.state.deleted_mosaics.add(match.group(1))
@@ -391,7 +634,21 @@ class Handler(BaseHTTPRequestHandler):
                 self.state.image_requests = getattr(self.state, "image_requests", 0) + 1
             images = [fixtures.mosaic_image(f"{match.group(1)}-i{n}", match.group(1), name, base)
                       for n, name in enumerate(names)]
+            for image in images:
+                if image["id"] in self.state.not_downloadable:
+                    image["available_for_download"] = False
             return self._send(200, [i for i in images if i["id"] not in self.state.deleted_images])
+        match = re.fullmatch(r"/rasters/image/([\w-]+)/download", path)
+        if method == "GET" and match:
+            with self.state.lock:
+                self.state.download_links.append(match.group(1))
+            for mosaic_id, names in {**fixtures.MOSAIC_IMAGES, **self.state.extra_images}.items():
+                for n, name in enumerate(names):
+                    if match.group(1) == f"{mosaic_id}-i{n}":
+                        return self._send(200, {"download_url": f"http://127.0.0.1:{self.server.server_address[1]}"
+                                                                f"/open/image/{match.group(1)}",
+                                                "filename": name, "expires_in": 3600})
+            return self._send(404, {"detail": {"code": "IMAGE_NOT_FOUND", "message": "Image not found"}})
         match = re.fullmatch(r"/rasters/image/([\w-]+)", path)
         if method == "GET" and match:
             base = f"http://127.0.0.1:{self.server.server_address[1]}/rest"
@@ -403,6 +660,21 @@ class Handler(BaseHTTPRequestHandler):
         match = re.fullmatch(r"/rasters/image/([\w-]+)/preview/[sl]", path)
         if method == "GET" and match:
             return self._send(200, PNG, "image/png")
+        match = re.fullmatch(r"/processings/([\w-]+)/restart/v2", path)
+        if method == "POST" and match:
+            with self.state.lock:
+                refused = self.state.restart_refused
+                item = next((p for p in self.state.processings if p["id"] == match.group(1)), None)
+                if refused is None and item is not None and item["status"] in ("FAILED", "CANCELLED"):
+                    item.update(status="IN_PROGRESS", percentCompleted=0, messages=[])
+                    return self._send(200, "", "text/plain")
+            if refused is not None:
+                status, code, message = refused
+                return self._send(status, {"code": code, "message": message})
+            if item is None:
+                return self._send(404, {"code": "NOT_FOUND", "message": "No processing"})
+            return self._send(400, {"code": "BAD_REQUEST", "message": "Only a failed or a cancelled processing "
+                                                                      "can be restarted"})
         match = re.fullmatch(r"/processings/([\w-]+)/rate", path)
         if method == "PUT" and match:
             return self._send(200, "", "text/plain")
@@ -439,10 +711,29 @@ def valid_processing(body) -> bool:
     mine = source.get("myImagery")
     if mine is not None and (("mosaicId" in mine) == ("imageIds" in mine)):
         return False
+    custom = source.get("userDefined")
+    if custom is not None:
+        present = [name for name in ("imagerySearch", "myImagery", "dataProvider", "userDefined") if name in source]
+        if not _valid_user_defined(custom, present):
+            return False
     meta = body.get("meta") or {}
     if not isinstance(meta, dict) or not all(isinstance(v, str) for v in meta.values()):
         return False
     return all(key in body for key in ("name", "projectId", "geometry", "params"))
+
+
+def _valid_user_defined(custom, present) -> bool:
+    """The backend's UserDefinedParams: a source type in upper case, an address, a zoom, the projection, and the login
+    and password together or not at all; and no other imagery next to it."""
+    if present != ["userDefined"] or not isinstance(custom, dict):
+        return False
+    if custom.get("sourceType") not in ("XYZ", "TMS", "QUADKEY") or not isinstance(custom.get("url"), str):
+        return False
+    zoom = custom.get("zoom")
+    if not isinstance(zoom, int) or isinstance(zoom, bool) or not 0 <= zoom <= 22 or custom.get("crs") != "epsg:3857":
+        return False
+    login = [key for key in ("rasterLogin", "rasterPassword") if key in custom]
+    return login in ([], ["rasterLogin", "rasterPassword"]) and all(isinstance(custom[key], str) for key in login)
 
 
 def auth_url(api_url):

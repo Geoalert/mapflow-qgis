@@ -1,5 +1,5 @@
-"""GeoTIFFs checked before they are uploaded to My imagery: the limits Mapflow's upload accepts, and the
-metadata it validates."""
+"""GeoTIFFs checked before they are uploaded to My imagery: the limits the account has, and the metadata
+Mapflow validates."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -8,9 +8,10 @@ from typing import List, Optional, Tuple
 from qgis.core import (QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsDistanceArea, QgsMapLayer,
                        QgsMimeDataUtils, QgsPointXY, QgsProject, QgsRasterLayer)
 
+from ..config import MAX_SIDE_PIXELS, UPLOAD_LIMIT_BYTES
+from ..core.formatting import size_limit
+
 GEOTIFF = (".tif", ".tiff")
-UPLOAD_LIMIT_GB = 2               # as Mapflow's upload accepts (3.x checked the same limits)
-MAX_SIDE_PIXELS = 30_000
 BANDS = (1, 3, 4)                 # what Mapflow's models read from your own imagery
 # Data types rasters/validate-image-metadata accepts (its request schema's enum)
 DTYPES = ("uint8", "uint16", "int16", "float32", "int32")
@@ -86,9 +87,11 @@ def _pixel_size_meters(layer: QgsRasterLayer) -> List[float]:
     return [round(calculator.measureLine(origin, across), 4), round(calculator.measureLine(origin, down), 4)]
 
 
-def geotiff_metadata(path: str) -> Tuple[dict, str]:
+def geotiff_metadata(path: str, max_bytes: int = UPLOAD_LIMIT_BYTES,
+                     max_side: int = MAX_SIDE_PIXELS) -> Tuple[dict, str]:
     """What the plugin and Mapflow need to know about a GeoTIFF before it's uploaded, and the reason it can't
-    be uploaded (empty if it can). `validation_request` turns it into the check Mapflow takes."""
+    be uploaded (empty if it can): a file over `max_bytes`, or an image with a side of `max_side` pixels or more,
+    is refused. `validation_request` turns it into the check Mapflow takes."""
     file = Path(path)
     meta = {"filename": file.name}
     if not file.is_file():
@@ -97,8 +100,8 @@ def geotiff_metadata(path: str) -> Tuple[dict, str]:
         return meta, "it isn't a GeoTIFF (.tif)"
     size = file.stat().st_size
     meta["file_size"] = size
-    if size > UPLOAD_LIMIT_GB * 1024 ** 3:
-        return meta, f"it's larger than {UPLOAD_LIMIT_GB} GB: upload it in Mapflow Web"
+    if size > max_bytes:
+        return meta, f"it's larger than {size_limit(max_bytes)}: upload it in Mapflow Web"
     layer = QgsRasterLayer(str(file), file.stem, "gdal")
     if not layer.isValid():
         return meta, "QGIS can't read it as a raster"
@@ -110,8 +113,8 @@ def geotiff_metadata(path: str) -> Tuple[dict, str]:
                 crs=(crs.authid() or crs.toWkt()) if crs.isValid() else "")
     if not crs.isValid():
         return meta, "it isn't georeferenced (no coordinate system)"
-    if max(layer.width(), layer.height()) >= MAX_SIDE_PIXELS:
-        return meta, f"it's {layer.width():,} × {layer.height():,} px; the limit is {MAX_SIDE_PIXELS:,} px a side"
+    if max(layer.width(), layer.height()) >= max_side:
+        return meta, f"it's {layer.width():,} × {layer.height():,} px; the limit is {max_side:,} px a side"
     if count not in BANDS:
         return meta, f"it has {count} bands; Mapflow takes 1, 3 or 4"
     if meta["dtypes"][0] not in DTYPES:

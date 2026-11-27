@@ -4,14 +4,15 @@ from __future__ import annotations
 from qgis.PyQt.QtWidgets import (QButtonGroup, QCheckBox, QDialog, QFileDialog, QHBoxLayout, QLineEdit, QRadioButton,
                                  QVBoxLayout)
 
-from .. import config
-from ..services.results import FILES, TILES, default_output_dir
+from ..config import FILES, TILES, Links
+from ..settings import default_output_dir
 from .theme import stylesheet
 from .widgets import Card, button, label, link
+from ..core.guard import guarded
 
 
 class SettingsDialog(QDialog):
-    def __init__(self, settings, email: str, server: str, parent=None):
+    def __init__(self, settings, email: str, server: str, links: Links, parent=None):
         super().__init__(parent)
         self.settings = settings
         self.signed_out = False
@@ -51,19 +52,19 @@ class SettingsDialog(QDialog):
         account.add(label("Account", "h2"))
         account.add(label(email or "Signed in", "body"))
         account.add(label(f"Server: {server}", "meta", wrap=True))
-        links = QHBoxLayout()
-        links.setSpacing(14)
-        links.addWidget(link("Balance and billing", config.TOP_UP_URL))
-        links.addWidget(link("API token", config.API_TOKEN_URL))
-        links.addStretch(1)
-        account.add(links)
+        account_links = QHBoxLayout()
+        account_links.setSpacing(14)
+        account_links.addWidget(link("Balance and billing", links.top_up))
+        account_links.addWidget(link("API token", links.api_token))
+        account_links.addStretch(1)
+        account.add(account_links)
         sign_out = button("Sign out", "ghost", "logout", size="sm")
         sign_out.clicked.connect(self._sign_out)
         account.add(sign_out)
         layout.addWidget(account)
 
         buttons = QHBoxLayout()
-        buttons.addWidget(link("Plugin guide", config.DOCS_URL))
+        buttons.addWidget(link("Plugin guide", links.docs))
         buttons.addStretch(1)
         cancel = button("Cancel", "ghost")
         cancel.clicked.connect(self.reject)
@@ -73,17 +74,20 @@ class SettingsDialog(QDialog):
         buttons.addWidget(save)
         layout.addLayout(buttons)
 
+    @guarded
     def _choose_folder(self) -> None:
         folder = QFileDialog.getExistingDirectory(self, "Folder for Mapflow results", self.folder.text())
         if folder:
             self.folder.setText(folder)
 
+    @guarded
     def _save(self) -> None:
         self.settings.setValue("results_mode", TILES if self.tiles.isChecked() else FILES)
         self.settings.setValue("output_dir", self.folder.text())
         self.settings.setValue("auto_load", self.auto.isChecked())
         self.accept()
 
+    @guarded
     def _sign_out(self) -> None:
         self.signed_out = True
         self.accept()

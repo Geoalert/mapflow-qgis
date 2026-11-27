@@ -4,10 +4,11 @@ from __future__ import annotations
 from qgis.PyQt.QtCore import Qt, pyqtSignal
 from qgis.PyQt.QtWidgets import QHBoxLayout, QLabel, QLineEdit, QScrollArea, QVBoxLayout, QWidget
 
-from .. import config
+from ..config import Links
 from . import icons
 from .theme import is_dark, tokens
 from .widgets import Callout, button, hbox, label, link, rule, vbox
+from ..core.guard import guarded
 
 
 class SignInPage(QWidget):
@@ -19,8 +20,9 @@ class SignInPage(QWidget):
     tokenSubmitted = pyqtSignal(str)
     networkSettingsRequested = pyqtSignal()
 
-    def __init__(self, parent=None):
+    def __init__(self, links: Links, parent=None):
         super().__init__(parent)
+        self.links = links
         self.setObjectName("mfPage")
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -32,7 +34,7 @@ class SignInPage(QWidget):
         scroll.setWidget(body)
         outer.addWidget(scroll)
         layout = QVBoxLayout(body)
-        layout.setContentsMargins(24, 28, 24, 20)
+        layout.setContentsMargins(16, 28, 16, 20)
         layout.setSpacing(20)
 
         layout.addWidget(icons.logo_widget(is_dark(), 44, body), 0, Qt.AlignmentFlag.AlignLeft)    # the waves show
@@ -69,8 +71,8 @@ class SignInPage(QWidget):
         layout.addWidget(self.cancel, 0, Qt.AlignmentFlag.AlignHCenter)
 
         create = button("Create a free account", "outline", external=True, size="lg")
-        create.setToolTip(config.SIGN_UP_URL)
-        create.clicked.connect(lambda: _open(config.SIGN_UP_URL))
+        create.setToolTip(self.links.sign_up)
+        create.clicked.connect(guarded(lambda: _open(self.links.sign_up)))
         gift = QLabel(body)
         gift.setPixmap(icons.gift_pixmap(tokens()["muted"]))
         credits = hbox(None, gift, label("250 free credits to start", "meta"), None, spacing=5)
@@ -79,7 +81,8 @@ class SignInPage(QWidget):
         self.more = button("Other ways to sign in", "ghost", size="sm")
         self.more.setIcon(icons.icon("chevron-down", tokens()["link"], 14))
         self.more.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
-        self.more.clicked.connect(lambda: self._toggle_more())   # not the slot itself: clicked passes checked=False
+        # not the slot itself: clicked passes checked=False
+        self.more.clicked.connect(guarded(lambda: self._toggle_more()))
         layout.addWidget(self.more, 0, Qt.AlignmentFlag.AlignHCenter)
 
         self.token_box = QWidget(body)
@@ -101,7 +104,7 @@ class SignInPage(QWidget):
         row.addWidget(self.token, 1)
         row.addWidget(self.token_button)
         token_layout.addLayout(row)
-        token_layout.addWidget(link("Get your token in Mapflow Web", config.API_TOKEN_URL))
+        token_layout.addWidget(link("Get your token in Mapflow Web", self.links.api_token))
         self.token_box.setVisible(False)
         layout.addWidget(self.token_box)
 
@@ -110,11 +113,18 @@ class SignInPage(QWidget):
         network = link("Network and proxy settings", external=False)
         network.clicked.connect(self.networkSettingsRequested.emit)
         footer = QHBoxLayout()
-        footer.setSpacing(16)
+        footer.setSpacing(12)
         footer.addWidget(network)
-        footer.addWidget(link("Plugin guide", config.DOCS_URL))
+        footer.addWidget(link("Plugin guide", self.links.docs))
         footer.addStretch(1)
         layout.addLayout(footer)
+        # a row of its own: three links do not fit a narrow dock
+        self.terms = link("Terms of use", self.links.terms)
+        terms_row = QHBoxLayout()
+        terms_row.setSpacing(16)
+        terms_row.addWidget(self.terms)
+        terms_row.addStretch(1)
+        layout.addLayout(terms_row)
 
     def _toggle_more(self, show=None) -> None:
         visible = (not self.token_box.isVisible()) if show is None else bool(show)
@@ -123,6 +133,7 @@ class SignInPage(QWidget):
         if visible:
             self.token.setFocus()
 
+    @guarded
     def _submit_token(self) -> None:
         token = self.token.text().strip()
         if token:

@@ -56,9 +56,16 @@ def when(moment: Optional[datetime], now: Optional[datetime] = None) -> str:
 
 
 def size(num_bytes: int) -> str:
-    value = float(num_bytes)
+    value = abs(float(num_bytes))
+    sign = "-" if num_bytes < 0 else ""
     for unit in ("B", "KB", "MB", "GB", "TB"):
         if value < 1024 or unit == "TB":
-            return f"{value:,.0f} {unit}" if unit in ("B", "KB") else f"{value:,.1f} {unit}"
+            precision = 0 if unit in ("B", "KB") else 1
+            return f"{sign}{value:,.{precision}f} {unit}"
         value /= 1024
     return f"{num_bytes} B"
+
+
+def size_limit(num_bytes: int) -> str:
+    """A size limit as people say it: "2 GB", not "2.0 GB"."""
+    return size(num_bytes).replace(".0 ", " ")

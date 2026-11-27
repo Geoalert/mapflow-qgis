@@ -1,26 +1,31 @@
 """Imagery: search the catalog over your area, or use your own collections (My imagery)."""
 from __future__ import annotations
 
-from datetime import date
 from typing import Callable, Dict, List, Optional, Tuple
 
 from qgis.PyQt.QtCore import QDate, QSize, Qt, QTimer, pyqtSignal
 from qgis.PyQt.QtGui import QPixmap
-from qgis.PyQt.QtWidgets import (QComboBox, QDateEdit, QGridLayout, QHBoxLayout, QLabel, QProgressBar,
+from qgis.PyQt.QtWidgets import (QComboBox, QDateEdit, QHBoxLayout, QLabel, QProgressBar,
                                  QPushButton, QScrollArea, QSlider, QToolButton, QVBoxLayout, QWidget)
 
 from .. import config
+from ..config import Links
 from ..core import formatting
+from ..core.failures import empty_list_text
 from ..core.models import CatalogImage, Mosaic
 from . import icons
 from .layer_picker import pick_layers
 from .theme import set_prop, tokens
-from .widgets import (Callout, Card, Combo, DropCard, DropTarget, ElidedLabel, Pill, Segmented, button,
-                      clear_layout, hbox, label, link, placeholder, release_focus, rounded, same_width, tool,
-                      vbox)
+from .widgets import (ButtonGrid, Callout, Card, Combo, DropCard, DropTarget, ElidedLabel, Pill, RangeSlider,
+                      Segmented, Toggle, button, clear_layout, hbox, label, link, placeholder, release_focus, rounded,
+                      same_width, tool, vbox)
+from ..core.guard import guarded
 
 
 MINE, SEARCH = 0, 1                             # the tabs: My imagery, Search the catalog
+
+
+DATE_PRESETS = ((3, "3 months"), (6, "6 months"), (12, "year"))      # (months, chip)
 
 
 class ImageryPage(QWidget):
@@ -30,6 +35,7 @@ class ImageryPage(QWidget):
     moreResults = pyqtSignal()
     useMosaic = pyqtSignal(str)
     showMosaic = pyqtSignal(str)
+    typesChanged = pyqtSignal(list)           # the Mosaics/Scenes filter: ["MOSAIC"], ["IMAGE"] or [] for both
     moreMosaics = pyqtSignal()                # "Show more" under the collections: their next page
     uploadRequested = pyqtSignal()
     layerUploadRequested = pyqtSignal(list)   # GeoTIFF layers of the project, by layer id
@@ -37,8 +43,9 @@ class ImageryPage(QWidget):
     layerChosen = pyqtSignal(str)
     clearRequested = pyqtSignal()
 
-    def __init__(self, parent=None):
+    def __init__(self, links: Links, parent=None):
         super().__init__(parent)
+        self.links = links
         self.setObjectName("mfPage")
         self._thumbs: Dict[str, QLabel] = {}
         self._pixmaps: Dict[str, QPixmap] = {}      # loaded thumbnails, kept while the results are
@@ -52,7 +59,7 @@ class ImageryPage(QWidget):
         self.geotiff_layers: Callable[[], List[Tuple[str, str]]] = lambda: []
         # (file, name) of the GeoTIFFs a drag carries; the controller sets it
         self.parse_drop: Callable[[object], List[Tuple[str, str]]] = lambda mime: []
-        self.my_data_url = config.WEB_URL + config.MY_DATA_PATH     # the controller sets the environment's
+        self.my_data_url = links.my_data     # the controller sets the environment's
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         scroll = QScrollArea(self)
@@ -77,6 +84,7 @@ class ImageryPage(QWidget):
         self.scroll = scroll
         self.show_tab(MINE)                         # your own imagery first
 
+    @guarded
     def show_tab(self, index: int) -> None:
         if self.tabs.index() != index:
             self.tabs.set_index(index)
@@ -101,9 +109,9 @@ class ImageryPage(QWidget):
         area_row.addStretch(1)
         self.draw_button = button("Draw", "ghost", "pen")
         self.draw_button.setToolTip("Draw a polygon on the map: click corners, double-click to finish")
-        self.draw_button.clicked.connect(lambda *_: self.areaAction.emit("draw"))
+        self.draw_button.clicked.connect(guarded(lambda *_: self.areaAction.emit("draw")))
         self.extent_button = button("Use map view", "ghost", "maximize")
-        self.extent_button.clicked.connect(lambda *_: self.areaAction.emit("extent"))
+        self.extent_button.clicked.connect(guarded(lambda *_: self.areaAction.emit("extent")))
         for item in (self.draw_button, self.extent_button):
             item.setProperty("compact", True)
             item.setIconSize(QSize(13, 13))
@@ -120,39 +128,71 @@ class ImageryPage(QWidget):
         self.area_text = label("Set an area on Start, or use the map view.", "meta")
         form.add(self.area_text)
 
-        grid = QGridLayout()
-        grid.setHorizontalSpacing(10)
-        grid.setVerticalSpacing(4)
-        today = date.today()
-        self.date_from = QDateEdit(QDate(today.year - 1, today.month, today.day))
-        self.date_to = QDateEdit(QDate(today.year, today.month, today.day))
+        today = QDate.currentDate()
+        self.date_from = QDateEdit(today.addYears(-1))      # addYears: 29 Feb a year back is 28 Feb
+        self.date_to = QDateEdit(today)
         for edit in (self.date_from, self.date_to):
             edit.setCalendarPopup(True)              # the calendar icon opens a month view
             edit.setDisplayFormat("d MMM yyyy")
             edit.setMaximumDate(QDate.currentDate())
             edit.setToolTip("Click the calendar icon to pick a date")
-        self.date_from.dateChanged.connect(lambda d: self.date_to.setMinimumDate(d))
-        self.date_to.dateChanged.connect(lambda d: self.date_from.setMaximumDate(d))
-        for column, (text, widget) in enumerate((("From", self.date_from), ("To", self.date_to))):
-            grid.addWidget(label(text, "label"), 0, column)
-            grid.addWidget(widget, 1, column)
-        form.add(grid)
+        self.date_from.dateChanged.connect(guarded(lambda d: self.date_to.setMinimumDate(d)))
+        self.date_to.dateChanged.connect(guarded(lambda d: self.date_from.setMaximumDate(d)))
+        # Side by side, or one above the other where two dates don't fit (Qt 6 draws them wider)
+        fields = []
+        for text, widget in (("From", self.date_from), ("To", self.date_to)):
+            field = QWidget()
+            column = QVBoxLayout(field)
+            column.setContentsMargins(0, 0, 0, 0)
+            column.setSpacing(4)
+            column.addWidget(label(text, "label"))
+            column.addWidget(widget)
+            fields.append(field)
+        self.date_fields = ButtonGrid(fields, columns=2, gap=10)
+        form.add(self.date_fields)
+        # Fixed ranges up to today; the one the dates match shows as on, so editing a date turns it off
+        presets = QHBoxLayout()
+        presets.setSpacing(4)
+        presets.addWidget(label("Last", "meta"))
+        self.date_presets: Dict[int, QPushButton] = {}
+        for months, text in DATE_PRESETS:
+            chip = self._chip(text, False)
+            chip.setToolTip(f"From {text if months != 12 else 'a year'} ago to today")
+            chip.clicked.connect(guarded(lambda *_, m=months: self.set_date_preset(m)))
+            presets.addWidget(chip)
+            self.date_presets[months] = chip
+        presets.addStretch(1)
+        form.add(presets)
+        for edit in (self.date_from, self.date_to):
+            edit.dateChanged.connect(guarded(lambda *_: self._show_date_preset()))
+        self._show_date_preset()
         self.cloud, self.cloud_value = self._slider(form, "Max cloud cover", 0, 100, 20, 5, "{} %")
-        self.nadir, self.nadir_value = self._slider(form, "Max off-nadir angle", 0, 50, 30, 5, "{}°")
+        self.nadir, self.nadir_value = self._range_slider(form, "Off-nadir angle", 0, 30, 5, "{}°")
         self.coverage, self.coverage_value = self._slider(form, "Min area coverage", 0, 100, 20, 10, "{} %")
         self.coverage.setToolTip("Only images that cover at least this share of the area. 0: any overlap")
+
+        available = QHBoxLayout()
+        available.addWidget(label("Available for me", "label"))
+        available.addStretch(1)
+        self.available = Toggle()
+        self.available.setAccessibleName("Available for me")
+        self.available.setToolTip("Hide images that your account cannot process")
+        available.addWidget(self.available)
+        form.add(available)
 
         types = QHBoxLayout()
         types.setSpacing(6)
         types.addWidget(label("Type", "label"))
         self.type_mosaic = self._chip("Mosaics", True)
         self.type_image = self._chip("Scenes", True)
-        types.addWidget(self.type_mosaic)
-        types.addWidget(self.type_image)
+        for chip in (self.type_mosaic, self.type_image):
+            chip.clicked.connect(guarded(lambda *_, c=chip: self._type_clicked(c)))
+            types.addWidget(chip)
+        self._show_types()
         types.addStretch(1)
         form.add(types)
         self.search_button = button("Search imagery", "primary", "search")
-        self.search_button.clicked.connect(lambda *_: self._emit_search())
+        self.search_button.clicked.connect(guarded(lambda *_: self._emit_search()))
         form.add(self.search_button)
         layout.addWidget(form)
 
@@ -163,16 +203,36 @@ class ImageryPage(QWidget):
         results_head.addWidget(self.results_title, 1)
         self.clear_button = button("Clear", "ghost", "x", size="sm")
         self.clear_button.setToolTip("Clear the search results and their footprints on the map")
-        self.clear_button.clicked.connect(lambda *_: self.clearRequested.emit())
+        self.clear_button.clicked.connect(guarded(lambda *_: self.clearRequested.emit()))
         self.clear_button.setVisible(False)
         results_head.addWidget(self.clear_button)
         layout.addLayout(results_head)
         self.results = QVBoxLayout()
         self.results.setSpacing(8)
         layout.addLayout(self.results)
-        layout.addWidget(link("Get advanced imagery search tools in Mapflow Web", config.WEB_URL))
+        layout.addWidget(link("Advanced imagery search in Mapflow Web", self.links.web))
         layout.addStretch(1)
         return page
+
+    def set_date_preset(self, months: int) -> None:
+        """The last `months` up to today."""
+        today = QDate.currentDate()
+        self.date_to.setMaximumDate(today)              # a panel left open past midnight: today moved on
+        self.date_to.setDate(today)
+        self.date_from.setDate(today.addMonths(-months))
+        self._show_date_preset()
+
+    def date_preset(self) -> Optional[int]:
+        """The preset the dates match (months), or None."""
+        today = QDate.currentDate()
+        if self.date_to.date() != today:
+            return None
+        return next((months for months, _ in DATE_PRESETS if self.date_from.date() == today.addMonths(-months)), None)
+
+    def _show_date_preset(self) -> None:
+        current = self.date_preset()
+        for months, chip in self.date_presets.items():
+            chip.setChecked(months == current)
 
     def _chip(self, text: str, checked: bool) -> QPushButton:
         chip = QPushButton(text)
@@ -194,18 +254,56 @@ class ImageryPage(QWidget):
         slider.setPageStep(step)
         slider.setValue(value)
         slider.setAccessibleName(title)
-        slider.valueChanged.connect(lambda v: shown.setText(unit.format(v)))
+        slider.valueChanged.connect(guarded(lambda v: shown.setText(unit.format(v))))
         form.add(vbox(head, slider, spacing=0))     # the title sits right on its slider
         return slider, shown
 
-    def _emit_search(self) -> None:
-        # The API's product types are MOSAIC and IMAGE (a "Scene" in the results is an IMAGE)
+    def _range_slider(self, form: Card, title: str, low: int, high: int, step: int, unit: str):
+        """Like `_slider`, with two handles: the full range is chosen at first. It only changes its label; the
+        search reads it on "Search imagery"."""
+        head = QHBoxLayout()
+        head.addWidget(label(title, "label"))
+        head.addStretch(1)
+        shown = label(f"{unit.format(low)}–{unit.format(high)}", "value")
+        head.addWidget(shown)
+        slider = RangeSlider(low, high)
+        slider.setPageStep(step)
+        slider.setAccessibleName(title)
+        slider.valuesChanged.connect(guarded(lambda a, b: shown.setText(f"{unit.format(a)}–{unit.format(b)}")))
+        form.add(vbox(head, slider, spacing=0))
+        return slider, shown
+
+    def product_types(self) -> Optional[List[str]]:
+        """The type filter: ["MOSAIC"] or ["IMAGE"], or None for both. The API's product types are MOSAIC and
+        IMAGE (a "Scene" in the results is an IMAGE)."""
         types = [t for t, chip in (("MOSAIC", self.type_mosaic), ("IMAGE", self.type_image)) if chip.isChecked()]
+        return types if len(types) == 1 else None
+
+    def _type_clicked(self, chip: QPushButton) -> None:
+        """A type chip filters by its type: a click shows only that type, and a click on the only type shown
+        shows both again. With results on the list, they follow at once."""
+        other = self.type_image if chip is self.type_mosaic else self.type_mosaic
+        was_only = not chip.isChecked() and not other.isChecked()     # Qt has toggled it already
+        chip.setChecked(True)
+        other.setChecked(was_only)
+        self._show_types()
+        self.typesChanged.emit(self.product_types() or [])
+
+    def _show_types(self) -> None:
+        for chip, other, name in ((self.type_mosaic, self.type_image, "mosaics"),
+                                  (self.type_image, self.type_mosaic, "scenes")):
+            chip.setToolTip("Show mosaics and scenes" if chip.isChecked() and not other.isChecked()
+                            else f"Show only {name}")
+
+    def _emit_search(self) -> None:
+        types = self.product_types()
         self.searchRequested.emit({
             "date_from": self.date_from.date().toPyDate(), "date_to": self.date_to.date().toPyDate(),
-            "max_cloud": float(self.cloud.value()), "max_off_nadir": float(self.nadir.value()),
+            "max_cloud": float(self.cloud.value()), "min_off_nadir": float(self.nadir.low()),
+            "max_off_nadir": float(self.nadir.high()),
             "min_coverage": float(self.coverage.value()) or None,
-            "product_types": types if len(types) == 1 else None,
+            "product_types": types,
+            "hide_unavailable": self.available.isChecked(),
         })
 
     def set_drawing(self, active: bool) -> None:
@@ -228,6 +326,7 @@ class ImageryPage(QWidget):
         self.layer_combo.setCurrentIndex(self._layer_ids.index(selected) if selected in self._layer_ids else 0)
         self.layer_combo.blockSignals(False)
 
+    @guarded
     def _layer_activated(self, index: int) -> None:
         if 0 <= index < len(self._layer_ids) and self._layer_ids[index]:
             self.layerChosen.emit(self._layer_ids[index])
@@ -236,8 +335,10 @@ class ImageryPage(QWidget):
         self.search_button.setEnabled(not busy)
         self.search_button.setText("Searching…" if busy else "Search imagery")
 
-    def show_search_message(self, text: str, kind: str = "info") -> None:
+    def show_search_message(self, text: str, kind: str = "info", action: Tuple[str, str] = ()) -> None:
+        """`action`: (caption, url) of a button next to the text that opens the page in the browser."""
         self.search_message.set(kind, text)
+        self.search_message.set_action(*action)
 
     def set_results(self, images: List[CatalogImage], total: int, chosen: Optional[str],
                     previewing: Optional[set] = None, loading_more: bool = False) -> None:
@@ -245,7 +346,7 @@ class ImageryPage(QWidget):
         self._thumbs, self._eyes = {}, {}
         if not images:
             self._pixmaps = {}
-        self.results_title.setText(f"{total:,} images over your area" if total else "")
+        self.results_title.setText(f"{total:,} {'image' if total == 1 else 'images'} over your area" if total else "")
         self.results_title.setVisible(bool(total))
         self.clear_button.setVisible(bool(images))
         self._uses = []                             # Use and Chosen: one width
@@ -257,7 +358,7 @@ class ImageryPage(QWidget):
             more = button("Loading…" if loading_more else f"Show more · {len(images):,} of {total:,}", "outline",
                           size="sm")
             more.setEnabled(not loading_more)
-            more.clicked.connect(lambda *_: self.moreResults.emit())
+            more.clicked.connect(guarded(lambda *_: self.moreResults.emit()))
             self.results.addWidget(more)
             self.more_button = more
         else:
@@ -296,17 +397,17 @@ class ImageryPage(QWidget):
             second.append(f"z{image.zoom}")
         if image.coverage is not None:
             second.append(f"covers {image.coverage:.0f}%")
-        texts.addWidget(label(" · ".join(first), "meta"))
+        texts.addWidget(label(" · ".join(first), "meta", wrap=True))
         if second:
-            texts.addWidget(label(" · ".join(second), "meta"))
+            texts.addWidget(label(" · ".join(second), "meta", wrap=True))
         row.addLayout(texts, 1)
         show = tool("eye", "Show the preview and the footprint on the map", "plain")
-        show.clicked.connect(lambda *_: self.showImage.emit(image.key))
+        show.clicked.connect(guarded(lambda *_: self.showImage.emit(image.key)))
         self._eyes[image.key] = show
         use = button("Chosen" if chosen else "Use", "outline" if chosen else "primary", size="sm")
         use.setEnabled(not chosen)
         self._uses.append(use)
-        use.clicked.connect(lambda *_: self.useImage.emit(image.key))
+        use.clicked.connect(guarded(lambda *_: self.useImage.emit(image.key)))
         # The kind, the eye and Use on one line, centred in the card
         pill = Pill("Mosaic" if image.is_mosaic else "Scene", "gray")
         actions = hbox(pill, show, use, spacing=8)
@@ -333,6 +434,22 @@ class ImageryPage(QWidget):
 
     # ---------- My imagery ----------
 
+    def set_upload_limit(self, max_bytes: int) -> None:
+        """The largest file an upload takes, in the line above the buttons."""
+        self.upload_limit.setText(
+            f"Upload RGB GeoTIFFs, up to {formatting.size_limit(max_bytes)} each, as a new collection.")
+
+    def set_storage_usage(self, used_bytes: Optional[int], limit_bytes: Optional[int]) -> None:
+        if used_bytes is None or limit_bytes is None or limit_bytes <= 0:
+            self.storage_badge.hide()
+            return
+        used_bytes = max(0, used_bytes)
+        used, limit = (value / 1024 ** 3 for value in (used_bytes, limit_bytes))
+        self.storage_amount.setText(f"{used:.1f} / {limit:.1f} GB")
+        self.storage_bar.setValue(min(100, round(used_bytes / limit_bytes * 100)))
+        set_prop(self.storage_bar, "storageWarning", used_bytes > limit_bytes * 0.8)
+        self.storage_badge.show()
+
     def _build_mine(self) -> QWidget:
         page = QWidget()
         page.setObjectName("mfScrollBody")
@@ -340,21 +457,20 @@ class ImageryPage(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(12)
         upload = DropCard(margins=(20, 17, 20, 17), spacing=8)     # room inside the dashed line
-        upload.add(hbox(label("Your own imagery", "h2"), None, label("Drag GeoTIFF layers or files here", "meta")))
-        upload.add(vbox(4, label("Upload RGB GeoTIFFs, up to 2 GB each, as a new collection.", "meta", wrap=True),
+        upload.add(label("Your own imagery", "h2"))
+        self.upload_limit = label("", "meta", wrap=True)
+        self.set_upload_limit(config.UPLOAD_LIMIT_BYTES)
+        # The drop hint is a line of its own, so the title row never sets the panel's width
+        upload.add(vbox(4, label("Drag GeoTIFF layers or files here.", "meta", wrap=True), self.upload_limit,
                         label("It costs no imagery credits to process.", "meta", wrap=True), 4, spacing=0))
         self.drop = DropTarget(upload, lambda mime: self.parse_drop(mime))
         self.upload_button = button("Upload a GeoTIFF", "outline", "upload")
-        self.upload_button.clicked.connect(lambda *_: self.uploadRequested.emit())
-        self.layer_button = button("Choose from raster layers", "outline", "layers")
-        self.layer_button.clicked.connect(lambda *_: self._choose_layers())
-        # The two ways in, side by side and sharing the width
-        buttons = hbox(self.upload_button, self.layer_button, spacing=8)
-        buttons.setStretch(0, 1)
-        buttons.setStretch(1, 1)
-        for item in (self.upload_button, self.layer_button):
-            item.setMinimumWidth(1)                 # a narrow dock squeezes them instead of widening the page
-        upload.add(buttons)
+        self.upload_button.clicked.connect(guarded(lambda *_: self.uploadRequested.emit()))
+        self.layer_button = button("Choose raster layers", "outline", "layers")
+        self.layer_button.clicked.connect(guarded(lambda *_: self._choose_layers()))
+        # The two ways in, side by side and sharing the width, or one above the other in a narrow dock
+        self.upload_buttons = ButtonGrid((self.upload_button, self.layer_button))
+        upload.add(self.upload_buttons)
         self.upload_bar = QProgressBar()
         self.upload_bar.setTextVisible(False)
         self.upload_bar.setVisible(False)
@@ -362,14 +478,29 @@ class ImageryPage(QWidget):
         self.upload_message = Callout("info", "")
         upload.add(self.upload_message)
         layout.addWidget(upload)
-        self.mosaics_title = label("", "label")
-        layout.addWidget(self.mosaics_title)
+        self.mosaics_title = ElidedLabel("", "label")
+        self.storage_badge = Card(margins=(10, 4, 10, 7), spacing=3)
+        self.storage_badge.setObjectName("mfStorageBadge")
+        self.storage_link = link("Storage", self.links.top_up)
+        self.storage_badge.setToolTip("Increase storage")
+        self.storage_link.setToolTip(self.storage_badge.toolTip())
+        self.storage_amount = label("", "meta")
+        self.storage_badge.add(hbox(self.storage_link, None, self.storage_amount))
+        self.storage_bar = QProgressBar()
+        self.storage_bar.setObjectName("mfStorageUsage")
+        self.storage_bar.setAccessibleName("My imagery storage used")
+        self.storage_bar.setTextVisible(False)
+        self.storage_badge.add(self.storage_bar)
+        self.storage_badge.hide()
+        heading = hbox(self.mosaics_title, self.storage_badge)
+        heading.setStretch(0, 1)
+        layout.addLayout(heading)
         self.mosaic_list = QVBoxLayout()
         self.mosaic_list.setSpacing(8)
         layout.addLayout(self.mosaic_list)
         # One "Show more", kept under the list and only changed: the cards above are added to, not redrawn
         self.more_mosaics = button("Show more", "outline", size="sm")
-        self.more_mosaics.clicked.connect(lambda *_: self.moreMosaics.emit())
+        self.more_mosaics.clicked.connect(guarded(lambda *_: self.moreMosaics.emit()))
         self.more_mosaics.setVisible(False)
         layout.addWidget(self.more_mosaics)
         layout.addWidget(link("Manage collections in Mapflow Web", lambda: self.my_data_url))
@@ -377,12 +508,14 @@ class ImageryPage(QWidget):
         return page
 
     def set_mosaics(self, mosaics: List[Mosaic], chosen: Optional[str], total: Optional[int] = None,
-                    loading: bool = False) -> None:
+                    loading: bool = False, loaded: bool = True, failed: bool = False) -> None:
         """The collections loaded so far, of `total` in the account: "Show more" brings the next page.
+        With none, the title says why: still loading, didn't load, or (only after a successful answer) none yet.
         Cards already drawn stay: a new page only adds its own, and nothing is redrawn while it loads.
         Redrawing hundreds of cards on every page (and on every refresh) made the list stutter."""
         total = len(mosaics) if total is None else max(total, len(mosaics))
-        self.mosaics_title.setText(f"Collections · {total:,}" if mosaics else "No collections yet")
+        self.mosaics_title.setText(f"Collections · {total:,}" if mosaics else
+                                   empty_list_text("collections", "No collections yet", loaded, loading, failed))
         keys = [_mosaic_key(m, chosen) for m in mosaics]
         drawn = self._mosaic_keys
         if [k[0] for k in keys[:len(drawn)]] != [k[0] for k in drawn]:
@@ -423,14 +556,14 @@ class ImageryPage(QWidget):
             f"{mosaic.image_count} image" + ("" if mosaic.image_count == 1 else "s")
         meta = " · ".join(t for t in (count, formatting.size(mosaic.size_bytes) if mosaic.size_bytes else "",
                                       formatting.when(mosaic.created)) if t)
-        row.addLayout(vbox(ElidedLabel(mosaic.name, "title"), label(meta, "meta"), spacing=2), 1)
+        row.addLayout(vbox(ElidedLabel(mosaic.name, "title"), label(meta, "meta", wrap=True), spacing=2), 1)
         show = tool("eye", "Show on the map", "plain")
-        show.clicked.connect(lambda *_, mid=mosaic.id: self.showMosaic.emit(mid))
+        show.clicked.connect(guarded(lambda *_, mid=mosaic.id: self.showMosaic.emit(mid)))
         several = (mosaic.image_count or 0) > 1
         use = button("Chosen" if mosaic.id == chosen else ("Choose…" if several else "Use"),
                      "outline" if mosaic.id == chosen else "primary", size="sm")
         use.setToolTip("Pick the whole collection or one of its images" if several else "Process this collection")
-        use.clicked.connect(lambda *_, mid=mosaic.id: self.useMosaic.emit(mid))
+        use.clicked.connect(guarded(lambda *_, mid=mosaic.id: self.useMosaic.emit(mid)))
         row.addWidget(show)
         row.addWidget(use)
         card.add(row)
@@ -443,6 +576,7 @@ class ImageryPage(QWidget):
             for use in new_uses:
                 use.setMinimumWidth(self._use_width)
 
+        @guarded
         def measure() -> None:
             try:
                 width = max((u.sizeHint().width() for u in self._mosaic_uses), default=0)

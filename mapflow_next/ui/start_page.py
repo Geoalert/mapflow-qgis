@@ -8,7 +8,7 @@ from qgis.PyQt.QtGui import QPixmap
 from qgis.PyQt.QtWidgets import (QGridLayout, QHBoxLayout, QLabel, QLineEdit, QProgressBar, QScrollArea, QVBoxLayout,
                                  QWidget)
 
-from .. import config
+from ..config import Links
 from ..core import formatting
 from ..core.models import Processing
 from ..core.scenarios import Catalogue, Scenario
@@ -16,6 +16,7 @@ from . import icons
 from .theme import tokens
 from .widgets import (Card, ElidedLabel, ImageTile, Pill, button, clear_layout, event_pos, label, link, placeholder,
                       vbox)
+from ..core.guard import guarded
 
 
 def scenario_pixmap(catalogue: Catalogue, scenario: Scenario, width: int = 170, height: int = 88) -> QPixmap:
@@ -36,12 +37,22 @@ def plain(text: str) -> str:
 def status_pill(processing: Processing, in_map: bool) -> tuple:
     if processing.needs_review:
         return "Review required", "warn"
+    if processing.is_awaiting:
+        return "Awaiting", "run"
     if processing.is_running:
         return f"Running · {processing.percent}%", "run"
     if processing.is_done:
         return ("✓ In map", "ok") if in_map else ("Done", "ok")
     return {"FAILED": ("Failed", "err"), "REFUNDED": ("Refunded", "gray"),
             "CANCELLED": ("Cancelled", "gray")}.get(processing.status.value, (processing.status.value.title(), "gray"))
+
+
+AWAITING_TIP = "Waiting for the imagery order to be completed. The processing starts when the imagery arrives."
+
+
+def status_tip(processing: Processing) -> str:
+    """The status pill's tooltip, where its text needs one."""
+    return AWAITING_TIP if processing.is_awaiting else ""
 
 
 def model_icon(model_name: str) -> Optional[str]:
@@ -63,8 +74,9 @@ class StartPage(QWidget):
     processingsRequested = pyqtSignal()
     processingOpened = pyqtSignal(str)        # a recent processing, by id: open it in Processings
 
-    def __init__(self, catalogue: Catalogue, parent=None):
+    def __init__(self, catalogue: Catalogue, links: Links, parent=None):
         super().__init__(parent)
+        self.links = links
         self.catalogue = catalogue
         self.setObjectName("mfPage")
         outer = QVBoxLayout(self)
@@ -88,7 +100,7 @@ class StartPage(QWidget):
         self.search.setClearButtonEnabled(True)
         self.search.addAction(icons.icon("search", tokens()["text2"], 16), QLineEdit.ActionPosition.LeadingPosition)
         self.search.textChanged.connect(self._filter)
-        self.search.returnPressed.connect(lambda: self.galleryRequested.emit(self.search.text()))
+        self.search.returnPressed.connect(guarded(lambda: self.galleryRequested.emit(self.search.text())))
         layout.addWidget(self.search)
 
         self.grid = QGridLayout()
@@ -100,13 +112,13 @@ class StartPage(QWidget):
         actions = QHBoxLayout()
         actions.setSpacing(8)
         self.all_button = button(f"All {len(catalogue.scenarios)} scenarios", "outline", "grid")
-        self.all_button.clicked.connect(lambda: self.galleryRequested.emit(self.search.text()))
+        self.all_button.clicked.connect(guarded(lambda: self.galleryRequested.emit(self.search.text())))
         custom = button("Custom setup", "ghost", "sliders")
         custom.clicked.connect(self.customRequested.emit)
         actions.addWidget(self.all_button, 1)
         actions.addWidget(custom)
         layout.addLayout(actions)
-        agent = link("Describe your task to the Mapflow AI Agent", config.AI_AGENT_URL)
+        agent = link("Describe your task to the AI Agent", self.links.ai_agent)
         agent.setIcon(icons.icon("message", tokens()["link"], 14))
         layout.addWidget(agent)
 
@@ -128,6 +140,7 @@ class StartPage(QWidget):
         self._tiles: List[ImageTile] = []
         self._filter("")
 
+    @guarded
     def _filter(self, text: str) -> None:
         for tile in self._tiles:
             self.grid.removeWidget(tile)
@@ -139,7 +152,7 @@ class StartPage(QWidget):
             tile = ImageTile(scenario.title, f"{plain(scenario.model_label)} · {scenario.price_short.split(' +')[0]}",
                              scenario_pixmap(self.catalogue, scenario), scenario.icon)
             tile.setToolTip(scenario.short)
-            tile.clicked.connect(lambda _=False, sid=scenario.id: self.scenarioChosen.emit(sid))
+            tile.clicked.connect(guarded(lambda _=False, sid=scenario.id: self.scenarioChosen.emit(sid)))
             self.grid.addWidget(tile, index // 2, index % 2)
             self._tiles.append(tile)
         more = len(found) - 4
@@ -184,9 +197,11 @@ class _MiniCard(Card):
         top.setSpacing(6)
         top.addWidget(ElidedLabel(processing.name, "title"), 1)
         text, kind = status_pill(processing, in_map)
-        top.addWidget(Pill(text, kind))
+        pill = Pill(text, kind)
+        pill.setToolTip(status_tip(processing))
+        top.addWidget(pill)
         texts.addLayout(top)
-        if processing.is_running:
+        if processing.is_running and not processing.is_awaiting:
             bar = QProgressBar(self)
             bar.setTextVisible(False)
             bar.setValue(processing.percent)
@@ -200,6 +215,7 @@ class _MiniCard(Card):
         row.addLayout(texts, 1)
         self.add(row)
 
+    @guarded
     def mouseReleaseEvent(self, event) -> None:
         if event.button() == Qt.MouseButton.LeftButton and self.rect().contains(event_pos(event)):
             self.clicked.emit(self.processing_id)

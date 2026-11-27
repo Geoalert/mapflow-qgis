@@ -27,6 +27,11 @@ FEATHER = {
     "chevron-up": '<polyline points="18 15 12 9 6 15"/>',
     "chevron-left": '<polyline points="15 18 9 12 15 6"/>',
     "chevron-right": '<polyline points="9 18 15 12 9 6"/>',
+    "arrow-up-right": '<path fill="#000" stroke="none" transform="translate(-5.4 0.95)" '
+                      'd="M17.23 11.18 L18.77 5.80 Q19 5 18.20 5.23 '
+                      'L12.82 6.77 Q12 7 12.60 7.60 L13.97 8.97 '
+                      'L6.81 16.13 Q6.37 16.57 6.81 17.01 L6.99 17.19 Q7.43 17.63 7.87 17.19 '
+                      'L15.03 10.03 L16.40 11.40 Q17 12 17.23 11.18 Z"/>',
     "external": '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 '
                 '9"/>'
                 '<line x1="10" y1="14" x2="21" y2="3"/>',

@@ -11,8 +11,10 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set, Tuple
 
 from .models import BillingType, DataProvider, Model, Project, UserStatus
+from .tile_layers import TileOffer, TileParams, nearest_zoom, user_defined
 
 MIN_BILLED_AREA_KM2 = 1.0
+MIN_ORDER = "min_order"     # Issue.code: the area is smaller than the imagery's provider sells
 
 
 @dataclass
@@ -29,8 +31,8 @@ class AreaOfInterest:
 
 @dataclass
 class ImageryChoice:
-    """Where the pixels come from. Exactly one of the three kinds."""
-    kind: str                                   # provider | my_imagery | catalog
+    """Where the pixels come from. Exactly one of the four kinds."""
+    kind: str                                   # provider | my_imagery | catalog | tile
     label: str
     provider: Optional[DataProvider] = None     # kind == provider
     zoom: Optional[int] = None
@@ -38,6 +40,9 @@ class ImageryChoice:
     image_ids: List[str] = field(default_factory=list)   # my_imagery (optional) or catalog
     catalog_provider: Optional[str] = None      # kind == catalog: the image's provider name
     min_area_km2: float = 0.0                   # kind == catalog: the smallest order the image's provider sells
+    tile_layer_id: Optional[str] = None         # kind == tile: the QGIS layer…
+    tile_name: str = ""                         # …its name
+    tile_params: Optional[TileParams] = field(default=None, repr=False)     # …and what is sent for it
 
     @classmethod
     def from_provider(cls, provider: DataProvider, zoom: Optional[int] = None) -> "ImageryChoice":
@@ -51,15 +56,38 @@ class ImageryChoice:
         label = f"{name} · {image_name}" if image_id and image_name else name
         return cls("my_imagery", label, mosaic_id=mosaic_id, image_ids=[image_id] if image_id else [])
 
+    def with_collection_name(self, old: str, new: str) -> None:
+        """A chosen collection (or one of its images) was renamed: the label starts with the collection's name."""
+        if self.kind == "my_imagery" and self.label.startswith(old):
+            self.label = new + self.label[len(old):]
+
     @classmethod
     def from_catalog(cls, image_id: str, provider_name: str, zoom: Optional[int], label: str,
                      min_area_km2: float = 0.0) -> "ImageryChoice":
         return cls("catalog", label, image_ids=[image_id], catalog_provider=provider_name, zoom=zoom,
                    min_area_km2=min_area_km2 or 0.0)
 
+    @classmethod
+    def from_tile(cls, offer: TileOffer, zoom: Optional[int] = None) -> "ImageryChoice":
+        """A usable QGIS tile layer, at the offered zoom nearest to `zoom` (18 when it is None)."""
+        zoom = nearest_zoom(offer.params.zooms, zoom)
+        return cls("tile", f"{offer.name} · zoom {zoom}", zoom=zoom, tile_layer_id=offer.layer_id,
+                   tile_name=offer.name, tile_params=offer.params)
+
+    @property
+    def identity(self) -> tuple:
+        """What tells one imagery choice from another (the key of the cost answer)."""
+        source = (self.provider.name if self.provider else self.tile_layer_id if self.kind == "tile"
+                  else self.mosaic_id)
+        kind = self.tile_params.source_type if self.tile_params else ""
+        address = self.tile_params.url if self.tile_params else ""
+        return self.kind, source, kind, address, self.zoom, tuple(self.image_ids)
+
     @property
     def source_name(self) -> str:
         """The imagery's provider as a person reads it."""
+        if self.kind == "tile":
+            return "QGIS tile layer"
         if self.kind == "provider" and self.provider:
             return self.provider.display_name
         if self.kind == "catalog":
@@ -75,7 +103,11 @@ class ImageryChoice:
             return 0.0
         return None
 
-    def source_params(self) -> dict:
+    def source_params(self, credentials: Optional[Tuple[str, str]] = None) -> dict:
+        """The `sourceParams` of the request. `credentials` (login, password) go into a tile layer's
+        `userDefined` and nowhere else."""
+        if self.kind == "tile":
+            return {"userDefined": user_defined(self.tile_params, self.zoom, credentials)}
         if self.kind == "provider":
             return {"dataProvider": {"providerName": self.provider.name, "zoom": str(self.zoom)}}
         if self.kind == "my_imagery":
@@ -98,6 +130,8 @@ def processing_meta(imagery: "ImageryChoice", version: str = "") -> Dict[str, st
         source = imagery.provider.name.lower()
     elif imagery.kind == "my_imagery":
         source = "my imagery"
+    elif imagery.kind == "tile":
+        source = imagery.tile_params.meta_source
     else:
         source = "imagery search"
     meta = {"source-app": "qgis", "source": source}
@@ -135,11 +169,13 @@ class Issue:
     # Ways out, shown as links next to the text: (label, where) with where one of "top_up",
     # "pricing" or "support". The form knows the addresses.
     links: Tuple[Tuple[str, str], ...] = ()
+    code: str = ""  # what kind of issue, where the form offers a fix of its own: MIN_ORDER
 
 
 @dataclass
 class Coverage:
-    """How the area meets the chosen My imagery. Worked out on the map side (it takes geometry)."""
+    """How the area meets the chosen imagery that has a footprint (My imagery, or one catalog image). Worked
+    out on the map side (it takes geometry)."""
     name: str                                       # the collection or the image
     overlaps: bool
     clipped: Optional[AreaOfInterest] = None        # the part of the area inside the imagery
@@ -154,15 +190,15 @@ class RunDraft:
     name: str = ""
     name_edited: bool = False
     scenario_id: Optional[str] = None
-    coverage: Optional[Coverage] = None             # set for My imagery; None when it doesn't apply
+    coverage: Optional[Coverage] = None             # set for imagery with a footprint; None for basemaps
     description: str = ""
 
     # ---- derived ----
 
     @property
     def processed_area(self) -> Optional[AreaOfInterest]:
-        """What gets processed and billed: for My imagery, the part of the area inside the imagery
-        (as the current plugin does); otherwise the area itself."""
+        """What gets processed and billed: for imagery with a footprint (My imagery, or one catalog image),
+        the part of the area inside the imagery; otherwise the area itself."""
         if self.aoi and self.coverage and self.coverage.overlaps and self.coverage.clipped:
             return self.coverage.clipped
         return self.aoi
@@ -219,14 +255,11 @@ class RunDraft:
                 found.append(Issue("account", f"{self.imagery.source_name} imagery isn't included in your plan. "
                                               "Switch to a Premium plan, or ask support to enable it.",
                                    (("See plans", "pricing"), ("Contact support", "support"))))
-            minimum, source = self.imagery.min_area_km2, self.imagery.source_name
-            if self.imagery.kind == "provider" and self.imagery.provider:
-                minimum = max(minimum, self.imagery.provider.min_area_km2)
-            elif self.imagery.kind == "catalog" and status is not None:
-                minimum = max(minimum, status.min_area_for(self.imagery.catalog_provider))
+            minimum, source = self.min_order(status)
             if self.aoi and minimum and self.processed_area.area_km2 < minimum:
-                found.append(Issue("imagery", f"{source} sells at least {minimum:,.2f} km² per order; the area is "
-                                              f"{self.processed_area.area_km2:,.2f} km². Choose a larger area."))
+                found.append(Issue("area", f"{source} sells at least {minimum:,.2f} km² per order; the area is "
+                                           f"{self.processed_area.area_km2:,.2f} km². Choose a larger area or "
+                                           "confirm to enlarge it automatically.", code=MIN_ORDER))
         if status and not found:
             if status.billing is BillingType.credits:
                 estimate = self.estimate()
@@ -240,8 +273,20 @@ class RunDraft:
                                                   f"{status.remaining_area_km2:,.2f} km² left."))
         return found
 
-    def payload(self, project_id: str, version: str = "") -> dict:
-        """The `POST /processings/v2` body (also accepted by `/processing/cost/v2`)."""
+    def min_order(self, status=None) -> Tuple[float, str]:
+        """(km², source name): the smallest order the chosen imagery's provider sells; 0 when it has no minimum."""
+        if not self.imagery:
+            return 0.0, ""
+        minimum = self.imagery.min_area_km2
+        if self.imagery.kind == "provider" and self.imagery.provider:
+            minimum = max(minimum, self.imagery.provider.min_area_km2)
+        elif self.imagery.kind == "catalog" and status is not None:
+            minimum = max(minimum, status.min_area_for(self.imagery.catalog_provider))
+        return minimum, self.imagery.source_name
+
+    def payload(self, project_id: str, version: str = "", credentials: Optional[Tuple[str, str]] = None) -> dict:
+        """The `POST /processings/v2` body (also accepted by `/processing/cost/v2`). `credentials`: the login and
+        password of a tile layer, for the start only; the cost request has none."""
         if not (self.model and self.aoi and self.imagery):
             raise ValueError("The draft is incomplete")
         body = {
@@ -249,7 +294,7 @@ class RunDraft:
             "projectId": project_id,
             "wdId": self.model.id,
             "geometry": self.processed_area.geometry,
-            "params": {"sourceParams": self.imagery.source_params()},
+            "params": {"sourceParams": self.imagery.source_params(credentials)},
             "blocks": self.model.blocks_payload(self.options),
             "meta": processing_meta(self.imagery, version),
         }
