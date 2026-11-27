@@ -34,10 +34,13 @@ The plugin covers the work that belongs next to the map. Each tab has its scenar
 - **Layers panel › Use a layer in Mapflow.** Right-click a polygon layer for "Use as AOI in Mapflow", or a
   GeoTIFF or XYZ/TMS tile layer for "Use as imagery in Mapflow". A GeoTIFF is uploaded to My imagery and chosen
   when it's ready; a tile layer is chosen as it is, as under "QGIS tile layers" in the run form.
-- **Imagery sources › Find imagery in the catalog.** Search by area, dates, cloud cover, off-nadir
-  angle and how much of the area an image covers, look at the footprints on the map, and use an image in
-  the run form. When an image is chosen, the area is clipped to its footprint, and an area outside it blocks Run.
-- **Processings › Follow the work and its history.** Progress updates on its own. Filter by status, search
+- **Imagery sources › Find imagery in the catalog.** Search by area, dates (or the last 3 months, 6 months or
+  year), cloud cover, off-nadir angle and how much of the area an image covers, look at the footprints on the
+  map, and use an image in the run form. Mosaics and Scenes filter the results at once. When an image is chosen,
+  the area is clipped to its footprint, and an area outside it blocks Run. An area too large for the search
+  points to Mapflow Web, which can run the search in the background.
+- **Processings › Follow the work and its history.** Progress updates on its own; a processing waiting for its
+  imagery order shows "Awaiting". Filter by status, search
   the whole project by name (the list below keeps updating while you search), load older processings, rename them, run one again with the same settings,
   or delete it. The project's planned processings (search templates) come first, with a "Planned search" mark, their name and status. Clicking a row opens that search in Mapflow Web. A list that fails to load says so instead of looking empty; if the project is deleted in
   Mapflow Web, the default project opens.
@@ -137,6 +140,8 @@ That is the rule; today the controller also holds the run form's state itself. `
   - The area is measured on the union of its parts, and each part is repaired first.
   - The plan limit is checked both on the total and on each polygon's bounding box.
   - A selection on the area's layer narrows the area to the selected polygons.
+  - An area under the smallest order the imagery's provider sells (inside the image, for a catalog image)
+    blocks Run, with "Enlarge": a rectangle over the area that meets the minimum, and a way back.
 - **Results:**
   - Downloaded as GeoJSON, written to a GeoPackage, styled with the same QML styles, and added to the
     "Mapflow" group.
@@ -176,9 +181,11 @@ That is the rule; today the controller also holds the run form's state itself. `
     image in them.
   - The imagery's extent becomes the area, and any other area is clipped to the imagery.
   - An area outside the imagery blocks Run, with a way back to the extent.
-- **Imagery search:** the same Area drop-down as on Start, date and slider filters (cloud cover,
-  off-nadir range, minimum area coverage), the "Available for me" switch, and "Clear". Filters apply when you press "Search imagery":
-  the list always shows what the last search returned.
+- **Imagery search:** the same Area drop-down as on Start, dates with presets (last 3 months, 6 months, year),
+  slider filters (cloud cover, off-nadir range, minimum area coverage), the "Available for me" switch, and
+  "Clear". Filters apply when you press "Search imagery", except Mosaics and Scenes: a click on one sends the
+  last search again with that type, and a second click shows both. The list always shows what the last search
+  returned.
 - **Processings:** pages of 30 with "Show more". Polling refreshes the shown window and leaves older
   pages in place. The planned processings load and refresh with the list; if they fail to load, the rows are hidden with no message.
 - **Live cost:** a local estimate at once, then the figure from `/cost`.
