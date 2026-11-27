@@ -1,0 +1,86 @@
+name: release review
+
+# Claude reviews the whole plugin before a release, following .claude/agents/release-reviewer.md.
+# It runs on every release PR into master (git flow: dev → master is the release) and on demand.
+# CRITICAL findings fail the check, so the release PR can't be merged with them (make the check required
+# in master's branch protection). Needs the ANTHROPIC_API_KEY repository secret.
+
+on:
+  pull_request:
+    branches: [master]
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+    inputs:
+      previous:
+        description: "Previous release to compare with (tag or commit). Empty: the latest v* tag."
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+  pull-requests: write
+  id-token: write
+
+concurrency:
+  group: release-review-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    if: github.event_name == 'workflow_dispatch' || !github.event.pull_request.draft
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Previous release
+        id: previous
+        env:
+          WANTED: ${{ github.event.inputs.previous }}
+        run: |
+          ref="${WANTED:-$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || git rev-list --max-parents=0 HEAD)}"
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+
+      - name: Review
+        id: review
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            You are the release-reviewer agent. Read .claude/agents/release-reviewer.md and follow it exactly.
+            Release candidate: ${{ github.sha }}. Previous release: ${{ steps.previous.outputs.ref }}.
+            Repository: ${{ github.repository }}.
+            Return the full markdown report in `report`, and the counts of CRITICAL and MAJOR findings.
+          claude_args: |
+            --model claude-opus-5-5
+            --max-turns 150
+            --allowedTools "Read,Grep,Glob,WebFetch,Bash(git log:*),Bash(git diff:*),Bash(git show:*),Bash(git blame:*),Bash(git describe:*),Bash(ls:*)"
+            --json-schema '{"type":"object","properties":{"verdict":{"type":"string","enum":["BLOCK","SHIP WITH FIXES","SHIP"]},"critical":{"type":"integer","minimum":0},"major":{"type":"integer","minimum":0},"report":{"type":"string"}},"required":["verdict","critical","major","report"]}'
+
+      - name: Publish the report
+        if: always() && steps.review.outputs.structured_output != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RESULT: ${{ steps.review.outputs.structured_output }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          echo "$RESULT" | jq -r '.report' > release-review.md
+          cat release-review.md >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "$PR" ]; then
+            gh pr comment "$PR" --body-file release-review.md
+          fi
+
+      - name: Keep the report
+        if: always() && hashFiles('release-review.md') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-review
+          path: release-review.md
+
+      - name: Block the release on CRITICAL findings
+        if: steps.review.outputs.structured_output != '' && fromJSON(steps.review.outputs.structured_output).critical > 0
+        run: |
+          echo "::error::The release review found CRITICAL issues. See the report in the PR or the job summary."
+          exit 1

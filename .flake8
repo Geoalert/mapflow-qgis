@@ -1,0 +1,19 @@
+[flake8]
+# Mirrors the qgis.org submission scan, which runs flake8 at
+# --max-line-length=120 with its default rule set. The Makefile passes the
+# same flag on the CLI (which wins); it is repeated here so a bare
+# editor-invoked `flake8` agrees with `make lint`.
+max-line-length = 120
+
+exclude = .git,__pycache__,venv,.venv,build,dist,.pytest_cache,.ruff_cache
+
+# Intentional re-exports: __init__.py imports symbols to form the package's
+# public API, so they read as unused locally.
+per-file-ignores =
+    __init__.py:F401
+
+# No debt ledger: mapflow_next/, tests/ and tools/ pass flake8's default rules.
+# Keep it that way: fix a finding rather than adding an extend-ignore here.
+# (qgis.org does not read this file, so anything ignored here is still
+# reported at submission.) If a suppression is ever unavoidable, use
+# extend-ignore, never ignore: `ignore` REPLACES flake8's default ignore set.

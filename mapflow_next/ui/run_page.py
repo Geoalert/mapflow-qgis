@@ -1,0 +1,597 @@
+"""The run form: ① model → ② area → ③ imagery, with the cost and the Run button always in view."""
+from __future__ import annotations
+
+import html
+from contextlib import contextmanager
+from dataclasses import astuple, dataclass, field, replace
+from typing import Dict, List, Optional, Tuple
+
+from qgis.PyQt.QtCore import QSignalBlocker, QSize, Qt, QTimer, pyqtSignal
+from qgis.PyQt.QtGui import QPixmap
+from qgis.PyQt.QtWidgets import (QComboBox, QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton,
+                                 QScrollArea, QSizePolicy, QToolButton, QVBoxLayout, QWidget)
+
+from .. import config
+from ..config import Links
+from ..core import formatting
+from ..core.draft import Issue
+from ..core.models import Block, Model
+from . import icons
+from .theme import set_prop, tokens
+from .widgets import (ButtonGrid, Callout, Card, Combo, ElidedLabel, FitLineEdit, HoverTip, OptionRow, Pill,
+                      StepHeader, Toggle, button, clear_layout, label, link, rounded, tool, vbox)
+from ..core.guard import guarded
+
+
+STAR = "#d69e2e"            # the recommended zoom's star: amber, seen on white, hover grey, the selected row, dark
+
+
+def issue_links(links: Links) -> dict:
+    """Where each way out of an issue leads."""
+    return {"top_up": links.top_up, "pricing": links.pricing, "support": f"mailto:{config.SUPPORT_EMAIL}"}
+
+
+def issue_html(issue: Issue, links: Links) -> str:
+    """An issue's text, with its ways out as links."""
+    where_to = issue_links(links)
+    anchors = [f'<a href="{where_to[where]}">{html.escape(text)}</a>' for text, where in issue.links
+               if where in where_to]
+    return " ".join([html.escape(issue.text)] + ([" · ".join(anchors)] if anchors else []))
+
+
+@dataclass
+class ImageryRow:
+    key: str                          # provider:<name> | mosaic | catalog | tile:<layer id>
+    title: str
+    meta: str = ""
+    price: str = ""
+    zooms: List[int] = field(default_factory=list)
+    zoom: Optional[int] = None
+    recommended_zoom: Optional[int] = None    # marked ★ in the zoom list
+    pick: str = ""                    # My imagery: text of the button that opens the collection picker
+    recommended: bool = False
+    note: str = ""                    # a warning line under the meta: "z19 recommended"
+    removable: bool = False
+    previewable: bool = False         # an eye shows it on the map (on the selected row)
+    previewing: Optional[bool] = None  # its preview is on the map; None: the eye only zooms to it
+    group: str = ""                   # a heading above the first row of a group ("QGIS tile layers")
+    disabled: bool = False            # cannot be chosen: `meta` says why
+
+
+@dataclass
+class CostView:
+    value: str = "—"                  # "46 credits"
+    formula: str = ""
+    balance: str = ""                 # "Balance after run: 1,194 credits"
+    show_top_up: bool = False
+    pending: bool = False
+
+
+class RunPage(QWidget):
+    backRequested = pyqtSignal()
+    changeScenarioRequested = pyqtSignal()
+    nameEdited = pyqtSignal(str)
+    renameRequested = pyqtSignal()
+    modelChosen = pyqtSignal(str)
+    optionToggled = pyqtSignal(str, bool)
+    layerChosen = pyqtSignal(str)
+    areaAction = pyqtSignal(str)               # draw | selected | extent | file
+    imageryChosen = pyqtSignal(str)            # row key
+    zoomChosen = pyqtSignal(str, int)          # row key, zoom
+    mosaicPickRequested = pyqtSignal()
+    catalogRemoved = pyqtSignal()
+    previewRequested = pyqtSignal()
+    searchImageryRequested = pyqtSignal()
+    runRequested = pyqtSignal()
+
+    def __init__(self, links: Links, parent=None):
+        super().__init__(parent)
+        self.links = links
+        self.setObjectName("mfPage")
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+        scroll = QScrollArea(self)
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.scroll = scroll
+        body = QWidget()
+        body.setObjectName("mfScrollBody")
+        scroll.setWidget(body)
+        outer.addWidget(scroll, 1)
+        layout = QVBoxLayout(body)
+        layout.setContentsMargins(16, 12, 16, 16)
+        layout.setSpacing(10)
+
+        layout.addWidget(self._build_model_step())
+        layout.addWidget(self._build_area_step())
+        layout.addWidget(self._build_imagery_step())
+        layout.addStretch(1)
+        outer.addWidget(self._build_cost_bar())
+        self._model_ids: List[str] = []
+        self._layer_ids: List[str] = []
+        self._rows: List[OptionRow] = []
+        self.group_labels: List[QPushButton] = []
+        self._groups: Dict[str, Tuple[QPushButton, List[Tuple[QWidget, bool]]]] = {}
+        self._open_groups: set = set()      # groups the user opened
+        self._shut_groups: set = set()      # groups the user closed though the chosen row is in them
+        self._rows_key = None
+        self._switches: Dict[str, Toggle] = {}
+        self._options_key = None
+
+    # ---------- building ----------
+
+    def _build_summary(self) -> QHBoxLayout:
+        """The scenario of step 1: back to the scenarios, its picture and title, the processing name, the gallery."""
+        card = self.model_card
+        row = QHBoxLayout()
+        row.setSpacing(8)
+        back = tool("chevron-left", "Back to scenarios", "plain", 18)
+        back.clicked.connect(self.backRequested.emit)
+        self.thumb = QLabel(card)
+        self.thumb.setFixedSize(52, 34)
+        texts = QVBoxLayout()
+        texts.setSpacing(1)
+        self.scenario_title = ElidedLabel("Custom setup", "h2")
+        name_row = QHBoxLayout()
+        name_row.setSpacing(4)
+        name_row.addWidget(label("Name:", "meta"))
+        self.name = FitLineEdit(card)
+        self.name.setProperty("flat", True)
+        self.name.setToolTip("Processing name: edit to rename")
+        self.name.textEdited.connect(self.nameEdited.emit)
+        edit = tool("edit", "Name and description of this processing", "plain", 14)
+        edit.clicked.connect(guarded(lambda *_: self.renameRequested.emit()))
+        self.rename_button = edit
+        # no pencil to push along while typing
+        self.name.editing.connect(guarded(lambda on: edit.setVisible(not on)))
+        policy = edit.sizePolicy()
+        policy.setRetainSizeWhenHidden(True)        # hidden, it keeps its place: the row's height doesn't jump
+        edit.setSizePolicy(policy)
+        name_row.addWidget(self.name)               # as wide as the name: the pencil right after it
+        name_row.addWidget(edit)
+        name_row.addStretch(1)
+        texts.addWidget(self.scenario_title)
+        texts.addLayout(name_row)
+        change = tool("grid", "Change the scenario: open the scenario gallery", "icon", 18)
+        change.clicked.connect(guarded(lambda *_: self.changeScenarioRequested.emit()))
+        self.change_button = change
+        row.addWidget(back)
+        row.addWidget(self.thumb)
+        row.addLayout(texts, 1)
+        row.addWidget(change)
+        return row
+
+    def _build_model_step(self) -> QWidget:
+        """Step 1 is the scenario itself: it sets the model, so the model's list shows only when there is a model to
+        pick (Custom setup, or a project without the scenario's model). The model's options show either way."""
+        self.model_card = Card(spacing=10)
+        self.model_header = StepHeader(1, "What to map")
+        self.model_price = label("", "value")
+        self.model_header.right.addWidget(self.model_price)
+        self.model_card.add(self.model_header)
+        self.model_card.add(self._build_summary())
+        self.model_combo = Combo(self.model_card)
+        self.model_combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        self.model_combo.setMinimumContentsLength(12)
+        self.model_combo.activated.connect(self._model_activated)
+        self.model_card.add(self.model_combo)
+        self.model_name = label("", "label")          # the scenario's model, where its list is hidden
+        self.model_name.setVisible(False)
+        self.model_card.add(self.model_name)
+        self.model_note = label("", "meta", wrap=True)
+        self.model_card.add(self.model_note)
+        self.options_box = QVBoxLayout()
+        self.options_box.setSpacing(10)
+        self.model_card.add(self.options_box)
+        info = link("How the models work", self.links.models_docs)
+        self.model_card.add(info)
+        return self.model_card
+
+    def _build_area_step(self) -> QWidget:
+        self.area_card = Card(spacing=8)
+        self.area_header = StepHeader(2, "Area")
+        self.area_value = label("", "value")
+        self.area_header.right.addWidget(self.area_value)
+        self.area_card.add(self.area_header)
+        self.layer_combo = Combo(self.area_card)
+        self.layer_combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        self.layer_combo.setMinimumContentsLength(12)
+        self.layer_combo.activated.connect(self._layer_activated)
+        self.area_card.add(self.layer_combo)
+        grid = QGridLayout()
+        grid.setSpacing(6)
+        self.area_buttons = {}
+        for index, (key, icon_name, text, tip) in enumerate((
+                ("draw", "pen", "Draw", "Draw a polygon on the map: click corners, double-click to finish"),
+                ("selected", "pointer", "Select features", "Select features on the map: the area is the selected ones"),
+                ("extent", "maximize", "Map view", "Use what the map shows now"),
+                ("file", "upload", "From file", "Open a vector file (GeoJSON, GeoPackage, Shapefile, KML)"))):
+            item = QToolButton(self.area_card)
+            item.setProperty("variant", "aoi")
+            item.setText(text)
+            item.setIcon(icons.icon(icon_name, tokens()["ink"], 14))
+            item.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+            item.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
+            item.setMinimumWidth(90)
+            item.setToolTip(tip)
+            item.setCursor(Qt.CursorShape.PointingHandCursor)
+            item.clicked.connect(guarded(lambda _=False, k=key: self.areaAction.emit(k)))
+            if key == "draw":
+                item.setCheckable(True)
+            grid.addWidget(item, index // 2, index % 2)
+            self.area_buttons[key] = item
+        self.area_card.add(grid)
+        self.area_meta = label("Pick a polygon layer, or draw the area on the map.", "meta", wrap=True)
+        self.area_card.add(self.area_meta)
+        self.area_error = label("", "error", wrap=True)
+        self.area_error.setVisible(False)
+        self.area_card.add(self.area_error)
+        # A suggestion about the area (My imagery: its extent, or an area outside it), with actions
+        self.area_hint = QWidget(self.area_card)
+        hint_layout = QVBoxLayout(self.area_hint)
+        hint_layout.setContentsMargins(0, 2, 0, 0)
+        hint_layout.setSpacing(6)
+        self.area_hint_text = Callout("info", "", self.area_hint)
+        hint_layout.addWidget(self.area_hint_text)
+        self.area_hint_actions = QVBoxLayout()        # its ButtonGrid: two columns, or one in a narrow dock
+        self.area_hint_actions.setContentsMargins(0, 0, 0, 0)
+        hint_layout.addLayout(self.area_hint_actions)
+        self.area_hint.setVisible(False)
+        self.area_hint_buttons: Dict[str, QPushButton] = {}
+        self._area_hint_key = None
+        self.area_card.add(self.area_hint)
+        return self.area_card
+
+    def _build_imagery_step(self) -> QWidget:
+        self.imagery_card = Card(spacing=8)
+        self.imagery_header = StepHeader(3, "Imagery sources")
+        self.imagery_card.add(self.imagery_header)
+        self.imagery_hint = label("", "meta", wrap=True)
+        self.imagery_card.add(self.imagery_hint)
+        self.rows_box = QVBoxLayout()
+        self.rows_box.setSpacing(6)
+        self.imagery_card.add(self.rows_box)
+        self.imagery_error = label("", "error", wrap=True)
+        self.imagery_error.setVisible(False)
+        self.imagery_card.add(self.imagery_error)
+        find = link("Find a newer satellite image", external=False)
+        find.setIcon(icons.icon("search", tokens()["link"], 14))
+        find.clicked.connect(self.searchImageryRequested.emit)
+        self.imagery_card.add(find)
+        return self.imagery_card
+
+    def _build_cost_bar(self) -> QWidget:
+        bar = QFrame(self)
+        bar.setObjectName("mfBottomBar")
+        layout = QVBoxLayout(bar)
+        layout.setContentsMargins(16, 10, 16, 12)
+        layout.setSpacing(6)
+        self.issues = Callout("warn", "", bar)
+        layout.addWidget(self.issues)
+        top = QHBoxLayout()
+        self.cost_label = label("Estimated cost", "title")
+        self.cost_value = label("—", "title")
+        top.addWidget(self.cost_label, 1)
+        top.addWidget(self.cost_value)
+        layout.addLayout(top)
+        self.cost_formula = label("", "meta", wrap=True)
+        layout.addWidget(self.cost_formula)
+        self.run_button = button("Run processing", "primary", "play", size="lg")
+        self.run_button.clicked.connect(self.runRequested.emit)
+        layout.addWidget(self.run_button)
+        bottom = QHBoxLayout()
+        self.balance = label("", "meta")
+        self.top_up = link("Top up", self.links.top_up)
+        bottom.addWidget(self.balance, 1)
+        bottom.addWidget(self.top_up)
+        layout.addLayout(bottom)
+        return bar
+
+    # ---------- events ----------
+
+    @guarded
+    def _model_activated(self, index: int) -> None:
+        if 0 <= index < len(self._model_ids):
+            self.modelChosen.emit(self._model_ids[index])
+
+    @guarded
+    def _layer_activated(self, index: int) -> None:
+        if 0 <= index < len(self._layer_ids):
+            self.layerChosen.emit(self._layer_ids[index])
+
+    # ---------- rendering ----------
+
+    def set_scenario(self, title: str, pixmap: Optional[QPixmap]) -> None:
+        self.scenario_title.setText(title)
+        if pixmap is not None and not pixmap.isNull():
+            self.thumb.setPixmap(rounded(pixmap, 52, 34, 6))
+            self.thumb.show()
+        else:
+            self.thumb.hide()
+
+    def set_name(self, text: str, description: str = "", force: bool = False) -> None:
+        """`force` sets the text even while the field has focus (after the name dialog)."""
+        if self.name.text() != text and (force or not self.name.hasFocus()):
+            self.name.setText(text)
+            self.name.setCursorPosition(0)
+        self.name.setToolTip(f"{text}\n\n{description}" if description else "Processing name: edit to rename")
+
+    def set_models(self, models: List[Model], selected: Optional[str], choosable: bool = True) -> None:
+        """`choosable`: the model's list shows. Without it the scenario has set the model."""
+        self.model_combo.setVisible(choosable)
+        chosen = next((m for m in models if m.id == selected), None)
+        self.model_name.setText(f"Model: {chosen.name}" if chosen else "")
+        self.model_name.setVisible(not choosable and chosen is not None)
+        blocker = QSignalBlocker(self.model_combo)
+        self.model_combo.clear()
+        self._model_ids = []
+        if not selected:
+            self.model_combo.addItem("Choose a model…")
+            self._model_ids.append("")
+        for model in models:
+            self.model_combo.addItem(model.name)
+            self._model_ids.append(model.id)
+        self.model_combo.setCurrentIndex(self._model_ids.index(selected) if selected in self._model_ids else 0)
+        del blocker
+
+    @contextmanager
+    def keep_scroll(self):
+        """Hold the scroll position while the form re-renders (restored again once layouts settle)."""
+        bar = self.scroll.verticalScrollBar()
+        value = bar.value()
+        try:
+            yield
+        finally:
+            bar.setValue(value)
+            QTimer.singleShot(0, guarded(lambda: bar.setValue(value)))
+
+    def set_options(self, model: Optional[Model], enabled: set, base_price: str, note: str = "",
+                    tips: Optional[Dict[str, str]] = None) -> None:
+        """`tips`: block name → what the option does, shown on hover."""
+        self.model_price.setText(base_price)
+        self.model_note.setText(note or (model.description if model else ""))
+        self.model_note.setVisible(bool(self.model_note.text()))
+        blocks = model.options if model else []
+        key = (model.id if model else None, tuple(b.name for b in blocks), tuple(sorted((tips or {}).items())))
+        if key == self._options_key:
+            # Same model and options: only the switches change. Rebuilding them would move the focus
+            for name, switch in self._switches.items():
+                if switch.isChecked() != (name in enabled):
+                    switch.blockSignals(True)
+                    switch.setChecked(name in enabled)
+                    switch.blockSignals(False)
+            return
+        self._options_key = key
+        clear_layout(self.options_box)
+        self._switches = {}
+        for block in blocks:
+            self.options_box.addWidget(self._option_row(block, block.name in enabled, (tips or {}).get(block.name, "")))
+
+    def _option_row(self, block: Block, checked: bool, tip: str = "") -> QWidget:
+        """`tip`: what the option does, shown on hover anywhere over the option."""
+        holder = QWidget()
+        row = QHBoxLayout(holder)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(10)
+        price = "no extra cost" if not block.price else f"+{formatting.per_km2(block.price)}"
+        texts = vbox(label(block.display_name, "title", wrap=True), label(price, "meta"), spacing=1)
+        switch = Toggle()
+        if tip:
+            holder.tip = HoverTip(holder, f"<p>{html.escape(tip)}</p>")    # rich text: Qt wraps it
+        switch.setChecked(checked)
+        switch.setAccessibleName(block.display_name)
+        switch.toggled.connect(guarded(lambda on, name=block.name: self.optionToggled.emit(name, bool(on))))
+        self._switches[block.name] = switch
+        row.addLayout(texts, 1)
+        row.addWidget(switch)
+        return holder
+
+    def set_layers(self, layers: List[Tuple[str, str]], selected: Optional[str]) -> None:
+        blocker = QSignalBlocker(self.layer_combo)
+        self.layer_combo.clear()
+        self._layer_ids = []
+        if not selected:
+            self.layer_combo.addItem("Choose a polygon layer…" if layers else "No polygon layers yet: draw the area")
+            self._layer_ids.append("")
+        for layer_id, name in layers:
+            self.layer_combo.addItem(icons.icon("map", tokens()["text2"], 14), name)
+            self._layer_ids.append(layer_id)
+        self.layer_combo.setCurrentIndex(self._layer_ids.index(selected) if selected in self._layer_ids else 0)
+        del blocker
+
+    def set_drawing(self, active: bool) -> None:
+        self.area_buttons["draw"].setChecked(active)
+        self.area_buttons["draw"].setText("Drawing…" if active else "Draw")
+
+    def set_area(self, value: str, meta: str, error: str = "") -> None:
+        self.area_value.setText(value)
+        self.area_meta.setText(meta)
+        self.area_error.setText(error)
+        self.area_error.setVisible(bool(error))
+
+    def set_area_hint(self, kind: str = "info", text: str = "", actions: Tuple[Tuple[str, str], ...] = ()) -> None:
+        """A suggestion under the area, with buttons that emit areaAction(key). Empty text hides it."""
+        key = (kind, text, tuple(actions))
+        if key == self._area_hint_key:
+            return
+        self._area_hint_key = key
+        self.area_hint_text.set(kind, text)
+        clear_layout(self.area_hint_actions)
+        self.area_hint_buttons = {}
+        for caption, action in actions:
+            item = button(caption, "outline", size="sm")
+            item.clicked.connect(guarded(lambda *_, a=action: self.areaAction.emit(a)))
+            self.area_hint_buttons[action] = item
+        if self.area_hint_buttons:
+            self.area_hint_actions.addWidget(ButtonGrid(self.area_hint_buttons.values(), columns=2, gap=6))
+        self.area_hint.setVisible(bool(text))
+
+    def set_imagery(self, rows: List[ImageryRow], selected: Optional[str], hint: str = "", error: str = "") -> None:
+        self.imagery_hint.setText(hint)
+        self.imagery_hint.setVisible(bool(hint))
+        self.imagery_error.setText(error)
+        self.imagery_error.setVisible(bool(error))
+        key = (tuple(astuple(r) for r in rows), selected)
+        if key == self._rows_key:
+            return                      # nothing changed: keep the widgets (and the focus) as they are
+        self._rows_key = key
+        clear_layout(self.rows_box)
+        self._rows = []
+        self.group_labels = []
+        self._groups = {}
+        mosaic_row = basemap_row = None
+        group = ""
+        for spec in rows:
+            if spec.group != group:
+                group = spec.group
+                if group:
+                    count = sum(1 for r in rows if r.group == group)
+                    heading = button(f"{group} ({count})", "link", size="sm")
+                    heading.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
+                    heading.clicked.connect(guarded(lambda *_, name=group: self._toggle_group(name)))
+                    self.group_labels.append(heading)
+                    self._groups[group] = (heading, [])
+                    self.rows_box.addWidget(heading)
+            inline_price = spec.key == "mosaic"
+            row = OptionRow(spec.title, spec.meta, title_detail=spec.price if inline_price else "")
+            chosen = spec.key == selected
+            row.set_selected(chosen)
+            if spec.disabled:
+                # The reason is the row's meta line and its tip; there is nothing to click, choose or zoom
+                row.setEnabled(False)
+                row.setToolTip(spec.meta)
+                row.setCursor(Qt.CursorShape.ArrowCursor)
+                self.rows_box.addWidget(row)
+                self._rows.append(row)
+                if spec.group:
+                    self._groups[spec.group][1].append((row, chosen))
+                continue
+            if spec.note:
+                row.add_note(spec.note)
+            row.clicked.connect(guarded(lambda *_, key=spec.key: self.imageryChosen.emit(key)))
+            if spec.recommended:
+                row.right.addWidget(Pill("Recommended", "ok"))
+            controls = QHBoxLayout()
+            controls.setSpacing(4)
+            if spec.zooms:
+                zoom = Combo(row)
+                star, blank = icons.icon("star-filled", STAR, 11), icons.icon("blank", STAR, 11)
+                zoom.setIconSize(QSize(11, 11))
+                for value in spec.zooms:     # every item has an icon, so the texts line up
+                    zoom.addItem(star if value == spec.recommended_zoom else blank, f"z{value}", value)
+                zoom.setCurrentIndex(spec.zooms.index(spec.zoom) if spec.zoom in spec.zooms else len(spec.zooms) - 1)
+                zoom.setToolTip("Zoom level: higher is sharper and costs more. The starred one is recommended for "
+                                "this scenario")
+                zoom.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+                zoom.setMinimumContentsLength(3)       # "z19"
+                zoom.activated.connect(
+                    guarded(lambda i, key=spec.key, combo=zoom: self.zoomChosen.emit(key, combo.itemData(i))))
+                controls.addWidget(zoom)
+            if spec.pick:
+                pick = button(spec.pick, "outline", size="sm")
+                pick.setToolTip("Upload a GeoTIFF to My imagery" if spec.pick == "Add imagery…"
+                                else "Choose a collection, or one image of it")
+                pick.clicked.connect(guarded(lambda *_: self.mosaicPickRequested.emit()))
+                controls.addWidget(pick, 0, Qt.AlignmentFlag.AlignVCenter)
+            if chosen and spec.previewable:
+                on = bool(spec.previewing)
+                eye = tool("eye", "Hide the preview" if on else "Preview on the map", "plain", 16)
+                if on:      # the preview is on the map: the eye shows it, and a click takes it off
+                    eye.setIcon(icons.icon("eye", tokens()["primary_ink"], 16))
+                    eye.setProperty("on", True)
+                eye.clicked.connect(guarded(lambda *_: self.previewRequested.emit()))
+                controls.insertWidget(0, eye)       # the eye first, the control by the row's edge
+            if spec.removable:
+                remove = tool("x", "Remove this image", "plain", 14)
+                remove.clicked.connect(guarded(lambda *_: self.catalogRemoved.emit()))
+                controls.addWidget(remove)
+            if spec.price and not inline_price:
+                column = QVBoxLayout()
+                column.setSpacing(2)
+                if controls.count():
+                    column.addLayout(controls)
+                price = label(spec.price, "meta")
+                price.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+                column.addWidget(price)
+                row.right.addLayout(column)
+            elif controls.count():
+                row.right.addLayout(controls)
+            self.rows_box.addWidget(row)
+            self._rows.append(row)
+            if spec.group:
+                self._groups[spec.group][1].append((row, chosen))
+            if inline_price:
+                mosaic_row = row
+            elif spec.zooms and basemap_row is None:
+                basemap_row = row
+
+        if mosaic_row is not None and basemap_row is not None:
+            basemap_row.ensurePolished()
+            mosaic_row.setMinimumHeight(basemap_row.minimumSizeHint().height())
+        for name in self._groups:
+            self._show_group(name)
+
+    def group_open(self, name: str) -> bool:
+        """A group of rows (the QGIS tile layers, which can be many) is folded under its heading until the user
+        opens it, or until one of its rows is the chosen source."""
+        if name in self._open_groups:
+            return True
+        holds_choice = any(chosen for _, chosen in self._groups.get(name, (None, []))[1])
+        return holds_choice and name not in self._shut_groups
+
+    def _toggle_group(self, name: str) -> None:
+        if self.group_open(name):
+            self._open_groups.discard(name)
+            self._shut_groups.add(name)
+        else:
+            self._open_groups.add(name)
+            self._shut_groups.discard(name)
+        with self.keep_scroll():
+            self._show_group(name)
+
+    def _show_group(self, name: str) -> None:
+        """Folded, a group shows only its chosen row, so the step's choice is never hidden."""
+        heading, members = self._groups[name]
+        opened = self.group_open(name)
+        heading.setIcon(icons.icon("chevron-down" if opened else "chevron-right", tokens()["link"], 14))
+        heading.setToolTip("Hide these layers" if opened else "Show these layers")
+        for row, chosen in members:
+            row.setVisible(opened or chosen)
+
+    def set_steps(self, model_done: bool, area_done: bool, imagery_done: bool) -> None:
+        states = []
+        active_given = False
+        for done in (model_done, area_done, imagery_done):
+            if done:
+                states.append("done")
+            elif not active_given:
+                states.append("active")
+                active_given = True
+            else:
+                states.append("todo")
+        for header, card, state in ((self.model_header, self.model_card, states[0]),
+                                    (self.area_header, self.area_card, states[1]),
+                                    (self.imagery_header, self.imagery_card, states[2])):
+            header.set_state(state)
+            set_prop(card, "active", state == "active")
+
+    def set_cost(self, view: CostView, credits_billing: bool) -> None:
+        self.cost_label.setText("Estimated cost" if credits_billing else "Uses")
+        self.cost_value.setText(view.value)
+        self.cost_formula.setText(view.formula)
+        self.cost_formula.setVisible(bool(view.formula))
+        self.balance.setText(view.balance)
+        self.top_up.setVisible(view.show_top_up)
+
+    def set_issues(self, issues: List[Issue], busy: bool = False) -> None:
+        blocking = [i for i in issues if i.field in ("account",)]
+        # Steps show their own hints; the bar only repeats what no step can show. Its first way out (Top up) is
+        # a button on the right, any others links in the text
+        issue = blocking[0] if blocking else None
+        where_to = issue_links(self.links)
+        ways = [(text, where) for text, where in issue.links if where in where_to] if issue else []
+        self.issues.set("warn", issue_html(replace(issue, links=tuple(ways[1:])), self.links) if issue else "")
+        self.issues.set_action(*((ways[0][0], where_to[ways[0][1]]) if ways else ()))
+        self.run_button.setEnabled(not issues and not busy)
+        self.run_button.setText("Starting…" if busy else "Run processing")

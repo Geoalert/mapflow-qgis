@@ -1,0 +1,42 @@
+[general]
+name=Mapflow Next
+qgisMinimumVersion=3.28
+qgisMaximumVersion=4.99
+description=Map buildings, roads, forest and more from satellite and aerial imagery with Mapflow AI models.
+about=A redesigned Mapflow plugin: one flow from what to map to results on the map, in a dock next to it.
+    What you can do:
+    - Start: run a processing. Pick a scenario or a model, set the area from a layer, a selection, a drawing or the map view, choose imagery, check the cost and run.
+    - Start: map your own imagery. Upload one or several GeoTIFFs, from files or the project's raster layers, or use a My imagery collection or one image in it.
+    - Layers panel: right-click a polygon layer to use it as the area, or a GeoTIFF layer to use it as the imagery.
+    - Imagery sources: search the satellite imagery catalog by area, date and cloud cover, and use an image.
+    - Processings: follow progress, filter and search the history, rename, run again with the same settings.
+    - Results load as styled layers (GeoPackage or vector tiles), or save as GeoJSON.
+    - Projects: create a project, switch, search and pin projects, including shared ones.
+    Renaming collections, sharing projects, reviews and your balance happen in Mapflow Web (https://app.mapflow.ai); the plugin links to each page.
+    Mapflow Next installs next to the 3.x Mapflow plugin. Settings are not carried over from it: sign in again, and set the output folder again if you changed it.
+    Requires a Mapflow account (250 free credits to start): https://app.mapflow.ai
+version=4.0.0
+experimental=True
+deprecated=False
+author=Geoalert
+email=hello@geoalert.io
+homepage=https://mapflow.ai
+tracker=https://github.com/Geoalert/mapflow-qgis/issues
+repository=https://github.com/Geoalert/mapflow-qgis
+tags=AI, machine learning, remote sensing, satellite imagery, aerial imagery, buildings, roads, forest, segmentation, mapping
+category=Raster
+icon=resources/icons/app-icon.svg
+hasProcessingProvider=no
+changelog=
+    4.0.0
+    - Runs in QGIS 3.28 and later and in QGIS 4 (Qt 6)
+    - Settings of the 3.x Mapflow plugin are not carried over
+    - New plugin built around one flow: model, area, imagery, processing, results
+    - Dock panel with Start, Processings and Imagery sources tabs, opened from its own Mapflow toolbar
+    - Check for updates in the plugin's menu
+    - Projects window: search, pin, see what's in each project and who it's shared with
+    - Zoom z17–z21 with the scenario's recommended zoom; pick one image from a My imagery collection
+    - Scenario gallery with 16 ready-made setups built on Mapflow models
+    - Sign in with Mapflow in the browser, which then goes on to Mapflow Web; you stay signed in across restarts
+    - API token as a fallback; both kept in the QGIS authentication database
+    - Live cost estimate before every run; results load as styled GeoPackage layers

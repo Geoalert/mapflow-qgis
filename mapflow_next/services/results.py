@@ -1,0 +1,246 @@
+"""Processing results onto the map: GeoPackage files (default) or streamed vector tiles."""
+from __future__ import annotations
+
+import functools
+import secrets
+from pathlib import Path
+from typing import Callable, Dict, Optional
+
+from qgis.PyQt.QtCore import QObject, pyqtSignal
+from qgis.core import QgsApplication, QgsMapLayer, QgsRectangle
+
+from ..api.client import MapflowApi
+from ..config import FILES, TILES
+from ..core import guard
+from ..core.models import Processing
+from ..qgis_bridge.conversion import ConvertTask
+from ..qgis_bridge.layers import MapLayers, bounds_extent, extent_is_world, features_extent
+from ..settings import default_output_dir
+
+GENERIC_FAILURE = "The results could not be added to the map. Details are in the Log Messages panel."
+STOP_WAIT_MS = 5000         # how long unload waits for a conversion to notice its cancel
+
+
+class Results(QObject):
+    loaded = pyqtSignal(str, list)      # processing id, [layer ids]
+    failed = pyqtSignal(str, str)       # processing id, message
+    busy = pyqtSignal(str, bool)        # processing id, loading
+
+    def __init__(self, api: MapflowApi, layers: MapLayers, settings, parent=None):
+        super().__init__(parent)
+        self.api, self.layers, self.settings = api, layers, settings
+        self._busy = set()
+        self._tasks: Dict[str, ConvertTask] = {}     # the running conversion of each processing
+
+    @property
+    def mode(self) -> str:
+        return self.settings.value("results_mode", FILES)
+
+    @property
+    def output_dir(self) -> Path:
+        return Path(self.settings.value("output_dir", "") or default_output_dir())
+
+    def reset(self) -> None:
+        """After sign-out: downloads were aborted and conversions are cancelled, nothing is loading any more.
+        A cancelled task removes its files itself; its work file is named per task, so a new conversion of the
+        same processing need not wait for it."""
+        self._cancel_tasks()
+        for processing_id in list(self._busy):
+            self._set_busy(processing_id, False)
+
+    def stop(self) -> None:
+        """Unload: cancel the conversions and wait, for a bounded time, for their workers, so that no file is left
+        in the output folder and no result reaches the plugin after it is gone. Downloads are aborted first, so none
+        feeds a task that is being cancelled. Emits nothing: the dock goes too."""
+        self.api.abort_all()
+        tasks = list(self._tasks.values())
+        self._cancel_tasks()
+        for task in tasks:
+            finished = task.waitForFinished(STOP_WAIT_MS)
+            task.discard()                  # `finished` runs on an event loop that no longer comes
+            if finished:
+                task.release()
+        self._busy.clear()
+
+    def _cancel_tasks(self) -> None:
+        tasks, self._tasks = list(self._tasks.values()), {}
+        for task in tasks:
+            task.detach()
+            task.cancel()
+
+    def is_busy(self, processing_id: str) -> bool:
+        return processing_id in self._busy
+
+    def in_map(self) -> set:
+        return self.layers.processing_ids_in_map()
+
+    def add_to_map(self, processing: Processing) -> None:
+        if not processing.is_done or processing.id in self._busy:
+            return
+        self._set_busy(processing.id, True)
+        self._continuing(processing)(self._load)(processing)
+
+    def _load(self, processing: Processing) -> None:
+        """The synchronous part of `add_to_map`: it starts the requests that the steps below continue."""
+        if self.mode == TILES:
+            vector = self.layers.vector_tiles(processing)
+            if vector is None:
+                self._fail(processing, "These results can't be streamed. Switch to files in Settings.")
+                return
+            # A vector tile layer covers the whole world until told otherwise: give it the results'
+            # extent (its tilejson bounds, as the current plugin does, else the processing's area)
+            # so the map shows the results, not the planet
+
+            @self._continuing(processing)
+            def with_extent(extent):
+                if extent is not None:
+                    vector.setExtent(extent)
+                self._with_imagery(processing, [vector])
+
+            @self._continuing(processing)
+            def from_tilejson(tilejson):
+                extent = bounds_extent((tilejson or {}).get("bounds"))
+                if extent is None or extent_is_world(extent):
+                    self._area_extent(processing, with_extent)
+                else:
+                    with_extent(extent)
+
+            @self._continuing(processing)
+            def tilejson_failed(_error):
+                self._area_extent(processing, with_extent)
+
+            if processing.vector_tilejson_url:
+                self.api.tilejson(processing.vector_tilejson_url, from_tilejson, tilejson_failed)
+            else:
+                self._area_extent(processing, with_extent)
+            return
+        folder = self.output_dir
+        try:
+            downloads = folder / ".downloads"
+            downloads.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            self._fail(processing, f"Can't write to {folder}: {exc.strerror}. Pick another folder in Settings.")
+            return
+        # A name per add: a cancelled conversion removes its own download, and must not meet the download of
+        # a later add of the same processing
+        target = str(downloads / f"{processing.id}-{secrets.token_hex(4)}.geojson")
+
+        @self._continuing(processing)
+        def converted(task: ConvertTask):
+            if self._tasks.get(processing.id) is task:
+                del self._tasks[processing.id]
+            if isinstance(task.error, OSError):
+                self._fail(processing, f"Can't write to {folder}: {task.error.strerror or task.error}. "
+                                       "Pick another folder in Settings.")
+                return
+            if task.error is not None:
+                # Reported here, on the GUI thread: the guard is not for a worker thread
+                guard.report(task.error, f"Results {processing.id}: conversion")
+                self._fail(processing, GENERIC_FAILURE)
+                return
+            if task.result is None:
+                self._fail(processing, f"Converting “{processing.name}” was cancelled.")
+                return
+            vectors = self.layers.open_converted(task.result, processing)
+            if not vectors:
+                self._fail(processing, "The processing returned no features.")
+                return
+            self._with_imagery(processing, vectors)
+
+        @self._continuing(processing)
+        def downloaded(path: str):
+            task = self.layers.convert_results(path, processing, folder, converted)
+            self._tasks[processing.id] = task
+            QgsApplication.taskManager().addTask(task)
+
+        self.api.download_result(processing.id, target, downloaded, self._download_failed(processing))
+
+    def _with_imagery(self, processing: Processing, vectors: list) -> None:
+        """Add the source imagery under the results (its extent comes from the tilejson), then zoom."""
+        @self._continuing(processing)
+        def finish(raster: Optional[QgsMapLayer]):
+            added = []
+            if raster is not None:
+                added.append(self.layers.add(raster, processing.id))
+            for vector in reversed(vectors):
+                added.append(self.layers.add(vector, processing.id))
+            self.layers.zoom_to([layer for layer in added if not layer.extent().isEmpty()] or added)
+            self._set_busy(processing.id, False)
+            self.loaded.emit(processing.id, [layer.id() for layer in added])
+
+        if not processing.raster_tile_url:
+            finish(None)
+            return
+        name = f"{processing.name} · imagery"
+
+        @self._continuing(processing)
+        def with_extent(tilejson: dict):
+            finish(self.layers.tile_raster(processing.raster_tile_url, name,
+                                           bounds_extent((tilejson or {}).get("bounds")),
+                                           int((tilejson or {}).get("maxzoom") or 21)))
+
+        @self._continuing(processing)
+        def without_extent(_error=None):
+            finish(self.layers.tile_raster(processing.raster_tile_url, name))
+
+        if processing.raster_tilejson_url:
+            self.api.tilejson(processing.raster_tilejson_url, with_extent, without_extent)
+        else:
+            without_extent()
+
+    def _area_extent(self, processing: Processing, then: Callable[[Optional[QgsRectangle]], None]) -> None:
+        """The bounding box of the processing's area (EPSG:3857), from Mapflow; None if it can't be had."""
+        @self._continuing(processing)
+        def done(collection: dict):
+            then(features_extent(collection))
+
+        @self._continuing(processing)
+        def failed(_error):
+            then(None)
+        self.api.processing_aois(processing.id, done, failed)
+
+    def save_geojson(self, processing: Processing, path: str, done: Callable[[str], None]) -> None:
+        self._continuing(processing)(self._save)(processing, path, done)
+
+    def _save(self, processing: Processing, path: str, done: Callable[[str], None]) -> None:
+        """The synchronous part of `save_geojson`: the flag, then the request. It runs under `_continuing`, so a
+        raise between the two (or in a slot of `busy`) clears the flag."""
+        self._set_busy(processing.id, True)
+
+        @self._continuing(processing)
+        def ok(saved: str):
+            self._set_busy(processing.id, False)
+            done(saved)
+
+        self.api.download_result(processing.id, path, ok, self._download_failed(processing))
+
+    def _download_failed(self, processing: Processing):
+        @self._continuing(processing)
+        def failed(error):
+            self._fail(processing, f"Results didn't download: {error.message}")
+        return failed
+
+    def _continuing(self, processing: Processing):
+        """Decorator for a step of a load: the synchronous start (`_load`) and every callback an HTTP request
+        hands on to, `on_error` ones included. `_busy` is set from `add_to_map` until the last step ends, so an
+        exception in any step must clear it, or the processing stays "loading" until sign-out. The exception is
+        reported through the guard and not raised again: `Http` would otherwise run the request's `on_error`, a
+        fallback that continues the load after the flag was cleared."""
+        def decorate(step):
+            @functools.wraps(step)
+            def run(*args):
+                try:
+                    return step(*args)
+                except Exception as exc:  # noqa: BLE001 - the guard's job, here to clear the flag first
+                    guard.report(exc, f"Results {processing.id}: {step.__qualname__}")
+                    self._fail(processing, GENERIC_FAILURE)
+            return run
+        return decorate
+
+    def _fail(self, processing: Processing, message: str) -> None:
+        self._set_busy(processing.id, False)
+        self.failed.emit(processing.id, message)
+
+    def _set_busy(self, processing_id: str, busy: bool) -> None:
+        (self._busy.add if busy else self._busy.discard)(processing_id)
+        self.busy.emit(processing_id, busy)

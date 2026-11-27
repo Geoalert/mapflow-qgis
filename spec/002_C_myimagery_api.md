@@ -18,19 +18,52 @@ Request body:
 ```
 
 ### `GET /rasters/mosaic`
-List all user's mosaics.
+List all user's mosaics. Not used by the plugin: an account can hold thousands of collections, and one
+response with all of them is too slow and too large for the dock (see the paged listing below).
+
+### `GET /rasters/mosaic/page`
+One page of the user's mosaics.
+
+Query parameters:
+- `offset`, `limit`: the page.
+- `sort`: `created_at` | `name` | `size_in_bytes`; `order`: `asc` | `desc`.
+- `tags` (repeatable): only mosaics with these tags.
+- `name_contains`: case-insensitive substring match against the mosaic's name **or the filename of any
+  image in it**; combined with `tags` as AND. The backend rejects an empty string (`422`): omit the
+  parameter to match all.
+
+Response shape:
+```json
+{"items": [Mosaic, ...], "offset": 0, "limit": 50, "total": 0, "has_next": false}
+```
+Each item is the same mosaic object as the other endpoints return, with `status_summary`
+(`total`, `ready`, `pending`, `in_progress`, `failed`): `status_summary.total` is the number of images.
+
+#### Plugin behaviour
+- Collections are listed **50 at a time, newest first** (`sort=created_at&order=desc`), with
+  "Show more" while `has_next`. Counts shown to the user ("Collections · N") use `total`, not the
+  number loaded.
+- **Search is server-side**: the collection search sends `name_contains`, so it finds collections
+  beyond the loaded pages and by the names of their images. A search is a separate listing with its
+  own pages; clearing it returns to the full listing.
+- A collection the plugin needs but hasn't listed (the imagery of a processing run again, a chosen
+  collection that scrolled off) is fetched by id with `GET /rasters/mosaic/{id}`; a `404` there means it
+  was deleted.
+- The periodic refresh reloads the listing from the first page; collections already loaded beyond it stay.
 
 ### `GET /rasters/mosaic/{id}`
-Get mosaic details.
+Get mosaic details (the same mosaic object as in the listings).
 
 ### `PUT /rasters/mosaic/{id}`
-Update mosaic name/tags.
+Update mosaic name/tags. The plugin offers it as "Rename…" in a collection's ⋯ menu (name and tags).
 
 ### `DELETE /rasters/mosaic/{id}`
 Delete a mosaic and all its images.
 
 ### `POST /rasters/mosaic/{id}/image`
-Upload an image to an existing mosaic. Multipart form data, 1h timeout.
+Upload an image to an existing mosaic. Multipart form data, 1h timeout. The timeout is a real limit, not
+the absence of one: an upload on a dead connection ends after an hour with a message, and the upload
+state is cleared so the next upload can start.
 
 ### `POST /rasters/mosaic/image`
 Create a new mosaic and upload the first image in one request. Query params: `name`, `tags`.
@@ -74,7 +107,8 @@ Field notes:
 - `available_for_download`: boolean, defaults to `true` if absent from API response. Indicates whether the image can be downloaded by the user. Images not ingested via `load_data` workflow are not downloadable.
 
 ### `PUT /rasters/image/{id}`
-Update image (rename). Query param: `name`.
+Update image (rename). Query param: `name`. **Not used by the plugin**: renaming an image is done in
+Mapflow Web.
 
 ### `DELETE /rasters/image/{id}`
 Delete an image from its mosaic.
@@ -141,6 +175,21 @@ Response shape (`UserLimitSchema`):
     "maxPixelCount": 0
 }
 ```
+
+#### Plugin behaviour
+- The plugin asks for the limits when My imagery opens and before an upload. `maxUploadFileSize` and
+  `maxPixelCount` replace its built-in limits (2 GB, 30,000 px a side), which remain only as the fallback
+  when the request fails: an account with larger limits must not be refused locally.
+- An upload larger than `memoryFree` is refused before anything is sent, with a message that names the
+  free space.
+- My imagery shows a **Storage** badge next to Collections when the used storage and a positive
+  limit are known. It shows used storage and the limit in GB, a usage bar, and a link to billing
+  in Mapflow Web.
+- The plugin requests fresh usage after successful uploads and every 20 seconds while My imagery
+  is visible. A failed display refresh keeps the last known values.
+- A negative `memoryFree` is valid when an account is over quota. Used storage is calculated as
+  `max(0, memoryLimit - memoryFree)` when both values are available, with `memoryUsed` as the fallback.
+  The badge shows the actual usage above the limit with a full bar. It has no separate free-space line.
 
 ## Error Model
 Data catalog errors use format: `{"detail": {error_data}}`.
